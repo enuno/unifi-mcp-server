@@ -1,3 +1,8 @@
 """MCP resources for UniFi MCP Server."""
 
-# Resources will be implemented in Phase 2
+from .clients import ClientsResource
+from .devices import DevicesResource
+from .networks import NetworksResource
+from .sites import SitesResource
+
+__all__ = ["SitesResource", "DevicesResource", "ClientsResource", "NetworksResource"]

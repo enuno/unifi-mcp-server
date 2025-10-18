@@ -146,234 +146,455 @@ No session management or cookie handling is required. Each request is independen
 
 ## MCP Tools
 
-Tools are executable functions that perform actions on the UniFi Controller.
+Tools are executable functions that perform actions on the UniFi Controller. All Phase 3 tools are read-only operations.
 
-### Device Management
+### Health Check
 
-#### `list_devices`
+#### `health_check`
 
-List all devices in a site.
+Verify the MCP server is running and accessible.
 
-**Parameters:**
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+**Parameters:** None
 
 **Returns:**
-Array of device objects containing device information.
+Server health status information.
 
 **Example:**
 ```python
-result = await mcp.call_tool("list_devices", {
-    "site_id": "default"
-})
+result = await mcp.call_tool("health_check", {})
 ```
 
 **Response:**
 ```json
-[
-  {
-    "mac": "aa:bb:cc:dd:ee:ff",
-    "name": "Living Room AP",
-    "model": "U6-Lite",
-    "type": "uap",
-    "ip": "192.168.1.100",
-    "status": "connected",
-    "uptime": 86400,
-    "version": "6.5.55.14277"
-  }
-]
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "api_type": "cloud"
+}
 ```
 
-#### `get_device`
+### Device Management Tools
 
-Get detailed information about a specific device.
+#### `get_device_details`
+
+Get detailed information for a specific device.
 
 **Parameters:**
-- `mac_address` (string, required): Device MAC address
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `site_id` (string, required): Site identifier
+- `device_id` (string, required): Device ID
 
 **Returns:**
 Object containing detailed device information.
 
 **Example:**
 ```python
-result = await mcp.call_tool("get_device", {
-    "mac_address": "aa:bb:cc:dd:ee:ff",
+result = await mcp.call_tool("get_device_details", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011"
+})
+```
+
+**Response:**
+```json
+{
+  "id": "507f1f77bcf86cd799439011",
+  "name": "Living Room AP",
+  "model": "U6-LR",
+  "type": "uap",
+  "mac": "aa:bb:cc:dd:ee:ff",
+  "ip": "192.168.1.100",
+  "state": 1,
+  "uptime": 86400,
+  "version": "6.5.55.14277"
+}
+```
+
+#### `get_device_statistics`
+
+Retrieve real-time statistics for a device.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `device_id` (string, required): Device ID
+
+**Returns:**
+Object containing device statistics.
+
+**Example:**
+```python
+result = await mcp.call_tool("get_device_statistics", {
+    "site_id": "default",
+    "device_id": "507f1f77bcf86cd799439011"
+})
+```
+
+**Response:**
+```json
+{
+  "device_id": "507f1f77bcf86cd799439011",
+  "uptime": 86400,
+  "cpu": 15,
+  "mem": 42,
+  "tx_bytes": 1024000000,
+  "rx_bytes": 2048000000,
+  "bytes": 3072000000,
+  "state": 1,
+  "uplink_depth": 0
+}
+```
+
+#### `list_devices_by_type`
+
+Filter devices by type (AP, switch, gateway).
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `device_type` (string, required): Device type filter (uap, usw, ugw, udm, uxg, etc.)
+
+**Returns:**
+Array of device objects matching the type.
+
+**Example:**
+```python
+result = await mcp.call_tool("list_devices_by_type", {
+    "site_id": "default",
+    "device_type": "uap"
+})
+```
+
+#### `search_devices`
+
+Search devices by name, MAC, or IP address.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `query` (string, required): Search query string
+
+**Returns:**
+Array of matching device objects.
+
+**Example:**
+```python
+result = await mcp.call_tool("search_devices", {
+    "site_id": "default",
+    "query": "office"
+})
+```
+
+### Client Management Tools
+
+#### `get_client_details`
+
+Get detailed information for a specific client.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `client_mac` (string, required): Client MAC address
+
+**Returns:**
+Object containing detailed client information.
+
+**Example:**
+```python
+result = await mcp.call_tool("get_client_details", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01"
+})
+```
+
+**Response:**
+```json
+{
+  "mac": "aa:bb:cc:dd:ee:01",
+  "hostname": "laptop-001",
+  "ip": "192.168.1.100",
+  "is_wired": false,
+  "signal": -45,
+  "tx_bytes": 1024000,
+  "rx_bytes": 2048000
+}
+```
+
+#### `get_client_statistics`
+
+Retrieve bandwidth and connection statistics for a client.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `client_mac` (string, required): Client MAC address
+
+**Returns:**
+Object containing client statistics.
+
+**Example:**
+```python
+result = await mcp.call_tool("get_client_statistics", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01"
+})
+```
+
+**Response:**
+```json
+{
+  "mac": "aa:bb:cc:dd:ee:01",
+  "tx_bytes": 1024000,
+  "rx_bytes": 2048000,
+  "tx_packets": 15000,
+  "rx_packets": 20000,
+  "tx_rate": 150000,
+  "rx_rate": 200000,
+  "signal": -45,
+  "rssi": 55,
+  "noise": -90,
+  "uptime": 3600,
+  "is_wired": false
+}
+```
+
+#### `list_active_clients`
+
+List currently connected clients.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Array of active client objects.
+
+**Example:**
+```python
+result = await mcp.call_tool("list_active_clients", {
     "site_id": "default"
 })
 ```
 
-#### `restart_device`
+#### `search_clients`
 
-Restart a UniFi device.
+Search clients by MAC, IP, or hostname.
 
 **Parameters:**
-- `mac_address` (string, required): Device MAC address
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `site_id` (string, required): Site identifier
+- `query` (string, required): Search query string
 
 **Returns:**
-Success confirmation.
+Array of matching client objects.
 
 **Example:**
 ```python
-result = await mcp.call_tool("restart_device", {
-    "mac_address": "aa:bb:cc:dd:ee:ff"
+result = await mcp.call_tool("search_clients", {
+    "site_id": "default",
+    "query": "laptop"
 })
 ```
 
-### Network Management
+### Network Information Tools
 
-#### `list_networks`
+#### `get_network_details`
 
-List all networks in a site.
+Get detailed network configuration.
 
 **Parameters:**
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `site_id` (string, required): Site identifier
+- `network_id` (string, required): Network ID
 
 **Returns:**
-Array of network configuration objects.
+Object containing network configuration.
 
 **Example:**
 ```python
-result = await mcp.call_tool("list_networks", {
+result = await mcp.call_tool("get_network_details", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea"
+})
+```
+
+**Response:**
+```json
+{
+  "id": "507f191e810c19729de860ea",
+  "name": "LAN",
+  "purpose": "corporate",
+  "vlan_id": 1,
+  "ip_subnet": "192.168.1.0/24",
+  "dhcpd_enabled": true
+}
+```
+
+#### `list_vlans`
+
+List all VLANs in a site.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Array of VLAN/network objects.
+
+**Example:**
+```python
+result = await mcp.call_tool("list_vlans", {
+    "site_id": "default"
+})
+```
+
+#### `get_subnet_info`
+
+Get subnet and DHCP information for a network.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `network_id` (string, required): Network ID
+
+**Returns:**
+Object containing subnet and DHCP configuration.
+
+**Example:**
+```python
+result = await mcp.call_tool("get_subnet_info", {
+    "site_id": "default",
+    "network_id": "507f191e810c19729de860ea"
+})
+```
+
+**Response:**
+```json
+{
+  "network_id": "507f191e810c19729de860ea",
+  "name": "LAN",
+  "ip_subnet": "192.168.1.0/24",
+  "vlan_id": 1,
+  "dhcpd_enabled": true,
+  "dhcpd_start": "192.168.1.100",
+  "dhcpd_stop": "192.168.1.254",
+  "dhcpd_leasetime": 86400,
+  "dhcpd_dns_1": "8.8.8.8",
+  "dhcpd_dns_2": "8.8.4.4",
+  "dhcpd_gateway": "192.168.1.1",
+  "domain_name": "local"
+}
+```
+
+#### `get_network_statistics`
+
+Retrieve network usage statistics for a site.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Object containing network statistics across all networks.
+
+**Example:**
+```python
+result = await mcp.call_tool("get_network_statistics", {
     "site_id": "default"
 })
 ```
 
 **Response:**
 ```json
-[
-  {
-    "id": "5f8a...",
-    "name": "Default",
-    "purpose": "corporate",
-    "vlan": 1,
-    "subnet": "192.168.1.0/24",
-    "dhcp_enabled": true
-  }
-]
+{
+  "site_id": "default",
+  "networks": [
+    {
+      "network_id": "507f191e810c19729de860ea",
+      "name": "LAN",
+      "vlan_id": 1,
+      "client_count": 15,
+      "total_tx_bytes": 10240000,
+      "total_rx_bytes": 20480000,
+      "total_bytes": 30720000
+    }
+  ]
+}
 ```
 
-#### `create_network`
+### Site Management Tools
 
-Create a new network.
+#### `get_site_details`
+
+Get detailed site information.
 
 **Parameters:**
-- `name` (string, required): Network name
-- `vlan_id` (integer, required): VLAN ID (1-4094)
-- `subnet` (string, required): Network subnet in CIDR notation
-- `dhcp_enabled` (boolean, optional): Enable DHCP. Default: `true`
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `site_id` (string, required): Site identifier
 
 **Returns:**
-Created network object.
+Object containing site details.
 
 **Example:**
 ```python
-result = await mcp.call_tool("create_network", {
-    "name": "Guest WiFi",
-    "vlan_id": 20,
-    "subnet": "192.168.20.0/24",
-    "dhcp_enabled": true
-})
-```
-
-### Client Management
-
-#### `list_clients`
-
-List all active clients in a site.
-
-**Parameters:**
-- `site_id` (string, optional): Site identifier. Default: `"default"`
-
-**Returns:**
-Array of client objects.
-
-**Example:**
-```python
-result = await mcp.call_tool("list_clients", {
+result = await mcp.call_tool("get_site_details", {
     "site_id": "default"
 })
 ```
 
 **Response:**
 ```json
-[
-  {
-    "mac": "11:22:33:44:55:66",
-    "hostname": "iPhone",
-    "ip": "192.168.1.50",
-    "network": "Default",
-    "ap_mac": "aa:bb:cc:dd:ee:ff",
-    "signal": -45,
-    "uptime": 3600
-  }
-]
+{
+  "id": "default",
+  "name": "Default Site",
+  "desc": "Default site description"
+}
 ```
 
-#### `block_client`
+#### `list_all_sites`
 
-Block a client from accessing the network.
+List all accessible sites.
 
-**Parameters:**
-- `mac_address` (string, required): Client MAC address
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+**Parameters:** None
 
 **Returns:**
-Success confirmation.
+Array of site objects.
 
 **Example:**
 ```python
-result = await mcp.call_tool("block_client", {
-    "mac_address": "11:22:33:44:55:66"
-})
+result = await mcp.call_tool("list_all_sites", {})
 ```
 
-### Firewall Management
+#### `get_site_statistics`
 
-#### `list_firewall_rules`
-
-List all firewall rules in a site.
+Retrieve site-wide statistics.
 
 **Parameters:**
-- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `site_id` (string, required): Site identifier
 
 **Returns:**
-Array of firewall rule objects.
+Object containing comprehensive site statistics.
 
 **Example:**
 ```python
-result = await mcp.call_tool("list_firewall_rules", {
+result = await mcp.call_tool("get_site_statistics", {
     "site_id": "default"
 })
 ```
 
-#### `create_firewall_rule`
-
-Create a new firewall rule.
-
-**Parameters:**
-- `name` (string, required): Rule name
-- `action` (string, required): Action (`"accept"`, `"drop"`, `"reject"`)
-- `source` (string, optional): Source network/IP
-- `destination` (string, optional): Destination network/IP
-- `protocol` (string, optional): Protocol (`"tcp"`, `"udp"`, `"icmp"`, `"all"`)
-- `port` (integer, optional): Destination port
-- `enabled` (boolean, optional): Enable rule. Default: `true`
-- `site_id` (string, optional): Site identifier. Default: `"default"`
-
-**Returns:**
-Created firewall rule object.
-
-**Example:**
-```python
-result = await mcp.call_tool("create_firewall_rule", {
-    "name": "Block external SSH",
-    "action": "drop",
-    "protocol": "tcp",
-    "port": 22,
-    "enabled": true
-})
+**Response:**
+```json
+{
+  "site_id": "default",
+  "devices": {
+    "total": 25,
+    "online": 24,
+    "offline": 1,
+    "access_points": 10,
+    "switches": 8,
+    "gateways": 7
+  },
+  "clients": {
+    "total": 42,
+    "wired": 15,
+    "wireless": 27
+  },
+  "networks": {
+    "total": 5
+  },
+  "bandwidth": {
+    "total_tx_bytes": 102400000,
+    "total_rx_bytes": 204800000,
+    "total_bytes": 307200000
+  }
+}
 ```
 
 ## MCP Resources

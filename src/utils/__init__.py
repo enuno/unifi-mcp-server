@@ -1,5 +1,6 @@
 """Utility modules for UniFi MCP Server."""
 
+from .audit import AuditLogger, get_audit_logger, log_audit
 from .exceptions import (
     APIError,
     AuthenticationError,
@@ -44,6 +45,10 @@ __all__ = [
     "ValidationError",
     "NetworkError",
     "ConfirmationRequiredError",
+    # Audit
+    "AuditLogger",
+    "get_audit_logger",
+    "log_audit",
     # Logger
     "get_logger",
     "log_api_request",

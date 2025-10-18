@@ -369,9 +369,68 @@ CMD ["python", "src/main.py"]
 - **Container Security:** Docker images scanned with Trivy
 - **Input Validation:** All user inputs validated with Pydantic models
 
+### Phase 4 Mutating Tools Safety Mechanisms
+
+**All mutating tools (Phase 4) implement comprehensive safety features:**
+
+1. **Confirmation Requirement:**
+   ```python
+   # ❌ WILL FAIL - Missing confirmation
+   await create_firewall_rule(site_id="default", name="test", action="drop")
+
+   # ✅ WORKS - With confirmation
+   await create_firewall_rule(site_id="default", name="test", action="drop", confirm=True)
+   ```
+
+2. **Dry Run Mode:**
+   ```python
+   # Preview changes without executing
+   result = await create_network(
+       site_id="default",
+       name="Guest",
+       vlan_id=100,
+       subnet="192.168.100.0/24",
+       dry_run=True  # No actual changes made
+   )
+   # Returns: {"dry_run": True, "would_create": {...}}
+   ```
+
+3. **Audit Logging:**
+   - All mutating operations logged to `audit.log`
+   - Includes timestamp, operation, parameters, result, user (if available)
+   - Separate log for security audit trail
+   - Format: JSON lines for easy parsing
+
+4. **Input Validation:**
+   - All parameters validated before execution
+   - Type checking via Pydantic models
+   - Custom validators for MAC addresses, IPs, VLANs, etc.
+   - Raises `ValidationError` for invalid inputs
+
+**Mutating Tool Categories:**
+
+- **Firewall Management:** `create_firewall_rule`, `update_firewall_rule`, `delete_firewall_rule`
+- **Network Configuration:** `create_network`, `update_network`, `delete_network`
+- **Device Control:** `restart_device`, `locate_device`, `upgrade_device`
+- **Client Management:** `block_client`, `unblock_client`, `reconnect_client`
+
+**Audit Log Example:**
+```json
+{
+  "timestamp": "2025-10-18T10:30:00Z",
+  "operation": "create_firewall_rule",
+  "parameters": {"site_id": "default", "name": "Block SSH", "action": "drop"},
+  "result": "success",
+  "dry_run": false,
+  "site_id": "default"
+}
+```
+
 ### Planned Security Enhancements
 
-- [ ] Audit logging for all API operations
+- [x] Audit logging for all mutating operations (✅ Phase 4)
+- [x] Confirmation requirements for dangerous operations (✅ Phase 4)
+- [x] Dry-run mode for safe testing (✅ Phase 4)
 - [ ] Role-based access control (RBAC) for MCP tools
 - [ ] API key rotation automation
 - [ ] Request signing for additional security

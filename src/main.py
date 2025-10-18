@@ -4,8 +4,12 @@ from fastmcp import FastMCP
 
 from .config import Settings
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
+from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
+from .tools import device_control as device_control_tools
 from .tools import devices as devices_tools
+from .tools import firewall as firewall_tools
+from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import sites as sites_tools
 from .utils import get_logger
@@ -195,6 +199,166 @@ async def list_all_sites() -> list[dict]:
 async def get_site_statistics(site_id: str) -> dict:
     """Retrieve site-wide statistics."""
     return await sites_tools.get_site_statistics(site_id, settings)
+
+
+# Firewall Management Tools (Phase 4)
+@mcp.tool()
+async def list_firewall_rules(site_id: str) -> list[dict]:
+    """List all firewall rules in a site."""
+    return await firewall_tools.list_firewall_rules(site_id, settings)
+
+
+@mcp.tool()
+async def create_firewall_rule(
+    site_id: str,
+    name: str,
+    action: str,
+    source: str | None = None,
+    destination: str | None = None,
+    protocol: str | None = None,
+    port: int | None = None,
+    enabled: bool = True,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new firewall rule (requires confirm=True)."""
+    return await firewall_tools.create_firewall_rule(
+        site_id, name, action, settings, source, destination, protocol, port, enabled, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def update_firewall_rule(
+    site_id: str,
+    rule_id: str,
+    name: str | None = None,
+    action: str | None = None,
+    source: str | None = None,
+    destination: str | None = None,
+    protocol: str | None = None,
+    port: int | None = None,
+    enabled: bool | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing firewall rule (requires confirm=True)."""
+    return await firewall_tools.update_firewall_rule(
+        site_id, rule_id, settings, name, action, source, destination, protocol, port, enabled, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def delete_firewall_rule(
+    site_id: str, rule_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete a firewall rule (requires confirm=True)."""
+    return await firewall_tools.delete_firewall_rule(site_id, rule_id, settings, confirm, dry_run)
+
+
+# Network Configuration Tools (Phase 4)
+@mcp.tool()
+async def create_network(
+    site_id: str,
+    name: str,
+    vlan_id: int,
+    subnet: str,
+    purpose: str = "corporate",
+    dhcp_enabled: bool = True,
+    dhcp_start: str | None = None,
+    dhcp_stop: str | None = None,
+    dhcp_dns_1: str | None = None,
+    dhcp_dns_2: str | None = None,
+    domain_name: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new network/VLAN (requires confirm=True)."""
+    return await network_config_tools.create_network(
+        site_id, name, vlan_id, subnet, settings, purpose, dhcp_enabled,
+        dhcp_start, dhcp_stop, dhcp_dns_1, dhcp_dns_2, domain_name, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def update_network(
+    site_id: str,
+    network_id: str,
+    name: str | None = None,
+    vlan_id: int | None = None,
+    subnet: str | None = None,
+    purpose: str | None = None,
+    dhcp_enabled: bool | None = None,
+    dhcp_start: str | None = None,
+    dhcp_stop: str | None = None,
+    dhcp_dns_1: str | None = None,
+    dhcp_dns_2: str | None = None,
+    domain_name: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing network (requires confirm=True)."""
+    return await network_config_tools.update_network(
+        site_id, network_id, settings, name, vlan_id, subnet, purpose, dhcp_enabled,
+        dhcp_start, dhcp_stop, dhcp_dns_1, dhcp_dns_2, domain_name, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def delete_network(
+    site_id: str, network_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete a network (requires confirm=True)."""
+    return await network_config_tools.delete_network(site_id, network_id, settings, confirm, dry_run)
+
+
+# Device Control Tools (Phase 4)
+@mcp.tool()
+async def restart_device(
+    site_id: str, device_mac: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Restart a UniFi device (requires confirm=True)."""
+    return await device_control_tools.restart_device(site_id, device_mac, settings, confirm, dry_run)
+
+
+@mcp.tool()
+async def locate_device(
+    site_id: str, device_mac: str, enabled: bool = True, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Enable/disable LED locate mode on a device (requires confirm=True)."""
+    return await device_control_tools.locate_device(site_id, device_mac, settings, enabled, confirm, dry_run)
+
+
+@mcp.tool()
+async def upgrade_device(
+    site_id: str, device_mac: str, firmware_url: str | None = None, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Trigger firmware upgrade for a device (requires confirm=True)."""
+    return await device_control_tools.upgrade_device(site_id, device_mac, settings, firmware_url, confirm, dry_run)
+
+
+# Client Management Tools (Phase 4)
+@mcp.tool()
+async def block_client(
+    site_id: str, client_mac: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Block a client from accessing the network (requires confirm=True)."""
+    return await client_mgmt_tools.block_client(site_id, client_mac, settings, confirm, dry_run)
+
+
+@mcp.tool()
+async def unblock_client(
+    site_id: str, client_mac: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Unblock a previously blocked client (requires confirm=True)."""
+    return await client_mgmt_tools.unblock_client(site_id, client_mac, settings, confirm, dry_run)
+
+
+@mcp.tool()
+async def reconnect_client(
+    site_id: str, client_mac: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Force a client to reconnect (requires confirm=True)."""
+    return await client_mgmt_tools.reconnect_client(site_id, client_mac, settings, confirm, dry_run)
 
 
 def main() -> None:

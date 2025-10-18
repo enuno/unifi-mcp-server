@@ -146,7 +146,12 @@ No session management or cookie handling is required. Each request is independen
 
 ## MCP Tools
 
-Tools are executable functions that perform actions on the UniFi Controller. All Phase 3 tools are read-only operations.
+Tools are executable functions that perform actions on the UniFi Controller.
+
+### Tool Categories
+
+- **Phase 3 Tools:** Read-only operations for querying network information
+- **Phase 4 Tools:** Mutating operations with safety mechanisms (confirm + dry-run)
 
 ### Health Check
 
@@ -596,6 +601,104 @@ result = await mcp.call_tool("get_site_statistics", {
   }
 }
 ```
+
+## Phase 4: Mutating Tools
+
+All Phase 4 tools modify UniFi configuration and require safety mechanisms.
+
+### Safety Mechanisms
+
+**All mutating tools implement these safety features:**
+
+1. **Confirmation Required:** Must pass `confirm=True` to execute
+2. **Dry Run Mode:** Pass `dry_run=True` to preview without changes
+3. **Audit Logging:** All operations logged to `audit.log`
+4. **Input Validation:** Parameters validated before execution
+
+### Firewall Management
+
+#### `list_firewall_rules`
+List all firewall rules (read-only).
+
+**Parameters:** `site_id`
+
+#### `create_firewall_rule`
+Create a new firewall rule.
+
+**Parameters:** `site_id`, `name`, `action` (accept/drop/reject), `source`, `destination`, `protocol`, `port`, `enabled`, **`confirm`**, **`dry_run`**
+
+**Example:**
+```python
+# Dry run first
+result = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block SSH",
+    "action": "drop",
+    "protocol": "tcp",
+    "port": 22,
+    "dry_run": True
+})
+
+# Then execute
+result = await mcp.call_tool("create_firewall_rule", {
+    "site_id": "default",
+    "name": "Block SSH",
+    "action": "drop",
+    "protocol": "tcp",
+    "port": 22,
+    "confirm": True
+})
+```
+
+#### `update_firewall_rule` & `delete_firewall_rule`
+Modify or remove firewall rules. Requires `confirm=True`.
+
+### Network Configuration
+
+#### `create_network`
+Create a new network/VLAN.
+
+**Parameters:** `site_id`, `name`, `vlan_id`, `subnet`, `purpose`, `dhcp_enabled`, DHCP settings, **`confirm`**, **`dry_run`**
+
+#### `update_network` & `delete_network`
+Modify or remove networks. Requires `confirm=True`.
+
+### Device Control
+
+#### `restart_device`
+Restart a UniFi device.
+
+**Parameters:** `site_id`, `device_mac`, **`confirm`**, **`dry_run`**
+
+#### `locate_device`
+Enable/disable LED locate mode.
+
+**Parameters:** `site_id`, `device_mac`, `enabled`, **`confirm`**, **`dry_run`**
+
+#### `upgrade_device`
+Trigger firmware upgrade.
+
+**Parameters:** `site_id`, `device_mac`, `firmware_url`, **`confirm`**, **`dry_run`**
+
+### Client Management
+
+#### `block_client` & `unblock_client`
+Block or unblock a client from the network.
+
+**Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
+
+#### `reconnect_client`
+Force a client to reconnect.
+
+**Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
+
+### Error Handling
+
+All mutating tools raise:
+- `ConfirmationRequiredError`: If `confirm` parameter not True
+- `ValidationError`: If parameters invalid
+- `ResourceNotFoundError`: If resource not found
+- `APIError`: If UniFi API returns error
 
 ## MCP Resources
 

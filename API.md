@@ -55,12 +55,13 @@ Configure the MCP server using environment variables:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `UNIFI_HOST` | UniFi Controller hostname or IP | Yes | - |
-| `UNIFI_USERNAME` | Controller username | Yes | - |
-| `UNIFI_PASSWORD` | Controller password | Yes | - |
-| `UNIFI_PORT` | Controller port | No | `8443` |
+| `UNIFI_API_KEY` | UniFi API Key from unifi.ui.com | Yes | - |
+| `UNIFI_API_TYPE` | API type: `cloud` or `local` | No | `cloud` |
+| `UNIFI_HOST` | API host (cloud: api.ui.com, local: gateway IP) | No | `api.ui.com` |
+| `UNIFI_PORT` | API port | No | `443` |
 | `UNIFI_VERIFY_SSL` | Verify SSL certificates | No | `true` |
 | `UNIFI_SITE` | Default site ID | No | `default` |
+| `UNIFI_RATE_LIMIT` | Max requests per minute | No | `100` |
 | `UNIFI_TIMEOUT` | Request timeout (seconds) | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
 | `MCP_SERVER_PORT` | MCP server port | No | `3000` |
@@ -72,11 +73,13 @@ Alternatively, use a `config.yaml` file:
 
 ```yaml
 unifi:
-  host: controller.local
-  port: 8443
-  username: admin
-  verify_ssl: false
+  api_key: your-api-key-here
+  api_type: cloud  # or 'local'
+  host: api.ui.com  # or gateway IP for local
+  port: 443
+  verify_ssl: true
   site: default
+  rate_limit: 100
   timeout: 30
   max_retries: 3
 
@@ -89,19 +92,57 @@ mcp:
 
 ## Authentication
 
-### Authentication Flow
+### Obtaining Your API Key
 
-1. Server connects to UniFi Controller using provided credentials
-2. Session token is obtained and cached
-3. Subsequent requests use the cached token
-4. Token is automatically refreshed when expired
+The UniFi MCP Server uses the official UniFi Cloud API with API key authentication:
+
+1. **Login** to [UniFi Site Manager](https://unifi.ui.com)
+2. **Navigate** to Settings → Control Plane → Integrations
+3. **Create** a new API Key by clicking "Create API Key"
+4. **Save** the key immediately - it's only displayed once!
+5. **Store** the key securely in environment variables or secret management
+
+### Authentication Method
+
+The server uses **stateless API key authentication** via the `X-API-Key` HTTP header:
+
+```http
+GET /v1/sites HTTP/1.1
+Host: api.ui.com
+X-API-Key: your-api-key-here
+Accept: application/json
+```
+
+No session management or cookie handling is required. Each request is independently authenticated.
+
+### API Access Modes
+
+**Cloud API (Recommended)**
+- Base URL: `https://api.ui.com/v1/`
+- Access cloud-hosted UniFi instances
+- Requires internet connectivity
+- SSL verification recommended
+
+**Local Gateway Proxy**
+- Base URL: `https://{gateway-ip}:{port}/proxy/network/integration`
+- Access local UniFi gateway directly
+- Works without internet
+- May require SSL verification disabled for self-signed certificates
+
+### Current Limitations
+
+- **Read-Only Access**: The Early Access API is currently read-only. Write operations will be available in future API versions and will require manual key updates.
+- **Rate Limiting**: See [Rate Limiting](#rate-limiting) section below
 
 ### Security Considerations
 
-- **Never hardcode credentials** in your code
-- Store credentials in environment variables or secure secret management systems
-- Use HTTPS when connecting to the UniFi Controller
+- **Never hardcode API keys** in your code
+- Store API keys in environment variables or secure secret management systems (AWS Secrets Manager, HashiCorp Vault, etc.)
+- Use HTTPS when connecting to the UniFi API (especially for cloud)
 - Implement proper access controls for MCP server access
+- **Rotate keys regularly** - API keys can be regenerated from unifi.ui.com
+- Monitor API key usage for suspicious activity
+- Treat API keys like passwords - they provide full access to your UniFi environment
 
 ## MCP Tools
 
@@ -418,16 +459,57 @@ Errors are returned in a standardized format:
 
 ## Rate Limiting
 
-The UniFi Controller may rate limit requests. The MCP server implements:
+### Official API Rate Limits
 
-- Automatic retry with exponential backoff
-- Request queuing to prevent overwhelming the controller
-- Configurable max retries and timeout
+The UniFi Cloud API enforces the following rate limits:
 
-**Best Practices:**
-- Batch operations when possible
-- Cache frequently accessed data
+| API Version | Requests per Minute | Notes |
+|-------------|--------------------:|-------|
+| **Early Access (EA)** | 100 | Current version |
+| **v1 Stable** | 10,000 | Future release |
+
+### Rate Limit Response
+
+When rate limits are exceeded, the API returns:
+
+**HTTP Status:** `429 Too Many Requests`
+
+**Headers:**
+```http
+Retry-After: 60
+```
+
+The `Retry-After` header indicates how many seconds to wait before retrying.
+
+### MCP Server Rate Limit Handling
+
+The MCP server implements intelligent rate limit handling:
+
+- **Automatic retry** with exponential backoff
+- **Request queuing** to prevent overwhelming the API
+- **Configurable rate limit** via `UNIFI_RATE_LIMIT` environment variable
+- **Graceful degradation** when limits are reached
+
+### Best Practices
+
+**For Application Developers:**
+- Batch operations when possible to reduce API calls
+- Cache frequently accessed data (devices, networks, etc.)
 - Avoid polling; use event-driven approaches when available
+- Implement client-side rate limiting to stay under limits
+- Monitor the `X-RateLimit-*` headers (if provided by API)
+
+**For High-Volume Applications:**
+- Consider the v1 Stable API when available (10,000 req/min)
+- Distribute load across multiple time windows
+- Use pagination efficiently to minimize requests
+- Cache static data locally
+
+**Rate Limit Configuration Example:**
+```env
+# Set to match your API version
+UNIFI_RATE_LIMIT=100  # EA: 100, v1 Stable: 10000
+```
 
 ## Examples
 

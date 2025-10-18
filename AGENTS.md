@@ -212,12 +212,13 @@ All AI-generated code must include tests:
    async def test_client_initialization():
        """Test that UniFi client initializes correctly."""
        client = UniFiClient(
-           host="controller.local",
-           username="admin",
-           password="password"
+           api_key="test-api-key",
+           api_type="cloud",
+           host="api.ui.com"
        )
-       assert client.host == "controller.local"
-       assert client.username == "admin"
+       assert client.host == "api.ui.com"
+       assert client.api_type == "cloud"
+       assert client.api_key == "test-api-key"
    ```
 
 2. **Integration Tests:**
@@ -225,9 +226,9 @@ All AI-generated code must include tests:
    import pytest
 
    @pytest.mark.integration
-   async def test_get_devices_from_real_controller():
-       """Test fetching devices from a real UniFi controller."""
-       # This test requires UNIFI_* environment variables
+   async def test_get_devices_from_real_api():
+       """Test fetching devices from real UniFi Cloud API."""
+       # This test requires UNIFI_API_KEY environment variable
        client = UniFiClient.from_env()
        devices = await client.get_devices()
        assert isinstance(devices, list)
@@ -242,7 +243,11 @@ All AI-generated code must include tests:
        """Test error handling when API fails."""
        with patch('src.api.client.httpx.AsyncClient.get') as mock_get:
            mock_get.side_effect = httpx.HTTPError("Connection failed")
-           client = UniFiClient(host="test", username="test", password="test")
+           client = UniFiClient(
+               api_key="test-key",
+               host="api.ui.com",
+               api_type="cloud"
+           )
            with pytest.raises(APIError):
                await client.get_devices()
    ```
@@ -273,24 +278,23 @@ pytest -k "test_device"
 
 ### Credential Management
 
-**NEVER include credentials in code:**
+**NEVER include API keys or credentials in code:**
 
 ```python
-# ❌ BAD
+# ❌ BAD - Hardcoded API key
 client = UniFiClient(
-    host="controller.local",
-    username="admin",
-    password="SuperSecret123"
+    api_key="abc123def456ghi789...",
+    host="api.ui.com"
 )
 
-# ✅ GOOD
+# ✅ GOOD - Load from environment
 from src.config.settings import Settings
 
 settings = Settings()  # Loads from environment
 client = UniFiClient(
+    api_key=settings.unifi_api_key,
     host=settings.unifi_host,
-    username=settings.unifi_username,
-    password=settings.unifi_password
+    api_type=settings.unifi_api_type
 )
 ```
 
@@ -321,11 +325,14 @@ class NetworkConfig(BaseModel):
 Don't expose sensitive information in errors:
 
 ```python
-# ❌ BAD
-logging.error(f"Auth failed: {username}:{password} on {host}")
+# ❌ BAD - Exposes API key in logs
+logging.error(f"Auth failed with API key: {api_key}")
 
-# ✅ GOOD
-logging.error(f"Authentication failed for user '{username}' on host '{host}'")
+# ✅ GOOD - Safe error message
+logging.error(f"Authentication failed for host '{host}' (API key: {api_key[:8]}...)")
+
+# ✅ EVEN BETTER - No key exposure
+logging.error(f"Authentication failed for host '{host}'. Check your UNIFI_API_KEY.")
 ```
 
 ### Secret Detection
@@ -339,6 +346,221 @@ pre-commit install
 # Manually check for secrets
 detect-secrets scan
 ```
+
+## UniFi API Guidelines
+
+### Authentication with API Keys
+
+This project uses the **official UniFi Cloud API** with API key authentication. All AI agents must follow these guidelines:
+
+**Authentication Method:**
+- Use `UNIFI_API_KEY` environment variable for authentication
+- API key is passed via the `X-API-Key` HTTP header
+- No session management or cookies required (stateless authentication)
+
+**NEVER hardcode API keys:**
+
+```python
+# ❌ BAD - Hardcoded API key
+headers = {
+    "X-API-Key": "abc123def456..."
+}
+
+# ✅ GOOD - Load from environment
+from src.config.settings import Settings
+
+settings = Settings()
+headers = {
+    "X-API-Key": settings.unifi_api_key
+}
+```
+
+### API Access Modes
+
+Support both cloud and local gateway access modes:
+
+**Cloud API (Default):**
+```python
+# Base URL: https://api.ui.com/v1/
+settings.unifi_api_type = "cloud"
+settings.unifi_host = "api.ui.com"
+settings.unifi_port = 443
+```
+
+**Local Gateway Proxy:**
+```python
+# Base URL: https://{gateway-ip}/proxy/network/integration/v1/
+settings.unifi_api_type = "local"
+settings.unifi_host = "192.168.1.1"
+settings.unifi_port = 443
+```
+
+### Read-Only Limitation
+
+**IMPORTANT:** The Early Access API is currently **read-only**.
+
+```python
+# ✅ ALLOWED - Read operations
+async def list_devices(site_id: str):
+    """List all devices - read operation."""
+    devices = await client.get(f"/v1/sites/{site_id}/devices")
+    return devices
+
+# ❌ NOT AVAILABLE - Write operations (will fail)
+async def create_network(name: str, vlan_id: int):
+    """Create network - not yet supported in EA API."""
+    # This will return 403 Forbidden in current API version
+    raise NotImplementedError(
+        "Write operations are not available in the Early Access API. "
+        "This feature will be available in v1 Stable release."
+    )
+```
+
+**Handling write requests:**
+- Document that write operations are not yet available
+- Return clear error messages to users
+- Consider implementing a "preview" mode that shows what would be created
+- Monitor UniFi API release notes for v1 Stable availability
+
+### Rate Limiting Considerations
+
+Implement proper rate limiting to respect API limits:
+
+**Current Limits:**
+- Early Access: 100 requests/minute
+- v1 Stable (future): 10,000 requests/minute
+
+**Implementation Example:**
+```python
+import asyncio
+from collections import deque
+from datetime import datetime, timedelta
+
+class UniFiRateLimiter:
+    """Rate limiter for UniFi API requests."""
+
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window = timedelta(seconds=window_seconds)
+        self.requests = deque()
+
+    async def acquire(self):
+        """Wait if necessary to respect rate limits."""
+        now = datetime.now()
+
+        # Remove old requests outside the window
+        while self.requests and self.requests[0] < now - self.window:
+            self.requests.popleft()
+
+        # Wait if at limit
+        if len(self.requests) >= self.max_requests:
+            sleep_time = (self.requests[0] + self.window - now).total_seconds()
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+
+        self.requests.append(now)
+```
+
+**Best Practices:**
+- Cache frequently accessed data (devices, sites, networks)
+- Batch operations when possible
+- Implement exponential backoff for 429 errors
+- Use configurable rate limits via `UNIFI_RATE_LIMIT` environment variable
+- Log rate limit warnings for monitoring
+
+### API Error Handling
+
+Handle UniFi API-specific errors gracefully:
+
+```python
+import httpx
+from typing import Dict, Any
+
+class UniFiAPIError(Exception):
+    """Base exception for UniFi API errors."""
+    pass
+
+class UniFiAuthenticationError(UniFiAPIError):
+    """Authentication failed - invalid API key."""
+    pass
+
+class UniFiRateLimitError(UniFiAPIError):
+    """Rate limit exceeded."""
+    pass
+
+async def safe_api_request(
+    client: httpx.AsyncClient,
+    method: str,
+    endpoint: str,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Make a safe API request with proper error handling.
+
+    Args:
+        client: HTTP client
+        method: HTTP method (GET, POST, etc.)
+        endpoint: API endpoint
+        **kwargs: Additional request parameters
+
+    Returns:
+        Response data as dictionary
+
+    Raises:
+        UniFiAuthenticationError: Invalid API key
+        UniFiRateLimitError: Rate limit exceeded
+        UniFiAPIError: Other API errors
+    """
+    try:
+        response = await client.request(method, endpoint, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise UniFiAuthenticationError(
+                "Invalid API key. Please check your UNIFI_API_KEY."
+            )
+        elif e.response.status_code == 429:
+            retry_after = e.response.headers.get("Retry-After", 60)
+            raise UniFiRateLimitError(
+                f"Rate limit exceeded. Retry after {retry_after} seconds."
+            )
+        else:
+            raise UniFiAPIError(f"API error: {e.response.status_code}")
+
+    except httpx.RequestError as e:
+        raise UniFiAPIError(f"Request failed: {str(e)}")
+```
+
+### Official API Documentation
+
+Always reference the official UniFi API documentation:
+
+**Primary Resources:**
+- **Getting Started**: [https://developer.ui.com/site-manager-api/gettingstarted](https://developer.ui.com/site-manager-api/gettingstarted)
+- **Project Reference**: `docs/UNIFI_API.md` (comprehensive guide)
+- **API Tutorial**: [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
+
+**When implementing new features:**
+1. Review official API documentation first
+2. Check `docs/UNIFI_API.md` for project-specific guidance
+3. Ensure endpoint paths match official specifications
+4. Test against real UniFi Cloud API or gateway proxy
+5. Document any API limitations or quirks discovered
+
+### API Key Security Checklist
+
+Before committing code, verify:
+
+- [ ] No hardcoded API keys in source code
+- [ ] API key loaded from environment variables
+- [ ] No API keys in log messages (even debug logs)
+- [ ] API keys redacted in error messages
+- [ ] `.env` file in `.gitignore`
+- [ ] `.env.example` has placeholder, not real key
+- [ ] Pre-commit hooks detect-secrets passing
+- [ ] Documentation mentions API key security
 
 ## Code Quality Standards
 

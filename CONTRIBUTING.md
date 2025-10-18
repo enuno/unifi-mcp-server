@@ -84,17 +84,43 @@ Create a `.env` file for local development:
 cp .env.example .env
 ```
 
-Edit the `.env` file with your UniFi controller credentials:
+#### Obtain Your UniFi API Key
+
+Before configuring the environment, you need to obtain an API key:
+
+1. Log in to [UniFi Site Manager](https://unifi.ui.com)
+2. Navigate to **Settings → Control Plane → Integrations**
+3. Click **Create API Key**
+4. **Copy and save the key immediately** - it's only shown once!
+
+#### Configure Your Environment
+
+Edit the `.env` file with your UniFi API key:
 
 ```env
-UNIFI_HOST=your-controller.local
-UNIFI_USERNAME=your-username
-UNIFI_PASSWORD=your-password
-UNIFI_PORT=8443
-UNIFI_VERIFY_SSL=false
+# Required: Your UniFi API Key
+UNIFI_API_KEY=your-api-key-here
+
+# For cloud API (recommended)
+UNIFI_API_TYPE=cloud
+UNIFI_HOST=api.ui.com
+UNIFI_PORT=443
+UNIFI_VERIFY_SSL=true
+
+# OR for local gateway proxy
+# UNIFI_API_TYPE=local
+# UNIFI_HOST=192.168.1.1
+# UNIFI_VERIFY_SSL=false
 ```
 
-**IMPORTANT:** Never commit the `.env` file to version control. It's already included in `.gitignore`.
+**CRITICAL SECURITY NOTES:**
+
+- **NEVER commit the `.env` file** to version control (it's in `.gitignore`)
+- **API keys provide full access** to your UniFi environment - treat them like passwords
+- **Store keys securely** using environment variables or secret management systems
+- **Rotate keys regularly** for security best practices
+- **Monitor key usage** for suspicious activity
+- The API is currently **read-only** in Early Access, but will support write operations in future versions
 
 ## Development Workflow
 

@@ -25,8 +25,9 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 ### Prerequisites
 
 - Python 3.10 or higher
-- A UniFi Network Controller (self-hosted or cloud)
-- UniFi Controller credentials with appropriate permissions
+- A UniFi account at [unifi.ui.com](https://unifi.ui.com)
+- UniFi API key (obtain from Settings → Control Plane → Integrations)
+- Access to UniFi Cloud API or local gateway
 
 ### Installation
 
@@ -67,27 +68,58 @@ pip install -e ".[dev]"
 # Pull the image
 docker pull ghcr.io/elvis/unifi-mcp-server:latest
 
-# Run the container
+# Run the container (Cloud API)
 docker run -d \
-  -e UNIFI_HOST=controller.local \
-  -e UNIFI_USERNAME=admin \
-  -e UNIFI_PASSWORD=your-password \
+  -e UNIFI_API_KEY=your-api-key \
+  -e UNIFI_API_TYPE=cloud \
+  -p 3000:3000 \
+  ghcr.io/elvis/unifi-mcp-server:latest
+
+# OR run with local gateway proxy
+docker run -d \
+  -e UNIFI_API_KEY=your-api-key \
+  -e UNIFI_API_TYPE=local \
+  -e UNIFI_HOST=192.168.1.1 \
   -p 3000:3000 \
   ghcr.io/elvis/unifi-mcp-server:latest
 ```
 
 ### Configuration
 
+#### Obtaining Your API Key
+
+1. Log in to [UniFi Site Manager](https://unifi.ui.com)
+2. Navigate to **Settings → Control Plane → Integrations**
+3. Click **Create API Key**
+4. **Save the key immediately** - it's only shown once!
+5. Store it securely in your `.env` file
+
+#### Configuration File
+
 Create a `.env` file in the project root:
 
 ```env
-UNIFI_HOST=your-controller.local
-UNIFI_USERNAME=your-username
-UNIFI_PASSWORD=your-password
-UNIFI_PORT=8443
-UNIFI_VERIFY_SSL=false
+# Required: Your UniFi API Key
+UNIFI_API_KEY=your-api-key-here
+
+# API Type: cloud or local
+UNIFI_API_TYPE=cloud
+
+# For cloud API (default)
+UNIFI_HOST=api.ui.com
+UNIFI_PORT=443
+UNIFI_VERIFY_SSL=true
+
+# For local gateway proxy, use:
+# UNIFI_API_TYPE=local
+# UNIFI_HOST=192.168.1.1
+# UNIFI_VERIFY_SSL=false
+
+# Optional settings
 UNIFI_SITE=default
 ```
+
+See `.env.example` for all available options.
 
 ### Running the Server
 
@@ -121,9 +153,8 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
         "src/main.py"
       ],
       "env": {
-        "UNIFI_HOST": "controller.local",
-        "UNIFI_USERNAME": "admin",
-        "UNIFI_PASSWORD": "your-password"
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "cloud"
       }
     }
   }

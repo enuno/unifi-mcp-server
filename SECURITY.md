@@ -47,26 +47,27 @@ Please include the following information in your report:
 ### Example Report
 
 ```
-**Vulnerability Type:** Credential Exposure
+**Vulnerability Type:** API Key Exposure
 
 **Description:**
-The application logs UniFi controller credentials in plain text when debug
+The application logs UniFi API keys in plain text when debug
 logging is enabled, potentially exposing sensitive authentication information.
 
 **Impact:**
-An attacker with access to log files could retrieve UniFi controller credentials
-and gain unauthorized access to the network infrastructure.
+An attacker with access to log files could retrieve the UniFi API key
+and gain unauthorized access to the UniFi Cloud API and network infrastructure.
 
 **Reproduction Steps:**
 1. Enable debug logging in the configuration
 2. Start the MCP server
-3. Examine the log output - credentials appear in plain text
+3. Examine the log output - API key appears in plain text
 
 **Affected Versions:** 0.1.0 - 0.1.3
 
 **Suggested Fix:**
-Implement credential masking in the logging module to redact sensitive
-information before writing to logs.
+Implement API key masking in the logging module to redact sensitive
+information before writing to logs. Show only first 8 characters or use
+placeholder text like "API key: ********".
 ```
 
 ## Response Timeline
@@ -84,29 +85,87 @@ We aim to respond to security vulnerability reports according to the following t
 
 **NEVER commit credentials or secrets to the repository:**
 
-- API keys
+- **UniFi API keys** (primary authentication method)
 - Passwords
 - Private keys
 - Certificates
 - OAuth tokens
 - Session tokens
 - Encryption keys
+- Database connection strings
+- Any `.env` files containing secrets
 
 **DO use environment variables or secure secret management:**
 
 ```python
-import os
 from pydantic_settings import BaseSettings
+from pydantic import Field, SecretStr
 
 class Settings(BaseSettings):
-    unifi_username: str
-    unifi_password: str
-    unifi_host: str
+    """Application settings loaded from environment."""
+
+    unifi_api_key: SecretStr = Field(..., description="UniFi API Key from unifi.ui.com")
+    unifi_api_type: str = Field(default="cloud", description="API type: cloud or local")
+    unifi_host: str = Field(default="api.ui.com", description="API host")
+    unifi_port: int = Field(default=443, description="API port")
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+# Usage with automatic masking
+settings = Settings()
+# API key is automatically masked when printed
+print(f"Using host: {settings.unifi_host}")  # Safe
+print(f"API key: {settings.unifi_api_key}")  # Outputs: **********
 ```
+
+### UniFi API Key Security
+
+**Obtaining API Keys Securely:**
+
+1. Log in to [UniFi Site Manager](https://unifi.ui.com)
+2. Navigate to Settings → Control Plane → Integrations
+3. Create API Key with a descriptive name
+4. **Copy the key immediately** - it's only shown once
+5. Store in a password manager or secure secret management system
+
+**API Key Best Practices:**
+
+```python
+# ❌ NEVER hardcode API keys
+api_key = "abc123def456..."
+
+# ❌ NEVER log full API keys
+logging.debug(f"Using API key: {api_key}")
+
+# ✅ DO load from environment
+api_key = os.getenv("UNIFI_API_KEY")
+
+# ✅ DO mask in logs (show first 8 chars only)
+logging.debug(f"Using API key: {api_key[:8]}..." if api_key else "not set")
+
+# ✅ DO use SecretStr for automatic masking
+from pydantic import SecretStr
+api_key = SecretStr(os.getenv("UNIFI_API_KEY"))
+```
+
+**API Key Rotation:**
+
+- Rotate API keys every 90 days or sooner
+- Immediately rotate if a key is exposed or compromised
+- Use separate keys for development, staging, and production
+- Revoke old keys after rotation
+- Document key rotation procedures in your runbooks
+
+**Secure Storage Options:**
+
+- Environment variables (`.env` file, never committed)
+- AWS Secrets Manager
+- HashiCorp Vault
+- Azure Key Vault
+- Google Cloud Secret Manager
+- Password managers (1Password, LastPass, etc.)
 
 ### Input Validation
 
@@ -131,26 +190,87 @@ class DeviceConfig(BaseModel):
 ### API Security
 
 **Authentication:**
-- Always use HTTPS for API communications
-- Implement proper session management
-- Use secure token storage
+- Always use HTTPS for API communications (required for UniFi Cloud API)
+- Use API key authentication via `X-API-Key` header
+- No session management needed (stateless authentication)
+- Store API keys securely using environment variables or secret management
+
+**API Key Headers:**
+```python
+import httpx
+from pydantic import SecretStr
+
+async def make_api_request(api_key: SecretStr, endpoint: str):
+    """Make authenticated request to UniFi API."""
+    headers = {
+        "X-API-Key": api_key.get_secret_value(),  # Only expose when needed
+        "Accept": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://api.ui.com/v1/{endpoint}",
+            headers=headers,
+            timeout=30.0
+        )
+        response.raise_for_status()
+        return response.json()
+```
 
 **Rate Limiting:**
-- Implement rate limiting to prevent abuse
-- Add exponential backoff for failed authentication attempts
+- Respect UniFi API rate limits (100 req/min EA, 10k req/min v1)
+- Implement client-side rate limiting
+- Add exponential backoff for 429 (rate limit) errors
+- Cache frequently accessed data to reduce API calls
+
+**Rate Limit Implementation Example:**
+```python
+import asyncio
+from datetime import datetime, timedelta
+
+class APIRateLimiter:
+    """Enforce rate limits for UniFi API."""
+
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window = timedelta(seconds=window_seconds)
+        self.requests = []
+
+    async def acquire(self):
+        """Wait if necessary to respect rate limits."""
+        now = datetime.now()
+
+        # Remove old requests
+        self.requests = [req for req in self.requests if req > now - self.window]
+
+        # Wait if at limit
+        if len(self.requests) >= self.max_requests:
+            sleep_time = (self.requests[0] + self.window - now).total_seconds()
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+
+        self.requests.append(now)
+```
 
 **Error Handling:**
-- Never expose sensitive information in error messages
-- Log errors securely without exposing credentials
+- Never expose API keys in error messages
+- Log errors securely without exposing secrets
+- Provide user-friendly error messages
 
 ```python
 import logging
 
-# BAD - Exposes credentials
-logging.error(f"Failed to connect to {host} with user {username} and password {password}")
+# ❌ BAD - Exposes API key
+logging.error(f"Failed to connect with API key: {api_key}")
 
-# GOOD - Masks sensitive data
-logging.error(f"Failed to connect to {host} with user {username}")
+# ❌ BAD - Shows partial key (still risky)
+logging.error(f"Auth failed with key: {api_key[:16]}...")
+
+# ✅ GOOD - No key exposure
+logging.error(f"Authentication failed for host '{host}'. Check your UNIFI_API_KEY.")
+
+# ✅ GOOD - Redacted for debugging
+logging.debug(f"API key configured: {'yes' if api_key else 'no'}")
 ```
 
 ### Dependency Security
@@ -238,20 +358,28 @@ CMD ["python", "src/main.py"]
 
 ### Current Security Features
 
-- **Environment-based Configuration:** Secrets stored in environment variables, not in code
+- **API Key Authentication:** Stateless authentication via official UniFi Cloud API
+- **Environment-based Configuration:** API keys stored in environment variables, not in code
+- **Secret Masking:** Pydantic SecretStr automatically masks sensitive values
 - **Type Safety:** Pydantic models enforce data validation
 - **Async Security:** Non-blocking I/O prevents certain timing attacks
-- **HTTPS Support:** Secure communication with UniFi controllers
-- **Pre-commit Hooks:** Automated secret detection before commits
+- **HTTPS-Only:** Secure communication with UniFi Cloud API (TLS 1.2+)
+- **Pre-commit Hooks:** Automated secret detection before commits using detect-secrets
+- **Dependency Scanning:** Automated vulnerability scanning with Safety and Bandit
+- **Container Security:** Docker images scanned with Trivy
+- **Input Validation:** All user inputs validated with Pydantic models
 
 ### Planned Security Enhancements
 
-- [ ] OAuth 2.0 support for authentication
-- [ ] Audit logging for all operations
+- [ ] Audit logging for all API operations
 - [ ] Role-based access control (RBAC) for MCP tools
-- [ ] Rate limiting for API endpoints
-- [ ] Encrypted credential storage
+- [ ] API key rotation automation
+- [ ] Request signing for additional security
+- [ ] IP allowlist/denylist support
+- [ ] Webhook signature verification
+- [ ] Enhanced monitoring and alerting for suspicious activity
 - [ ] Security headers for HTTP responses
+- [ ] Support for multiple API keys with different scopes
 
 ## Security Audit History
 

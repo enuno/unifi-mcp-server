@@ -700,6 +700,383 @@ All mutating tools raise:
 - `ResourceNotFoundError`: If resource not found
 - `APIError`: If UniFi API returns error
 
+## Phase 5: Advanced Features
+
+Phase 5 adds WiFi management, port forwarding, DPI analytics, caching, and webhook support.
+
+### WiFi Network (SSID) Management
+
+#### `list_wlans`
+List all wireless networks (SSIDs) in a site (read-only).
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Maximum number of WLANs to return
+- `offset` (integer, optional): Number of WLANs to skip
+
+**Example:**
+```python
+result = await mcp.call_tool("list_wlans", {
+    "site_id": "default",
+    "limit": 10
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "HomeWiFi",
+    "security": "wpapsk",
+    "enabled": true,
+    "is_guest": false,
+    "wpa_mode": "wpa2",
+    "wpa_enc": "ccmp",
+    "vlan": null,
+    "hide_ssid": false
+  }
+]
+```
+
+#### `create_wlan`
+Create a new wireless network/SSID.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `name` (string, required): SSID name
+- `security` (string, required): Security type (open, wpapsk, wpaeap)
+- `password` (string, optional): WiFi password (required for wpapsk)
+- `enabled` (boolean, optional): Enable the WLAN immediately (default: true)
+- `is_guest` (boolean, optional): Mark as guest network (default: false)
+- `wpa_mode` (string, optional): WPA mode (wpa, wpa2, wpa3) (default: wpa2)
+- `wpa_enc` (string, optional): WPA encryption (tkip, ccmp, ccmp-tkip) (default: ccmp)
+- `vlan_id` (integer, optional): VLAN ID for network isolation (1-4094)
+- `hide_ssid` (boolean, optional): Hide SSID from broadcast (default: false)
+- **`confirm`** (boolean, required): Confirmation flag (must be True)
+- **`dry_run`** (boolean, optional): Preview without creating
+
+**Example:**
+```python
+# Create guest WiFi with VLAN isolation
+result = await mcp.call_tool("create_wlan", {
+    "site_id": "default",
+    "name": "Guest WiFi",
+    "security": "wpapsk",
+    "password": "securepass123",
+    "is_guest": true,
+    "wpa_mode": "wpa2",
+    "vlan_id": 100,
+    "confirm": True
+})
+```
+
+**Security Note:** Passwords are automatically masked in audit logs.
+
+#### `update_wlan`
+Update an existing wireless network.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `wlan_id` (string, required): WLAN ID
+- `name` (string, optional): New SSID name
+- `security` (string, optional): New security type
+- `password` (string, optional): New WiFi password
+- `enabled` (boolean, optional): Enable/disable the WLAN
+- `is_guest` (boolean, optional): Mark as guest network
+- `wpa_mode` (string, optional): New WPA mode
+- `wpa_enc` (string, optional): New WPA encryption
+- `vlan_id` (integer, optional): New VLAN ID
+- `hide_ssid` (boolean, optional): Hide/show SSID
+- **`confirm`** (boolean, required): Confirmation flag
+- **`dry_run`** (boolean, optional): Preview without updating
+
+#### `delete_wlan`
+Delete a wireless network.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `wlan_id` (string, required): WLAN ID
+- **`confirm`** (boolean, required): Confirmation flag
+- **`dry_run`** (boolean, optional): Preview without deleting
+
+#### `get_wlan_statistics`
+Get WiFi usage statistics for a site or specific WLAN.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `wlan_id` (string, optional): Optional WLAN ID to filter statistics
+
+**Example:**
+```python
+result = await mcp.call_tool("get_wlan_statistics", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "wlans": [
+    {
+      "wlan_id": "507f1f77bcf86cd799439011",
+      "name": "HomeWiFi",
+      "enabled": true,
+      "security": "wpapsk",
+      "is_guest": false,
+      "client_count": 12,
+      "total_tx_bytes": 10240000000,
+      "total_rx_bytes": 20480000000,
+      "total_bytes": 30720000000
+    }
+  ]
+}
+```
+
+### Port Forwarding Management
+
+#### `list_port_forwards`
+List all port forwarding rules in a site (read-only).
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Maximum number of rules to return
+- `offset` (integer, optional): Number of rules to skip
+
+**Example:**
+```python
+result = await mcp.call_tool("list_port_forwards", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439011",
+    "name": "Web Server",
+    "dst_port": "80",
+    "fwd": "192.168.1.100",
+    "fwd_port": "8080",
+    "proto": "tcp",
+    "enabled": true,
+    "log": false
+  }
+]
+```
+
+#### `create_port_forward`
+Create a port forwarding rule.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `name` (string, required): Rule name/description
+- `dst_port` (integer, required): Destination port (external/WAN port)
+- `fwd_ip` (string, required): Forward to IP address (internal/LAN)
+- `fwd_port` (integer, required): Forward to port (internal)
+- `protocol` (string, optional): Protocol (tcp, udp, tcp_udp) (default: tcp_udp)
+- `src` (string, optional): Source restriction (any, or specific IP/network) (default: any)
+- `enabled` (boolean, optional): Enable the rule immediately (default: true)
+- `log` (boolean, optional): Enable logging for this rule (default: false)
+- **`confirm`** (boolean, required): Confirmation flag
+- **`dry_run`** (boolean, optional): Preview without creating
+
+**Example:**
+```python
+# Forward external port 8080 to internal server
+result = await mcp.call_tool("create_port_forward", {
+    "site_id": "default",
+    "name": "Web Server",
+    "dst_port": 8080,
+    "fwd_ip": "192.168.1.100",
+    "fwd_port": 80,
+    "protocol": "tcp",
+    "confirm": True
+})
+```
+
+#### `delete_port_forward`
+Delete a port forwarding rule.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `rule_id` (string, required): Port forwarding rule ID
+- **`confirm`** (boolean, required): Confirmation flag
+- **`dry_run`** (boolean, optional): Preview without deleting
+
+### DPI (Deep Packet Inspection) Statistics
+
+#### `get_dpi_statistics`
+Get Deep Packet Inspection statistics for a site.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
+
+**Example:**
+```python
+result = await mcp.call_tool("get_dpi_statistics", {
+    "site_id": "default",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "time_range": "24h",
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "tx_bytes": 5120000000,
+      "rx_bytes": 10240000000,
+      "total_bytes": 15360000000
+    },
+    {
+      "application": "YouTube",
+      "category": "Streaming",
+      "tx_bytes": 2560000000,
+      "rx_bytes": 7680000000,
+      "total_bytes": 10240000000
+    }
+  ],
+  "categories": [
+    {
+      "category": "Streaming",
+      "tx_bytes": 7680000000,
+      "rx_bytes": 17920000000,
+      "total_bytes": 25600000000,
+      "application_count": 2
+    }
+  ],
+  "total_applications": 15,
+  "total_categories": 6
+}
+```
+
+#### `list_top_applications`
+List top applications by bandwidth usage.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Number of top applications to return (default: 10)
+- `time_range` (string, optional): Time range for statistics (default: 24h)
+
+**Example:**
+```python
+result = await mcp.call_tool("list_top_applications", {
+    "site_id": "default",
+    "limit": 5,
+    "time_range": "7d"
+})
+```
+
+**Response:**
+```json
+[
+  {
+    "application": "Netflix",
+    "category": "Streaming",
+    "tx_bytes": 5120000000,
+    "rx_bytes": 10240000000,
+    "total_bytes": 15360000000
+  }
+]
+```
+
+#### `get_client_dpi`
+Get DPI statistics for a specific client.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `client_mac` (string, required): Client MAC address
+- `time_range` (string, optional): Time range for statistics (default: 24h)
+- `limit` (integer, optional): Maximum number of applications to return
+- `offset` (integer, optional): Number of applications to skip
+
+**Example:**
+```python
+result = await mcp.call_tool("get_client_dpi", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:01",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+```json
+{
+  "site_id": "default",
+  "client_mac": "aa:bb:cc:dd:ee:01",
+  "time_range": "24h",
+  "total_tx_bytes": 512000000,
+  "total_rx_bytes": 1024000000,
+  "total_bytes": 1536000000,
+  "applications": [
+    {
+      "application": "Netflix",
+      "category": "Streaming",
+      "tx_bytes": 256000000,
+      "rx_bytes": 768000000,
+      "total_bytes": 1024000000,
+      "percentage": 66.67
+    }
+  ],
+  "total_applications": 8
+}
+```
+
+### Caching (Optional)
+
+The MCP server includes optional Redis-based caching to reduce API calls and improve performance.
+
+**Configuration:**
+Set these environment variables to enable caching:
+- `REDIS_HOST` (default: localhost)
+- `REDIS_PORT` (default: 6379)
+- `REDIS_DB` (default: 0)
+- `REDIS_PASSWORD` (optional)
+
+**Cache TTL by Resource Type:**
+- Sites: 5 minutes
+- Devices: 1 minute
+- Clients: 30 seconds
+- Networks: 5 minutes
+- WLANs: 5 minutes
+- Firewall Rules: 5 minutes
+- Port Forwards: 5 minutes
+- DPI Stats: 2 minutes
+
+**Cache Invalidation:**
+Caches are automatically invalidated when mutating operations are performed on related resources.
+
+### Webhooks (Optional)
+
+The MCP server can receive webhooks from UniFi for real-time event processing.
+
+**Configuration:**
+Set `WEBHOOK_SECRET` environment variable for signature verification.
+
+**Webhook Endpoint:**
+```
+POST /webhooks/unifi
+```
+
+**Supported Events:**
+- `device.online` - Device came online
+- `device.offline` - Device went offline
+- `client.connected` - Client connected
+- `client.disconnected` - Client disconnected
+- `alert.raised` - Alert raised
+- `event.occurred` - Generic event
+
+**Event Handlers:**
+Webhooks automatically invalidate relevant caches and can trigger custom handlers.
+
 ## MCP Resources
 
 Resources provide read-only access to UniFi data through standardized URIs.
@@ -904,10 +1281,11 @@ asyncio.run(monitor_devices())
 
 Planned features for future releases:
 
-- [ ] Port forwarding management
-- [ ] WiFi network (SSID) management
-- [ ] DPI (Deep Packet Inspection) statistics
-- [ ] Webhook support for events
+- [x] Port forwarding management (✅ Phase 5)
+- [x] WiFi network (SSID) management (✅ Phase 5)
+- [x] DPI (Deep Packet Inspection) statistics (✅ Phase 5)
+- [x] Webhook support for events (✅ Phase 5)
+- [x] Redis caching for performance (✅ Phase 5)
 - [ ] Backup and restore operations
 - [ ] Bulk operations for devices
 - [ ] Advanced firewall rule management

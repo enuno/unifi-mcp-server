@@ -8,10 +8,13 @@ from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import device_control as device_control_tools
 from .tools import devices as devices_tools
+from .tools import dpi as dpi_tools
 from .tools import firewall as firewall_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
+from .tools import port_forwarding as port_fwd_tools
 from .tools import sites as sites_tools
+from .tools import wifi as wifi_tools
 from .utils import get_logger
 
 # Initialize settings
@@ -359,6 +362,133 @@ async def reconnect_client(
 ) -> dict:
     """Force a client to reconnect (requires confirm=True)."""
     return await client_mgmt_tools.reconnect_client(site_id, client_mac, settings, confirm, dry_run)
+
+
+# WiFi Network (SSID) Management Tools (Phase 5)
+@mcp.tool()
+async def list_wlans(site_id: str, limit: int | None = None, offset: int | None = None) -> list[dict]:
+    """List all wireless networks (SSIDs) in a site."""
+    return await wifi_tools.list_wlans(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def create_wlan(
+    site_id: str,
+    name: str,
+    security: str,
+    password: str | None = None,
+    enabled: bool = True,
+    is_guest: bool = False,
+    wpa_mode: str = "wpa2",
+    wpa_enc: str = "ccmp",
+    vlan_id: int | None = None,
+    hide_ssid: bool = False,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new wireless network/SSID (requires confirm=True)."""
+    return await wifi_tools.create_wlan(
+        site_id, name, security, settings, password, enabled, is_guest,
+        wpa_mode, wpa_enc, vlan_id, hide_ssid, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def update_wlan(
+    site_id: str,
+    wlan_id: str,
+    name: str | None = None,
+    security: str | None = None,
+    password: str | None = None,
+    enabled: bool | None = None,
+    is_guest: bool | None = None,
+    wpa_mode: str | None = None,
+    wpa_enc: str | None = None,
+    vlan_id: int | None = None,
+    hide_ssid: bool | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing wireless network (requires confirm=True)."""
+    return await wifi_tools.update_wlan(
+        site_id, wlan_id, settings, name, security, password, enabled,
+        is_guest, wpa_mode, wpa_enc, vlan_id, hide_ssid, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def delete_wlan(
+    site_id: str, wlan_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete a wireless network (requires confirm=True)."""
+    return await wifi_tools.delete_wlan(site_id, wlan_id, settings, confirm, dry_run)
+
+
+@mcp.tool()
+async def get_wlan_statistics(site_id: str, wlan_id: str | None = None) -> dict:
+    """Get WiFi usage statistics for a site or specific WLAN."""
+    return await wifi_tools.get_wlan_statistics(site_id, settings, wlan_id)
+
+
+# Port Forwarding Management Tools (Phase 5)
+@mcp.tool()
+async def list_port_forwards(site_id: str, limit: int | None = None, offset: int | None = None) -> list[dict]:
+    """List all port forwarding rules in a site."""
+    return await port_fwd_tools.list_port_forwards(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def create_port_forward(
+    site_id: str,
+    name: str,
+    dst_port: int,
+    fwd_ip: str,
+    fwd_port: int,
+    protocol: str = "tcp_udp",
+    src: str = "any",
+    enabled: bool = True,
+    log: bool = False,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a port forwarding rule (requires confirm=True)."""
+    return await port_fwd_tools.create_port_forward(
+        site_id, name, dst_port, fwd_ip, fwd_port, settings,
+        protocol, src, enabled, log, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def delete_port_forward(
+    site_id: str, rule_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete a port forwarding rule (requires confirm=True)."""
+    return await port_fwd_tools.delete_port_forward(site_id, rule_id, settings, confirm, dry_run)
+
+
+# DPI Statistics Tools (Phase 5)
+@mcp.tool()
+async def get_dpi_statistics(site_id: str, time_range: str = "24h") -> dict:
+    """Get Deep Packet Inspection statistics for a site."""
+    return await dpi_tools.get_dpi_statistics(site_id, settings, time_range)
+
+
+@mcp.tool()
+async def list_top_applications(site_id: str, limit: int = 10, time_range: str = "24h") -> list[dict]:
+    """List top applications by bandwidth usage."""
+    return await dpi_tools.list_top_applications(site_id, settings, limit, time_range)
+
+
+@mcp.tool()
+async def get_client_dpi(
+    site_id: str,
+    client_mac: str,
+    time_range: str = "24h",
+    limit: int | None = None,
+    offset: int | None = None,
+) -> dict:
+    """Get DPI statistics for a specific client."""
+    return await dpi_tools.get_client_dpi(site_id, client_mac, settings, time_range, limit, offset)
 
 
 def main() -> None:

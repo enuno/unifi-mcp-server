@@ -1,0 +1,116 @@
+# AI Ignore File
+# Files and directories that AI coding assistants should exclude from analysis
+
+# Build Artifacts
+dist/
+build/
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test Coverage and Reports
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+.pytest_cache/
+.tox/
+.nox/
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Generated Documentation
+docs/_build/
+site/
+_build/
+
+# Logs and Temporary Files
+*.log
+logs/
+tmp/
+temp/
+*.tmp
+
+# Security Reports
+bandit-report.json
+safety-report.json
+pip-audit-report.json
+trivy-report.json
+*.sarif
+
+# Secrets and Credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+credentials.json
+secrets.yaml
+.secrets/
+
+# Package Lock Files
+poetry.lock
+Pipfile.lock
+uv.lock
+
+# Compiled Code
+*.pyc
+*.pyo
+*.pyd
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Large Data Files
+*.csv
+*.dat
+*.db
+*.sqlite
+*.sqlite3
+
+# Experimental Outputs
+experiments/
+outputs/
+checkpoints/
+*.ckpt
+
+# Third-party Dependencies
+node_modules/
+vendor/
+
+# Git Files
+.git/
+.gitignore
+
+# CI/CD Artifacts
+.github/
+
+# Docker
+*.tar
+*.tar.gz
+docker-compose.override.yml
+
+# MyPy Cache
+.mypy_cache/
+.dmypy.json
+
+# Ruff Cache
+.ruff_cache/

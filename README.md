@@ -9,16 +9,42 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 
 ## Features
 
-- **Device Management**: List, monitor, and control UniFi devices (APs, switches, gateways)
-- **Network Configuration**: Manage networks, VLANs, and subnets
-- **Client Management**: Query and manage connected clients
-- **Firewall Rules**: Create and manage firewall rules
-- **Multi-Site Support**: Work with multiple UniFi sites
-- **Real-time Monitoring**: Access device and network statistics
-- **Type-Safe**: Full type hints and Pydantic validation
-- **Async Support**: Built with async/await for high performance
-- **Comprehensive Testing**: Extensive test coverage with pytest
-- **Security-First**: Multiple security scanners and best practices
+### Core Capabilities
+
+- **Device Management**: List, monitor, restart, locate, and upgrade UniFi devices (APs, switches, gateways)
+- **Network Configuration**: Create, update, and delete networks, VLANs, and subnets with DHCP configuration
+- **Client Management**: Query, block, unblock, and reconnect clients
+- **Firewall Rules**: Create, update, and delete firewall rules with traffic filtering
+- **WiFi/SSID Management**: Create and manage wireless networks with WPA2/WPA3, guest networks, and VLAN isolation
+- **Port Forwarding**: Configure port forwarding rules for external access
+- **DPI Statistics**: Deep Packet Inspection analytics for bandwidth usage by application and category
+- **Multi-Site Support**: Work with multiple UniFi sites seamlessly
+- **Real-time Monitoring**: Access device, network, client, and WiFi statistics
+
+### Advanced Features
+
+- **Redis Caching**: Optional Redis-based caching for improved performance (configurable TTL per resource type)
+- **Webhook Support**: Real-time event processing with HMAC signature verification
+- **Automatic Cache Invalidation**: Smart cache invalidation when configuration changes
+- **Event Handlers**: Built-in handlers for device, client, and alert events
+
+### Safety & Security
+
+- **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
+- **Dry-Run Mode**: Preview changes before applying them with `dry_run=True`
+- **Audit Logging**: All operations logged to `audit.log` for compliance
+- **Input Validation**: Comprehensive parameter validation with detailed error messages
+- **Password Masking**: Sensitive data automatically masked in logs
+- **Type-Safe**: Full type hints and Pydantic validation throughout
+- **Security Scanners**: CodeQL, Trivy, Bandit, Safety, and detect-secrets integration
+
+### Technical Excellence
+
+- **Async Support**: Built with async/await for high performance and concurrency
+- **MCP Protocol**: Standard Model Context Protocol for AI agent integration
+- **Comprehensive Testing**: 105 unit tests with detailed coverage reporting
+- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds
+- **Multi-Architecture**: Docker images for amd64 and arm64
 
 ## Quick Start
 
@@ -117,6 +143,15 @@ UNIFI_VERIFY_SSL=true
 
 # Optional settings
 UNIFI_SITE=default
+
+# Redis caching (optional - improves performance)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+# REDIS_PASSWORD=your-password  # If Redis requires authentication
+
+# Webhook support (optional - for real-time events)
+WEBHOOK_SECRET=your-webhook-secret-here
 ```
 
 See `.env.example` for all available options.
@@ -178,9 +213,32 @@ async def main():
     for device in devices:
         print(f"{device['name']}: {device['status']}")
 
-    # Get network information
+    # Get network information via resource
     networks = await mcp.read_resource("sites://default/networks")
     print(f"Networks: {len(networks)}")
+
+    # Create a guest WiFi network with VLAN isolation
+    wifi = await mcp.call_tool("create_wlan", {
+        "site_id": "default",
+        "name": "Guest WiFi",
+        "security": "wpapsk",
+        "password": "GuestPass123!",
+        "is_guest": True,
+        "vlan_id": 100,
+        "confirm": True  # Required for safety
+    })
+    print(f"Created WiFi: {wifi['name']}")
+
+    # Get DPI statistics for top bandwidth users
+    top_apps = await mcp.call_tool("list_top_applications", {
+        "site_id": "default",
+        "limit": 5,
+        "time_range": "24h"
+    })
+
+    for app in top_apps:
+        gb = app['total_bytes'] / 1024**3
+        print(f"{app['application']}: {gb:.2f} GB")
 
 asyncio.run(main())
 ```
@@ -255,24 +313,40 @@ uv run mcp dev src/main.py
 ```
 unifi-mcp-server/
 ├── .github/
-│   └── workflows/          # CI/CD pipelines
+│   └── workflows/          # CI/CD pipelines (CI, security, release)
+├── .claude/
+│   └── commands/          # Custom slash commands for development
 ├── src/
-│   ├── main.py            # MCP server entry point
+│   ├── main.py            # MCP server entry point (40 tools registered)
+│   ├── cache.py           # Redis caching implementation
 │   ├── config/            # Configuration management
-│   ├── api/               # UniFi API client
+│   ├── api/               # UniFi API client with rate limiting
 │   ├── tools/             # MCP tool definitions
+│   │   ├── clients.py     # Client query tools
+│   │   ├── devices.py     # Device query tools
+│   │   ├── networks.py    # Network query tools
+│   │   ├── sites.py       # Site query tools
+│   │   ├── firewall.py    # Firewall management (Phase 4)
+│   │   ├── network_config.py  # Network configuration (Phase 4)
+│   │   ├── device_control.py  # Device control (Phase 4)
+│   │   ├── client_management.py  # Client management (Phase 4)
+│   │   ├── wifi.py        # WiFi/SSID management (Phase 5)
+│   │   ├── port_forwarding.py  # Port forwarding (Phase 5)
+│   │   └── dpi.py         # DPI statistics (Phase 5)
 │   ├── resources/         # MCP resource definitions
-│   └── utils/             # Utility functions
+│   ├── webhooks/          # Webhook receiver and handlers (Phase 5)
+│   └── utils/             # Utility functions and validators
 ├── tests/
-│   ├── unit/              # Unit tests
+│   ├── unit/              # Unit tests (105 tests)
 │   └── integration/       # Integration tests
 ├── docs/                  # Additional documentation
+│   └── AI-Coding/         # AI coding guidelines
 ├── .env.example           # Environment variable template
 ├── pyproject.toml         # Project configuration
 ├── README.md              # This file
-├── API.md                 # API documentation
+├── API.md                 # Complete API documentation
 ├── CONTRIBUTING.md        # Contribution guidelines
-├── SECURITY.md            # Security policy
+├── SECURITY.md            # Security policy and best practices
 ├── AGENTS.md              # AI agent guidelines
 └── LICENSE                # Apache 2.0 License
 ```
@@ -307,28 +381,47 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 
 ## Roadmap
 
-### Version 0.1.0 (Current)
+### Version 0.1.0 (Current - Complete ✅)
 
-- [x] Basic device management
-- [x] Network configuration
-- [x] Client management
-- [x] Firewall rule management
-- [x] Site support
+**Phase 3: Read-Only Operations (16 tools)**
+- [x] Device management (list, details, statistics, search by type)
+- [x] Client management (list, details, statistics, search)
+- [x] Network information (details, VLANs, subnets, statistics)
+- [x] Site management (list, details, statistics)
+- [x] MCP resources (sites, devices, clients, networks)
+
+**Phase 4: Mutating Operations with Safety (13 tools)**
+- [x] Firewall rule management (create, update, delete)
+- [x] Network configuration (create, update, delete networks/VLANs)
+- [x] Device control (restart, locate, upgrade)
+- [x] Client management (block, unblock, reconnect)
+- [x] Safety mechanisms (confirmation, dry-run, audit logging)
+
+**Phase 5: Advanced Features (11 tools)**
+- [x] WiFi/SSID management (create, update, delete, statistics)
+- [x] Port forwarding configuration (create, delete, list)
+- [x] DPI statistics (site-wide, top apps, per-client)
+- [x] Redis caching with automatic invalidation
+- [x] Webhook support for real-time events
+
+**Total: 40 MCP tools + 4 MCP resources**
 
 ### Version 0.2.0 (Planned)
 
-- [ ] WiFi network (SSID) management
-- [ ] Port forwarding configuration
-- [ ] DPI statistics
-- [ ] Webhook support for events
+- [ ] Unit tests for Phase 5 tools (target: 80% coverage)
+- [ ] Integration tests for caching and webhooks
+- [ ] Performance benchmarks and optimization
+- [ ] Additional DPI analytics (historical trends)
+- [ ] Backup and restore operations
 
 ### Version 1.0.0 (Future)
 
-- [ ] Complete UniFi API coverage
-- [ ] Advanced analytics
-- [ ] Backup and restore
-- [ ] VPN configuration
-- [ ] Alert management
+- [ ] Complete UniFi API coverage (remaining endpoints)
+- [ ] Advanced analytics dashboard
+- [ ] VPN configuration management
+- [ ] Alert and notification management
+- [ ] Bulk operations for devices
+- [ ] Traffic shaping and QoS management
 
 ## Acknowledgments
 

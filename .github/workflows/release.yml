@@ -86,7 +86,7 @@ jobs:
       - name: Build Python package
         run: |
           source .venv/bin/activate
-          pip install build
+          uv pip install build
           python -m build
 
       - name: Upload build artifacts

@@ -5,7 +5,6 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     ValidationError,
     get_logger,
@@ -107,9 +106,7 @@ async def create_wlan(
     # Validate WPA mode
     valid_wpa_modes = ["wpa", "wpa2", "wpa3"]
     if wpa_mode not in valid_wpa_modes:
-        raise ValidationError(
-            f"Invalid WPA mode '{wpa_mode}'. Must be one of: {valid_wpa_modes}"
-        )
+        raise ValidationError(f"Invalid WPA mode '{wpa_mode}'. Must be one of: {valid_wpa_modes}")
 
     # Validate WPA encryption
     valid_wpa_enc = ["tkip", "ccmp", "ccmp-tkip"]
@@ -167,9 +164,7 @@ async def create_wlan(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(
-                f"/ea/sites/{site_id}/rest/wlanconf", json=wlan_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json=wlan_data)
             created_wlan = response.get("data", [{}])[0]
 
             logger.info(f"Created WLAN '{name}' in site '{site_id}'")
@@ -407,9 +402,7 @@ async def delete_wlan(
             if not wlan_exists:
                 raise ResourceNotFoundError("wlan", wlan_id)
 
-            response = await client.delete(
-                f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}"
-            )
+            response = await client.delete(f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}")
 
             logger.info(f"Deleted WLAN '{wlan_id}' from site '{site_id}'")
             log_audit(
@@ -473,25 +466,26 @@ async def get_wlan_statistics(
 
             # Count clients on this WLAN (match by essid/name)
             clients_on_wlan = [
-                c for c in clients_data
-                if c.get("essid") == wlan_name or c.get("is_wired") is False
+                c for c in clients_data if c.get("essid") == wlan_name or c.get("is_wired") is False
             ]
 
             # Calculate total bandwidth
             total_tx = sum(c.get("tx_bytes", 0) for c in clients_on_wlan)
             total_rx = sum(c.get("rx_bytes", 0) for c in clients_on_wlan)
 
-            wlan_stats.append({
-                "wlan_id": wlan_identifier,
-                "name": wlan_name,
-                "enabled": wlan.get("enabled", False),
-                "security": wlan.get("security"),
-                "is_guest": wlan.get("is_guest", False),
-                "client_count": len(clients_on_wlan),
-                "total_tx_bytes": total_tx,
-                "total_rx_bytes": total_rx,
-                "total_bytes": total_tx + total_rx,
-            })
+            wlan_stats.append(
+                {
+                    "wlan_id": wlan_identifier,
+                    "name": wlan_name,
+                    "enabled": wlan.get("enabled", False),
+                    "security": wlan.get("security"),
+                    "is_guest": wlan.get("is_guest", False),
+                    "client_count": len(clients_on_wlan),
+                    "total_tx_bytes": total_tx,
+                    "total_rx_bytes": total_rx,
+                    "total_bytes": total_tx + total_rx,
+                }
+            )
 
         logger.info(f"Retrieved WLAN statistics for site '{site_id}'")
 

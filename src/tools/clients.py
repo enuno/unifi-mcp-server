@@ -14,9 +14,7 @@ from ..utils import (
 )
 
 
-async def get_client_details(
-    site_id: str, client_mac: str, settings: Settings
-) -> dict[str, Any]:
+async def get_client_details(site_id: str, client_mac: str, settings: Settings) -> dict[str, Any]:
     """Get detailed information for a specific client.
 
     Args:
@@ -194,7 +192,5 @@ async def search_clients(
         # Parse into Client models
         clients = [Client(**c).model_dump() for c in paginated]
 
-        logger.info(
-            f"Found {len(clients)} clients matching '{query}' in site '{site_id}'"
-        )
+        logger.info(f"Found {len(clients)} clients matching '{query}' in site '{site_id}'")
         return clients

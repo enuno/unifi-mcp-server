@@ -5,7 +5,6 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     ValidationError,
     get_logger,
@@ -103,9 +102,7 @@ async def create_port_forward(
     # Validate protocol
     valid_protocols = ["tcp", "udp", "tcp_udp"]
     if protocol not in valid_protocols:
-        raise ValidationError(
-            f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}"
-        )
+        raise ValidationError(f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}")
 
     # Validate source if not "any"
     if src != "any":
@@ -153,9 +150,7 @@ async def create_port_forward(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(
-                f"/ea/sites/{site_id}/rest/portforward", json=pf_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/rest/portforward", json=pf_data)
             created_rule = response.get("data", [{}])[0]
 
             logger.info(
@@ -213,8 +208,7 @@ async def delete_port_forward(
 
     if dry_run:
         logger.info(
-            f"DRY RUN: Would delete port forwarding rule '{rule_id}' "
-            f"from site '{site_id}'"
+            f"DRY RUN: Would delete port forwarding rule '{rule_id}' " f"from site '{site_id}'"
         )
         log_audit(
             operation="delete_port_forward",
@@ -237,13 +231,9 @@ async def delete_port_forward(
             if not rule_exists:
                 raise ResourceNotFoundError("port_forward_rule", rule_id)
 
-            response = await client.delete(
-                f"/ea/sites/{site_id}/rest/portforward/{rule_id}"
-            )
+            response = await client.delete(f"/ea/sites/{site_id}/rest/portforward/{rule_id}")
 
-            logger.info(
-                f"Deleted port forwarding rule '{rule_id}' from site '{site_id}'"
-            )
+            logger.info(f"Deleted port forwarding rule '{rule_id}' from site '{site_id}'")
             log_audit(
                 operation="delete_port_forward",
                 parameters=parameters,

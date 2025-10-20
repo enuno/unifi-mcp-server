@@ -2,14 +2,14 @@
 
 import logging
 import sys
-from typing import Any, Optional
+from typing import Any
 
 # Configure logging format
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-def get_logger(name: str, level: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str, level: str | None = None) -> logging.Logger:
     """Get a configured logger instance.
 
     Args:
@@ -44,8 +44,8 @@ def log_api_request(
     logger: logging.Logger,
     method: str,
     url: str,
-    status_code: Optional[int] = None,
-    duration_ms: Optional[float] = None,
+    status_code: int | None = None,
+    duration_ms: float | None = None,
     **kwargs: Any,
 ) -> None:
     """Log API request details in structured format.

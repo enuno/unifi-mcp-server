@@ -5,12 +5,10 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     get_logger,
     log_audit,
     validate_confirmation,
-    validate_device_id,
     validate_mac_address,
     validate_site_id,
 )
@@ -66,17 +64,14 @@ async def restart_device(
             devices_data = response.get("data", [])
 
             device_exists = any(
-                validate_mac_address(d.get("mac", "")) == device_mac
-                for d in devices_data
+                validate_mac_address(d.get("mac", "")) == device_mac for d in devices_data
             )
             if not device_exists:
                 raise ResourceNotFoundError("device", device_mac)
 
             # Restart the device
             restart_data = {"mac": device_mac, "cmd": "restart"}
-            response = await client.post(
-                f"/ea/sites/{site_id}/cmd/devmgr", json=restart_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=restart_data)
 
             logger.info(f"Initiated restart for device '{device_mac}' in site '{site_id}'")
             log_audit(
@@ -139,8 +134,7 @@ async def locate_device(
 
     if dry_run:
         logger.info(
-            f"DRY RUN: Would {action} locate mode for device '{device_mac}' "
-            f"in site '{site_id}'"
+            f"DRY RUN: Would {action} locate mode for device '{device_mac}' " f"in site '{site_id}'"
         )
         log_audit(
             operation="locate_device",
@@ -160,8 +154,7 @@ async def locate_device(
             devices_data = response.get("data", [])
 
             device_exists = any(
-                validate_mac_address(d.get("mac", "")) == device_mac
-                for d in devices_data
+                validate_mac_address(d.get("mac", "")) == device_mac for d in devices_data
             )
             if not device_exists:
                 raise ResourceNotFoundError("device", device_mac)
@@ -169,9 +162,7 @@ async def locate_device(
             # Set locate state
             cmd = "set-locate" if enabled else "unset-locate"
             locate_data = {"mac": device_mac, "cmd": cmd}
-            response = await client.post(
-                f"/ea/sites/{site_id}/cmd/devmgr", json=locate_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=locate_data)
 
             logger.info(
                 f"{action.capitalize()}d locate mode for device '{device_mac}' "
@@ -275,13 +266,10 @@ async def upgrade_device(
             if firmware_url:
                 upgrade_data["url"] = firmware_url
 
-            response = await client.post(
-                f"/ea/sites/{site_id}/cmd/devmgr", json=upgrade_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=upgrade_data)
 
             logger.info(
-                f"Initiated firmware upgrade for device '{device_mac}' "
-                f"in site '{site_id}'"
+                f"Initiated firmware upgrade for device '{device_mac}' " f"in site '{site_id}'"
             )
             log_audit(
                 operation="upgrade_device",

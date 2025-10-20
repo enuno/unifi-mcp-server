@@ -8,8 +8,9 @@ event validation, and rate limiting.
 import hashlib
 import hmac
 import json
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, validator
@@ -133,19 +134,19 @@ class WebhookReceiver:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid JSON payload",
-                )
+                ) from e
             except ValueError as e:
                 self.logger.error(f"Invalid webhook event: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=str(e),
-                )
+                ) from e
             except Exception as e:
                 self.logger.error(f"Error processing webhook: {e}")
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="Internal server error",
-                )
+                ) from e
 
         self.logger.info(f"Webhook receiver registered at {self.path}")
 
@@ -242,9 +243,7 @@ class WebhookReceiver:
 
         # Clean old cache entries (older than 5 minutes)
         cutoff = datetime.now() - timedelta(minutes=5)
-        self._event_cache = {
-            eid: ts for eid, ts in self._event_cache.items() if ts > cutoff
-        }
+        self._event_cache = {eid: ts for eid, ts in self._event_cache.items() if ts > cutoff}
 
         # Check if event ID exists
         if event.event_id in self._event_cache:

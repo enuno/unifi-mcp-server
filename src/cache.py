@@ -4,12 +4,11 @@ This module provides caching capabilities to reduce API calls and improve perfor
 Supports configurable TTL per resource type and graceful degradation if Redis is unavailable.
 """
 
-import asyncio
 import json
 import logging
-from datetime import timedelta
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import Any
 
 try:
     import redis.asyncio as redis
@@ -164,9 +163,7 @@ class CacheClient:
             self.logger.error(f"Cache get error for key '{key}': {e}")
             return None
 
-    async def set(
-        self, key: str, value: Any, ttl: int | None = None
-    ) -> bool:
+    async def set(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """Set value in cache.
 
         Args:

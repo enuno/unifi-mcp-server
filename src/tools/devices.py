@@ -48,9 +48,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         raise ResourceNotFoundError("device", device_id)
 
 
-async def get_device_statistics(
-    site_id: str, device_id: str, settings: Settings
-) -> dict[str, Any]:
+async def get_device_statistics(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve real-time statistics for a device.
 
     Args:
@@ -135,8 +133,7 @@ async def list_devices_by_type(
         devices = [Device(**d).model_dump() for d in paginated]
 
         logger.info(
-            f"Retrieved {len(devices)} devices of type '{device_type}' "
-            f"for site '{site_id}'"
+            f"Retrieved {len(devices)} devices of type '{device_type}' " f"for site '{site_id}'"
         )
         return devices
 
@@ -187,7 +184,5 @@ async def search_devices(
         # Parse into Device models
         devices = [Device(**d).model_dump() for d in paginated]
 
-        logger.info(
-            f"Found {len(devices)} devices matching '{query}' in site '{site_id}'"
-        )
+        logger.info(f"Found {len(devices)} devices matching '{query}' in site '{site_id}'")
         return devices

@@ -1,8 +1,9 @@
 """Unit tests for UniFi API client."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import httpx
+import pytest
 
 from src.api import UniFiClient
 from src.config import Settings
@@ -198,9 +199,7 @@ class TestUniFiClient:
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_instance = AsyncMock()
-            mock_instance.request = AsyncMock(
-                side_effect=httpx.TimeoutException("Request timeout")
-            )
+            mock_instance.request = AsyncMock(side_effect=httpx.TimeoutException("Request timeout"))
             mock_instance.aclose = AsyncMock()
             mock_client_class.return_value = mock_instance
 
@@ -246,8 +245,9 @@ class TestRateLimiter:
     @pytest.mark.asyncio
     async def test_rate_limiter_replenishes_tokens(self) -> None:
         """Test rate limiter replenishes tokens over time."""
-        from src.api.client import RateLimiter
         import asyncio
+
+        from src.api.client import RateLimiter
 
         limiter = RateLimiter(requests_per_period=2, period_seconds=1)
 

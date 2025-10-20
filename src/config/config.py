@@ -1,7 +1,7 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
 from enum import Enum
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     )
 
     # Local API Configuration
-    local_host: Optional[str] = Field(
+    local_host: str | None = Field(
         default=None,
         description="Local UniFi controller hostname/IP",
         validation_alias="UNIFI_LOCAL_HOST",

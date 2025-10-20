@@ -1,6 +1,5 @@
 """Device data model."""
 
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,34 +8,34 @@ class Device(BaseModel):
     """UniFi network device information."""
 
     id: str = Field(..., description="Device ID", alias="_id")
-    name: Optional[str] = Field(None, description="Device name")
+    name: str | None = Field(None, description="Device name")
     model: str = Field(..., description="Device model")
     type: str = Field(..., description="Device type (uap, usw, ugw, etc.)")
     mac: str = Field(..., description="Device MAC address")
-    ip: Optional[str] = Field(None, description="Device IP address")
+    ip: str | None = Field(None, description="Device IP address")
 
     # Status fields
     state: int = Field(..., description="Device state (0=offline, 1=online, etc.)")
-    adopted: Optional[bool] = Field(None, description="Whether device is adopted")
-    disabled: Optional[bool] = Field(None, description="Whether device is disabled")
+    adopted: bool | None = Field(None, description="Whether device is adopted")
+    disabled: bool | None = Field(None, description="Whether device is disabled")
 
     # Hardware info
-    version: Optional[str] = Field(None, description="Firmware version")
-    uptime: Optional[int] = Field(None, description="Uptime in seconds")
+    version: str | None = Field(None, description="Firmware version")
+    uptime: int | None = Field(None, description="Uptime in seconds")
 
     # Performance metrics
-    cpu: Optional[float] = Field(None, description="CPU usage percentage")
-    mem: Optional[float] = Field(None, description="Memory usage percentage")
-    uplink_depth: Optional[int] = Field(None, description="Uplink depth in network topology")
+    cpu: float | None = Field(None, description="CPU usage percentage")
+    mem: float | None = Field(None, description="Memory usage percentage")
+    uplink_depth: int | None = Field(None, description="Uplink depth in network topology")
 
     # Network stats
-    bytes: Optional[int] = Field(None, description="Total bytes transferred")
-    tx_bytes: Optional[int] = Field(None, description="Transmitted bytes")
-    rx_bytes: Optional[int] = Field(None, description="Received bytes")
+    bytes: int | None = Field(None, description="Total bytes transferred")
+    tx_bytes: int | None = Field(None, description="Transmitted bytes")
+    rx_bytes: int | None = Field(None, description="Received bytes")
 
     # Additional metadata
-    serial: Optional[str] = Field(None, description="Device serial number")
-    license_state: Optional[str] = Field(None, description="License state")
+    serial: str | None = Field(None, description="Device serial number")
+    license_state: str | None = Field(None, description="License state")
 
     model_config = ConfigDict(
         populate_by_name=True,

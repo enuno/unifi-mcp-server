@@ -5,7 +5,6 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     get_logger,
     log_audit,
@@ -65,8 +64,7 @@ async def block_client(
             clients_data = response.get("data", [])
 
             client_exists = any(
-                validate_mac_address(c.get("mac", "")) == client_mac
-                for c in clients_data
+                validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
             )
             if not client_exists:
                 raise ResourceNotFoundError("client", client_mac)
@@ -146,9 +144,7 @@ async def unblock_client(
 
             # Unblock the client
             unblock_data = {"mac": client_mac, "cmd": "unblock-sta"}
-            response = await client.post(
-                f"/ea/sites/{site_id}/cmd/stamgr", json=unblock_data
-            )
+            await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json=unblock_data)
 
             logger.info(f"Unblocked client '{client_mac}' in site '{site_id}'")
             log_audit(
@@ -206,9 +202,7 @@ async def reconnect_client(
     parameters = {"site_id": site_id, "client_mac": client_mac}
 
     if dry_run:
-        logger.info(
-            f"DRY RUN: Would force reconnect for client '{client_mac}' in site '{site_id}'"
-        )
+        logger.info(f"DRY RUN: Would force reconnect for client '{client_mac}' in site '{site_id}'")
         log_audit(
             operation="reconnect_client",
             parameters=parameters,
@@ -227,17 +221,14 @@ async def reconnect_client(
             clients_data = response.get("data", [])
 
             client_exists = any(
-                validate_mac_address(c.get("mac", "")) == client_mac
-                for c in clients_data
+                validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
             )
             if not client_exists:
                 raise ResourceNotFoundError("active client", client_mac)
 
             # Force client reconnection
             reconnect_data = {"mac": client_mac, "cmd": "kick-sta"}
-            response = await client.post(
-                f"/ea/sites/{site_id}/cmd/stamgr", json=reconnect_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json=reconnect_data)
 
             logger.info(f"Forced reconnect for client '{client_mac}' in site '{site_id}'")
             log_audit(

@@ -2,7 +2,7 @@
 
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 
 def get_timestamp() -> int:
@@ -82,7 +82,7 @@ def format_percentage(value: float, precision: int = 1) -> str:
     return f"{pct:.{precision}f}%"
 
 
-def sanitize_dict(data: dict[str, Any], exclude_keys: Optional[list[str]] = None) -> dict[str, Any]:
+def sanitize_dict(data: dict[str, Any], exclude_keys: list[str] | None = None) -> dict[str, Any]:
     """Remove sensitive keys from dictionary.
 
     Args:
@@ -136,7 +136,7 @@ def parse_device_type(model: str) -> str:
         return "unknown"
 
 
-def build_uri(scheme: str, *parts: str, query: Optional[dict[str, Any]] = None) -> str:
+def build_uri(scheme: str, *parts: str, query: dict[str, Any] | None = None) -> str:
     """Build a URI with optional query parameters.
 
     Args:

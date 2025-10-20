@@ -1,6 +1,5 @@
 """Clients MCP resource implementation."""
 
-from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
@@ -46,7 +45,9 @@ class ClientsResource:
 
             # Fetch clients from API
             # Use /sta for active clients or /stat/alluser for all
-            endpoint = f"/ea/sites/{site_id}/sta" if active_only else f"/ea/sites/{site_id}/stat/alluser"
+            endpoint = (
+                f"/ea/sites/{site_id}/sta" if active_only else f"/ea/sites/{site_id}/stat/alluser"
+            )
 
             response = await client.get(endpoint)
 

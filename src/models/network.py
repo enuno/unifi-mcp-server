@@ -1,6 +1,5 @@
 """Network data model."""
 
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,36 +12,38 @@ class Network(BaseModel):
     purpose: str = Field(..., description="Network purpose (corporate, guest, etc.)")
 
     # Network configuration
-    vlan: Optional[int] = Field(None, description="VLAN ID", alias="vlan_enabled")
-    vlan_id: Optional[int] = Field(None, description="VLAN number")
-    enabled: Optional[bool] = Field(None, description="Whether network is enabled")
+    vlan: int | None = Field(None, description="VLAN ID", alias="vlan_enabled")
+    vlan_id: int | None = Field(None, description="VLAN number")
+    enabled: bool | None = Field(None, description="Whether network is enabled")
 
     # IP configuration
-    ip_subnet: Optional[str] = Field(None, description="IP subnet (CIDR notation)")
-    networkgroup: Optional[str] = Field(None, description="Network group")
-    domain_name: Optional[str] = Field(None, description="Domain name")
+    ip_subnet: str | None = Field(None, description="IP subnet (CIDR notation)")
+    networkgroup: str | None = Field(None, description="Network group")
+    domain_name: str | None = Field(None, description="Domain name")
 
     # DHCP settings
-    dhcpd_enabled: Optional[bool] = Field(None, description="Whether DHCP is enabled")
-    dhcpd_start: Optional[str] = Field(None, description="DHCP range start")
-    dhcpd_stop: Optional[str] = Field(None, description="DHCP range end")
-    dhcpd_leasetime: Optional[int] = Field(None, description="DHCP lease time in seconds")
-    dhcpd_dns_enabled: Optional[bool] = Field(None, description="Whether DHCP DNS is enabled")
-    dhcpd_dns_1: Optional[str] = Field(None, description="Primary DNS server")
-    dhcpd_dns_2: Optional[str] = Field(None, description="Secondary DNS server")
-    dhcpd_gateway_enabled: Optional[bool] = Field(None, description="Whether DHCP gateway is enabled")
-    dhcpd_gateway: Optional[str] = Field(None, description="DHCP gateway IP")
+    dhcpd_enabled: bool | None = Field(None, description="Whether DHCP is enabled")
+    dhcpd_start: str | None = Field(None, description="DHCP range start")
+    dhcpd_stop: str | None = Field(None, description="DHCP range end")
+    dhcpd_leasetime: int | None = Field(None, description="DHCP lease time in seconds")
+    dhcpd_dns_enabled: bool | None = Field(None, description="Whether DHCP DNS is enabled")
+    dhcpd_dns_1: str | None = Field(None, description="Primary DNS server")
+    dhcpd_dns_2: str | None = Field(None, description="Secondary DNS server")
+    dhcpd_gateway_enabled: bool | None = Field(
+        None, description="Whether DHCP gateway is enabled"
+    )
+    dhcpd_gateway: str | None = Field(None, description="DHCP gateway IP")
 
     # IGMP settings
-    igmp_snooping: Optional[bool] = Field(None, description="IGMP snooping enabled")
+    igmp_snooping: bool | None = Field(None, description="IGMP snooping enabled")
 
     # IPv6
-    ipv6_interface_type: Optional[str] = Field(None, description="IPv6 interface type")
-    ipv6_pd_start: Optional[str] = Field(None, description="IPv6 prefix delegation start")
-    ipv6_pd_stop: Optional[str] = Field(None, description="IPv6 prefix delegation stop")
+    ipv6_interface_type: str | None = Field(None, description="IPv6 interface type")
+    ipv6_pd_start: str | None = Field(None, description="IPv6 prefix delegation start")
+    ipv6_pd_stop: str | None = Field(None, description="IPv6 prefix delegation stop")
 
     # Site association
-    site_id: Optional[str] = Field(None, description="Site ID")
+    site_id: str | None = Field(None, description="Site ID")
 
     model_config = ConfigDict(
         populate_by_name=True,

@@ -73,9 +73,7 @@ async def get_devices_resource(site_id: str) -> str:
         JSON string of devices list
     """
     devices = await devices_resource.list_devices(site_id)
-    return "\n".join(
-        [f"Device: {d.name or d.model} ({d.mac}) - {d.ip}" for d in devices]
-    )
+    return "\n".join([f"Device: {d.name or d.model} ({d.mac}) - {d.ip}" for d in devices])
 
 
 @mcp.resource("sites://{site_id}/clients")
@@ -89,9 +87,7 @@ async def get_clients_resource(site_id: str) -> str:
         JSON string of clients list
     """
     clients = await clients_resource.list_clients(site_id, active_only=True)
-    return "\n".join(
-        [f"Client: {c.hostname or c.name or c.mac} ({c.ip})" for c in clients]
-    )
+    return "\n".join([f"Client: {c.hostname or c.name or c.mac} ({c.ip})" for c in clients])
 
 
 @mcp.resource("sites://{site_id}/networks")
@@ -226,7 +222,17 @@ async def create_firewall_rule(
 ) -> dict:
     """Create a new firewall rule (requires confirm=True)."""
     return await firewall_tools.create_firewall_rule(
-        site_id, name, action, settings, source, destination, protocol, port, enabled, confirm, dry_run
+        site_id,
+        name,
+        action,
+        settings,
+        source,
+        destination,
+        protocol,
+        port,
+        enabled,
+        confirm,
+        dry_run,
     )
 
 
@@ -246,7 +252,18 @@ async def update_firewall_rule(
 ) -> dict:
     """Update an existing firewall rule (requires confirm=True)."""
     return await firewall_tools.update_firewall_rule(
-        site_id, rule_id, settings, name, action, source, destination, protocol, port, enabled, confirm, dry_run
+        site_id,
+        rule_id,
+        settings,
+        name,
+        action,
+        source,
+        destination,
+        protocol,
+        port,
+        enabled,
+        confirm,
+        dry_run,
     )
 
 
@@ -277,8 +294,20 @@ async def create_network(
 ) -> dict:
     """Create a new network/VLAN (requires confirm=True)."""
     return await network_config_tools.create_network(
-        site_id, name, vlan_id, subnet, settings, purpose, dhcp_enabled,
-        dhcp_start, dhcp_stop, dhcp_dns_1, dhcp_dns_2, domain_name, confirm, dry_run
+        site_id,
+        name,
+        vlan_id,
+        subnet,
+        settings,
+        purpose,
+        dhcp_enabled,
+        dhcp_start,
+        dhcp_stop,
+        dhcp_dns_1,
+        dhcp_dns_2,
+        domain_name,
+        confirm,
+        dry_run,
     )
 
 
@@ -301,8 +330,21 @@ async def update_network(
 ) -> dict:
     """Update an existing network (requires confirm=True)."""
     return await network_config_tools.update_network(
-        site_id, network_id, settings, name, vlan_id, subnet, purpose, dhcp_enabled,
-        dhcp_start, dhcp_stop, dhcp_dns_1, dhcp_dns_2, domain_name, confirm, dry_run
+        site_id,
+        network_id,
+        settings,
+        name,
+        vlan_id,
+        subnet,
+        purpose,
+        dhcp_enabled,
+        dhcp_start,
+        dhcp_stop,
+        dhcp_dns_1,
+        dhcp_dns_2,
+        domain_name,
+        confirm,
+        dry_run,
     )
 
 
@@ -311,7 +353,9 @@ async def delete_network(
     site_id: str, network_id: str, confirm: bool = False, dry_run: bool = False
 ) -> dict:
     """Delete a network (requires confirm=True)."""
-    return await network_config_tools.delete_network(site_id, network_id, settings, confirm, dry_run)
+    return await network_config_tools.delete_network(
+        site_id, network_id, settings, confirm, dry_run
+    )
 
 
 # Device Control Tools (Phase 4)
@@ -320,23 +364,37 @@ async def restart_device(
     site_id: str, device_mac: str, confirm: bool = False, dry_run: bool = False
 ) -> dict:
     """Restart a UniFi device (requires confirm=True)."""
-    return await device_control_tools.restart_device(site_id, device_mac, settings, confirm, dry_run)
+    return await device_control_tools.restart_device(
+        site_id, device_mac, settings, confirm, dry_run
+    )
 
 
 @mcp.tool()
 async def locate_device(
-    site_id: str, device_mac: str, enabled: bool = True, confirm: bool = False, dry_run: bool = False
+    site_id: str,
+    device_mac: str,
+    enabled: bool = True,
+    confirm: bool = False,
+    dry_run: bool = False,
 ) -> dict:
     """Enable/disable LED locate mode on a device (requires confirm=True)."""
-    return await device_control_tools.locate_device(site_id, device_mac, settings, enabled, confirm, dry_run)
+    return await device_control_tools.locate_device(
+        site_id, device_mac, settings, enabled, confirm, dry_run
+    )
 
 
 @mcp.tool()
 async def upgrade_device(
-    site_id: str, device_mac: str, firmware_url: str | None = None, confirm: bool = False, dry_run: bool = False
+    site_id: str,
+    device_mac: str,
+    firmware_url: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
 ) -> dict:
     """Trigger firmware upgrade for a device (requires confirm=True)."""
-    return await device_control_tools.upgrade_device(site_id, device_mac, settings, firmware_url, confirm, dry_run)
+    return await device_control_tools.upgrade_device(
+        site_id, device_mac, settings, firmware_url, confirm, dry_run
+    )
 
 
 # Client Management Tools (Phase 4)
@@ -366,7 +424,9 @@ async def reconnect_client(
 
 # WiFi Network (SSID) Management Tools (Phase 5)
 @mcp.tool()
-async def list_wlans(site_id: str, limit: int | None = None, offset: int | None = None) -> list[dict]:
+async def list_wlans(
+    site_id: str, limit: int | None = None, offset: int | None = None
+) -> list[dict]:
     """List all wireless networks (SSIDs) in a site."""
     return await wifi_tools.list_wlans(site_id, settings, limit, offset)
 
@@ -388,8 +448,19 @@ async def create_wlan(
 ) -> dict:
     """Create a new wireless network/SSID (requires confirm=True)."""
     return await wifi_tools.create_wlan(
-        site_id, name, security, settings, password, enabled, is_guest,
-        wpa_mode, wpa_enc, vlan_id, hide_ssid, confirm, dry_run
+        site_id,
+        name,
+        security,
+        settings,
+        password,
+        enabled,
+        is_guest,
+        wpa_mode,
+        wpa_enc,
+        vlan_id,
+        hide_ssid,
+        confirm,
+        dry_run,
     )
 
 
@@ -411,8 +482,20 @@ async def update_wlan(
 ) -> dict:
     """Update an existing wireless network (requires confirm=True)."""
     return await wifi_tools.update_wlan(
-        site_id, wlan_id, settings, name, security, password, enabled,
-        is_guest, wpa_mode, wpa_enc, vlan_id, hide_ssid, confirm, dry_run
+        site_id,
+        wlan_id,
+        settings,
+        name,
+        security,
+        password,
+        enabled,
+        is_guest,
+        wpa_mode,
+        wpa_enc,
+        vlan_id,
+        hide_ssid,
+        confirm,
+        dry_run,
     )
 
 
@@ -432,7 +515,9 @@ async def get_wlan_statistics(site_id: str, wlan_id: str | None = None) -> dict:
 
 # Port Forwarding Management Tools (Phase 5)
 @mcp.tool()
-async def list_port_forwards(site_id: str, limit: int | None = None, offset: int | None = None) -> list[dict]:
+async def list_port_forwards(
+    site_id: str, limit: int | None = None, offset: int | None = None
+) -> list[dict]:
     """List all port forwarding rules in a site."""
     return await port_fwd_tools.list_port_forwards(site_id, settings, limit, offset)
 
@@ -453,8 +538,18 @@ async def create_port_forward(
 ) -> dict:
     """Create a port forwarding rule (requires confirm=True)."""
     return await port_fwd_tools.create_port_forward(
-        site_id, name, dst_port, fwd_ip, fwd_port, settings,
-        protocol, src, enabled, log, confirm, dry_run
+        site_id,
+        name,
+        dst_port,
+        fwd_ip,
+        fwd_port,
+        settings,
+        protocol,
+        src,
+        enabled,
+        log,
+        confirm,
+        dry_run,
     )
 
 
@@ -474,7 +569,9 @@ async def get_dpi_statistics(site_id: str, time_range: str = "24h") -> dict:
 
 
 @mcp.tool()
-async def list_top_applications(site_id: str, limit: int = 10, time_range: str = "24h") -> list[dict]:
+async def list_top_applications(
+    site_id: str, limit: int = 10, time_range: str = "24h"
+) -> list[dict]:
     """List top applications by bandwidth usage."""
     return await dpi_tools.list_top_applications(site_id, settings, limit, time_range)
 

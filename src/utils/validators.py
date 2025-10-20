@@ -1,7 +1,6 @@
 """Input validation functions for UniFi MCP Server."""
 
 import re
-from typing import Any, Optional
 
 from .exceptions import ValidationError
 
@@ -118,7 +117,7 @@ def validate_device_id(device_id: str) -> str:
     return device_id.lower()
 
 
-def validate_confirmation(confirm: Optional[bool], operation: str) -> None:
+def validate_confirmation(confirm: bool | None, operation: str) -> None:
     """Validate that confirmation is provided for mutating operations.
 
     Args:
@@ -134,7 +133,9 @@ def validate_confirmation(confirm: Optional[bool], operation: str) -> None:
         )
 
 
-def validate_limit_offset(limit: Optional[int] = None, offset: Optional[int] = None) -> tuple[int, int]:
+def validate_limit_offset(
+    limit: int | None = None, offset: int | None = None
+) -> tuple[int, int]:
     """Validate and normalize pagination parameters.
 
     Args:

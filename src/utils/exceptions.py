@@ -1,12 +1,12 @@
 """Custom exception classes for UniFi MCP Server."""
 
-from typing import Any, Optional
+from typing import Any
 
 
 class UniFiMCPException(Exception):
     """Base exception for UniFi MCP Server."""
 
-    def __init__(self, message: str, details: Optional[dict[str, Any]] = None) -> None:
+    def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         """Initialize exception with message and optional details.
 
         Args:
@@ -36,8 +36,8 @@ class APIError(UniFiMCPException):
     def __init__(
         self,
         message: str,
-        status_code: Optional[int] = None,
-        response_data: Optional[dict[str, Any]] = None,
+        status_code: int | None = None,
+        response_data: dict[str, Any] | None = None,
     ) -> None:
         """Initialize API error.
 
@@ -57,7 +57,7 @@ class RateLimitError(APIError):
     def __init__(
         self,
         message: str = "Rate limit exceeded",
-        retry_after: Optional[int] = None,
+        retry_after: int | None = None,
     ) -> None:
         """Initialize rate limit error.
 

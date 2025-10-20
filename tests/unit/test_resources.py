@@ -1,7 +1,8 @@
 """Unit tests for MCP resources."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.config import Settings
 from src.resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
@@ -18,9 +19,7 @@ class TestSitesResource:
     """Test suite for SitesResource."""
 
     @pytest.mark.asyncio
-    async def test_list_sites(
-        self, mock_settings: Settings, sample_site_data: dict
-    ) -> None:
+    async def test_list_sites(self, mock_settings: Settings, sample_site_data: dict) -> None:
         """Test listing all sites."""
         with patch("src.resources.sites.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -58,9 +57,7 @@ class TestSitesResource:
             assert sites[0].id == "default"
 
     @pytest.mark.asyncio
-    async def test_get_site(
-        self, mock_settings: Settings, sample_site_data: dict
-    ) -> None:
+    async def test_get_site(self, mock_settings: Settings, sample_site_data: dict) -> None:
         """Test getting a specific site."""
         with patch("src.resources.sites.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -100,9 +97,7 @@ class TestDevicesResource:
     """Test suite for DevicesResource."""
 
     @pytest.mark.asyncio
-    async def test_list_devices(
-        self, mock_settings: Settings, sample_device_data: dict
-    ) -> None:
+    async def test_list_devices(self, mock_settings: Settings, sample_device_data: dict) -> None:
         """Test listing all devices."""
         with patch("src.resources.devices.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -139,9 +134,7 @@ class TestDevicesResource:
             assert devices[0].name == "Switch-Main"
 
     @pytest.mark.asyncio
-    async def test_filter_by_type(
-        self, mock_settings: Settings, sample_device_data: dict
-    ) -> None:
+    async def test_filter_by_type(self, mock_settings: Settings, sample_device_data: dict) -> None:
         """Test filtering devices by type."""
         with patch("src.resources.devices.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -162,9 +155,7 @@ class TestClientsResource:
     """Test suite for ClientsResource."""
 
     @pytest.mark.asyncio
-    async def test_list_clients(
-        self, mock_settings: Settings, sample_client_data: dict
-    ) -> None:
+    async def test_list_clients(self, mock_settings: Settings, sample_client_data: dict) -> None:
         """Test listing all clients."""
         with patch("src.resources.clients.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -195,7 +186,7 @@ class TestClientsResource:
             mock_client_class.return_value = mock_instance
 
             resource = ClientsResource(mock_settings)
-            clients = await resource.list_clients("default", active_only=True)
+            await resource.list_clients("default", active_only=True)
 
             # Should call the correct endpoint
             mock_instance.get.assert_called_with("/ea/sites/default/sta")
@@ -247,9 +238,7 @@ class TestNetworksResource:
         }
 
     @pytest.mark.asyncio
-    async def test_list_networks(
-        self, mock_settings: Settings, sample_network_data: dict
-    ) -> None:
+    async def test_list_networks(self, mock_settings: Settings, sample_network_data: dict) -> None:
         """Test listing all networks."""
         with patch("src.resources.networks.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -267,9 +256,7 @@ class TestNetworksResource:
             assert networks[1].name == "Guest"
 
     @pytest.mark.asyncio
-    async def test_list_vlans(
-        self, mock_settings: Settings, sample_network_data: dict
-    ) -> None:
+    async def test_list_vlans(self, mock_settings: Settings, sample_network_data: dict) -> None:
         """Test listing VLANs."""
         with patch("src.resources.networks.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()

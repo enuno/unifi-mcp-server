@@ -1,6 +1,5 @@
 """Sites MCP resource implementation."""
 
-from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
@@ -20,9 +19,7 @@ class SitesResource:
         self.settings = settings
         self.logger = get_logger(__name__, settings.log_level)
 
-    async def list_sites(
-        self, limit: int | None = None, offset: int | None = None
-    ) -> list[Site]:
+    async def list_sites(self, limit: int | None = None, offset: int | None = None) -> list[Site]:
         """List all UniFi sites.
 
         Args:
@@ -50,9 +47,7 @@ class SitesResource:
             # Parse into Site models
             sites = [Site(**site) for site in paginated_data]
 
-            self.logger.info(
-                f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})"
-            )
+            self.logger.info(f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})")
 
             return sites
 

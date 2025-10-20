@@ -1,11 +1,12 @@
 """Unit tests for MCP tools."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 from src.config import Settings
-from src.tools import devices as devices_tools
 from src.tools import clients as clients_tools
+from src.tools import devices as devices_tools
 from src.tools import networks as networks_tools
 from src.tools import sites as sites_tools
 from src.utils import ResourceNotFoundError
@@ -42,9 +43,7 @@ class TestDeviceTools:
             assert result["model"] == "U6-LR"
 
     @pytest.mark.asyncio
-    async def test_get_device_details_not_found(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_device_details_not_found(self, mock_settings: Settings) -> None:
         """Test device not found."""
         # Return empty data to simulate device not found
         empty_data = {"meta": {"rc": "ok"}, "data": []}
@@ -75,13 +74,10 @@ class TestDeviceTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await devices_tools.list_devices_by_type(
-                "default", "uap", mock_settings
-            )
+            result = await devices_tools.list_devices_by_type("default", "uap", mock_settings)
 
             assert len(result) == 1
             assert result[0]["type"] == "uap"
-
 
     @pytest.mark.asyncio
     async def test_get_device_statistics(
@@ -105,9 +101,7 @@ class TestDeviceTools:
             assert result["state"] == 1
 
     @pytest.mark.asyncio
-    async def test_get_device_statistics_not_found(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_device_statistics_not_found(self, mock_settings: Settings) -> None:
         """Test device statistics not found."""
         empty_data = {"meta": {"rc": "ok"}, "data": []}
 
@@ -125,9 +119,7 @@ class TestDeviceTools:
                 )
 
     @pytest.mark.asyncio
-    async def test_search_devices(
-        self, mock_settings: Settings, sample_device_data: dict
-    ) -> None:
+    async def test_search_devices(self, mock_settings: Settings, sample_device_data: dict) -> None:
         """Test searching devices."""
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -137,9 +129,7 @@ class TestDeviceTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await devices_tools.search_devices(
-                "default", "office", mock_settings
-            )
+            result = await devices_tools.search_devices("default", "office", mock_settings)
 
             assert len(result) == 1
             assert "Office" in result[0]["name"]
@@ -207,9 +197,7 @@ class TestClientTools:
             assert result["signal"] == -45
 
     @pytest.mark.asyncio
-    async def test_get_client_statistics_not_found(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_client_statistics_not_found(self, mock_settings: Settings) -> None:
         """Test client statistics not found."""
         empty_data = {"meta": {"rc": "ok"}, "data": []}
 
@@ -227,9 +215,7 @@ class TestClientTools:
                 )
 
     @pytest.mark.asyncio
-    async def test_search_clients(
-        self, mock_settings: Settings, sample_client_data: dict
-    ) -> None:
+    async def test_search_clients(self, mock_settings: Settings, sample_client_data: dict) -> None:
         """Test searching clients."""
         with patch("src.tools.clients.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -239,9 +225,7 @@ class TestClientTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await clients_tools.search_clients(
-                "default", "laptop", mock_settings
-            )
+            result = await clients_tools.search_clients("default", "laptop", mock_settings)
 
             assert len(result) == 1
             assert "laptop" in result[0]["hostname"]
@@ -316,9 +300,7 @@ class TestNetworkTools:
             assert result["dhcpd_enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_get_subnet_info_not_found(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_subnet_info_not_found(self, mock_settings: Settings) -> None:
         """Test subnet info not found."""
         empty_data = {"meta": {"rc": "ok"}, "data": []}
 
@@ -344,9 +326,7 @@ class TestNetworkTools:
             mock_instance = AsyncMock()
             mock_instance.authenticate = AsyncMock()
             # Mock multiple get calls for networks and clients
-            mock_instance.get = AsyncMock(
-                side_effect=[sample_network_data, sample_client_data]
-            )
+            mock_instance.get = AsyncMock(side_effect=[sample_network_data, sample_client_data])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
@@ -358,9 +338,7 @@ class TestNetworkTools:
             assert len(result["networks"]) == 2
 
     @pytest.mark.asyncio
-    async def test_list_vlans(
-        self, mock_settings: Settings, sample_network_data: dict
-    ) -> None:
+    async def test_list_vlans(self, mock_settings: Settings, sample_network_data: dict) -> None:
         """Test listing VLANs."""
         with patch("src.tools.networks.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -380,9 +358,7 @@ class TestSiteTools:
     """Test suite for site management tools."""
 
     @pytest.mark.asyncio
-    async def test_get_site_details(
-        self, mock_settings: Settings, sample_site_data: dict
-    ) -> None:
+    async def test_get_site_details(self, mock_settings: Settings, sample_site_data: dict) -> None:
         """Test getting site details."""
         with patch("src.tools.sites.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -397,9 +373,7 @@ class TestSiteTools:
             assert result["name"] == "Default Site"
 
     @pytest.mark.asyncio
-    async def test_list_sites(
-        self, mock_settings: Settings, sample_site_data: dict
-    ) -> None:
+    async def test_list_sites(self, mock_settings: Settings, sample_site_data: dict) -> None:
         """Test listing sites."""
         with patch("src.tools.sites.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()

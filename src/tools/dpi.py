@@ -33,9 +33,7 @@ async def get_dpi_statistics(
     # Validate time range
     valid_ranges = ["1h", "6h", "12h", "24h", "7d", "30d"]
     if time_range not in valid_ranges:
-        raise ValueError(
-            f"Invalid time range '{time_range}'. Must be one of: {valid_ranges}"
-        )
+        raise ValueError(f"Invalid time range '{time_range}'. Must be one of: {valid_ranges}")
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
@@ -86,21 +84,10 @@ async def get_dpi_statistics(
                     category_stats[cat]["application_count"] += 1
 
         # Convert to lists and sort by total bytes
-        applications = sorted(
-            app_stats.values(),
-            key=lambda x: x["total_bytes"],
-            reverse=True
-        )
-        categories = sorted(
-            category_stats.values(),
-            key=lambda x: x["total_bytes"],
-            reverse=True
-        )
+        applications = sorted(app_stats.values(), key=lambda x: x["total_bytes"], reverse=True)
+        categories = sorted(category_stats.values(), key=lambda x: x["total_bytes"], reverse=True)
 
-        logger.info(
-            f"Retrieved DPI statistics for site '{site_id}' "
-            f"(time range: {time_range})"
-        )
+        logger.info(f"Retrieved DPI statistics for site '{site_id}' " f"(time range: {time_range})")
 
         return {
             "site_id": site_id,
@@ -175,17 +162,13 @@ async def get_client_dpi(
     # Validate time range
     valid_ranges = ["1h", "6h", "12h", "24h", "7d", "30d"]
     if time_range not in valid_ranges:
-        raise ValueError(
-            f"Invalid time range '{time_range}'. Must be one of: {valid_ranges}"
-        )
+        raise ValueError(f"Invalid time range '{time_range}'. Must be one of: {valid_ranges}")
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
         # Get client-specific DPI data
-        response = await client.get(
-            f"/ea/sites/{site_id}/stat/stadpi/{client_mac}"
-        )
+        response = await client.get(f"/ea/sites/{site_id}/stat/stadpi/{client_mac}")
         dpi_data = response.get("data", [])
 
         # Aggregate by application
@@ -217,11 +200,7 @@ async def get_client_dpi(
                 app_stats[app]["total_bytes"] += total_bytes
 
         # Convert to list and sort by total bytes
-        applications = sorted(
-            app_stats.values(),
-            key=lambda x: x["total_bytes"],
-            reverse=True
-        )
+        applications = sorted(app_stats.values(), key=lambda x: x["total_bytes"], reverse=True)
 
         # Apply pagination
         paginated_apps = applications[offset : offset + limit]

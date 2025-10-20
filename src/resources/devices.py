@@ -1,6 +1,5 @@
 """Devices MCP resource implementation."""
 
-from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
@@ -80,8 +79,9 @@ class DevicesResource:
 
         # Filter by type
         filtered = [
-            d for d in devices if d.type.lower() == device_type.lower()
-            or device_type.lower() in d.model.lower()
+            d
+            for d in devices
+            if d.type.lower() == device_type.lower() or device_type.lower() in d.model.lower()
         ]
 
         # Apply pagination to filtered results

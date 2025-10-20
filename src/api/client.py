@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -111,7 +111,9 @@ class UniFiClient:
         try:
             # Test authentication with a simple API call
             response = await self._request("GET", "/ea/sites")
-            self._authenticated = response.get("meta", {}).get("rc") == "ok" or response.get("data") is not None
+            self._authenticated = (
+                response.get("meta", {}).get("rc") == "ok" or response.get("data") is not None
+            )
             self.logger.info("Successfully authenticated with UniFi API")
         except Exception as e:
             self.logger.error(f"Authentication failed: {e}")
@@ -121,8 +123,8 @@ class UniFiClient:
         self,
         method: str,
         endpoint: str,
-        params: Optional[dict[str, Any]] = None,
-        json_data: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
         retry_count: int = 0,
     ) -> dict[str, Any]:
         """Make an HTTP request with retries and error handling.
@@ -175,9 +177,7 @@ class UniFiClient:
                 if retry_count < self.settings.max_retries:
                     self.logger.warning(f"Rate limited, retrying after {retry_after}s")
                     await asyncio.sleep(retry_after)
-                    return await self._request(
-                        method, endpoint, params, json_data, retry_count + 1
-                    )
+                    return await self._request(method, endpoint, params, json_data, retry_count + 1)
 
                 raise RateLimitError(retry_after=retry_after)
 
@@ -209,7 +209,7 @@ class UniFiClient:
         except httpx.TimeoutException as e:
             # Retry on timeout
             if retry_count < self.settings.max_retries:
-                backoff = self.settings.retry_backoff_factor ** retry_count
+                backoff = self.settings.retry_backoff_factor**retry_count
                 self.logger.warning(f"Request timeout, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
                 return await self._request(method, endpoint, params, json_data, retry_count + 1)
@@ -219,7 +219,7 @@ class UniFiClient:
         except httpx.NetworkError as e:
             # Retry on network error
             if retry_count < self.settings.max_retries:
-                backoff = self.settings.retry_backoff_factor ** retry_count
+                backoff = self.settings.retry_backoff_factor**retry_count
                 self.logger.warning(f"Network error, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
                 return await self._request(method, endpoint, params, json_data, retry_count + 1)
@@ -234,7 +234,7 @@ class UniFiClient:
             self.logger.error(f"Unexpected error during API request: {e}")
             raise APIError(f"Unexpected error: {e}") from e
 
-    async def get(self, endpoint: str, params: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a GET request.
 
         Args:
@@ -250,7 +250,7 @@ class UniFiClient:
         self,
         endpoint: str,
         json_data: dict[str, Any],
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make a POST request.
 
@@ -268,7 +268,7 @@ class UniFiClient:
         self,
         endpoint: str,
         json_data: dict[str, Any],
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Make a PUT request.
 
@@ -283,7 +283,7 @@ class UniFiClient:
         return await self._request("PUT", endpoint, params=params, json_data=json_data)
 
     async def delete(
-        self, endpoint: str, params: Optional[dict[str, Any]] = None
+        self, endpoint: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         """Make a DELETE request.
 

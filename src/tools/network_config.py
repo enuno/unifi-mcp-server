@@ -5,7 +5,6 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     ValidationError,
     get_logger,
@@ -67,9 +66,7 @@ async def create_network(
     # Validate purpose
     valid_purposes = ["corporate", "guest", "vlan-only", "wan"]
     if purpose not in valid_purposes:
-        raise ValidationError(
-            f"Invalid purpose '{purpose}'. Must be one of: {valid_purposes}"
-        )
+        raise ValidationError(f"Invalid purpose '{purpose}'. Must be one of: {valid_purposes}")
 
     # Validate subnet format
     if "/" not in subnet:
@@ -123,9 +120,7 @@ async def create_network(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(
-                f"/ea/sites/{site_id}/rest/networkconf", json=network_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/rest/networkconf", json=network_data)
             created_network = response.get("data", [{}])[0]
 
             logger.info(f"Created network '{name}' in site '{site_id}'")
@@ -204,9 +199,7 @@ async def update_network(
     if purpose is not None:
         valid_purposes = ["corporate", "guest", "vlan-only", "wan"]
         if purpose not in valid_purposes:
-            raise ValidationError(
-                f"Invalid purpose '{purpose}'. Must be one of: {valid_purposes}"
-            )
+            raise ValidationError(f"Invalid purpose '{purpose}'. Must be one of: {valid_purposes}")
 
     # Validate subnet format if provided
     if subnet is not None and "/" not in subnet:
@@ -352,9 +345,7 @@ async def delete_network(
             if not network_exists:
                 raise ResourceNotFoundError("network", network_id)
 
-            response = await client.delete(
-                f"/ea/sites/{site_id}/rest/networkconf/{network_id}"
-            )
+            response = await client.delete(f"/ea/sites/{site_id}/rest/networkconf/{network_id}")
 
             logger.info(f"Deleted network '{network_id}' from site '{site_id}'")
             log_audit(

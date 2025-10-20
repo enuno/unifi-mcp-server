@@ -1,7 +1,6 @@
 """Audit logging for mutating operations."""
 
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +96,7 @@ class AuditLogger:
 
         entries = []
         try:
-            with open(self.log_file, "r", encoding="utf-8") as f:
+            with open(self.log_file, encoding="utf-8") as f:
                 # Read file in reverse to get most recent entries first
                 lines = f.readlines()
                 for line in reversed(lines):
@@ -125,9 +124,7 @@ class AuditLogger:
 _audit_logger: AuditLogger | None = None
 
 
-def get_audit_logger(
-    log_file: str | Path | None = None, log_level: str = "INFO"
-) -> AuditLogger:
+def get_audit_logger(log_file: str | Path | None = None, log_level: str = "INFO") -> AuditLogger:
     """Get or create the global audit logger instance.
 
     Args:

@@ -13,9 +13,7 @@ from ..utils import (
 )
 
 
-async def get_network_details(
-    site_id: str, network_id: str, settings: Settings
-) -> dict[str, Any]:
+async def get_network_details(site_id: str, network_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed network configuration.
 
     Args:
@@ -87,9 +85,7 @@ async def list_vlans(
         return networks
 
 
-async def get_subnet_info(
-    site_id: str, network_id: str, settings: Settings
-) -> dict[str, Any]:
+async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> dict[str, Any]:
     """Get subnet and DHCP information for a network.
 
     Args:
@@ -135,9 +131,7 @@ async def get_subnet_info(
         raise ResourceNotFoundError("network", network_id)
 
 
-async def get_network_statistics(
-    site_id: str, settings: Settings
-) -> dict[str, Any]:
+async def get_network_statistics(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve network usage statistics for a site.
 
     Args:
@@ -168,9 +162,7 @@ async def get_network_statistics(
             vlan_id = network.get("vlan_id")
 
             # Count clients on this network
-            clients_on_network = [
-                c for c in clients_data if c.get("vlan") == vlan_id
-            ]
+            clients_on_network = [c for c in clients_data if c.get("vlan") == vlan_id]
 
             # Calculate total bandwidth
             total_tx = sum(c.get("tx_bytes", 0) for c in clients_on_network)

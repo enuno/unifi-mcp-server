@@ -3,8 +3,7 @@
 This module provides example event handlers and a handler management class.
 """
 
-import logging
-from typing import Any, Callable
+from collections.abc import Callable
 
 from ..config import Settings
 from ..utils import get_logger
@@ -78,8 +77,7 @@ class WebhookEventHandler:
         ssid = event.data.get("essid", "N/A")
 
         self.logger.info(
-            f"Client connected: {client_name} ({client_mac}) to {ssid} "
-            f"in site {event.site_id}"
+            f"Client connected: {client_name} ({client_mac}) to {ssid} " f"in site {event.site_id}"
         )
 
         # Example: Invalidate clients cache
@@ -124,8 +122,7 @@ class WebhookEventHandler:
         severity = event.data.get("severity", "info")
 
         self.logger.warning(
-            f"Alert raised in site {event.site_id}: [{severity}] "
-            f"{alert_type} - {alert_message}"
+            f"Alert raised in site {event.site_id}: [{severity}] " f"{alert_type} - {alert_message}"
         )
 
         # Example: Could trigger notifications, update monitoring systems, etc.
@@ -139,9 +136,7 @@ class WebhookEventHandler:
         event_key = event.data.get("key", "unknown")
         event_msg = event.data.get("msg", "")
 
-        self.logger.info(
-            f"Event occurred in site {event.site_id}: {event_key} - {event_msg}"
-        )
+        self.logger.info(f"Event occurred in site {event.site_id}: {event_key} - {event_msg}")
 
     async def handle_wildcard(self, event: WebhookEvent) -> None:
         """Handle any event (wildcard handler).

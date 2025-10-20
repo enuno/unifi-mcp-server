@@ -104,9 +104,7 @@ async def get_site_statistics(site_id: str, settings: Settings) -> dict[str, Any
         # Count device types
         ap_count = sum(1 for d in devices_data if d.get("type") == "uap")
         switch_count = sum(1 for d in devices_data if d.get("type") == "usw")
-        gateway_count = sum(
-            1 for d in devices_data if d.get("type") in ["ugw", "udm", "uxg"]
-        )
+        gateway_count = sum(1 for d in devices_data if d.get("type") in ["ugw", "udm", "uxg"])
 
         # Count online/offline devices
         online_devices = sum(1 for d in devices_data if d.get("state") == 1)

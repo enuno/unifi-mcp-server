@@ -1,6 +1,5 @@
 """Client data model."""
 
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,48 +8,48 @@ class Client(BaseModel):
     """UniFi network client information."""
 
     mac: str = Field(..., description="Client MAC address")
-    ip: Optional[str] = Field(None, description="Client IP address")
-    hostname: Optional[str] = Field(None, description="Client hostname")
-    name: Optional[str] = Field(None, description="Client name (user-assigned)")
+    ip: str | None = Field(None, description="Client IP address")
+    hostname: str | None = Field(None, description="Client hostname")
+    name: str | None = Field(None, description="Client name (user-assigned)")
 
     # Connection info
-    is_wired: Optional[bool] = Field(None, description="Whether client is wired")
-    is_guest: Optional[bool] = Field(None, description="Whether client is on guest network")
-    essid: Optional[str] = Field(None, description="SSID name (for wireless clients)")
-    channel: Optional[int] = Field(None, description="WiFi channel (for wireless clients)")
-    radio: Optional[str] = Field(None, description="Radio type (ng, na, etc.)")
+    is_wired: bool | None = Field(None, description="Whether client is wired")
+    is_guest: bool | None = Field(None, description="Whether client is on guest network")
+    essid: str | None = Field(None, description="SSID name (for wireless clients)")
+    channel: int | None = Field(None, description="WiFi channel (for wireless clients)")
+    radio: str | None = Field(None, description="Radio type (ng, na, etc.)")
 
     # Signal strength (wireless only)
-    signal: Optional[int] = Field(None, description="Signal strength in dBm")
-    rssi: Optional[int] = Field(None, description="RSSI value")
-    noise: Optional[int] = Field(None, description="Noise level in dBm")
+    signal: int | None = Field(None, description="Signal strength in dBm")
+    rssi: int | None = Field(None, description="RSSI value")
+    noise: int | None = Field(None, description="Noise level in dBm")
 
     # Network statistics
-    tx_bytes: Optional[int] = Field(None, description="Transmitted bytes")
-    rx_bytes: Optional[int] = Field(None, description="Received bytes")
-    tx_packets: Optional[int] = Field(None, description="Transmitted packets")
-    rx_packets: Optional[int] = Field(None, description="Received packets")
-    tx_rate: Optional[int] = Field(None, description="Transmission rate in Kbps")
-    rx_rate: Optional[int] = Field(None, description="Receiving rate in Kbps")
+    tx_bytes: int | None = Field(None, description="Transmitted bytes")
+    rx_bytes: int | None = Field(None, description="Received bytes")
+    tx_packets: int | None = Field(None, description="Transmitted packets")
+    rx_packets: int | None = Field(None, description="Received packets")
+    tx_rate: int | None = Field(None, description="Transmission rate in Kbps")
+    rx_rate: int | None = Field(None, description="Receiving rate in Kbps")
 
     # Session info
-    uptime: Optional[int] = Field(None, description="Session uptime in seconds")
-    last_seen: Optional[int] = Field(None, description="Last seen timestamp")
-    first_seen: Optional[int] = Field(None, description="First seen timestamp")
+    uptime: int | None = Field(None, description="Session uptime in seconds")
+    last_seen: int | None = Field(None, description="Last seen timestamp")
+    first_seen: int | None = Field(None, description="First seen timestamp")
 
     # Device info
-    oui: Optional[str] = Field(None, description="MAC OUI manufacturer")
-    os_class: Optional[int] = Field(None, description="Operating system class")
-    os_name: Optional[str] = Field(None, description="Operating system name")
+    oui: str | None = Field(None, description="MAC OUI manufacturer")
+    os_class: int | None = Field(None, description="Operating system class")
+    os_name: str | None = Field(None, description="Operating system name")
 
     # Associated device
-    ap_mac: Optional[str] = Field(None, description="Access point MAC address")
-    sw_mac: Optional[str] = Field(None, description="Switch MAC address")
-    gw_mac: Optional[str] = Field(None, description="Gateway MAC address")
+    ap_mac: str | None = Field(None, description="Access point MAC address")
+    sw_mac: str | None = Field(None, description="Switch MAC address")
+    gw_mac: str | None = Field(None, description="Gateway MAC address")
 
     # VLAN
-    vlan: Optional[int] = Field(None, description="VLAN ID")
-    network: Optional[str] = Field(None, description="Network name")
+    vlan: int | None = Field(None, description="VLAN ID")
+    network: str | None = Field(None, description="Network name")
 
     model_config = ConfigDict(
         populate_by_name=True,

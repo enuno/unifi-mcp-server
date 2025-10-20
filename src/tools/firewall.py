@@ -5,7 +5,6 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     get_logger,
     log_audit,
@@ -97,9 +96,7 @@ async def create_firewall_rule(
     if protocol:
         valid_protocols = ["tcp", "udp", "icmp", "all"]
         if protocol.lower() not in valid_protocols:
-            raise ValueError(
-                f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}"
-            )
+            raise ValueError(f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}")
 
     # Build rule data
     rule_data = {
@@ -147,9 +144,7 @@ async def create_firewall_rule(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(
-                f"/ea/sites/{site_id}/rest/firewallrule", json=rule_data
-            )
+            response = await client.post(f"/ea/sites/{site_id}/rest/firewallrule", json=rule_data)
             created_rule = response.get("data", [{}])[0]
 
             logger.info(f"Created firewall rule '{name}' in site '{site_id}'")
@@ -218,17 +213,13 @@ async def update_firewall_rule(
     if action:
         valid_actions = ["accept", "drop", "reject"]
         if action.lower() not in valid_actions:
-            raise ValueError(
-                f"Invalid action '{action}'. Must be one of: {valid_actions}"
-            )
+            raise ValueError(f"Invalid action '{action}'. Must be one of: {valid_actions}")
 
     # Validate protocol if provided
     if protocol:
         valid_protocols = ["tcp", "udp", "icmp", "all"]
         if protocol.lower() not in valid_protocols:
-            raise ValueError(
-                f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}"
-            )
+            raise ValueError(f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}")
 
     parameters = {
         "site_id": site_id,
@@ -366,9 +357,7 @@ async def delete_firewall_rule(
             if not rule_exists:
                 raise ResourceNotFoundError("firewall_rule", rule_id)
 
-            response = await client.delete(
-                f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}"
-            )
+            response = await client.delete(f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}")
 
             logger.info(f"Deleted firewall rule '{rule_id}' from site '{site_id}'")
             log_audit(

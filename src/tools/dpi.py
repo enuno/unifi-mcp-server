@@ -123,7 +123,7 @@ async def list_top_applications(
     dpi_stats = await get_dpi_statistics(site_id, settings, time_range)
 
     # Get top N applications
-    top_apps = dpi_stats["applications"][:limit]
+    top_apps: list[dict[str, Any]] = dpi_stats["applications"][:limit]
 
     logger.info(
         f"Retrieved top {len(top_apps)} applications for site '{site_id}' "

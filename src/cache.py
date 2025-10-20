@@ -11,15 +11,15 @@ from functools import wraps
 from typing import Any
 
 try:
-    import redis.asyncio as redis
-    from redis.asyncio import Redis
-    from redis.exceptions import RedisError
+    import redis.asyncio as redis  # type: ignore[import-untyped]
+    from redis.asyncio import Redis  # type: ignore[import-untyped]
+    from redis.exceptions import RedisError  # type: ignore[import-untyped]
 
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    Redis = None  # type: ignore
-    RedisError = Exception  # type: ignore
+    Redis = None  # type: ignore[assignment,misc]
+    RedisError = Exception  # type: ignore[assignment,misc]
 
 from .config import Settings
 from .utils import get_logger
@@ -228,7 +228,7 @@ class CacheClient:
                 keys.append(key)
 
             if keys:
-                deleted = await self._redis.delete(*keys)
+                deleted: int = await self._redis.delete(*keys)
                 self.logger.debug(f"Cache DELETE pattern '{pattern}': {deleted} keys")
                 return deleted
             return 0
@@ -309,7 +309,7 @@ def cached(
     resource_type: str,
     ttl: int | None = None,
     key_builder: Callable[..., str] | None = None,
-):
+) -> Callable[[Callable], Callable]:
     """Decorator for caching function results.
 
     Args:
@@ -326,7 +326,7 @@ def cached(
 
     def decorator(func: Callable) -> Callable:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Extract settings from arguments
             settings = None
             for arg in args:

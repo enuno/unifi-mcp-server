@@ -4,10 +4,14 @@ This module provides example event handlers and a handler management class.
 """
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from ..config import Settings
 from ..utils import get_logger
 from .receiver import WebhookEvent
+
+if TYPE_CHECKING:
+    from .receiver import WebhookReceiver
 
 
 class WebhookEventHandler:
@@ -163,7 +167,7 @@ class WebhookEventHandler:
             "event.occurred": self.handle_event_occurred,
         }
 
-    def register_default_handlers(self, receiver) -> None:
+    def register_default_handlers(self, receiver: "WebhookReceiver") -> None:
         """Register all default handlers with a webhook receiver.
 
         Args:

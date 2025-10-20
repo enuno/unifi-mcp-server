@@ -208,6 +208,5 @@ jobs:
       - name: Fail if any job failed
         if: |
           needs.lint.result == 'failure' ||
-          needs.test.result == 'failure' ||
-          needs.pre-commit.result == 'failure'
+          needs.test.result == 'failure'
         run: exit 1

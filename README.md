@@ -1,4 +1,4 @@
-# UniFi MCP Server
+# <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/unifi-dark.png" alt="UniFi Dark Logo" width="40" /> UniFi MCP Server
 
 [![CI](https://github.com/elvis/unifi-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/elvis/unifi-mcp-server/actions/workflows/ci.yml)
 [![Security](https://github.com/elvis/unifi-mcp-server/actions/workflows/security.yml/badge.svg)](https://github.com/elvis/unifi-mcp-server/actions/workflows/security.yml)

@@ -68,3 +68,4 @@ For local development and testing, the following steps should be followed, as in
 
 [2] King, Z. (2025, March 30). *Build a MCP Server for AI Access to UniFi Networks (Goose or Claude)*. MakeWithData. Retrieved from [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
 
+

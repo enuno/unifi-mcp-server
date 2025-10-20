@@ -540,7 +540,8 @@ If you encounter issues or need clarification:
 
 ---
 
-**Author:** Manus AI  
-**Last Updated:** October 17, 2025  
+**Author:** Manus AI
+**Last Updated:** October 17, 2025
 **Version:** 1.0
+
 

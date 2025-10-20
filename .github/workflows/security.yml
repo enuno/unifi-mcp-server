@@ -259,19 +259,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install OSV Scanner
+        run: |
+          curl -L https://github.com/google/osv-scanner/releases/download/v1.9.0/osv-scanner_linux_amd64 -o osv-scanner
+          chmod +x osv-scanner
+
       - name: Run OSV Scanner
-        uses: google/osv-scanner-action@v1.9.0
-        with:
-          scan-args: |-
-            --recursive
-            --format sarif
-            --output osv-results.sarif
-            ./
+        run: |
+          ./osv-scanner --recursive --format sarif --output osv-results.sarif . || true
         continue-on-error: true
 
       - name: Upload OSV Scanner results
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('osv-results.sarif') != ''
         with:
           sarif_file: osv-results.sarif
         continue-on-error: true

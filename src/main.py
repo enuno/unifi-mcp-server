@@ -591,6 +591,9 @@ def main() -> None:
     logger.info(f"Base URL: {settings.base_url}")
     logger.info("Server ready to handle requests")
 
+    # Start the FastMCP server
+    mcp.run()
+
 
 if __name__ == "__main__":
     main()

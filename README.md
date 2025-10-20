@@ -95,18 +95,17 @@ pip install -e ".[dev]"
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
 
 # Run the container (Cloud API)
-docker run -d \
+# Note: -i flag required for STDIO transport
+docker run -i -d \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=cloud \
-  -p 3000:3000 \
   ghcr.io/enuno/unifi-mcp-server:latest
 
 # OR run with local gateway proxy
-docker run -d \
+docker run -i -d \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=local \
   -e UNIFI_HOST=192.168.1.1 \
-  -p 3000:3000 \
   ghcr.io/enuno/unifi-mcp-server:latest
 ```
 

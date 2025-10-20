@@ -39,7 +39,7 @@ async def block_client(
     """
     site_id = validate_site_id(site_id)
     client_mac = validate_mac_address(client_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "client management operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "client_mac": client_mac}
@@ -61,7 +61,7 @@ async def block_client(
 
             # Verify client exists (check both active and all users)
             response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
-            clients_data = response.get("data", [])
+            clients_data: list[dict[str, Any]] = response.get("data", [])
 
             client_exists = any(
                 validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
@@ -71,7 +71,7 @@ async def block_client(
 
             # Block the client
             block_data = {"mac": client_mac, "cmd": "block-sta"}
-            response = await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json=block_data)
+            response = await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json_data=block_data)
 
             logger.info(f"Blocked client '{client_mac}' in site '{site_id}'")
             log_audit(
@@ -122,7 +122,7 @@ async def unblock_client(
     """
     site_id = validate_site_id(site_id)
     client_mac = validate_mac_address(client_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "client management operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "client_mac": client_mac}
@@ -144,7 +144,7 @@ async def unblock_client(
 
             # Unblock the client
             unblock_data = {"mac": client_mac, "cmd": "unblock-sta"}
-            await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json=unblock_data)
+            await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json_data=unblock_data)
 
             logger.info(f"Unblocked client '{client_mac}' in site '{site_id}'")
             log_audit(
@@ -196,7 +196,7 @@ async def reconnect_client(
     """
     site_id = validate_site_id(site_id)
     client_mac = validate_mac_address(client_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "client management operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "client_mac": client_mac}
@@ -218,7 +218,7 @@ async def reconnect_client(
 
             # Verify client is currently connected
             response = await client.get(f"/ea/sites/{site_id}/sta")
-            clients_data = response.get("data", [])
+            clients_data: list[dict[str, Any]] = response.get("data", [])
 
             client_exists = any(
                 validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
@@ -228,7 +228,9 @@ async def reconnect_client(
 
             # Force client reconnection
             reconnect_data = {"mac": client_mac, "cmd": "kick-sta"}
-            response = await client.post(f"/ea/sites/{site_id}/cmd/stamgr", json=reconnect_data)
+            response = await client.post(
+                f"/ea/sites/{site_id}/cmd/stamgr", json_data=reconnect_data
+            )
 
             logger.info(f"Forced reconnect for client '{client_mac}' in site '{site_id}'")
             log_audit(

@@ -29,7 +29,7 @@ class WebhookEvent(BaseModel):
     event_id: str | None = Field(None, description="Unique event identifier")
 
     @validator("event_type")
-    def validate_event_type(cls, v):
+    def validate_event_type(cls, v: str) -> str:
         """Validate event type format."""
         if not v or "." not in v:
             raise ValueError("Event type must be in format 'category.action'")
@@ -81,7 +81,7 @@ class WebhookReceiver:
         async def receive_webhook(
             request: Request,
             x_unifi_signature: str | None = Header(None),
-        ):
+        ) -> dict[str, Any]:
             """Receive and process UniFi webhook."""
             try:
                 # Get request body

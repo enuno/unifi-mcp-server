@@ -56,7 +56,7 @@ async def create_network(
         ValidationError: If validation fails
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "network configuration operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate VLAN ID
@@ -120,8 +120,10 @@ async def create_network(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(f"/ea/sites/{site_id}/rest/networkconf", json=network_data)
-            created_network = response.get("data", [{}])[0]
+            response = await client.post(
+                f"/ea/sites/{site_id}/rest/networkconf", json_data=network_data
+            )
+            created_network: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Created network '{name}' in site '{site_id}'")
             log_audit(
@@ -188,7 +190,7 @@ async def update_network(
         ResourceNotFoundError: If network not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "network configuration operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate VLAN ID if provided
@@ -232,7 +234,7 @@ async def update_network(
 
             # Get existing network
             response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-            networks_data = response.get("data", [])
+            networks_data: list[dict[str, Any]] = response.get("data", [])
 
             existing_network = None
             for network in networks_data:
@@ -268,9 +270,9 @@ async def update_network(
                 update_data["domain_name"] = domain_name
 
             response = await client.put(
-                f"/ea/sites/{site_id}/rest/networkconf/{network_id}", json=update_data
+                f"/ea/sites/{site_id}/rest/networkconf/{network_id}", json_data=update_data
             )
-            updated_network = response.get("data", [{}])[0]
+            updated_network: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Updated network '{network_id}' in site '{site_id}'")
             log_audit(
@@ -317,7 +319,7 @@ async def delete_network(
         ResourceNotFoundError: If network not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "network configuration operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "network_id": network_id}
@@ -339,7 +341,7 @@ async def delete_network(
 
             # Verify network exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-            networks_data = response.get("data", [])
+            networks_data: list[dict[str, Any]] = response.get("data", [])
 
             network_exists = any(net.get("_id") == network_id for net in networks_data)
             if not network_exists:

@@ -42,7 +42,7 @@ async def list_port_forwards(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/portforward")
-        rules_data = response.get("data", [])
+        rules_data: list[dict[str, Any]] = response.get("data", [])
 
         # Apply pagination
         paginated = rules_data[offset : offset + limit]
@@ -89,7 +89,7 @@ async def create_port_forward(
         ValidationError: If validation fails
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "port forwarding operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate ports
@@ -150,8 +150,8 @@ async def create_port_forward(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(f"/ea/sites/{site_id}/rest/portforward", json=pf_data)
-            created_rule = response.get("data", [{}])[0]
+            response = await client.post(f"/ea/sites/{site_id}/rest/portforward", json_data=pf_data)
+            created_rule: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(
                 f"Created port forward '{name}' "
@@ -201,7 +201,7 @@ async def delete_port_forward(
         ResourceNotFoundError: If rule not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "port forwarding operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "rule_id": rule_id}
@@ -225,7 +225,7 @@ async def delete_port_forward(
 
             # Verify rule exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/portforward")
-            rules_data = response.get("data", [])
+            rules_data: list[dict[str, Any]] = response.get("data", [])
 
             rule_exists = any(rule.get("_id") == rule_id for rule in rules_data)
             if not rule_exists:

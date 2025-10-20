@@ -133,9 +133,7 @@ def validate_confirmation(confirm: bool | None, operation: str) -> None:
         )
 
 
-def validate_limit_offset(
-    limit: int | None = None, offset: int | None = None
-) -> tuple[int, int]:
+def validate_limit_offset(limit: int | None = None, offset: int | None = None) -> tuple[int, int]:
     """Validate and normalize pagination parameters.
 
     Args:

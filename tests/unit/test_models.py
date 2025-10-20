@@ -1,6 +1,5 @@
 """Unit tests for data models."""
 
-
 from src.models import Client, Device, Network, Site
 
 

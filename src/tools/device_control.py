@@ -39,7 +39,7 @@ async def restart_device(
     """
     site_id = validate_site_id(site_id)
     device_mac = validate_mac_address(device_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "device control operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "device_mac": device_mac}
@@ -61,7 +61,7 @@ async def restart_device(
 
             # Verify device exists
             response = await client.get(f"/ea/sites/{site_id}/devices")
-            devices_data = response.get("data", [])
+            devices_data: list[dict[str, Any]] = response.get("data", [])
 
             device_exists = any(
                 validate_mac_address(d.get("mac", "")) == device_mac for d in devices_data
@@ -71,7 +71,7 @@ async def restart_device(
 
             # Restart the device
             restart_data = {"mac": device_mac, "cmd": "restart"}
-            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=restart_data)
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json_data=restart_data)
 
             logger.info(f"Initiated restart for device '{device_mac}' in site '{site_id}'")
             log_audit(
@@ -125,7 +125,7 @@ async def locate_device(
     """
     site_id = validate_site_id(site_id)
     device_mac = validate_mac_address(device_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "device control operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "device_mac": device_mac, "enabled": enabled}
@@ -151,7 +151,7 @@ async def locate_device(
 
             # Verify device exists
             response = await client.get(f"/ea/sites/{site_id}/devices")
-            devices_data = response.get("data", [])
+            devices_data: list[dict[str, Any]] = response.get("data", [])
 
             device_exists = any(
                 validate_mac_address(d.get("mac", "")) == device_mac for d in devices_data
@@ -162,7 +162,7 @@ async def locate_device(
             # Set locate state
             cmd = "set-locate" if enabled else "unset-locate"
             locate_data = {"mac": device_mac, "cmd": cmd}
-            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=locate_data)
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json_data=locate_data)
 
             logger.info(
                 f"{action.capitalize()}d locate mode for device '{device_mac}' "
@@ -220,7 +220,7 @@ async def upgrade_device(
     """
     site_id = validate_site_id(site_id)
     device_mac = validate_mac_address(device_mac)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "device control operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {
@@ -249,7 +249,7 @@ async def upgrade_device(
 
             # Verify device exists and get details
             response = await client.get(f"/ea/sites/{site_id}/devices")
-            devices_data = response.get("data", [])
+            devices_data: list[dict[str, Any]] = response.get("data", [])
 
             device = None
             for d in devices_data:
@@ -266,7 +266,7 @@ async def upgrade_device(
             if firmware_url:
                 upgrade_data["url"] = firmware_url
 
-            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json=upgrade_data)
+            response = await client.post(f"/ea/sites/{site_id}/cmd/devmgr", json_data=upgrade_data)
 
             logger.info(
                 f"Initiated firmware upgrade for device '{device_mac}' " f"in site '{site_id}'"

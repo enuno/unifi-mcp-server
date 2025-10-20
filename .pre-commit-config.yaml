@@ -14,7 +14,6 @@ repos:
         name: Fix end of files
       - id: check-yaml
         name: Check YAML syntax
-        args: [--safe]
       - id: check-json
         name: Check JSON syntax
       - id: check-toml

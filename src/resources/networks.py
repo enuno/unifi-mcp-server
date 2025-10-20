@@ -1,6 +1,5 @@
 """Networks MCP resource implementation."""
 
-
 from ..api import UniFiClient
 from ..config import Settings
 from ..models import Network

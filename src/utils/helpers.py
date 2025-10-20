@@ -60,11 +60,12 @@ def format_bytes(bytes_value: int, precision: int = 2) -> str:
     Returns:
         Formatted bytes string (e.g., "1.23 GB")
     """
+    bytes_float = float(bytes_value)
     for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
-        if bytes_value < 1024.0:
-            return f"{bytes_value:.{precision}f} {unit}"
-        bytes_value /= 1024.0
-    return f"{bytes_value:.{precision}f} PB"
+        if bytes_float < 1024.0:
+            return f"{bytes_float:.{precision}f} {unit}"
+        bytes_float /= 1024.0
+    return f"{bytes_float:.{precision}f} PB"
 
 
 def format_percentage(value: float, precision: int = 1) -> str:

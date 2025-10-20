@@ -1,6 +1,5 @@
 """Network data model."""
 
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -29,9 +28,7 @@ class Network(BaseModel):
     dhcpd_dns_enabled: bool | None = Field(None, description="Whether DHCP DNS is enabled")
     dhcpd_dns_1: str | None = Field(None, description="Primary DNS server")
     dhcpd_dns_2: str | None = Field(None, description="Secondary DNS server")
-    dhcpd_gateway_enabled: bool | None = Field(
-        None, description="Whether DHCP gateway is enabled"
-    )
+    dhcpd_gateway_enabled: bool | None = Field(None, description="Whether DHCP gateway is enabled")
     dhcpd_gateway: str | None = Field(None, description="DHCP gateway IP")
 
     # IGMP settings

@@ -30,7 +30,7 @@ class RateLimiter:
         """
         self.requests_per_period = requests_per_period
         self.period_seconds = period_seconds
-        self.tokens = requests_per_period
+        self.tokens: float = float(requests_per_period)
         self.last_update = time.time()
         self._lock = asyncio.Lock()
 
@@ -204,7 +204,8 @@ class UniFiClient:
                 )
 
             # Parse response
-            return response.json()
+            json_response: dict[str, Any] = response.json()
+            return json_response
 
         except httpx.TimeoutException as e:
             # Retry on timeout
@@ -282,9 +283,7 @@ class UniFiClient:
         """
         return await self._request("PUT", endpoint, params=params, json_data=json_data)
 
-    async def delete(
-        self, endpoint: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def delete(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a DELETE request.
 
         Args:

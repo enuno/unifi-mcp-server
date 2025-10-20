@@ -39,7 +39,7 @@ async def list_firewall_rules(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-        rules_data = response.get("data", [])
+        rules_data: list[dict[str, Any]] = response.get("data", [])
 
         # Apply pagination
         paginated = rules_data[offset : offset + limit]
@@ -84,7 +84,7 @@ async def create_firewall_rule(
         ValidationError: If validation fails
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "firewall operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate action
@@ -144,8 +144,10 @@ async def create_firewall_rule(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(f"/ea/sites/{site_id}/rest/firewallrule", json=rule_data)
-            created_rule = response.get("data", [{}])[0]
+            response = await client.post(
+                f"/ea/sites/{site_id}/rest/firewallrule", json_data=rule_data
+            )
+            created_rule: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Created firewall rule '{name}' in site '{site_id}'")
             log_audit(
@@ -206,7 +208,7 @@ async def update_firewall_rule(
         ResourceNotFoundError: If rule not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "firewall operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate action if provided
@@ -250,7 +252,7 @@ async def update_firewall_rule(
 
             # Get existing rule
             response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-            rules_data = response.get("data", [])
+            rules_data: list[dict[str, Any]] = response.get("data", [])
 
             existing_rule = None
             for rule in rules_data:
@@ -280,9 +282,9 @@ async def update_firewall_rule(
                 update_data["enabled"] = enabled
 
             response = await client.put(
-                f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}", json=update_data
+                f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}", json_data=update_data
             )
-            updated_rule = response.get("data", [{}])[0]
+            updated_rule: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Updated firewall rule '{rule_id}' in site '{site_id}'")
             log_audit(
@@ -329,7 +331,7 @@ async def delete_firewall_rule(
         ResourceNotFoundError: If rule not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "firewall operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "rule_id": rule_id}
@@ -351,7 +353,7 @@ async def delete_firewall_rule(
 
             # Verify rule exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-            rules_data = response.get("data", [])
+            rules_data: list[dict[str, Any]] = response.get("data", [])
 
             rule_exists = any(rule.get("_id") == rule_id for rule in rules_data)
             if not rule_exists:

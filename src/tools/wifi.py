@@ -40,7 +40,7 @@ async def list_wlans(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-        wlans_data = response.get("data", [])
+        wlans_data: list[dict[str, Any]] = response.get("data", [])
 
         # Apply pagination
         paginated = wlans_data[offset : offset + limit]
@@ -89,7 +89,7 @@ async def create_wlan(
         ValidationError: If validation fails
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "wifi operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate security type
@@ -164,8 +164,8 @@ async def create_wlan(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json=wlan_data)
-            created_wlan = response.get("data", [{}])[0]
+            response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json_data=wlan_data)
+            created_wlan: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Created WLAN '{name}' in site '{site_id}'")
             log_audit(
@@ -230,7 +230,7 @@ async def update_wlan(
         ResourceNotFoundError: If WLAN not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "wifi operation")
     logger = get_logger(__name__, settings.log_level)
 
     # Validate security type if provided
@@ -290,7 +290,7 @@ async def update_wlan(
 
             # Get existing WLAN
             response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-            wlans_data = response.get("data", [])
+            wlans_data: list[dict[str, Any]] = response.get("data", [])
 
             existing_wlan = None
             for wlan in wlans_data:
@@ -325,9 +325,9 @@ async def update_wlan(
                 update_data["hide_ssid"] = hide_ssid
 
             response = await client.put(
-                f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}", json=update_data
+                f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}", json_data=update_data
             )
-            updated_wlan = response.get("data", [{}])[0]
+            updated_wlan: dict[str, Any] = response.get("data", [{}])[0]
 
             logger.info(f"Updated WLAN '{wlan_id}' in site '{site_id}'")
             log_audit(
@@ -374,7 +374,7 @@ async def delete_wlan(
         ResourceNotFoundError: If WLAN not found
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm)
+    validate_confirmation(confirm, "wifi operation")
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {"site_id": site_id, "wlan_id": wlan_id}
@@ -396,7 +396,7 @@ async def delete_wlan(
 
             # Verify WLAN exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-            wlans_data = response.get("data", [])
+            wlans_data: list[dict[str, Any]] = response.get("data", [])
 
             wlan_exists = any(wlan.get("_id") == wlan_id for wlan in wlans_data)
             if not wlan_exists:

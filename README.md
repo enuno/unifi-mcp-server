@@ -1,7 +1,7 @@
 # <img src="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/unifi-dark.png" alt="UniFi Dark Logo" width="40" /> UniFi MCP Server
 
-[![CI](https://github.com/elvis/unifi-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/elvis/unifi-mcp-server/actions/workflows/ci.yml)
-[![Security](https://github.com/elvis/unifi-mcp-server/actions/workflows/security.yml/badge.svg)](https://github.com/elvis/unifi-mcp-server/actions/workflows/security.yml)
+[![CI](https://github.com/enuno/unifi-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/enuno/unifi-mcp-server/actions/workflows/ci.yml)
+[![Security](https://github.com/enuno/unifi-mcp-server/actions/workflows/security.yml/badge.svg)](https://github.com/enuno/unifi-mcp-server/actions/workflows/security.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
@@ -64,7 +64,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone https://github.com/elvis/unifi-mcp-server.git
+git clone https://github.com/enuno/unifi-mcp-server.git
 cd unifi-mcp-server
 
 # Create virtual environment and install dependencies
@@ -77,7 +77,7 @@ uv pip install -e ".[dev]"
 
 ```bash
 # Clone the repository
-git clone https://github.com/elvis/unifi-mcp-server.git
+git clone https://github.com/enuno/unifi-mcp-server.git
 cd unifi-mcp-server
 
 # Create virtual environment
@@ -92,14 +92,14 @@ pip install -e ".[dev]"
 
 ```bash
 # Pull the image
-docker pull ghcr.io/elvis/unifi-mcp-server:latest
+docker pull ghcr.io/enuno/unifi-mcp-server:latest
 
 # Run the container (Cloud API)
 docker run -d \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=cloud \
   -p 3000:3000 \
-  ghcr.io/elvis/unifi-mcp-server:latest
+  ghcr.io/enuno/unifi-mcp-server:latest
 
 # OR run with local gateway proxy
 docker run -d \
@@ -107,7 +107,7 @@ docker run -d \
   -e UNIFI_API_TYPE=local \
   -e UNIFI_HOST=192.168.1.1 \
   -p 3000:3000 \
-  ghcr.io/elvis/unifi-mcp-server:latest
+  ghcr.io/enuno/unifi-mcp-server:latest
 ```
 
 ### Configuration
@@ -438,14 +438,14 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/elvis/unifi-mcp-server/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/elvis/unifi-mcp-server/discussions)
+- **Issues**: [GitHub Issues](https://github.com/enuno/unifi-mcp-server/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/enuno/unifi-mcp-server/discussions)
 - **Documentation**: See [API.md](API.md) and other docs in this repository
 
 ## Links
 
-- **Repository**: https://github.com/elvis/unifi-mcp-server
-- **Docker Hub**: https://ghcr.io/elvis/unifi-mcp-server
+- **Repository**: https://github.com/enuno/unifi-mcp-server
+- **Docker Hub**: https://ghcr.io/enuno/unifi-mcp-server
 - **Documentation**: [API.md](API.md)
 - **UniFi Official**: https://www.ui.com/
 

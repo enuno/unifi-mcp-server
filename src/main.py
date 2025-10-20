@@ -22,11 +22,7 @@ settings = Settings()
 logger = get_logger(__name__, settings.log_level)
 
 # Initialize FastMCP server
-mcp = FastMCP(
-    "UniFi MCP Server",
-    version="0.1.0",
-    description="Model Context Protocol server for UniFi Network API",
-)
+mcp = FastMCP("UniFi MCP Server")
 
 # Initialize resource handlers
 sites_resource = SitesResource(settings)

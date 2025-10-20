@@ -21,18 +21,22 @@ Steps to execute:
 The PR description should follow this format:
 
 ## Description
+
 [Brief description of changes]
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Breaking change
 - [ ] Documentation update
 
 ## Testing
+
 [Describe testing performed]
 
 ## Checklist
+
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Commented complex code
@@ -42,6 +46,7 @@ The PR description should follow this format:
 - [ ] No new warnings
 
 ## AI Assistance
+
 This PR was created with assistance from Claude Code.
 
 Report back with the PR URL once created.

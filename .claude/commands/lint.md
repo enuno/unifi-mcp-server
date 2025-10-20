@@ -12,6 +12,7 @@ Execute the following checks:
 4. MyPy type checking: `mypy src/`
 
 Report back with:
+
 - List of any formatting issues
 - Import sorting problems
 - Linting errors or warnings

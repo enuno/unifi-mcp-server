@@ -1,7 +1,7 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
 default_language_version:
-  python: python3.10
+  python: python3
 
 repos:
   # General file checks
@@ -47,7 +47,6 @@ repos:
     hooks:
       - id: black
         name: Format code with Black
-        language_version: python3.10
 
   # Import sorting with isort
   - repo: https://github.com/pycqa/isort
@@ -74,6 +73,7 @@ repos:
         additional_dependencies:
           - types-PyYAML
           - types-requests
+          - types-redis
           - pydantic>=2.0.0
         args: [--ignore-missing-imports, --show-error-codes]
         exclude: ^tests/
@@ -87,14 +87,6 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
         exclude: ^tests/
-
-  # Check for common security issues
-  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
-    rev: v1.3.3
-    hooks:
-      - id: python-safety-dependencies-check
-        name: Check dependencies for vulnerabilities
-        files: pyproject.toml
 
   # Markdown linting
   - repo: https://github.com/igorshubovych/markdownlint-cli

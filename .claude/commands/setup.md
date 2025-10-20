@@ -15,6 +15,7 @@ Execute the following setup steps:
 7. Run initial tests to verify setup: `pytest --co -q`
 
 Report back with:
+
 - Setup completion status
 - Any errors encountered
 - Next steps for configuration

@@ -31,7 +31,7 @@ We take the security of the UniFi MCP Server seriously. If you believe you have 
 
 **Alternatively, you can email the maintainers directly at:**
 
-- security@homelab.local (replace with actual contact)
+- <security@homelab.local> (replace with actual contact)
 
 ### What to Include in Your Report
 
@@ -190,12 +190,14 @@ class DeviceConfig(BaseModel):
 ### API Security
 
 **Authentication:**
+
 - Always use HTTPS for API communications (required for UniFi Cloud API)
 - Use API key authentication via `X-API-Key` header
 - No session management needed (stateless authentication)
 - Store API keys securely using environment variables or secret management
 
 **API Key Headers:**
+
 ```python
 import httpx
 from pydantic import SecretStr
@@ -218,12 +220,14 @@ async def make_api_request(api_key: SecretStr, endpoint: str):
 ```
 
 **Rate Limiting:**
+
 - Respect UniFi API rate limits (100 req/min EA, 10k req/min v1)
 - Implement client-side rate limiting
 - Add exponential backoff for 429 (rate limit) errors
 - Cache frequently accessed data to reduce API calls
 
 **Rate Limit Implementation Example:**
+
 ```python
 import asyncio
 from datetime import datetime, timedelta
@@ -253,6 +257,7 @@ class APIRateLimiter:
 ```
 
 **Error Handling:**
+
 - Never expose API keys in error messages
 - Log errors securely without exposing secrets
 - Provide user-friendly error messages
@@ -276,6 +281,7 @@ logging.debug(f"API key configured: {'yes' if api_key else 'no'}")
 ### Dependency Security
 
 **Regular Updates:**
+
 - Keep all dependencies up to date
 - Review security advisories for dependencies
 - Use automated dependency scanning tools
@@ -324,6 +330,7 @@ See `AI_GIT_PRACTICES.md` and `AGENTS.md` for additional AI security guidelines.
 ### Docker Security
 
 **Image Security:**
+
 - Use official base images from trusted sources
 - Keep base images updated
 - Run containers as non-root users
@@ -374,6 +381,7 @@ CMD ["python", "src/main.py"]
 **All mutating tools (Phase 4) implement comprehensive safety features:**
 
 1. **Confirmation Requirement:**
+
    ```python
    # ❌ WILL FAIL - Missing confirmation
    await create_firewall_rule(site_id="default", name="test", action="drop")
@@ -383,6 +391,7 @@ CMD ["python", "src/main.py"]
    ```
 
 2. **Dry Run Mode:**
+
    ```python
    # Preview changes without executing
    result = await create_network(
@@ -415,6 +424,7 @@ CMD ["python", "src/main.py"]
 - **Client Management:** `block_client`, `unblock_client`, `reconnect_client`
 
 **Audit Log Example:**
+
 ```json
 {
   "timestamp": "2025-10-18T10:30:00Z",
@@ -459,8 +469,8 @@ This project strives to follow:
 
 For security-related questions or concerns:
 
-- **Security Team:** security@homelab.local
-- **Project Maintainer:** elvis@homelab.local
+- **Security Team:** <security@homelab.local>
+- **Project Maintainer:** <elvis@homelab.local>
 - **GitHub Security:** Use GitHub Security Advisories
 
 ## Acknowledgments

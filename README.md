@@ -384,6 +384,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 ### Version 0.1.0 (Current - Complete ✅)
 
 **Phase 3: Read-Only Operations (16 tools)**
+
 - [x] Device management (list, details, statistics, search by type)
 - [x] Client management (list, details, statistics, search)
 - [x] Network information (details, VLANs, subnets, statistics)
@@ -391,6 +392,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] MCP resources (sites, devices, clients, networks)
 
 **Phase 4: Mutating Operations with Safety (13 tools)**
+
 - [x] Firewall rule management (create, update, delete)
 - [x] Network configuration (create, update, delete networks/VLANs)
 - [x] Device control (restart, locate, upgrade)
@@ -398,6 +400,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] Safety mechanisms (confirmation, dry-run, audit logging)
 
 **Phase 5: Advanced Features (11 tools)**
+
 - [x] WiFi/SSID management (create, update, delete, statistics)
 - [x] Port forwarding configuration (create, delete, list)
 - [x] DPI statistics (site-wide, top apps, per-client)
@@ -444,10 +447,10 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## Links
 
-- **Repository**: https://github.com/enuno/unifi-mcp-server
-- **Docker Hub**: https://ghcr.io/enuno/unifi-mcp-server
+- **Repository**: <https://github.com/enuno/unifi-mcp-server>
+- **Docker Hub**: <https://ghcr.io/enuno/unifi-mcp-server>
 - **Documentation**: [API.md](API.md)
-- **UniFi Official**: https://www.ui.com/
+- **UniFi Official**: <https://www.ui.com/>
 
 ---
 

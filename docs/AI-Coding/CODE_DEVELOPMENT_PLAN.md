@@ -449,6 +449,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `chore`
 
 **Examples:**
+
 - `feat(tools): add firewall rule creation tool`
 - `fix(api): handle rate limiting correctly`
 - `docs(api): add examples for device tools`
@@ -478,12 +479,14 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 Use the following checklist to track development progress:
 
 ### Phase 1: Core Infrastructure
+
 - [ ] Configuration management implemented
 - [ ] API client foundation complete
 - [ ] Utility functions created
 - [ ] Unit tests passing (≥80% coverage)
 
 ### Phase 2: MCP Resources
+
 - [ ] Sites resource implemented
 - [ ] Devices resource implemented
 - [ ] Clients resource implemented
@@ -491,6 +494,7 @@ Use the following checklist to track development progress:
 - [ ] Documentation updated
 
 ### Phase 3: Read Operations
+
 - [ ] Device management tools complete
 - [ ] Client management tools complete
 - [ ] Network information tools complete
@@ -498,6 +502,7 @@ Use the following checklist to track development progress:
 - [ ] Tests passing (≥85% coverage)
 
 ### Phase 4: Write Operations
+
 - [ ] Firewall rules tools complete
 - [ ] Network configuration tools complete
 - [ ] Device control tools complete
@@ -506,6 +511,7 @@ Use the following checklist to track development progress:
 - [ ] Audit logging functional
 
 ### Phase 5: Advanced Features
+
 - [ ] WiFi management complete
 - [ ] Port forwarding complete
 - [ ] DPI statistics complete
@@ -513,6 +519,7 @@ Use the following checklist to track development progress:
 - [ ] Webhook support added
 
 ### Phase 6: Testing and QA
+
 - [ ] Unit tests ≥90% coverage
 - [ ] Integration tests complete
 - [ ] Security scans passing
@@ -520,6 +527,7 @@ Use the following checklist to track development progress:
 - [ ] Code quality checks passing
 
 ### Phase 7: Documentation and Deployment
+
 - [ ] API documentation complete
 - [ ] User documentation complete
 - [ ] Developer documentation complete
@@ -543,5 +551,3 @@ If you encounter issues or need clarification:
 **Author:** Manus AI
 **Last Updated:** October 17, 2025
 **Version:** 1.0
-
-

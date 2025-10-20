@@ -15,6 +15,7 @@ Execute the following cleanup commands:
 7. Remove ruff cache: `rm -rf .ruff_cache`
 
 Report back with:
+
 - List of directories/files removed
 - Disk space freed
 - Confirmation that working directory is clean

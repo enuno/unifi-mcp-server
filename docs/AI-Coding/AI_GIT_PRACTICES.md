@@ -34,5 +34,3 @@ To maximize the efficiency of AI assistants, it is often beneficial to create cu
 - **Quick-Reference Guides:** Provide quick-reference guides for common AI workflows, such as `/pr` to automate pull request creation or `/test` to run the test suite.
 
 Well-documented commands facilitate consistent usage and improve collaboration efficiency. Adhering to these AI-specific Git practices will ensure that your repository remains clean, maintainable, and transparent, enabling both human developers and AI assistants to collaborate effectively while minimizing risks and maximizing productivity.
-
-

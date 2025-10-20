@@ -39,5 +39,3 @@ Maintaining a clean and organized repository is crucial for long-term project he
 - **Archiving and Pruning:** Old experimental outputs, large data files, and other non-essential assets should be archived or pruned from the repository. For large files, consider using Git LFS (Large File Storage) or storing them in a separate object storage service.
 
 By adhering to these contribution best practices, we can foster a collaborative environment that is both productive and secure, enabling human and AI developers to work together effectively to build a high-quality UniFi MCP Server.
-
-

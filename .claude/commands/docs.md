@@ -14,6 +14,7 @@ Tasks to perform:
 6. Suggest improvements to documentation
 
 Report back with:
+
 - Missing or incomplete docstrings
 - Outdated documentation
 - Suggested additions or improvements

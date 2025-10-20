@@ -5,12 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models import Site
-from ..utils import (
-    ResourceNotFoundError,
-    get_logger,
-    validate_limit_offset,
-    validate_site_id,
-)
+from ..utils import ResourceNotFoundError, get_logger, validate_limit_offset, validate_site_id
 
 
 async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:

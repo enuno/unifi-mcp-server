@@ -11,6 +11,7 @@ Execute the following commands:
 3. Fix auto-fixable linting issues: `ruff check src/ tests/ --fix`
 
 Report back with:
+
 - Files that were modified
 - Summary of changes made
 - Any remaining issues that require manual intervention

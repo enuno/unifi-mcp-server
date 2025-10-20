@@ -11,15 +11,15 @@ from functools import wraps
 from typing import Any
 
 try:
-    import redis.asyncio as redis  # type: ignore[import-untyped]
-    from redis.asyncio import Redis  # type: ignore[import-untyped]
-    from redis.exceptions import RedisError  # type: ignore[import-untyped]
+    import redis.asyncio as redis
+    from redis.asyncio import Redis
+    from redis.exceptions import RedisError
 
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    Redis = None  # type: ignore[assignment]
-    RedisError = Exception  # type: ignore[assignment]
+    Redis = None
+    RedisError = Exception
 
 from .config import Settings
 from .utils import get_logger

@@ -46,6 +46,7 @@ dev = [
     "bandit>=1.7.0",
     "types-PyYAML>=6.0.0",
     "types-requests>=2.31.0",
+    "types-redis>=4.6.0",
 ]
 
 [project.urls]

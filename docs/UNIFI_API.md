@@ -41,6 +41,7 @@ Navigate to [https://unifi.ui.com](https://unifi.ui.com) and sign in with your U
 #### 2. Access the API Section
 
 From the left navigation menu:
+
 1. Click on **Settings** (gear icon)
 2. Select **Control Plane**
 3. Click on **Integrations**
@@ -74,15 +75,18 @@ UNIFI_API_KEY=your-api-key-here
 ### Managing API Keys
 
 **Viewing Existing Keys**
+
 - You can view a list of your API keys in the Integrations section
 - Only the key name/description is shown, not the actual key value
 
 **Revoking Keys**
+
 - Click the trash icon next to a key to revoke it
 - Revoked keys cannot be restored
 - Applications using revoked keys will immediately lose access
 
 **Best Practices**
+
 - Create separate keys for different environments (dev, staging, production)
 - Use descriptive names to identify where each key is used
 - Rotate keys regularly (e.g., every 90 days)
@@ -95,12 +99,14 @@ The UniFi MCP Server supports two API access modes:
 ### Cloud API (Recommended)
 
 **Overview**
+
 - Access UniFi services through Ubiquiti's cloud infrastructure
 - Works with cloud-hosted UniFi instances
 - Requires internet connectivity
 - Official, supported API endpoint
 
 **Configuration**
+
 ```env
 UNIFI_API_TYPE=cloud
 UNIFI_HOST=api.ui.com
@@ -109,11 +115,13 @@ UNIFI_VERIFY_SSL=true
 ```
 
 **Base URL Structure**
+
 ```
 https://api.ui.com/v1/{endpoint}
 ```
 
 **Advantages**
+
 - ✅ Official support from Ubiquiti
 - ✅ Guaranteed uptime and reliability
 - ✅ Automatic updates and improvements
@@ -122,6 +130,7 @@ https://api.ui.com/v1/{endpoint}
 - ✅ SSL/TLS security by default
 
 **Limitations**
+
 - ❌ Requires internet connectivity
 - ❌ Currently read-only (EA version)
 - ❌ Rate limited (100 req/min in EA)
@@ -129,12 +138,14 @@ https://api.ui.com/v1/{endpoint}
 ### Local Gateway Proxy
 
 **Overview**
+
 - Direct access to local UniFi gateway
 - Works without internet connectivity
 - Uses gateway as a proxy to the network controller
 - Useful for air-gapped or isolated networks
 
 **Configuration**
+
 ```env
 UNIFI_API_TYPE=local
 UNIFI_HOST=192.168.1.1  # Your gateway IP
@@ -143,17 +154,20 @@ UNIFI_VERIFY_SSL=false  # Often needed for self-signed certs
 ```
 
 **Base URL Structure**
+
 ```
 https://{gateway-ip}:{port}/proxy/network/integration/v1/{endpoint}
 ```
 
 **Advantages**
+
 - ✅ Works without internet
 - ✅ Lower latency (local network)
 - ✅ No cloud dependency
 - ✅ Useful for isolated/secure environments
 
 **Limitations**
+
 - ❌ Requires local network access
 - ❌ May have self-signed certificates
 - ❌ No official support guarantee
@@ -175,6 +189,7 @@ https://{gateway-ip}:{port}/proxy/network/integration/v1/{endpoint}
 ### Sites Management
 
 #### List All Sites
+
 ```http
 GET /v1/sites
 ```
@@ -182,6 +197,7 @@ GET /v1/sites
 **Pagination**: Returns up to 200 sites per request. Use `offset` and `limit` parameters for pagination.
 
 **Example Response**:
+
 ```json
 {
   "data": [
@@ -197,11 +213,13 @@ GET /v1/sites
 ### Devices Management
 
 #### List Devices in a Site
+
 ```http
 GET /v1/sites/{site_id}/devices
 ```
 
 **Example Response**:
+
 ```json
 {
   "data": [
@@ -220,11 +238,13 @@ GET /v1/sites/{site_id}/devices
 ### Hosts (Clients) Management
 
 #### List All Hosts
+
 ```http
 GET /v1/hosts
 ```
 
 **Example Response**:
+
 ```json
 {
   "data": [
@@ -247,6 +267,7 @@ X-API-Key: your-api-key-here
 ```
 
 **Example with curl**:
+
 ```bash
 curl -X GET 'https://api.ui.com/v1/sites' \
   -H 'X-API-Key: your-api-key-here' \
@@ -279,6 +300,7 @@ X-RateLimit-Reset: 1634567890
 ### Handling Rate Limits
 
 **429 Too Many Requests Response**:
+
 ```http
 HTTP/1.1 429 Too Many Requests
 Retry-After: 60
@@ -287,6 +309,7 @@ Retry-After: 60
 **Recommended Strategies**:
 
 1. **Exponential Backoff**
+
    ```
    Wait time = min(base_delay * 2^retry_count, max_delay)
    ```
@@ -339,6 +362,7 @@ If you're migrating from a local UniFi controller setup to the cloud API:
 #### 1. Verify Cloud Access
 
 Ensure your UniFi setup is accessible via unifi.ui.com:
+
 - Log in to [https://unifi.ui.com](https://unifi.ui.com)
 - Verify you can see your sites and devices
 
@@ -349,6 +373,7 @@ Follow the [Getting Your API Key](#getting-your-api-key) instructions above.
 #### 3. Update Environment Variables
 
 **Before (Local Controller)**:
+
 ```env
 UNIFI_HOST=controller.local
 UNIFI_USERNAME=admin
@@ -358,6 +383,7 @@ UNIFI_VERIFY_SSL=false
 ```
 
 **After (Cloud API)**:
+
 ```env
 UNIFI_API_KEY=your-api-key-here
 UNIFI_API_TYPE=cloud
@@ -369,12 +395,14 @@ UNIFI_VERIFY_SSL=true
 #### 4. Update Code (If Applicable)
 
 **Authentication Changes**:
+
 - Remove session/cookie management code
 - Remove login/logout logic
 - Add `X-API-Key` header to all requests
 - Remove CSRF token handling
 
 **Endpoint Changes**:
+
 - Update base URL from controller to cloud API
 - Update endpoint paths to match cloud API structure
 - Implement pagination for large result sets
@@ -414,6 +442,7 @@ UNIFI_VERIFY_SSL=true
 #### Issue: 401 Unauthorized
 
 **Symptoms**:
+
 ```json
 {
   "error": "Unauthorized",
@@ -422,6 +451,7 @@ UNIFI_VERIFY_SSL=true
 ```
 
 **Solutions**:
+
 1. Verify API key is correct (no extra spaces or characters)
 2. Check that `X-API-Key` header is set correctly
 3. Ensure API key hasn't been revoked
@@ -430,12 +460,14 @@ UNIFI_VERIFY_SSL=true
 #### Issue: 429 Too Many Requests
 
 **Symptoms**:
+
 ```http
 HTTP/1.1 429 Too Many Requests
 Retry-After: 60
 ```
 
 **Solutions**:
+
 1. Implement exponential backoff
 2. Reduce request frequency
 3. Cache frequently accessed data
@@ -444,10 +476,12 @@ Retry-After: 60
 #### Issue: Connection Timeout
 
 **Symptoms**:
+
 - Requests hang or timeout
 - No response from API
 
 **Solutions**:
+
 1. Check internet connectivity
 2. Verify firewall allows outbound HTTPS (port 443)
 3. Test with curl: `curl -v https://api.ui.com/v1/sites -H "X-API-Key: your-key"`
@@ -457,6 +491,7 @@ Retry-After: 60
 #### Issue: SSL Certificate Verification Failed
 
 **Symptoms**:
+
 ```
 SSL: CERTIFICATE_VERIFY_FAILED
 ```
@@ -464,21 +499,25 @@ SSL: CERTIFICATE_VERIFY_FAILED
 **Solutions**:
 
 **For Cloud API** (should not happen):
+
 1. Update system CA certificates
 2. Check system clock is correct
 3. Verify DNS is resolving correctly
 
 **For Local Gateway Proxy** (common):
+
 1. Set `UNIFI_VERIFY_SSL=false` in `.env`
 2. Or install gateway's self-signed certificate in system trust store
 
 #### Issue: Empty Response / No Data
 
 **Symptoms**:
+
 - API returns 200 OK but no data
 - Empty arrays in responses
 
 **Solutions**:
+
 1. Verify you have sites/devices configured in UniFi
 2. Check site_id is correct
 3. Ensure devices are adopted and online
@@ -487,10 +526,12 @@ SSL: CERTIFICATE_VERIFY_FAILED
 #### Issue: Read-Only API Limitations
 
 **Symptoms**:
+
 - Cannot create/update/delete resources
 - 403 Forbidden on write operations
 
 **Solutions**:
+
 - This is expected behavior for EA version
 - Read-only access is current limitation
 - Wait for v1 Stable release for write operations
@@ -505,6 +546,7 @@ MCP_LOG_LEVEL=DEBUG
 ```
 
 This will log:
+
 - All HTTP requests and responses
 - Authentication headers (keys are redacted)
 - Rate limiting information

@@ -12,6 +12,7 @@ Execute the following security checks:
 4. Review .env.example to ensure no credentials are exposed
 
 Report back with:
+
 - Any security vulnerabilities found
 - Severity levels (LOW, MEDIUM, HIGH, CRITICAL)
 - Recommended remediation steps

@@ -58,14 +58,12 @@ The project follows a structure similar to the reference implementation from `si
 
 For local development and testing, the following steps should be followed, as inspired by the `makewithdata.tech` guide [2]:
 
-1.  **Initialize the Environment:** Use `uv` to create a virtual environment and install the necessary dependencies.
-2.  **Run the Server:** Start the MCP server in development mode using a command like `uv run mcp dev main.py`. This will enable the MCP Inspector, a valuable tool for debugging.
-3.  **Testing:** The MCP Inspector, available at `http://localhost:5173`, should be used to test tool and resource implementations interactively.
+1. **Initialize the Environment:** Use `uv` to create a virtual environment and install the necessary dependencies.
+2. **Run the Server:** Start the MCP server in development mode using a command like `uv run mcp dev main.py`. This will enable the MCP Inspector, a valuable tool for debugging.
+3. **Testing:** The MCP Inspector, available at `http://localhost:5173`, should be used to test tool and resource implementations interactively.
 
 ### References
 
 [1] sirkirby. (2025). *unifi-network-mcp*. GitHub. Retrieved from [https://github.com/sirkirby/unifi-network-mcp](https://github.com/sirkirby/unifi-network-mcp)
 
 [2] King, Z. (2025, March 30). *Build a MCP Server for AI Access to UniFi Networks (Goose or Claude)*. MakeWithData. Retrieved from [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
-
-

@@ -4,12 +4,7 @@ from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
-from ..utils import (
-    get_logger,
-    validate_limit_offset,
-    validate_mac_address,
-    validate_site_id,
-)
+from ..utils import get_logger, validate_limit_offset, validate_mac_address, validate_site_id
 
 
 async def get_dpi_statistics(

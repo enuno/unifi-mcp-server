@@ -118,12 +118,14 @@ No session management or cookie handling is required. Each request is independen
 ### API Access Modes
 
 **Cloud API (Recommended)**
+
 - Base URL: `https://api.ui.com/v1/`
 - Access cloud-hosted UniFi instances
 - Requires internet connectivity
 - SSL verification recommended
 
 **Local Gateway Proxy**
+
 - Base URL: `https://{gateway-ip}:{port}/proxy/network/integration`
 - Access local UniFi gateway directly
 - Works without internet
@@ -165,11 +167,13 @@ Verify the MCP server is running and accessible.
 Server health status information.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("health_check", {})
 ```
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -185,6 +189,7 @@ result = await mcp.call_tool("health_check", {})
 Get detailed information for a specific device.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `device_id` (string, required): Device ID
 
@@ -192,6 +197,7 @@ Get detailed information for a specific device.
 Object containing detailed device information.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_device_details", {
     "site_id": "default",
@@ -200,6 +206,7 @@ result = await mcp.call_tool("get_device_details", {
 ```
 
 **Response:**
+
 ```json
 {
   "id": "507f1f77bcf86cd799439011",
@@ -219,6 +226,7 @@ result = await mcp.call_tool("get_device_details", {
 Retrieve real-time statistics for a device.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `device_id` (string, required): Device ID
 
@@ -226,6 +234,7 @@ Retrieve real-time statistics for a device.
 Object containing device statistics.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_device_statistics", {
     "site_id": "default",
@@ -234,6 +243,7 @@ result = await mcp.call_tool("get_device_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "device_id": "507f1f77bcf86cd799439011",
@@ -253,6 +263,7 @@ result = await mcp.call_tool("get_device_statistics", {
 Filter devices by type (AP, switch, gateway).
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `device_type` (string, required): Device type filter (uap, usw, ugw, udm, uxg, etc.)
 
@@ -260,6 +271,7 @@ Filter devices by type (AP, switch, gateway).
 Array of device objects matching the type.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_devices_by_type", {
     "site_id": "default",
@@ -272,6 +284,7 @@ result = await mcp.call_tool("list_devices_by_type", {
 Search devices by name, MAC, or IP address.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `query` (string, required): Search query string
 
@@ -279,6 +292,7 @@ Search devices by name, MAC, or IP address.
 Array of matching device objects.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("search_devices", {
     "site_id": "default",
@@ -293,6 +307,7 @@ result = await mcp.call_tool("search_devices", {
 Get detailed information for a specific client.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `client_mac` (string, required): Client MAC address
 
@@ -300,6 +315,7 @@ Get detailed information for a specific client.
 Object containing detailed client information.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_client_details", {
     "site_id": "default",
@@ -308,6 +324,7 @@ result = await mcp.call_tool("get_client_details", {
 ```
 
 **Response:**
+
 ```json
 {
   "mac": "aa:bb:cc:dd:ee:01",
@@ -325,6 +342,7 @@ result = await mcp.call_tool("get_client_details", {
 Retrieve bandwidth and connection statistics for a client.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `client_mac` (string, required): Client MAC address
 
@@ -332,6 +350,7 @@ Retrieve bandwidth and connection statistics for a client.
 Object containing client statistics.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_client_statistics", {
     "site_id": "default",
@@ -340,6 +359,7 @@ result = await mcp.call_tool("get_client_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "mac": "aa:bb:cc:dd:ee:01",
@@ -362,12 +382,14 @@ result = await mcp.call_tool("get_client_statistics", {
 List currently connected clients.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 
 **Returns:**
 Array of active client objects.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_active_clients", {
     "site_id": "default"
@@ -379,6 +401,7 @@ result = await mcp.call_tool("list_active_clients", {
 Search clients by MAC, IP, or hostname.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `query` (string, required): Search query string
 
@@ -386,6 +409,7 @@ Search clients by MAC, IP, or hostname.
 Array of matching client objects.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("search_clients", {
     "site_id": "default",
@@ -400,6 +424,7 @@ result = await mcp.call_tool("search_clients", {
 Get detailed network configuration.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `network_id` (string, required): Network ID
 
@@ -407,6 +432,7 @@ Get detailed network configuration.
 Object containing network configuration.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_network_details", {
     "site_id": "default",
@@ -415,6 +441,7 @@ result = await mcp.call_tool("get_network_details", {
 ```
 
 **Response:**
+
 ```json
 {
   "id": "507f191e810c19729de860ea",
@@ -431,12 +458,14 @@ result = await mcp.call_tool("get_network_details", {
 List all VLANs in a site.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 
 **Returns:**
 Array of VLAN/network objects.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_vlans", {
     "site_id": "default"
@@ -448,6 +477,7 @@ result = await mcp.call_tool("list_vlans", {
 Get subnet and DHCP information for a network.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `network_id` (string, required): Network ID
 
@@ -455,6 +485,7 @@ Get subnet and DHCP information for a network.
 Object containing subnet and DHCP configuration.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_subnet_info", {
     "site_id": "default",
@@ -463,6 +494,7 @@ result = await mcp.call_tool("get_subnet_info", {
 ```
 
 **Response:**
+
 ```json
 {
   "network_id": "507f191e810c19729de860ea",
@@ -485,12 +517,14 @@ result = await mcp.call_tool("get_subnet_info", {
 Retrieve network usage statistics for a site.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 
 **Returns:**
 Object containing network statistics across all networks.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_network_statistics", {
     "site_id": "default"
@@ -498,6 +532,7 @@ result = await mcp.call_tool("get_network_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "site_id": "default",
@@ -522,12 +557,14 @@ result = await mcp.call_tool("get_network_statistics", {
 Get detailed site information.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 
 **Returns:**
 Object containing site details.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_site_details", {
     "site_id": "default"
@@ -535,6 +572,7 @@ result = await mcp.call_tool("get_site_details", {
 ```
 
 **Response:**
+
 ```json
 {
   "id": "default",
@@ -553,6 +591,7 @@ List all accessible sites.
 Array of site objects.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_all_sites", {})
 ```
@@ -562,12 +601,14 @@ result = await mcp.call_tool("list_all_sites", {})
 Retrieve site-wide statistics.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 
 **Returns:**
 Object containing comprehensive site statistics.
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_site_statistics", {
     "site_id": "default"
@@ -575,6 +616,7 @@ result = await mcp.call_tool("get_site_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "site_id": "default",
@@ -618,16 +660,19 @@ All Phase 4 tools modify UniFi configuration and require safety mechanisms.
 ### Firewall Management
 
 #### `list_firewall_rules`
+
 List all firewall rules (read-only).
 
 **Parameters:** `site_id`
 
 #### `create_firewall_rule`
+
 Create a new firewall rule.
 
 **Parameters:** `site_id`, `name`, `action` (accept/drop/reject), `source`, `destination`, `protocol`, `port`, `enabled`, **`confirm`**, **`dry_run`**
 
 **Example:**
+
 ```python
 # Dry run first
 result = await mcp.call_tool("create_firewall_rule", {
@@ -651,31 +696,37 @@ result = await mcp.call_tool("create_firewall_rule", {
 ```
 
 #### `update_firewall_rule` & `delete_firewall_rule`
+
 Modify or remove firewall rules. Requires `confirm=True`.
 
 ### Network Configuration
 
 #### `create_network`
+
 Create a new network/VLAN.
 
 **Parameters:** `site_id`, `name`, `vlan_id`, `subnet`, `purpose`, `dhcp_enabled`, DHCP settings, **`confirm`**, **`dry_run`**
 
 #### `update_network` & `delete_network`
+
 Modify or remove networks. Requires `confirm=True`.
 
 ### Device Control
 
 #### `restart_device`
+
 Restart a UniFi device.
 
 **Parameters:** `site_id`, `device_mac`, **`confirm`**, **`dry_run`**
 
 #### `locate_device`
+
 Enable/disable LED locate mode.
 
 **Parameters:** `site_id`, `device_mac`, `enabled`, **`confirm`**, **`dry_run`**
 
 #### `upgrade_device`
+
 Trigger firmware upgrade.
 
 **Parameters:** `site_id`, `device_mac`, `firmware_url`, **`confirm`**, **`dry_run`**
@@ -683,11 +734,13 @@ Trigger firmware upgrade.
 ### Client Management
 
 #### `block_client` & `unblock_client`
+
 Block or unblock a client from the network.
 
 **Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
 
 #### `reconnect_client`
+
 Force a client to reconnect.
 
 **Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
@@ -695,6 +748,7 @@ Force a client to reconnect.
 ### Error Handling
 
 All mutating tools raise:
+
 - `ConfirmationRequiredError`: If `confirm` parameter not True
 - `ValidationError`: If parameters invalid
 - `ResourceNotFoundError`: If resource not found
@@ -707,14 +761,17 @@ Phase 5 adds WiFi management, port forwarding, DPI analytics, caching, and webho
 ### WiFi Network (SSID) Management
 
 #### `list_wlans`
+
 List all wireless networks (SSIDs) in a site (read-only).
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Maximum number of WLANs to return
 - `offset` (integer, optional): Number of WLANs to skip
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_wlans", {
     "site_id": "default",
@@ -723,6 +780,7 @@ result = await mcp.call_tool("list_wlans", {
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -740,9 +798,11 @@ result = await mcp.call_tool("list_wlans", {
 ```
 
 #### `create_wlan`
+
 Create a new wireless network/SSID.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `name` (string, required): SSID name
 - `security` (string, required): Security type (open, wpapsk, wpaeap)
@@ -757,6 +817,7 @@ Create a new wireless network/SSID.
 - **`dry_run`** (boolean, optional): Preview without creating
 
 **Example:**
+
 ```python
 # Create guest WiFi with VLAN isolation
 result = await mcp.call_tool("create_wlan", {
@@ -774,9 +835,11 @@ result = await mcp.call_tool("create_wlan", {
 **Security Note:** Passwords are automatically masked in audit logs.
 
 #### `update_wlan`
+
 Update an existing wireless network.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `wlan_id` (string, required): WLAN ID
 - `name` (string, optional): New SSID name
@@ -792,22 +855,27 @@ Update an existing wireless network.
 - **`dry_run`** (boolean, optional): Preview without updating
 
 #### `delete_wlan`
+
 Delete a wireless network.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `wlan_id` (string, required): WLAN ID
 - **`confirm`** (boolean, required): Confirmation flag
 - **`dry_run`** (boolean, optional): Preview without deleting
 
 #### `get_wlan_statistics`
+
 Get WiFi usage statistics for a site or specific WLAN.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `wlan_id` (string, optional): Optional WLAN ID to filter statistics
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_wlan_statistics", {
     "site_id": "default"
@@ -815,6 +883,7 @@ result = await mcp.call_tool("get_wlan_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "site_id": "default",
@@ -837,14 +906,17 @@ result = await mcp.call_tool("get_wlan_statistics", {
 ### Port Forwarding Management
 
 #### `list_port_forwards`
+
 List all port forwarding rules in a site (read-only).
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Maximum number of rules to return
 - `offset` (integer, optional): Number of rules to skip
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_port_forwards", {
     "site_id": "default"
@@ -852,6 +924,7 @@ result = await mcp.call_tool("list_port_forwards", {
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -868,9 +941,11 @@ result = await mcp.call_tool("list_port_forwards", {
 ```
 
 #### `create_port_forward`
+
 Create a port forwarding rule.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `name` (string, required): Rule name/description
 - `dst_port` (integer, required): Destination port (external/WAN port)
@@ -884,6 +959,7 @@ Create a port forwarding rule.
 - **`dry_run`** (boolean, optional): Preview without creating
 
 **Example:**
+
 ```python
 # Forward external port 8080 to internal server
 result = await mcp.call_tool("create_port_forward", {
@@ -898,9 +974,11 @@ result = await mcp.call_tool("create_port_forward", {
 ```
 
 #### `delete_port_forward`
+
 Delete a port forwarding rule.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `rule_id` (string, required): Port forwarding rule ID
 - **`confirm`** (boolean, required): Confirmation flag
@@ -909,13 +987,16 @@ Delete a port forwarding rule.
 ### DPI (Deep Packet Inspection) Statistics
 
 #### `get_dpi_statistics`
+
 Get Deep Packet Inspection statistics for a site.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `time_range` (string, optional): Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_dpi_statistics", {
     "site_id": "default",
@@ -924,6 +1005,7 @@ result = await mcp.call_tool("get_dpi_statistics", {
 ```
 
 **Response:**
+
 ```json
 {
   "site_id": "default",
@@ -959,14 +1041,17 @@ result = await mcp.call_tool("get_dpi_statistics", {
 ```
 
 #### `list_top_applications`
+
 List top applications by bandwidth usage.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Number of top applications to return (default: 10)
 - `time_range` (string, optional): Time range for statistics (default: 24h)
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("list_top_applications", {
     "site_id": "default",
@@ -976,6 +1061,7 @@ result = await mcp.call_tool("list_top_applications", {
 ```
 
 **Response:**
+
 ```json
 [
   {
@@ -989,9 +1075,11 @@ result = await mcp.call_tool("list_top_applications", {
 ```
 
 #### `get_client_dpi`
+
 Get DPI statistics for a specific client.
 
 **Parameters:**
+
 - `site_id` (string, required): Site identifier
 - `client_mac` (string, required): Client MAC address
 - `time_range` (string, optional): Time range for statistics (default: 24h)
@@ -999,6 +1087,7 @@ Get DPI statistics for a specific client.
 - `offset` (integer, optional): Number of applications to skip
 
 **Example:**
+
 ```python
 result = await mcp.call_tool("get_client_dpi", {
     "site_id": "default",
@@ -1008,6 +1097,7 @@ result = await mcp.call_tool("get_client_dpi", {
 ```
 
 **Response:**
+
 ```json
 {
   "site_id": "default",
@@ -1036,12 +1126,14 @@ The MCP server includes optional Redis-based caching to reduce API calls and imp
 
 **Configuration:**
 Set these environment variables to enable caching:
+
 - `REDIS_HOST` (default: localhost)
 - `REDIS_PORT` (default: 6379)
 - `REDIS_DB` (default: 0)
 - `REDIS_PASSWORD` (optional)
 
 **Cache TTL by Resource Type:**
+
 - Sites: 5 minutes
 - Devices: 1 minute
 - Clients: 30 seconds
@@ -1062,11 +1154,13 @@ The MCP server can receive webhooks from UniFi for real-time event processing.
 Set `WEBHOOK_SECRET` environment variable for signature verification.
 
 **Webhook Endpoint:**
+
 ```
 POST /webhooks/unifi
 ```
 
 **Supported Events:**
+
 - `device.online` - Device came online
 - `device.offline` - Device went offline
 - `client.connected` - Client connected
@@ -1096,6 +1190,7 @@ sites://<site_id>/<resource_type>/<identifier>
 List all devices in a site.
 
 **Example:**
+
 ```python
 devices = await mcp.read_resource("sites://default/devices")
 ```
@@ -1105,6 +1200,7 @@ devices = await mcp.read_resource("sites://default/devices")
 Get a specific device by MAC address.
 
 **Example:**
+
 ```python
 device = await mcp.read_resource("sites://default/devices/aa:bb:cc:dd:ee:ff")
 ```
@@ -1114,6 +1210,7 @@ device = await mcp.read_resource("sites://default/devices/aa:bb:cc:dd:ee:ff")
 List all networks in a site.
 
 **Example:**
+
 ```python
 networks = await mcp.read_resource("sites://default/networks")
 ```
@@ -1123,6 +1220,7 @@ networks = await mcp.read_resource("sites://default/networks")
 List all active clients in a site.
 
 **Example:**
+
 ```python
 clients = await mcp.read_resource("sites://default/clients")
 ```
@@ -1176,6 +1274,7 @@ When rate limits are exceeded, the API returns:
 **HTTP Status:** `429 Too Many Requests`
 
 **Headers:**
+
 ```http
 Retry-After: 60
 ```
@@ -1194,6 +1293,7 @@ The MCP server implements intelligent rate limit handling:
 ### Best Practices
 
 **For Application Developers:**
+
 - Batch operations when possible to reduce API calls
 - Cache frequently accessed data (devices, networks, etc.)
 - Avoid polling; use event-driven approaches when available
@@ -1201,12 +1301,14 @@ The MCP server implements intelligent rate limit handling:
 - Monitor the `X-RateLimit-*` headers (if provided by API)
 
 **For High-Volume Applications:**
+
 - Consider the v1 Stable API when available (10,000 req/min)
 - Distribute load across multiple time windows
 - Use pagination efficiently to minimize requests
 - Cache static data locally
 
 **Rate Limit Configuration Example:**
+
 ```env
 # Set to match your API version
 UNIFI_RATE_LIMIT=100  # EA: 100, v1 Stable: 10000
@@ -1296,7 +1398,7 @@ Planned features for future releases:
 
 For issues, questions, or contributions:
 
-- **GitHub Issues:** https://github.com/elvis/unifi-mcp-server/issues
+- **GitHub Issues:** <https://github.com/elvis/unifi-mcp-server/issues>
 - **Documentation:** See `README.md` and `CONTRIBUTING.md`
 - **Security Issues:** See `SECURITY.md`
 

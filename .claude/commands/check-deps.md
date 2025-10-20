@@ -12,6 +12,7 @@ Execute the following checks:
 4. Check for deprecated package warnings
 
 Report back with:
+
 - List of outdated packages with current and latest versions
 - Security vulnerabilities found (if any)
 - Recommendations for which packages to update

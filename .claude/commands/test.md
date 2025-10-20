@@ -13,6 +13,7 @@ Execute the following commands:
 5. Check if coverage meets the 80% minimum threshold
 
 Report back with:
+
 - Number of tests passed/failed
 - Overall code coverage percentage
 - Any areas with low coverage

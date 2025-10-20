@@ -19,24 +19,28 @@ This document provides universal rules, workflows, and best practices for all AI
 All AI agents must adhere to these fundamental principles:
 
 ### 1. Safety First
+
 - Never perform destructive operations without explicit confirmation
 - Always validate inputs and handle errors gracefully
 - Implement proper authentication and authorization checks
 - Never commit or expose sensitive data
 
 ### 2. Clarity and Transparency
+
 - Write clear, self-documenting code with appropriate comments
 - Document all decisions and trade-offs
 - Tag AI-generated contributions appropriately
 - Explain complex logic in docstrings
 
 ### 3. Consistency
+
 - Follow the project's established patterns and conventions
 - Maintain consistent code style (enforced by linting tools)
 - Use consistent naming conventions throughout the codebase
 - Adhere to the project's architecture and design patterns
 
 ### 4. Quality Over Speed
+
 - Prioritize correctness and maintainability over quick delivery
 - Include comprehensive tests for all code changes
 - Ensure code passes all quality checks before submission
@@ -204,6 +208,7 @@ All AI-generated code must include tests:
 ### Test Types
 
 1. **Unit Tests:**
+
    ```python
    import pytest
    from src.api.client import UniFiClient
@@ -222,6 +227,7 @@ All AI-generated code must include tests:
    ```
 
 2. **Integration Tests:**
+
    ```python
    import pytest
 
@@ -235,6 +241,7 @@ All AI-generated code must include tests:
    ```
 
 3. **Mock Tests:**
+
    ```python
    from unittest.mock import AsyncMock, patch
 
@@ -354,6 +361,7 @@ detect-secrets scan
 This project uses the **official UniFi Cloud API** with API key authentication. All AI agents must follow these guidelines:
 
 **Authentication Method:**
+
 - Use `UNIFI_API_KEY` environment variable for authentication
 - API key is passed via the `X-API-Key` HTTP header
 - No session management or cookies required (stateless authentication)
@@ -380,6 +388,7 @@ headers = {
 Support both cloud and local gateway access modes:
 
 **Cloud API (Default):**
+
 ```python
 # Base URL: https://api.ui.com/v1/
 settings.unifi_api_type = "cloud"
@@ -388,6 +397,7 @@ settings.unifi_port = 443
 ```
 
 **Local Gateway Proxy:**
+
 ```python
 # Base URL: https://{gateway-ip}/proxy/network/integration/v1/
 settings.unifi_api_type = "local"
@@ -417,6 +427,7 @@ async def create_network(name: str, vlan_id: int):
 ```
 
 **Handling write requests:**
+
 - Document that write operations are not yet available
 - Return clear error messages to users
 - Consider implementing a "preview" mode that shows what would be created
@@ -427,10 +438,12 @@ async def create_network(name: str, vlan_id: int):
 Implement proper rate limiting to respect API limits:
 
 **Current Limits:**
+
 - Early Access: 100 requests/minute
 - v1 Stable (future): 10,000 requests/minute
 
 **Implementation Example:**
+
 ```python
 import asyncio
 from collections import deque
@@ -462,6 +475,7 @@ class UniFiRateLimiter:
 ```
 
 **Best Practices:**
+
 - Cache frequently accessed data (devices, sites, networks)
 - Batch operations when possible
 - Implement exponential backoff for 429 errors
@@ -538,11 +552,13 @@ async def safe_api_request(
 Always reference the official UniFi API documentation:
 
 **Primary Resources:**
+
 - **Getting Started**: [https://developer.ui.com/site-manager-api/gettingstarted](https://developer.ui.com/site-manager-api/gettingstarted)
 - **Project Reference**: `docs/UNIFI_API.md` (comprehensive guide)
 - **API Tutorial**: [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
 
 **When implementing new features:**
+
 1. Review official API documentation first
 2. Check `docs/UNIFI_API.md` for project-specific guidance
 3. Ensure endpoint paths match official specifications
@@ -679,6 +695,7 @@ result = await mcp.call_tool("get_device", {
 ### Auto-Merge Restrictions
 
 AI agents **MUST NOT**:
+
 - Automatically merge pull requests
 - Bypass code review requirements
 - Push directly to the `main` branch
@@ -688,6 +705,7 @@ AI agents **MUST NOT**:
 ### Required Approvals
 
 All AI-generated code requires:
+
 - At least one human reviewer approval
 - All CI/CD checks passing
 - No unresolved review comments
@@ -696,6 +714,7 @@ All AI-generated code requires:
 ### Human-in-the-Loop
 
 Critical changes require additional human review:
+
 - Security-related code
 - Authentication/authorization logic
 - Data deletion or modification
@@ -782,6 +801,7 @@ By following these guidelines, AI agents can contribute effectively to the UniFi
 **Last Updated:** 2025-10-17
 
 For additional guidance, see:
+
 - `AI_CODING_ASSISTANT.md` - Project-specific AI guidelines
 - `AI_GIT_PRACTICES.md` - AI-specific Git practices
 - `CONTRIBUTING.md` - General contribution guidelines

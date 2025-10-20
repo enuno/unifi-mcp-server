@@ -13,6 +13,7 @@ Execute the following steps:
 5. Optionally run the container with test environment variables
 
 Report back with:
+
 - Build success/failure status
 - Image size
 - Any build warnings or errors

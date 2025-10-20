@@ -18,8 +18,8 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    Redis = None  # type: ignore[assignment,misc]
-    RedisError = Exception  # type: ignore[assignment,misc]
+    Redis = None  # type: ignore[assignment]
+    RedisError = Exception  # type: ignore[assignment]
 
 from .config import Settings
 from .utils import get_logger

@@ -88,26 +88,41 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-#### Using Docker
+#### Using Docker (Standalone)
+
+For standalone Docker usage (not with MCP clients):
 
 ```bash
 # Pull the image
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
 
-# Run the container (Cloud API)
-# Note: -i flag required for STDIO transport
+# Run the container in background (Cloud API)
+# Note: -i flag keeps stdin open for STDIO transport
 docker run -i -d \
+  --name unifi-mcp \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=cloud \
   ghcr.io/enuno/unifi-mcp-server:latest
 
 # OR run with local gateway proxy
 docker run -i -d \
+  --name unifi-mcp \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=local \
   -e UNIFI_HOST=192.168.1.1 \
   ghcr.io/enuno/unifi-mcp-server:latest
+
+# Check container status
+docker ps --filter name=unifi-mcp
+
+# View logs
+docker logs unifi-mcp
+
+# Stop and remove
+docker rm -f unifi-mcp
 ```
+
+**Note**: For MCP client integration (Claude Desktop, etc.), see the [Usage](#usage) section below for the correct configuration without `-d` flag.
 
 ### Configuration
 
@@ -173,6 +188,8 @@ The MCP Inspector will be available at `http://localhost:5173` for interactive t
 
 Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
+#### Option 1: Using uv (Recommended)
+
 ```json
 {
   "mcpServers": {
@@ -194,6 +211,30 @@ Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/
   }
 }
 ```
+
+#### Option 2: Using Docker
+
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "UNIFI_API_KEY=your-api-key-here",
+        "-e",
+        "UNIFI_API_TYPE=cloud",
+        "ghcr.io/enuno/unifi-mcp-server:latest"
+      ]
+    }
+  }
+}
+```
+
+**Important**: Do NOT use `-d` (detached mode) in MCP client configurations. The MCP client needs to maintain a persistent stdin/stdout connection to the container.
 
 ### Programmatic Usage
 

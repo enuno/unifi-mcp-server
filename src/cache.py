@@ -18,8 +18,8 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    Redis = None
-    RedisError = Exception
+    Redis = None  # type: ignore[assignment,misc]
+    RedisError = Exception  # type: ignore[assignment,misc]
 
 from .config import Settings
 from .utils import get_logger
@@ -131,7 +131,7 @@ class CacheClient:
         """Disconnect from Redis."""
         if self._redis:
             try:
-                await self._redis.aclose()
+                await self._redis.close()
                 self.logger.info("Disconnected from Redis")
             except Exception as e:
                 self.logger.error(f"Error disconnecting from Redis: {e}")

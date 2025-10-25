@@ -7,7 +7,9 @@ from ..config import Settings
 from ..models import Device
 from ..utils import (
     ResourceNotFoundError,
+    audit_action,
     get_logger,
+    validate_confirmation,
     validate_device_id,
     validate_limit_offset,
     validate_site_id,
@@ -186,3 +188,167 @@ async def search_devices(
 
         logger.info(f"Found {len(devices)} devices matching '{query}' in site '{site_id}'")
         return devices
+
+
+async def list_pending_devices(
+    site_id: str,
+    settings: Settings,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict[str, Any]]:
+    """List devices awaiting adoption on the specified site.
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        limit: Maximum number of devices to return
+        offset: Number of devices to skip
+
+    Returns:
+        List of pending device dictionaries
+    """
+    site_id = validate_site_id(site_id)
+    limit, offset = validate_limit_offset(limit, offset)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        params = {}
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
+
+        response = await client.get(
+            f"/integration/v1/sites/{site_id}/devices/pending", params=params
+        )
+        devices_data = response.get("data", [])
+
+        # Parse into Device models
+        devices = [Device(**d).model_dump() for d in devices_data]
+
+        logger.info(f"Retrieved {len(devices)} pending devices for site '{site_id}'")
+        return devices
+
+
+async def adopt_device(
+    site_id: str,
+    device_id: str,
+    settings: Settings,
+    name: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Adopt a pending device onto the specified site.
+
+    Args:
+        site_id: Site identifier
+        device_id: Device identifier to adopt
+        settings: Application settings
+        name: Optional device name
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Adopted device information
+    """
+    validate_confirmation(confirm, "adopt device")
+    site_id = validate_site_id(site_id)
+    device_id = validate_device_id(device_id)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        payload = {}
+        if name:
+            payload["name"] = name
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would adopt device {device_id} with payload: {payload}")
+            return {"dry_run": True, "device_id": device_id, "payload": payload}
+
+        response = await client.post(
+            f"/integration/v1/sites/{site_id}/devices/{device_id}/adopt", json_data=payload
+        )
+        data = response.get("data", response)
+
+        # Audit the action
+        await audit_action(
+            settings,
+            action_type="adopt_device",
+            resource_type="device",
+            resource_id=device_id,
+            site_id=site_id,
+            details={"name": name} if name else {},
+        )
+
+        logger.info(f"Successfully adopted device {device_id}")
+        return Device(**data).model_dump()
+
+
+async def execute_port_action(
+    site_id: str,
+    device_id: str,
+    port_idx: int,
+    action: str,
+    settings: Settings,
+    params: dict[str, Any] | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Execute an action on a specific port of a device.
+
+    Args:
+        site_id: Site identifier
+        device_id: Device identifier
+        port_idx: Port index number
+        action: Action to perform (power-cycle, enable, disable)
+        settings: Application settings
+        params: Additional action parameters
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Action result
+    """
+    validate_confirmation(confirm, f"execute port action '{action}'")
+    site_id = validate_site_id(site_id)
+    device_id = validate_device_id(device_id)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        payload = {"action": action, "params": params or {}}
+
+        if dry_run:
+            logger.info(
+                f"[DRY RUN] Would execute port action '{action}' on device {device_id} port {port_idx}"
+            )
+            return {
+                "dry_run": True,
+                "device_id": device_id,
+                "port_idx": port_idx,
+                "payload": payload,
+            }
+
+        response = await client.post(
+            f"/integration/v1/sites/{site_id}/devices/{device_id}/ports/{port_idx}/action",
+            json_data=payload,
+        )
+        data = response.get("data", response)
+
+        # Audit the action
+        await audit_action(
+            settings,
+            action_type="port_action",
+            resource_type="device_port",
+            resource_id=f"{device_id}:{port_idx}",
+            site_id=site_id,
+            details={"action": action},
+        )
+
+        logger.info(f"Successfully executed port action '{action}' on port {port_idx}")
+        return {"success": True, "action": action, "port_idx": port_idx, "result": data}

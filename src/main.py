@@ -4,16 +4,22 @@ from fastmcp import FastMCP
 
 from .config import Settings
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
+from .tools import acls as acls_tools
+from .tools import application as application_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import device_control as device_control_tools
 from .tools import devices as devices_tools
 from .tools import dpi as dpi_tools
+from .tools import dpi_tools as dpi_new_tools
 from .tools import firewall as firewall_tools
+from .tools import firewall_zones as firewall_zones_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
 from .tools import sites as sites_tools
+from .tools import vouchers as vouchers_tools
+from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
 from .utils import get_logger
 
@@ -582,6 +588,336 @@ async def get_client_dpi(
 ) -> dict:
     """Get DPI statistics for a specific client."""
     return await dpi_tools.get_client_dpi(site_id, client_mac, settings, time_range, limit, offset)
+
+
+# Application Information Tool
+@mcp.tool()
+async def get_application_info() -> dict:
+    """Get UniFi Network application information."""
+    return await application_tools.get_application_info(settings)
+
+
+# Pending Devices and Adoption Tools
+@mcp.tool()
+async def list_pending_devices(
+    site_id: str, limit: int | None = None, offset: int | None = None
+) -> list[dict]:
+    """List devices awaiting adoption on the specified site."""
+    return await devices_tools.list_pending_devices(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def adopt_device(
+    site_id: str,
+    device_id: str,
+    name: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Adopt a pending device onto the specified site (requires confirm=True)."""
+    return await devices_tools.adopt_device(site_id, device_id, settings, name, confirm, dry_run)
+
+
+@mcp.tool()
+async def execute_port_action(
+    site_id: str,
+    device_id: str,
+    port_idx: int,
+    action: str,
+    params: dict | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Execute an action on a specific port (power-cycle, enable, disable) (requires confirm=True)."""
+    return await devices_tools.execute_port_action(
+        site_id, device_id, port_idx, action, settings, params, confirm, dry_run
+    )
+
+
+# Enhanced Client Actions
+@mcp.tool()
+async def authorize_guest(
+    site_id: str,
+    client_mac: str,
+    duration: int,
+    upload_limit_kbps: int | None = None,
+    download_limit_kbps: int | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Authorize a guest client for network access (requires confirm=True)."""
+    return await client_mgmt_tools.authorize_guest(
+        site_id,
+        client_mac,
+        duration,
+        settings,
+        upload_limit_kbps,
+        download_limit_kbps,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def limit_bandwidth(
+    site_id: str,
+    client_mac: str,
+    upload_limit_kbps: int | None = None,
+    download_limit_kbps: int | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Apply bandwidth restrictions to a client (requires confirm=True)."""
+    return await client_mgmt_tools.limit_bandwidth(
+        site_id, client_mac, settings, upload_limit_kbps, download_limit_kbps, confirm, dry_run
+    )
+
+
+# Hotspot Voucher Tools
+@mcp.tool()
+async def list_vouchers(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+    filter_expr: str | None = None,
+) -> list[dict]:
+    """List all hotspot vouchers for a site."""
+    return await vouchers_tools.list_vouchers(site_id, settings, limit, offset, filter_expr)
+
+
+@mcp.tool()
+async def get_voucher(site_id: str, voucher_id: str) -> dict:
+    """Get details for a specific voucher."""
+    return await vouchers_tools.get_voucher(site_id, voucher_id, settings)
+
+
+@mcp.tool()
+async def create_vouchers(
+    site_id: str,
+    count: int,
+    duration: int,
+    upload_limit_kbps: int | None = None,
+    download_limit_kbps: int | None = None,
+    upload_quota_mb: int | None = None,
+    download_quota_mb: int | None = None,
+    note: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create new hotspot vouchers (requires confirm=True)."""
+    return await vouchers_tools.create_vouchers(
+        site_id,
+        count,
+        duration,
+        settings,
+        upload_limit_kbps,
+        download_limit_kbps,
+        upload_quota_mb,
+        download_quota_mb,
+        note,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def delete_voucher(
+    site_id: str, voucher_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete a specific voucher (requires confirm=True)."""
+    return await vouchers_tools.delete_voucher(site_id, voucher_id, settings, confirm, dry_run)
+
+
+@mcp.tool()
+async def bulk_delete_vouchers(
+    site_id: str, filter_expr: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Bulk delete vouchers using a filter expression (requires confirm=True)."""
+    return await vouchers_tools.bulk_delete_vouchers(
+        site_id, filter_expr, settings, confirm, dry_run
+    )
+
+
+# Firewall Zone Tools
+@mcp.tool()
+async def list_firewall_zones(site_id: str) -> list[dict]:
+    """List all firewall zones for a site."""
+    return await firewall_zones_tools.list_firewall_zones(site_id, settings)
+
+
+@mcp.tool()
+async def create_firewall_zone(
+    site_id: str,
+    name: str,
+    description: str | None = None,
+    network_ids: list[str] | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new firewall zone (requires confirm=True)."""
+    return await firewall_zones_tools.create_firewall_zone(
+        site_id, name, settings, description, network_ids, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def update_firewall_zone(
+    site_id: str,
+    firewall_zone_id: str,
+    name: str | None = None,
+    description: str | None = None,
+    network_ids: list[str] | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing firewall zone (requires confirm=True)."""
+    return await firewall_zones_tools.update_firewall_zone(
+        site_id, firewall_zone_id, settings, name, description, network_ids, confirm, dry_run
+    )
+
+
+# ACL Tools
+@mcp.tool()
+async def list_acl_rules(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+    filter_expr: str | None = None,
+) -> list[dict]:
+    """List all ACL rules for a site."""
+    return await acls_tools.list_acl_rules(site_id, settings, limit, offset, filter_expr)
+
+
+@mcp.tool()
+async def get_acl_rule(site_id: str, acl_rule_id: str) -> dict:
+    """Get details for a specific ACL rule."""
+    return await acls_tools.get_acl_rule(site_id, acl_rule_id, settings)
+
+
+@mcp.tool()
+async def create_acl_rule(
+    site_id: str,
+    name: str,
+    action: str,
+    enabled: bool = True,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    source_network: str | None = None,
+    destination_type: str | None = None,
+    destination_id: str | None = None,
+    destination_network: str | None = None,
+    protocol: str | None = None,
+    src_port: int | None = None,
+    dst_port: int | None = None,
+    priority: int = 100,
+    description: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new ACL rule (requires confirm=True)."""
+    return await acls_tools.create_acl_rule(
+        site_id,
+        name,
+        action,
+        settings,
+        enabled,
+        source_type,
+        source_id,
+        source_network,
+        destination_type,
+        destination_id,
+        destination_network,
+        protocol,
+        src_port,
+        dst_port,
+        priority,
+        description,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def update_acl_rule(
+    site_id: str,
+    acl_rule_id: str,
+    name: str | None = None,
+    action: str | None = None,
+    enabled: bool | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    source_network: str | None = None,
+    destination_type: str | None = None,
+    destination_id: str | None = None,
+    destination_network: str | None = None,
+    protocol: str | None = None,
+    src_port: int | None = None,
+    dst_port: int | None = None,
+    priority: int | None = None,
+    description: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing ACL rule (requires confirm=True)."""
+    return await acls_tools.update_acl_rule(
+        site_id,
+        acl_rule_id,
+        settings,
+        name,
+        action,
+        enabled,
+        source_type,
+        source_id,
+        source_network,
+        destination_type,
+        destination_id,
+        destination_network,
+        protocol,
+        src_port,
+        dst_port,
+        priority,
+        description,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def delete_acl_rule(
+    site_id: str, acl_rule_id: str, confirm: bool = False, dry_run: bool = False
+) -> dict:
+    """Delete an ACL rule (requires confirm=True)."""
+    return await acls_tools.delete_acl_rule(site_id, acl_rule_id, settings, confirm, dry_run)
+
+
+# WAN Connections Tool
+@mcp.tool()
+async def list_wan_connections(site_id: str) -> list[dict]:
+    """List all WAN connections for a site."""
+    return await wans_tools.list_wan_connections(site_id, settings)
+
+
+# DPI and Country Tools
+@mcp.tool()
+async def list_dpi_categories() -> list[dict]:
+    """List all DPI categories."""
+    return await dpi_new_tools.list_dpi_categories(settings)
+
+
+@mcp.tool()
+async def list_dpi_applications(
+    limit: int | None = None,
+    offset: int | None = None,
+    filter_expr: str | None = None,
+) -> list[dict]:
+    """List all DPI applications."""
+    return await dpi_new_tools.list_dpi_applications(settings, limit, offset, filter_expr)
+
+
+@mcp.tool()
+async def list_countries() -> list[dict]:
+    """List all countries for configuration and localization."""
+    return await dpi_new_tools.list_countries(settings)
 
 
 def main() -> None:

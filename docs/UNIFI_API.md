@@ -1,585 +1,634 @@
-# UniFi API Reference Guide
+# UniFi Network API Reference
 
-This document provides comprehensive information about the official UniFi Cloud API used by this MCP server.
+## Overview
 
-## Table of Contents
+This document provides a comprehensive reference for the UniFi Network API, covering all available endpoints, authentication requirements, filtering capabilities, and error handling patterns. The API enables programmatic access to UniFi network infrastructure for automation, monitoring, and management.
 
-- [Official Documentation](#official-documentation)
-- [Getting Your API Key](#getting-your-api-key)
-- [API Access Modes](#api-access-modes)
-- [Available Endpoints](#available-endpoints)
-- [Rate Limiting](#rate-limiting)
-- [Migration Guide](#migration-guide)
-- [Troubleshooting](#troubleshooting)
-- [Additional Resources](#additional-resources)
-
-## Official Documentation
-
-### UniFi API Documentation
-
-- **Getting Started Guide**: [https://developer.ui.com/site-manager-api/gettingstarted](https://developer.ui.com/site-manager-api/gettingstarted)
-- **API Reference**: Available through the UniFi Developer Portal
-- **MCP Implementation Guide**: [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
-
-### API Version Information
-
-| Version | Status | Rate Limit | Features |
-|---------|--------|------------|----------|
-| Early Access (EA) | **Current** | 100 req/min | Read-only access |
-| v1 Stable | Coming Soon | 10,000 req/min | Read + Write access |
-
-## Getting Your API Key
-
-### Step-by-Step Instructions
-
-Follow these steps to obtain your UniFi API key:
-
-#### 1. Sign In to UniFi Site Manager
-
-Navigate to [https://unifi.ui.com](https://unifi.ui.com) and sign in with your UniFi account credentials.
-
-#### 2. Access the API Section
-
-From the left navigation menu:
-
-1. Click on **Settings** (gear icon)
-2. Select **Control Plane**
-3. Click on **Integrations**
-
-#### 3. Create an API Key
-
-1. Click the **"Create API Key"** button
-2. Optionally provide a description (e.g., "MCP Server - Production")
-3. Click **Create**
-
-#### 4. Save Your API Key
-
-**CRITICAL**: The API key is displayed **only once** and cannot be retrieved later.
-
-1. **Copy the entire key** immediately
-2. Store it in a secure location:
-   - Password manager (recommended)
-   - Secure environment variable
-   - Secret management system (AWS Secrets Manager, HashiCorp Vault, etc.)
-3. **Never** commit the key to version control
-4. **Never** share the key in plain text
-
-#### 5. Configure Your Application
-
-Add the API key to your `.env` file:
-
-```env
-UNIFI_API_KEY=your-api-key-here
-```
-
-### Managing API Keys
-
-**Viewing Existing Keys**
-
-- You can view a list of your API keys in the Integrations section
-- Only the key name/description is shown, not the actual key value
-
-**Revoking Keys**
-
-- Click the trash icon next to a key to revoke it
-- Revoked keys cannot be restored
-- Applications using revoked keys will immediately lose access
-
-**Best Practices**
-
-- Create separate keys for different environments (dev, staging, production)
-- Use descriptive names to identify where each key is used
-- Rotate keys regularly (e.g., every 90 days)
-- Revoke keys immediately if compromised
-
-## API Access Modes
-
-The UniFi MCP Server supports two API access modes:
-
-### Cloud API (Recommended)
-
-**Overview**
-
-- Access UniFi services through Ubiquiti's cloud infrastructure
-- Works with cloud-hosted UniFi instances
-- Requires internet connectivity
-- Official, supported API endpoint
-
-**Configuration**
-
-```env
-UNIFI_API_TYPE=cloud
-UNIFI_HOST=api.ui.com
-UNIFI_PORT=443
-UNIFI_VERIFY_SSL=true
-```
-
-**Base URL Structure**
+## Base URL
 
 ```
-https://api.ui.com/v1/{endpoint}
+https://{GATEWAY_HOST}:{GATEWAY_PORT}/integration/v1
 ```
 
-**Advantages**
+## Authentication
 
-- ✅ Official support from Ubiquiti
-- ✅ Guaranteed uptime and reliability
-- ✅ Automatic updates and improvements
-- ✅ Higher rate limits (future v1 stable)
-- ✅ Works from anywhere with internet
-- ✅ SSL/TLS security by default
-
-**Limitations**
-
-- ❌ Requires internet connectivity
-- ❌ Currently read-only (EA version)
-- ❌ Rate limited (100 req/min in EA)
-
-### Local Gateway Proxy
-
-**Overview**
-
-- Direct access to local UniFi gateway
-- Works without internet connectivity
-- Uses gateway as a proxy to the network controller
-- Useful for air-gapped or isolated networks
-
-**Configuration**
-
-```env
-UNIFI_API_TYPE=local
-UNIFI_HOST=192.168.1.1  # Your gateway IP
-UNIFI_PORT=443
-UNIFI_VERIFY_SSL=false  # Often needed for self-signed certs
-```
-
-**Base URL Structure**
+All API requests require Bearer token authentication using an API token generated from the UniFi console:
 
 ```
-https://{gateway-ip}:{port}/proxy/network/integration/v1/{endpoint}
+Authorization: Bearer {API_TOKEN}
+Content-Type: application/json
 ```
 
-**Advantages**
-
-- ✅ Works without internet
-- ✅ Lower latency (local network)
-- ✅ No cloud dependency
-- ✅ Useful for isolated/secure environments
-
-**Limitations**
-
-- ❌ Requires local network access
-- ❌ May have self-signed certificates
-- ❌ No official support guarantee
-- ❌ Must manage gateway availability
-
-### Comparison Table
-
-| Feature | Cloud API | Local Gateway Proxy |
-|---------|-----------|---------------------|
-| **Internet Required** | Yes | No |
-| **Official Support** | Yes | Limited |
-| **SSL Verification** | Recommended | Often disabled |
-| **Rate Limits** | 100/min (EA), 10k/min (v1) | Varies by gateway |
-| **Access Location** | Anywhere | Local network only |
-| **Use Case** | Production, cloud deployments | Development, air-gapped networks |
-
-## Available Endpoints
-
-### Sites Management
-
-#### List All Sites
-
-```http
-GET /v1/sites
-```
-
-**Pagination**: Returns up to 200 sites per request. Use `offset` and `limit` parameters for pagination.
-
-**Example Response**:
-
-```json
-{
-  "data": [
-    {
-      "id": "site-id-123",
-      "name": "Default Site",
-      "description": "Main site"
-    }
-  ]
-}
-```
-
-### Devices Management
-
-#### List Devices in a Site
-
-```http
-GET /v1/sites/{site_id}/devices
-```
-
-**Example Response**:
-
-```json
-{
-  "data": [
-    {
-      "mac": "aa:bb:cc:dd:ee:ff",
-      "name": "Living Room AP",
-      "model": "U6-Lite",
-      "type": "uap",
-      "ip": "192.168.1.100",
-      "status": "connected"
-    }
-  ]
-}
-```
-
-### Hosts (Clients) Management
-
-#### List All Hosts
-
-```http
-GET /v1/hosts
-```
-
-**Example Response**:
-
-```json
-{
-  "data": [
-    {
-      "mac": "11:22:33:44:55:66",
-      "hostname": "iPhone",
-      "ip": "192.168.1.50",
-      "network": "Default"
-    }
-  ]
-}
-```
-
-### Authentication Header
-
-All requests must include the API key in the `X-API-Key` header:
-
-```http
-X-API-Key: your-api-key-here
-```
-
-**Example with curl**:
-
-```bash
-curl -X GET 'https://api.ui.com/v1/sites' \
-  -H 'X-API-Key: your-api-key-here' \
-  -H 'Accept: application/json'
-```
-
-## Rate Limiting
-
-### Current Limits (Early Access)
-
-- **Requests per Minute**: 100
-- **Burst Allowance**: Not documented
-- **Reset Window**: 60 seconds
-
-### Future Limits (v1 Stable)
-
-- **Requests per Minute**: 10,000
-- **Significantly higher capacity** for production workloads
-
-### Rate Limit Headers
-
-When you make a request, look for these headers (may vary by implementation):
-
-```http
-X-RateLimit-Limit: 100
-X-RateLimit-Remaining: 95
-X-RateLimit-Reset: 1634567890
-```
-
-### Handling Rate Limits
-
-**429 Too Many Requests Response**:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 60
-```
-
-**Recommended Strategies**:
-
-1. **Exponential Backoff**
-
-   ```
-   Wait time = min(base_delay * 2^retry_count, max_delay)
-   ```
-
-2. **Request Queuing**
-   - Queue requests locally
-   - Process at a controlled rate
-   - Stay under the limit proactively
-
-3. **Caching**
-   - Cache frequently accessed data
-   - Implement TTL-based cache invalidation
-   - Use ETags for conditional requests (if supported)
-
-4. **Batch Operations**
-   - Combine multiple operations when possible
-   - Reduce total number of API calls
-
-### Rate Limit Best Practices
-
-```python
-# Example: Simple rate limiter
-import time
-from collections import deque
-
-class RateLimiter:
-    def __init__(self, max_requests=100, window=60):
-        self.max_requests = max_requests
-        self.window = window
-        self.requests = deque()
-
-    def allow_request(self):
-        now = time.time()
-        # Remove old requests outside the window
-        while self.requests and self.requests[0] < now - self.window:
-            self.requests.popleft()
-
-        if len(self.requests) < self.max_requests:
-            self.requests.append(now)
-            return True
-        return False
-```
-
-## Migration Guide
-
-### From Local Controller to Cloud API
-
-If you're migrating from a local UniFi controller setup to the cloud API:
-
-#### 1. Verify Cloud Access
-
-Ensure your UniFi setup is accessible via unifi.ui.com:
-
-- Log in to [https://unifi.ui.com](https://unifi.ui.com)
-- Verify you can see your sites and devices
-
-#### 2. Obtain API Key
-
-Follow the [Getting Your API Key](#getting-your-api-key) instructions above.
-
-#### 3. Update Environment Variables
-
-**Before (Local Controller)**:
-
-```env
-UNIFI_HOST=controller.local
-UNIFI_USERNAME=admin
-UNIFI_PASSWORD=your-password
-UNIFI_PORT=8443
-UNIFI_VERIFY_SSL=false
-```
-
-**After (Cloud API)**:
-
-```env
-UNIFI_API_KEY=your-api-key-here
-UNIFI_API_TYPE=cloud
-UNIFI_HOST=api.ui.com
-UNIFI_PORT=443
-UNIFI_VERIFY_SSL=true
-```
-
-#### 4. Update Code (If Applicable)
-
-**Authentication Changes**:
-
-- Remove session/cookie management code
-- Remove login/logout logic
-- Add `X-API-Key` header to all requests
-- Remove CSRF token handling
-
-**Endpoint Changes**:
-
-- Update base URL from controller to cloud API
-- Update endpoint paths to match cloud API structure
-- Implement pagination for large result sets
-
-#### 5. Test Thoroughly
-
-- Verify connectivity to cloud API
-- Test all MCP tools and resources
-- Confirm data matches expectations
-- Monitor rate limiting behavior
-
-#### 6. Update Documentation
-
-- Update deployment documentation
-- Update runbooks and procedures
-- Notify team members of changes
-
-### Migration Checklist
-
-- [ ] Verify cloud access at unifi.ui.com
-- [ ] Create API key
-- [ ] Update `.env` file
-- [ ] Remove old credential files
-- [ ] Update code authentication logic
-- [ ] Update endpoint URLs
-- [ ] Implement rate limiting
-- [ ] Test all functionality
-- [ ] Update documentation
-- [ ] Deploy to production
-- [ ] Monitor for issues
-- [ ] Revoke old credentials (if applicable)
-
-## Troubleshooting
-
-### Common Issues and Solutions
-
-#### Issue: 401 Unauthorized
-
-**Symptoms**:
-
-```json
-{
-  "error": "Unauthorized",
-  "message": "Invalid API key"
-}
-```
-
-**Solutions**:
-
-1. Verify API key is correct (no extra spaces or characters)
-2. Check that `X-API-Key` header is set correctly
-3. Ensure API key hasn't been revoked
-4. Create a new API key if necessary
-
-#### Issue: 429 Too Many Requests
-
-**Symptoms**:
-
-```http
-HTTP/1.1 429 Too Many Requests
-Retry-After: 60
-```
-
-**Solutions**:
-
-1. Implement exponential backoff
-2. Reduce request frequency
-3. Cache frequently accessed data
-4. Consider upgrading to v1 Stable when available (10k/min)
-
-#### Issue: Connection Timeout
-
-**Symptoms**:
-
-- Requests hang or timeout
-- No response from API
-
-**Solutions**:
-
-1. Check internet connectivity
-2. Verify firewall allows outbound HTTPS (port 443)
-3. Test with curl: `curl -v https://api.ui.com/v1/sites -H "X-API-Key: your-key"`
-4. Check DNS resolution: `nslookup api.ui.com`
-5. Try increasing timeout value in configuration
-
-#### Issue: SSL Certificate Verification Failed
-
-**Symptoms**:
-
-```
-SSL: CERTIFICATE_VERIFY_FAILED
-```
-
-**Solutions**:
-
-**For Cloud API** (should not happen):
-
-1. Update system CA certificates
-2. Check system clock is correct
-3. Verify DNS is resolving correctly
-
-**For Local Gateway Proxy** (common):
-
-1. Set `UNIFI_VERIFY_SSL=false` in `.env`
-2. Or install gateway's self-signed certificate in system trust store
-
-#### Issue: Empty Response / No Data
-
-**Symptoms**:
-
-- API returns 200 OK but no data
-- Empty arrays in responses
-
-**Solutions**:
-
-1. Verify you have sites/devices configured in UniFi
-2. Check site_id is correct
-3. Ensure devices are adopted and online
-4. Log in to unifi.ui.com to verify data exists
-
-#### Issue: Read-Only API Limitations
-
-**Symptoms**:
-
-- Cannot create/update/delete resources
-- 403 Forbidden on write operations
-
-**Solutions**:
-
-- This is expected behavior for EA version
-- Read-only access is current limitation
-- Wait for v1 Stable release for write operations
-- Use UniFi web interface for configuration changes
-
-### Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```env
-MCP_LOG_LEVEL=DEBUG
-```
-
-This will log:
-
-- All HTTP requests and responses
-- Authentication headers (keys are redacted)
-- Rate limiting information
-- Error details
-
-## Additional Resources
-
-### Official Links
-
-- **UniFi Site Manager**: [https://unifi.ui.com](https://unifi.ui.com)
-- **UniFi Developer Portal**: [https://developer.ui.com](https://developer.ui.com)
-- **UniFi Community Forums**: [https://community.ui.com](https://community.ui.com)
-- **Ubiquiti Support**: [https://help.ui.com](https://help.ui.com)
-
-### API Tutorials and Guides
-
-- **Building an MCP Server for UniFi**: [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
-- **UniFi API Getting Started**: [https://developer.ui.com/site-manager-api/gettingstarted](https://developer.ui.com/site-manager-api/gettingstarted)
-
-### Related Projects
-
-- **FastMCP**: [https://github.com/jlowin/fastmcp](https://github.com/jlowin/fastmcp) - MCP server framework
-- **Anthropic MCP**: [https://github.com/anthropics/mcp](https://github.com/anthropics/mcp) - Model Context Protocol specification
-
-### Security Resources
-
-- **OWASP API Security**: [https://owasp.org/www-project-api-security/](https://owasp.org/www-project-api-security/)
-- **API Key Management Best Practices**: Research industry standards for API key rotation and management
+**Generate API Token:**
+1. Navigate to `https://unifi.ui.com`
+2. Go to **Settings → Control Plane → Integrations**
+3. Click **Create API Key**
+4. Store the token securely
+
+## Common Query Parameters
+
+Most list endpoints support the following query parameters:
+
+- `offset` (integer): Starting position for pagination (default: 0)
+- `limit` (integer): Maximum number of results to return (default: 200)
+- `filter` (string): Filter expression using structured query syntax
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-10-17
-**API Version**: Early Access (EA)
+## API Endpoints by Category
 
-For issues or questions about this documentation, please file an issue at the repository issue tracker.
+### 1. About Application
+
+#### Get Application Information
+**`GET /application/info`**
+
+Retrieve general information about the UniFi Network application instance.
+
+**Response:**
+- Application version
+- System capabilities
+- Deployment metadata
+
+---
+
+### 2. Sites
+
+#### List Sites
+**`GET /sites`**
+
+Retrieve a paginated list of local sites configured in the UniFi controller.
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of site objects containing site ID, name, description, and configuration
+
+---
+
+### 3. UniFi Devices
+
+#### List Pending Devices
+**`GET /sites/{siteId}/devices/pending`**
+
+Retrieve devices awaiting adoption on the specified site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Response:**
+- Paginated list of unadopted devices with MAC address, model, firmware version
+
+#### List Adopted Devices
+**`GET /sites/{siteId}/devices/adopted`**
+
+List all devices currently adopted on the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of adopted device objects with full configuration and status
+
+#### Get Device Details
+**`GET /sites/{siteId}/devices/adopted/{deviceId}`**
+
+Retrieve detailed information for a specific adopted device.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `deviceId` (string, required): Device identifier
+
+**Response:**
+- Complete device configuration, status, statistics, and metadata
+
+#### Adopt Device
+**`POST /sites/{siteId}/devices/{deviceId}/adopt`**
+
+Adopt a pending device onto the specified site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `deviceId` (string, required): Device identifier to adopt
+
+**Request Body:**
+```json
+{
+  "name": "Optional device name"
+}
+```
+
+**Response:**
+- 200 OK on successful adoption
+- Device object with updated adoption status
+
+#### Execute Device Action
+**`POST /sites/{siteId}/devices/adopted/{deviceId}/action`**
+
+Perform administrative actions on an adopted device (e.g., restart, upgrade, locate).
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `deviceId` (string, required): Device identifier
+
+**Request Body:**
+```json
+{
+  "action": "restart",
+  "params": {}
+}
+```
+
+**Common Actions:**
+- `restart`: Reboot the device
+- `upgrade`: Initiate firmware upgrade
+- `locate`: Enable LED identification
+- `provision`: Force device provisioning
+
+#### Execute Port Action
+**`POST /sites/{siteId}/devices/{deviceId}/ports/{portIdx}/action`**
+
+Perform actions on a specific port of a device (e.g., power cycle PoE port).
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `deviceId` (string, required): Device identifier
+- `portIdx` (integer, required): Port index number
+
+**Request Body:**
+```json
+{
+  "action": "power-cycle",
+  "params": {}
+}
+```
+
+**Common Port Actions:**
+- `power-cycle`: PoE power cycle
+- `enable`: Enable port
+- `disable`: Disable port
+
+---
+
+### 4. Clients
+
+#### List Clients
+**`GET /sites/{siteId}/clients`**
+
+List all connected clients on the specified site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of client objects with connection details, MAC address, IP, hostname, usage statistics
+
+#### Get Client Details
+**`GET /sites/{siteId}/clients/{clientId}`**
+
+Retrieve detailed information for a specific connected client.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `clientId` (string, required): Client identifier (typically MAC address)
+
+**Response:**
+- Complete client information including network assignment, connection quality, bandwidth usage
+
+#### Execute Client Action
+**`POST /sites/{siteId}/clients/{clientId}/action`**
+
+Execute administrative actions on a client (authorize guest, limit bandwidth, block, reconnect).
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `clientId` (string, required): Client identifier
+
+**Request Body:**
+```json
+{
+  "action": "authorize-guest",
+  "params": {
+    "duration": 3600
+  }
+}
+```
+
+**Common Client Actions:**
+- `authorize-guest`: Grant guest network access
+- `block`: Block client access
+- `unblock`: Unblock client
+- `reconnect`: Force client reconnection
+- `limit-bandwidth`: Apply bandwidth restrictions
+
+---
+
+### 5. Hotspot Vouchers
+
+#### List Vouchers
+**`GET /sites/{siteId}/vouchers`**
+
+Retrieve all hotspot vouchers for the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of voucher objects with code, usage status, expiration
+
+#### Create Vouchers
+**`POST /sites/{siteId}/vouchers`**
+
+Generate new hotspot vouchers for guest access.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Request Body:**
+```json
+{
+  "count": 10,
+  "duration": 86400,
+  "uploadLimit": 1024,
+  "downloadLimit": 10240
+}
+```
+
+**Response:**
+- Array of generated voucher codes
+
+#### Bulk Delete Vouchers
+**`DELETE /sites/{siteId}/vouchers`**
+
+Remove multiple vouchers using a filter expression.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `filter`: Filter expression to select vouchers for deletion
+
+#### Get Voucher Details
+**`GET /sites/{siteId}/vouchers/{voucherId}`**
+
+Retrieve details for a specific voucher.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `voucherId` (string, required): Voucher identifier
+
+#### Delete Voucher
+**`DELETE /sites/{siteId}/vouchers/{voucherId}`**
+
+Remove a specific voucher.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `voucherId` (string, required): Voucher identifier
+
+---
+
+### 6. Firewall
+
+#### List Firewall Zones
+**`GET /sites/{siteId}/firewall/zones`**
+
+List all firewall zones configured on the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Response:**
+- Array of firewall zone objects with network assignments and policies
+
+#### Create Firewall Zone
+**`POST /sites/{siteId}/firewall/zones`**
+
+Create a new custom firewall zone.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Request Body:**
+```json
+{
+  "name": "DMZ",
+  "description": "Demilitarized Zone",
+  "networks": ["network-id-1"]
+}
+```
+
+#### Update Firewall Zone
+**`PUT /sites/{siteId}/firewall/zones/{firewallZoneId}`**
+
+Update an existing custom firewall zone.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `firewallZoneId` (string, required): Firewall zone identifier
+
+**Request Body:**
+```json
+{
+  "name": "Updated DMZ",
+  "networks": ["network-id-1", "network-id-2"]
+}
+```
+
+> **Note:** Enhanced firewall policy management APIs are coming soon.
+
+---
+
+### 7. Deep Packet Inspection (DPI)
+
+#### List DPI Categories
+**`GET /dpi/categories`**
+
+Retrieve all available DPI application categories.
+
+**Response:**
+- Array of category objects with category ID, name, and description
+
+#### List DPI Applications
+**`GET /dpi/applications`**
+
+List all DPI-identifiable applications.
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of application objects with app ID, name, category, and traffic classification rules
+
+---
+
+### 8. Country Information
+
+#### Get Country List
+**`GET /countries`**
+
+Retrieve a list of all known countries for configuration and localization.
+
+**Response:**
+- Array of country objects with ISO codes, names, and regulatory information
+
+---
+
+### 9. Networks (VLANs)
+
+#### List Networks
+**`GET /sites/{siteId}/networks`**
+
+List all configured networks (VLANs) on the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of network objects with VLAN ID, IP ranges, DHCP settings, and firewall zone assignments
+
+#### Get Network Details
+**`GET /sites/{siteId}/networks/{networkId}`**
+
+Retrieve details for a specific network.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `networkId` (string, required): Network identifier
+
+#### Create Network
+**`POST /sites/{siteId}/networks`**
+
+Create a new network (VLAN) on the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Request Body:**
+```json
+{
+  "name": "Guest Network",
+  "vlan": 10,
+  "subnet": "192.168.10.0/24",
+  "dhcpEnabled": true,
+  "dhcpRange": {
+    "start": "192.168.10.10",
+    "end": "192.168.10.250"
+  }
+}
+```
+
+#### Update Network
+**`PUT /sites/{siteId}/networks/{networkId}`**
+
+Update an existing network configuration.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `networkId` (string, required): Network identifier
+
+**Request Body:**
+- Network configuration object (partial updates supported)
+
+#### Delete Network
+**`DELETE /sites/{siteId}/networks/{networkId}`**
+
+Remove a network from the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `networkId` (string, required): Network identifier
+
+**Query Parameters:**
+- `cascade` (boolean): If true, also remove dependent configurations
+
+---
+
+### 10. Access Control Lists (ACLs)
+
+#### List ACL Rules
+**`GET /sites/{siteId}/acls`**
+
+List all ACL rules configured for the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Query Parameters:**
+- `offset`, `limit`, `filter`
+
+**Response:**
+- Array of ACL rule objects with source, destination, action, and priority
+
+#### Get ACL Rule Details
+**`GET /sites/{siteId}/acls/{aclRuleId}`**
+
+Retrieve details for a specific ACL rule.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `aclRuleId` (string, required): ACL rule identifier
+
+#### Create ACL Rule
+**`POST /sites/{siteId}/acls`**
+
+Create a new Access Control List rule.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Request Body:**
+```json
+{
+  "name": "Block Social Media",
+  "enabled": true,
+  "action": "deny",
+  "sourceType": "network",
+  "sourceId": "guest-network-id",
+  "destinationType": "dpi-category",
+  "destinationId": "social-media-category-id",
+  "priority": 100
+}
+```
+
+#### Update ACL Rule
+**`PUT /sites/{siteId}/acls/{aclRuleId}`**
+
+Update an existing ACL rule.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `aclRuleId` (string, required): ACL rule identifier
+
+**Request Body:**
+- ACL rule configuration object (partial updates supported)
+
+#### Delete ACL Rule
+**`DELETE /sites/{siteId}/acls/{aclRuleId}`**
+
+Remove an ACL rule from the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+- `aclRuleId` (string, required): ACL rule identifier
+
+---
+
+### 11. WAN Connections
+
+#### List WAN Connections
+**`GET /sites/{siteId}/wans`**
+
+List all WAN interfaces and connections configured on the site.
+
+**Path Parameters:**
+- `siteId` (string, required): Site identifier
+
+**Response:**
+- Array of WAN connection objects with interface details, connection status, IP addresses, and statistics
+
+---
+
+## Filtering & Error Handling
+
+### Filter Syntax
+
+The `filter` query parameter supports structured filtering using a type-safe syntax:
+
+```
+filter=status eq 'online'
+filter=vlan gt 10 and vlan lt 100
+filter=name contains 'guest'
+```
+
+**Supported Operators:**
+- `eq`: Equal
+- `ne`: Not equal
+- `gt`: Greater than
+- `lt`: Less than
+- `gte`: Greater than or equal
+- `lte`: Less than or equal
+- `contains`: String contains
+- `startswith`: String starts with
+- `and`: Logical AND
+- `or`: Logical OR
+
+### Error Response Structure
+
+All API errors return a standardized JSON response:
+
+```json
+{
+  "statusCode": 400,
+  "statusName": "UNAUTHORIZED",
+  "code": "api.authentication.missing-credentials",
+  "message": "Missing credentials",
+  "timestamp": "2024-11-27T08:13:46.966Z",
+  "requestPath": "/integration/v1/sites/123",
+  "requestId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+}
+```
+
+**Common Error Codes:**
+
+| Status Code | Status Name | Description |
+|-------------|-------------|-------------|
+| 400 | BAD_REQUEST | Invalid request parameters or body |
+| 401 | UNAUTHORIZED | Missing or invalid authentication |
+| 403 | FORBIDDEN | Insufficient permissions |
+| 404 | NOT_FOUND | Resource does not exist |
+| 409 | CONFLICT | Resource conflict (e.g., duplicate VLAN ID) |
+| 422 | UNPROCESSABLE_ENTITY | Validation failure |
+| 429 | TOO_MANY_REQUESTS | Rate limit exceeded |
+| 500 | INTERNAL_SERVER_ERROR | Server error |
+| 503 | SERVICE_UNAVAILABLE | Service temporarily unavailable |
+
+---
+
+## API Enhancements
+
+### Improved Filtering Options
+- Flexible, type-safe filtering through structured query parameter syntax
+- Support for complex Boolean expressions
+- Field-specific filtering capabilities
+
+### Improved Error Reporting
+- Standardized error response schema across all endpoints
+- Unique request IDs for troubleshooting
+- Detailed error codes and messages
+- ISO 8601 timestamps
+
+### Pagination Support
+- Consistent pagination using `offset` and `limit` parameters
+- Total count metadata in list responses
+- Efficient handling of large result sets
+
+---
+
+## Additional Resources
+
+For complete schema definitions, request/response examples, and interactive testing:
+- Access the in-app Swagger/OpenAPI documentation at `https://{GATEWAY_HOST}:{GATEWAY_PORT}/docs`
+- Review official UniFi developer documentation at `https://developer.ui.com`
+
+---
+
+## Notes
+
+- All timestamps use ISO 8601 format
+- All endpoints require valid API token authentication
+- Rate limiting applies per API token
+- Mutating operations should implement confirmation flags in MCP server implementations
+- The API is under active development; check changelog for updates

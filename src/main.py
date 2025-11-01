@@ -1,5 +1,9 @@
 """Main entry point for UniFi MCP Server."""
 
+import os
+
+from agnost import config as agnost_config
+from agnost import track
 from fastmcp import FastMCP
 
 from .config import Settings
@@ -29,6 +33,40 @@ logger = get_logger(__name__, settings.log_level)
 
 # Initialize FastMCP server
 mcp = FastMCP("UniFi MCP Server")
+
+# Configure agnost tracking if enabled
+if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
+    agnost_org_id = os.getenv("AGNOST_ORG_ID")
+    if agnost_org_id:
+        try:
+            # Configure tracking with input/output control
+            disable_input = os.getenv("AGNOST_DISABLE_INPUT", "false").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+            disable_output = os.getenv("AGNOST_DISABLE_OUTPUT", "false").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+
+            track(
+                mcp,
+                agnost_org_id,
+                agnost_config(
+                    endpoint=os.getenv("AGNOST_ENDPOINT", "https://api.agnost.ai"),
+                    disable_input=disable_input,
+                    disable_output=disable_output,
+                ),
+            )
+            logger.info(
+                f"Agnost.ai performance tracking enabled (input: {not disable_input}, output: {not disable_output})"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to initialize agnost tracking: {e}")
+    else:
+        logger.warning("AGNOST_ENABLED is true but AGNOST_ORG_ID is not set")
 
 # Initialize resource handlers
 sites_resource = SitesResource(settings)

@@ -27,6 +27,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 - **Webhook Support**: Real-time event processing with HMAC signature verification
 - **Automatic Cache Invalidation**: Smart cache invalidation when configuration changes
 - **Event Handlers**: Built-in handlers for device, client, and alert events
+- **Performance Tracking**: Optional agnost.ai integration for monitoring MCP tool performance and usage analytics
 
 ### Safety & Security
 
@@ -87,6 +88,38 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 # Install dependencies
 pip install -e ".[dev]"
 ```
+
+#### Using Docker Compose (Recommended for Production)
+
+The recommended way to run the UniFi MCP Server with full monitoring capabilities:
+
+```bash
+# 1. Copy and configure environment variables
+cp .env.docker.example .env
+# Edit .env with your UNIFI_API_KEY and AGNOST_ORG_ID
+
+# 2. Start all services (MCP Server + Redis + MCP Toolbox)
+docker-compose up -d
+
+# 3. Check service status
+docker-compose ps
+
+# 4. View logs
+docker-compose logs -f unifi-mcp
+
+# 5. Access MCP Toolbox dashboard
+open http://localhost:8080
+
+# 6. Stop all services
+docker-compose down
+```
+
+**Included Services:**
+- **UniFi MCP Server**: Main MCP server with 40 tools
+- **MCP Toolbox**: Web-based analytics dashboard (port 8080)
+- **Redis**: High-performance caching layer
+
+See [MCP_TOOLBOX.md](MCP_TOOLBOX.md) for detailed Toolbox documentation.
 
 #### Using Docker (Standalone)
 
@@ -166,6 +199,14 @@ REDIS_DB=0
 
 # Webhook support (optional - for real-time events)
 WEBHOOK_SECRET=your-webhook-secret-here
+
+# Performance tracking with agnost.ai (optional - for analytics)
+# Get your Organization ID from https://app.agnost.ai
+# AGNOST_ENABLED=true
+# AGNOST_ORG_ID=your-organization-id-here
+# AGNOST_ENDPOINT=https://api.agnost.ai
+# AGNOST_DISABLE_INPUT=false  # Set to true to disable input tracking
+# AGNOST_DISABLE_OUTPUT=false # Set to true to disable output tracking
 ```
 
 See `.env.example` for all available options.
@@ -454,6 +495,8 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [ ] Unit tests for Phase 5 tools (target: 80% coverage)
 - [ ] Integration tests for caching and webhooks
 - [ ] Performance benchmarks and optimization
+- [x] Performance tracking with agnost.ai integration
+- [x] MCP Toolbox Docker integration for analytics dashboard
 - [ ] Additional DPI analytics (historical trends)
 - [ ] Backup and restore operations
 

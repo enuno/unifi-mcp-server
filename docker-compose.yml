@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # UniFi MCP Server
+  unifi-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: unifi-mcp-server
+    restart: unless-stopped
+    stdin_open: true  # -i flag for STDIO transport
+    tty: false
+    environment:
+      # UniFi API Configuration
+      UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud}
+      UNIFI_HOST: ${UNIFI_HOST:-api.ui.com}
+      UNIFI_PORT: ${UNIFI_PORT:-443}
+      UNIFI_VERIFY_SSL: ${UNIFI_VERIFY_SSL:-true}
+      UNIFI_SITE: ${UNIFI_SITE:-default}
+
+      # MCP Server Configuration
+      MCP_SERVER_PORT: ${MCP_SERVER_PORT:-3000}
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+
+      # Optional: Rate Limiting
+      UNIFI_RATE_LIMIT: ${UNIFI_RATE_LIMIT:-100}
+      UNIFI_TIMEOUT: ${UNIFI_TIMEOUT:-30}
+      UNIFI_MAX_RETRIES: ${UNIFI_MAX_RETRIES:-3}
+
+      # Optional: Agnost Performance Tracking
+      AGNOST_ENABLED: ${AGNOST_ENABLED:-false}
+      AGNOST_ORG_ID: ${AGNOST_ORG_ID:-}
+      AGNOST_ENDPOINT: ${AGNOST_ENDPOINT:-https://api.agnost.ai}
+      AGNOST_DISABLE_INPUT: ${AGNOST_DISABLE_INPUT:-false}
+      AGNOST_DISABLE_OUTPUT: ${AGNOST_DISABLE_OUTPUT:-false}
+
+      # Optional: Redis Caching
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # Optional: Webhook Support
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+    networks:
+      - mcp-network
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./audit.log:/app/audit.log
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:3000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # MCP Toolbox - Analytics and Monitoring Dashboard
+  mcp-toolbox:
+    image: ghcr.io/agnost-io/toolbox:latest
+    container_name: mcp-toolbox
+    restart: unless-stopped
+    ports:
+      - "${TOOLBOX_PORT:-8080}:8080"
+    environment:
+      # Agnost Configuration for Toolbox
+      AGNOST_ORG_ID: ${AGNOST_ORG_ID:?AGNOST_ORG_ID required for toolbox}
+      AGNOST_ENDPOINT: ${AGNOST_ENDPOINT:-https://api.agnost.ai}
+
+      # Toolbox Configuration
+      TOOLBOX_AUTH_ENABLED: ${TOOLBOX_AUTH_ENABLED:-false}
+      TOOLBOX_USERNAME: ${TOOLBOX_USERNAME:-admin}
+      TOOLBOX_PASSWORD: ${TOOLBOX_PASSWORD:-}
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Redis Cache (Optional but recommended)
+  redis:
+    image: redis:7-alpine
+    container_name: unifi-mcp-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --requirepass ${REDIS_PASSWORD:-}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

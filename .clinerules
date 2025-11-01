@@ -1,0 +1,289 @@
+# Cline Rules for UniFi MCP Server
+
+## Project Overview
+This is a Python-based MCP (Model Context Protocol) server providing access to UniFi Network Controller API.
+- **Tech Stack**: Python 3.10+, FastMCP, asyncio, Pydantic, Redis (optional caching)
+- **Architecture**: Async-first MCP server with 40+ tools, resource endpoints, webhook support
+- **Purpose**: Enable AI agents to interact with UniFi network infrastructure via standardized MCP
+
+## Core Development Principles
+
+### 1. Documentation and Code Quality
+- **ALWAYS** update docstrings when modifying functions
+- Follow Google-style docstrings for all public APIs
+- Maintain comprehensive inline comments for complex logic
+- Update relevant documentation files (README.md, API.md, CONTRIBUTING.md) when adding features
+- All code changes MUST pass pre-commit hooks before committing
+
+### 2. Async Programming Standards
+- Use `async/await` for ALL I/O-bound operations (API calls, database queries, file operations)
+- **NEVER** use blocking synchronous calls in async contexts
+- Leverage `asyncio.gather()` for concurrent operations
+- Implement proper exception handling with `try/except` blocks in async functions
+- Use `async with` for context managers (HTTP clients, database connections)
+
+### 3. Type Safety and Validation
+- **ALWAYS** use type hints for function parameters and return values
+- Leverage Pydantic models for complex data structures and validation
+- Use `Optional[T]` or `T | None` for nullable parameters
+- Implement input validation at tool boundaries using Pydantic
+- Run `mypy` type checking before submitting PRs
+
+### 4. Testing Requirements
+- Target: 80%+ code coverage for all new features
+- Write unit tests for individual functions using pytest
+- Create integration tests for API interactions (mark with `@pytest.mark.integration`)
+- Mock external dependencies (UniFi API, Redis) in unit tests
+- Use fixtures for common test setup and teardown
+- **NEVER** commit code that breaks existing tests
+
+### 5. Security and Safety
+- **CRITICAL**: All mutating operations MUST require `confirm=True` parameter
+- Implement dry-run mode (`dry_run=True`) for preview-before-apply functionality
+- Log all operations to `audit.log` with timestamps and user context
+- Mask sensitive data (passwords, API keys) in logs using utility functions
+- Validate all user inputs at API boundaries
+- Follow principle of least privilege for API access
+
+## Project Structure Conventions
+
+### Directory Organization
+```
+src/
+├── main.py              # MCP server entry point
+├── config/              # Configuration management
+├── api/                 # UniFi API client (rate limiting, retries)
+├── tools/               # MCP tool implementations
+│   ├── clients.py       # Client query tools
+│   ├── devices.py       # Device management
+│   ├── networks.py      # Network configuration
+│   ├── firewall.py      # Firewall rules
+│   └── ...
+├── resources/           # MCP resource endpoints
+├── webhooks/            # Webhook handlers
+├── utils/               # Utility functions, validators
+└── cache.py             # Redis caching implementation
+tests/
+├── unit/                # Unit tests (fast, no external deps)
+└── integration/         # Integration tests (require UniFi controller)
+```
+
+### File Naming
+- Use snake_case for Python files: `device_control.py`, `network_config.py`
+- Group related tools in single files (e.g., all device tools in `devices.py`)
+- Test files mirror source structure: `tests/unit/tools/test_devices.py`
+
+## Coding Standards
+
+### Function Design
+- Keep functions focused on single responsibility
+- Prefer small, composable functions over large monoliths
+- Use descriptive function names: `create_firewall_rule()` not `create()`
+- Limit function parameters (max 5-7); use Pydantic models for complex inputs
+- Return explicit types; avoid returning `Any` or untyped dicts
+
+### Error Handling
+```python
+# GOOD: Specific exception handling with context
+try:
+    result = await unifi_api.get_devices(site_id)
+except UniFiConnectionError as e:
+    logger.error(f"Failed to connect to UniFi controller: {e}")
+    raise MCPError(f"Controller connection failed: {str(e)}")
+except UniFiAuthError as e:
+    logger.error(f"Authentication failed: {e}")
+    raise MCPError("Invalid API credentials")
+```
+
+### MCP Tool Implementation Pattern
+```python
+@mcp.tool()
+async def example_tool(
+    site_id: str,
+    param1: str,
+    optional_param: Optional[int] = None,
+    confirm: bool = False,
+    dry_run: bool = False
+) -> dict:
+    """
+    Brief description of what the tool does.
+    
+    Args:
+        site_id: UniFi site identifier
+        param1: Description of param1
+        optional_param: Description of optional parameter
+        confirm: Required True for mutating operations
+        dry_run: Preview changes without applying
+        
+    Returns:
+        Dictionary containing operation results
+        
+    Raises:
+        MCPError: If operation fails or validation errors occur
+    """
+    # Validate inputs
+    if not site_id or not param1:
+        raise ValueError("site_id and param1 are required")
+    
+    # Check confirmation for mutating operations
+    if not confirm and not dry_run:
+        raise MCPError("This operation requires confirm=True")
+    
+    # Log operation
+    logger.info(f"Executing example_tool: site={site_id}, dry_run={dry_run}")
+    
+    # Implement logic
+    if dry_run:
+        return {"status": "preview", "changes": [...]}
+    
+    result = await perform_operation()
+    
+    # Invalidate cache if needed
+    await cache.invalidate(f"cache_key:{site_id}")
+    
+    return result
+```
+
+### Caching Strategy
+- Use Redis for caching when `REDIS_HOST` is configured
+- Set appropriate TTLs per resource type (devices: 60s, networks: 300s)
+- Invalidate cache on mutating operations
+- Handle cache misses gracefully (fallback to API)
+
+## Git Workflow
+
+### Commit Messages
+Follow Conventional Commits:
+```
+feat: add WiFi statistics tool
+fix: correct device restart timeout handling
+docs: update API.md with new firewall endpoints
+test: add integration tests for port forwarding
+refactor: simplify client management code
+```
+
+### Branch Naming
+- Feature branches: `feature/wifi-statistics`
+- Bug fixes: `fix/device-restart-timeout`
+- Documentation: `docs/api-reference-update`
+
+### Pull Request Requirements
+1. All tests pass (`pytest`)
+2. Code coverage meets 80% threshold
+3. Type checking passes (`mypy src/`)
+4. Pre-commit hooks pass (black, isort, ruff, bandit)
+5. Documentation updated (if applicable)
+6. CHANGELOG.md updated for user-facing changes
+
+## Development Tools
+
+### Required Commands
+```bash
+# Install dependencies
+uv pip install -e ".[dev]"
+
+# Run tests
+pytest                          # All tests
+pytest -m unit                  # Unit tests only
+pytest --cov=src --cov-report=html  # With coverage
+
+# Code quality
+black src/ tests/               # Format code
+isort src/ tests/               # Sort imports
+ruff check src/ tests/ --fix   # Lint and fix
+mypy src/                       # Type check
+
+# Development server
+uv run mcp dev src/main.py      # With MCP Inspector
+```
+
+### Pre-commit Hooks
+```bash
+pre-commit install
+pre-commit install --hook-type commit-msg
+pre-commit run --all-files  # Manual run
+```
+
+## Common Patterns
+
+### API Client Usage
+```python
+from src.api.unifi_client import UniFiClient
+
+async with UniFiClient(api_key, host, site) as client:
+    devices = await client.get_devices()
+    # Client handles rate limiting, retries, authentication
+```
+
+### Resource Definition
+```python
+@mcp.resource("sites://{site_id}/devices")
+async def list_devices_resource(site_id: str) -> str:
+    """Expose devices as MCP resource."""
+    devices = await get_devices(site_id)
+    return json.dumps(devices, indent=2)
+```
+
+### Webhook Handler
+```python
+@webhook.handler("device.connected")
+async def on_device_connected(event: WebhookEvent):
+    """Handle device connection events."""
+    logger.info(f"Device connected: {event.device_mac}")
+    await cache.invalidate(f"devices:{event.site_id}")
+```
+
+## AI Agent Guidance
+
+### When Adding New Features
+1. Review existing patterns in similar tools (e.g., check `devices.py` when adding device features)
+2. Follow the MCP tool implementation pattern above
+3. Add comprehensive tests (both unit and integration)
+4. Update API.md with new tool documentation
+5. Add examples to docstrings
+
+### When Fixing Bugs
+1. Write a failing test that reproduces the bug
+2. Fix the bug using minimal changes
+3. Verify all tests pass
+4. Add regression test if needed
+
+### When Refactoring
+1. Ensure tests provide adequate coverage before refactoring
+2. Refactor in small, atomic commits
+3. Run tests frequently during refactoring
+4. Update documentation if interfaces change
+
+## Critical Reminders
+
+- **NEVER** commit API keys, passwords, or sensitive data
+- **ALWAYS** use `confirm=True` for operations that modify network state
+- **ALWAYS** write tests for new features
+- **NEVER** merge code that fails type checking or linting
+- **ALWAYS** update documentation alongside code changes
+- **NEVER** use synchronous blocking calls in async contexts
+- **ALWAYS** validate inputs using Pydantic models
+- **NEVER** expose sensitive data in logs (use masking utilities)
+
+## Environment Variables
+
+Reference `.env.example` for all configuration options:
+```
+UNIFI_API_KEY=<required>
+UNIFI_API_TYPE=cloud|local
+UNIFI_HOST=api.ui.com (or local gateway IP)
+UNIFI_SITE=default
+REDIS_HOST=localhost (optional, for caching)
+WEBHOOK_SECRET=<optional, for webhook HMAC verification>
+```
+
+## Resources
+
+- Main documentation: README.md, API.md, CONTRIBUTING.md
+- UniFi API reference: Official UniFi API documentation
+- MCP specification: https://modelcontextprotocol.io/
+- FastMCP documentation: https://gofastmcp.com/
+
+---
+Generated for Cline AI coding assistant
+Version: 0.1.2 (Oct 2025)

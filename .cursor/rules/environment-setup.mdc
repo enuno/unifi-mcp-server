@@ -1,0 +1,74 @@
+---
+description: Environment variables and configuration setup
+globs: [".env*", "src/config/**/*.py"]
+alwaysApply: false
+---
+
+# Environment Setup
+
+## Required Environment Variables
+
+```bash
+# Required
+UNIFI_API_KEY=your-api-key-here
+UNIFI_API_TYPE=cloud  # or "local"
+UNIFI_HOST=api.ui.com  # or local gateway IP
+UNIFI_SITE=default
+
+# Optional
+REDIS_HOST=localhost  # Enable caching
+REDIS_PORT=6379
+WEBHOOK_SECRET=your-secret  # Enable webhook HMAC verification
+```
+
+## Configuration Loading Order
+
+The server merges settings from **environment variables**, an optional `.env` file, and `src/config/config.py` (listed in order of precedence).
+
+## API Configuration
+
+### Cloud API (Default)
+
+```bash
+UNIFI_API_TYPE=cloud
+UNIFI_CLOUD_API_URL=https://api.ui.com
+```
+
+### Local Gateway Proxy
+
+```bash
+UNIFI_API_TYPE=local
+UNIFI_LOCAL_HOST=192.168.1.1
+UNIFI_LOCAL_PORT=443
+UNIFI_LOCAL_VERIFY_SSL=true
+```
+
+## Development Environment
+
+Always use `.env.example` as a template:
+
+```bash
+# Copy example file
+cp .env.example .env
+
+# Never commit .env to version control
+# It's in .gitignore by default
+```
+
+## Configuration in Code
+
+Load settings in Python using Pydantic:
+
+```python
+from src.config.config import Settings
+
+settings = Settings()  # Automatically loads from environment
+```
+
+## Security Reminders
+
+- **NEVER** hardcode API keys in source code
+- **NEVER** commit `.env` files to version control
+- **ALWAYS** use environment variables for sensitive data
+- **ALWAYS** mask sensitive data in logs
+- **ALWAYS** validate configuration on startup

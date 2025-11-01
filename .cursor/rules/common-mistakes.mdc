@@ -1,0 +1,69 @@
+---
+description: Common mistakes to avoid and best practices to follow
+globs: ["src/**/*.py"]
+alwaysApply: false
+---
+
+# Common Mistakes to Avoid
+
+## ❌ DON'T
+
+- Use synchronous blocking calls in async functions
+- Omit type hints or use `Any` unnecessarily
+- Skip tests for new features
+- Forget `confirm=True` safety checks on mutating operations
+- Expose sensitive data in logs
+- Commit without running pre-commit hooks
+- Mix sync and async code improperly
+- Return untyped dicts when Pydantic models are appropriate
+
+## ✅ DO
+
+- Use async/await consistently
+- Provide comprehensive type hints
+- Write tests first (TDD)
+- Implement dry-run mode for dangerous operations
+- Mask passwords and keys in logs
+- Run full test suite before committing
+- Use `async with` for resource management
+- Define Pydantic models for complex data structures
+
+## Quick Commands
+
+```bash
+# Development
+uv run mcp dev src/main.py      # Run with MCP Inspector
+
+# Testing
+pytest                          # Run all tests
+pytest -m unit                  # Unit tests only
+pytest -m integration           # Integration tests only
+pytest --cov=src --cov-report=html  # With coverage report
+
+# Code Quality
+black src/ tests/               # Format
+isort src/ tests/               # Sort imports
+ruff check src/ tests/ --fix   # Lint and fix
+mypy src/                       # Type check
+bandit -r src/                  # Security scan
+
+# Pre-commit
+pre-commit run --all-files      # Run all hooks
+```
+
+## Key Resources
+
+- **Project Documentation**: README.md, API.md, CONTRIBUTING.md, SECURITY.md
+- **MCP Specification**: https://modelcontextprotocol.io/
+- **FastMCP Docs**: https://gofastmcp.com/
+- **UniFi API**: Official UniFi Controller API documentation
+- **Pydantic**: https://docs.pydantic.dev/
+
+## Remember
+
+- **Safety First**: Require `confirm=True` for all network modifications
+- **Test Everything**: 80%+ coverage is not optional
+- **Type Everything**: Type hints improve code quality and catch bugs
+- **Document Well**: Future you (and other developers) will thank you
+- **Async Always**: This is an async-first project - respect the pattern
+- **Security Matters**: Never expose credentials or sensitive data

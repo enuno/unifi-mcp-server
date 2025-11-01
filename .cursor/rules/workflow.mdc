@@ -1,0 +1,68 @@
+---
+description: Development workflow and commit practices
+globs: ["**/*.py", "**/*.md"]
+alwaysApply: false
+---
+
+# Development Workflow
+
+## Before Starting Work
+
+1. Pull latest changes: `git pull origin main`
+2. Create feature branch: `git checkout -b feature/your-feature`
+3. Review existing patterns in similar files
+
+## During Development
+
+1. Write tests first (TDD approach)
+2. Implement feature following patterns above
+3. Run tests frequently: `pytest -v`
+4. Check types: `mypy src/`
+5. Format code: `black src/ tests/` and `isort src/ tests/`
+
+## Before Committing
+
+1. Run full test suite: `pytest --cov=src --cov-report=term-missing`
+2. Ensure coverage ≥80%: Check coverage report
+3. Run linter: `ruff check src/ tests/ --fix`
+4. Type check: `mypy src/`
+5. Run pre-commit hooks: `pre-commit run --all-files`
+6. Update documentation if needed
+
+## Commit Message Format
+
+Follow Conventional Commits:
+
+```
+<type>: <short summary>
+
+<optional body>
+```
+
+Types: `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`
+
+Examples:
+
+```
+feat: add DPI statistics tool for bandwidth analysis
+fix: correct device restart timeout handling
+docs: update API.md with WiFi management tools
+test: add integration tests for port forwarding
+refactor: simplify client blocking logic
+```
+
+## Code Quality Checklist
+
+Before submitting a PR, verify:
+
+- [ ] All tests pass (`pytest`)
+- [ ] Code coverage ≥80% (`pytest --cov`)
+- [ ] Type checking passes (`mypy src/`)
+- [ ] Linting passes (`ruff check src/ tests/`)
+- [ ] Code formatted (`black`, `isort`)
+- [ ] Security checks pass (`bandit -r src/`)
+- [ ] Pre-commit hooks pass
+- [ ] Documentation updated (docstrings, API.md)
+- [ ] CHANGELOG.md updated for user-facing changes
+- [ ] No hardcoded secrets or API keys
+- [ ] Audit logging added for mutating operations

@@ -1,0 +1,54 @@
+---
+description: Core coding principles for async-first development and security
+globs: ["src/**/*.py"]
+alwaysApply: true
+---
+
+# Core Coding Principles
+
+## 1. Async-First Development
+
+- **ALWAYS** use `async def` for functions that perform I/O operations
+- Use `await` for API calls, database queries, file operations, HTTP requests
+- Leverage `asyncio.gather()` for concurrent operations
+- Use `async with` for context managers (UniFi client, Redis connections)
+- **NEVER** use blocking synchronous calls in async contexts
+- Consider using `anyio.to_thread.run_sync()` for CPU-intensive operations
+
+## 2. Type Safety and Validation
+
+- **ALWAYS** provide type hints for all function parameters and return values
+- Use Pydantic models for complex input/output structures
+- Prefer explicit types over `Any` or untyped dicts
+- Use `Optional[T]` or `T | None` for nullable values
+- Leverage Pydantic's validation features (Field, validator decorators)
+- Run mypy before committing changes
+
+## 3. Security-First Design
+
+- **CRITICAL**: All mutating operations MUST require `confirm=True` parameter
+- Implement `dry_run=True` mode for preview-before-apply
+- Log all operations to `audit.log` with context (user, timestamp, parameters)
+- Use password masking utilities for sensitive data in logs
+- Validate and sanitize all user inputs
+- Follow least-privilege principle for API access
+- Never commit API keys, passwords, or secrets to version control
+
+## 4. Comprehensive Testing
+
+- Write tests FIRST for new features (TDD approach)
+- Target 80%+ code coverage for all new code
+- Use pytest fixtures for common setup
+- Mock external dependencies (UniFi API, Redis) in unit tests
+- Mark integration tests with `@pytest.mark.integration`
+- Test edge cases, error conditions, and validation failures
+- **NEVER** commit code that breaks existing tests
+
+## 5. Documentation Standards
+
+- Write clear, comprehensive docstrings for all public functions
+- Use Google-style docstring format
+- Include Args, Returns, Raises sections
+- Provide usage examples in docstrings for complex tools
+- Update API.md when adding new tools or changing signatures
+- Keep README.md current with project capabilities

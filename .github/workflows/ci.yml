@@ -190,7 +190,7 @@ jobs:
         with:
           extra_args: --all-files
         env:
-          SKIP: detect-secrets  # Skip detect-secrets (covered in Security Checks job)
+          SKIP: detect-secrets,mypy  # Skip hooks already covered in dedicated jobs
 
   build-summary:
     name: Build Summary

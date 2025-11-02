@@ -9,6 +9,19 @@ from .network import Network
 from .site import Site
 from .voucher import Voucher
 from .wan import WANConnection
+from .site_manager import (
+    CrossSiteStatistics,
+    InternetHealthMetrics,
+    SiteHealthSummary,
+    VantagePoint,
+)
+from .traffic_flow import FlowRisk, FlowStatistics, FlowView, TrafficFlow
+from .zbf_matrix import (
+    ApplicationBlockRule,
+    ZoneNetworkAssignment,
+    ZonePolicy,
+    ZonePolicyMatrix,
+)
 
 __all__ = [
     "Site",
@@ -22,4 +35,16 @@ __all__ = [
     "DPICategory",
     "DPIApplication",
     "Country",
+    "ZonePolicyMatrix",
+    "ZonePolicy",
+    "ApplicationBlockRule",
+    "ZoneNetworkAssignment",
+    "TrafficFlow",
+    "FlowStatistics",
+    "FlowRisk",
+    "FlowView",
+    "SiteHealthSummary",
+    "InternetHealthMetrics",
+    "CrossSiteStatistics",
+    "VantagePoint",
 ]

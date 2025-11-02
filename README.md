@@ -43,7 +43,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 
 - **Async Support**: Built with async/await for high performance and concurrency
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
-- **Comprehensive Testing**: 105 unit tests with detailed coverage reporting
+- **Comprehensive Testing**: 179 unit tests with 34% coverage (target: 80%)
 - **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds
 - **Multi-Architecture**: Docker images for amd64 and arm64
 
@@ -351,17 +351,32 @@ pre-commit install --hook-type commit-msg
 
 ```bash
 # Run all tests
-pytest
+pytest tests/unit/
 
-# Run with coverage
-pytest --cov=src --cov-report=html --cov-report=term-missing
+# Run with coverage report
+pytest tests/unit/ --cov=src --cov-report=html --cov-report=term-missing
 
-# Run only unit tests
+# Run specific test file
+pytest tests/unit/test_zbf_tools.py -v
+
+# Run tests for new v0.2.0 features
+pytest tests/unit/test_new_models.py tests/unit/test_zbf_tools.py tests/unit/test_traffic_flow_tools.py
+
+# Run only unit tests (fast)
 pytest -m unit
 
 # Run only integration tests (requires UniFi controller)
 pytest -m integration
 ```
+
+**Current Test Coverage**:
+- **Overall**: 34.10% (179 tests passing)
+- **New v0.2.0 Models**: 100% (36 tests)
+- **ZBF Tools**: 82.68% (22 tests)
+- **Traffic Flow Tools**: 86.62% (16 tests)
+- **Existing Tools**: 15-95% (varying coverage)
+
+See [TESTING_PLAN.md](TESTING_PLAN.md) for the comprehensive testing roadmap.
 
 ### Code Quality
 
@@ -418,14 +433,17 @@ unifi-mcp-server/
 │   ├── webhooks/          # Webhook receiver and handlers (Phase 5)
 │   └── utils/             # Utility functions and validators
 ├── tests/
-│   ├── unit/              # Unit tests (105 tests)
-│   └── integration/       # Integration tests
+│   ├── unit/              # Unit tests (179 tests, 34% coverage)
+│   ├── integration/       # Integration tests (planned)
+│   └── performance/       # Performance benchmarks (planned)
 ├── docs/                  # Additional documentation
 │   └── AI-Coding/         # AI coding guidelines
 ├── .env.example           # Environment variable template
 ├── pyproject.toml         # Project configuration
 ├── README.md              # This file
 ├── API.md                 # Complete API documentation
+├── TESTING_PLAN.md        # Testing strategy and roadmap
+├── DEVELOPMENT_PLAN.md    # Development roadmap
 ├── CONTRIBUTING.md        # Contribution guidelines
 ├── SECURITY.md            # Security policy and best practices
 ├── AGENTS.md              # AI agent guidelines

@@ -7,7 +7,13 @@ from agnost import track
 from fastmcp import FastMCP
 
 from .config import Settings
-from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
+from .resources import (
+    ClientsResource,
+    DevicesResource,
+    NetworksResource,
+    SitesResource,
+)
+from .resources import site_manager as site_manager_resource
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import client_management as client_mgmt_tools
@@ -21,10 +27,13 @@ from .tools import firewall_zones as firewall_zones_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
+from .tools import site_manager as site_manager_tools
 from .tools import sites as sites_tools
+from .tools import traffic_flows as traffic_flows_tools
 from .tools import vouchers as vouchers_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
+from .tools import zbf_matrix as zbf_matrix_tools
 from .utils import get_logger
 
 # Initialize settings
@@ -73,6 +82,7 @@ sites_resource = SitesResource(settings)
 devices_resource = DevicesResource(settings)
 clients_resource = ClientsResource(settings)
 networks_resource = NetworksResource(settings)
+site_manager_res = site_manager_resource.SiteManagerResource(settings)
 
 
 # MCP Tools
@@ -85,7 +95,7 @@ async def health_check() -> dict[str, str]:
     """
     return {
         "status": "healthy",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "api_type": settings.api_type.value,
     }
 
@@ -956,6 +966,287 @@ async def list_dpi_applications(
 async def list_countries() -> list[dict]:
     """List all countries for configuration and localization."""
     return await dpi_new_tools.list_countries(settings)
+
+
+# Zone-Based Firewall Matrix Tools
+@mcp.tool()
+async def get_zbf_matrix(site_id: str) -> dict:
+    """Retrieve zone-to-zone policy matrix."""
+    return await zbf_matrix_tools.get_zbf_matrix(site_id, settings)
+
+
+@mcp.tool()
+async def get_zone_policies(site_id: str, zone_id: str) -> list[dict]:
+    """Get policies for a specific zone."""
+    return await zbf_matrix_tools.get_zone_policies(site_id, zone_id, settings)
+
+
+@mcp.tool()
+async def update_zbf_policy(
+    site_id: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+    action: str,
+    description: str | None = None,
+    priority: int | None = None,
+    enabled: bool = True,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Modify inter-zone firewall policy (requires confirm=True)."""
+    return await zbf_matrix_tools.update_zbf_policy(
+        site_id,
+        source_zone_id,
+        destination_zone_id,
+        action,
+        settings,
+        description,
+        priority,
+        enabled,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def block_application_by_zone(
+    site_id: str,
+    zone_id: str,
+    application_id: str,
+    action: str = "block",
+    enabled: bool = True,
+    description: str | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Block applications using zone-based rules (requires confirm=True)."""
+    return await zbf_matrix_tools.block_application_by_zone(
+        site_id,
+        zone_id,
+        application_id,
+        settings,
+        action,
+        enabled,
+        description,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
+async def list_blocked_applications(
+    site_id: str, zone_id: str | None = None
+) -> list[dict]:
+    """List applications blocked per zone."""
+    return await zbf_matrix_tools.list_blocked_applications(
+        site_id, zone_id, settings
+    )
+
+
+@mcp.tool()
+async def assign_network_to_zone(
+    site_id: str,
+    zone_id: str,
+    network_id: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Dynamically assign a network to a zone (requires confirm=True)."""
+    return await firewall_zones_tools.assign_network_to_zone(
+        site_id, zone_id, network_id, settings, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def get_zone_networks(site_id: str, zone_id: str) -> list[dict]:
+    """List all networks in a zone."""
+    return await firewall_zones_tools.get_zone_networks(site_id, zone_id, settings)
+
+
+# Traffic Flows Tools
+@mcp.tool()
+async def get_traffic_flows(
+    site_id: str,
+    source_ip: str | None = None,
+    destination_ip: str | None = None,
+    protocol: str | None = None,
+    application_id: str | None = None,
+    time_range: str = "24h",
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """Retrieve real-time traffic flows."""
+    return await traffic_flows_tools.get_traffic_flows(
+        site_id,
+        settings,
+        source_ip,
+        destination_ip,
+        protocol,
+        application_id,
+        time_range,
+        limit,
+        offset,
+    )
+
+
+@mcp.tool()
+async def get_flow_statistics(
+    site_id: str, time_range: str = "24h"
+) -> dict:
+    """Get aggregate flow statistics."""
+    return await traffic_flows_tools.get_flow_statistics(site_id, settings, time_range)
+
+
+@mcp.tool()
+async def get_traffic_flow_details(site_id: str, flow_id: str) -> dict:
+    """Get details for a specific traffic flow."""
+    return await traffic_flows_tools.get_traffic_flow_details(
+        site_id, flow_id, settings
+    )
+
+
+@mcp.tool()
+async def get_top_flows(
+    site_id: str,
+    limit: int = 10,
+    time_range: str = "24h",
+    sort_by: str = "bytes",
+) -> list[dict]:
+    """Get top bandwidth-consuming flows."""
+    return await traffic_flows_tools.get_top_flows(
+        site_id, settings, limit, time_range, sort_by
+    )
+
+
+@mcp.tool()
+async def get_flow_risks(
+    site_id: str,
+    time_range: str = "24h",
+    min_risk_level: str | None = None,
+) -> list[dict]:
+    """Get risk assessment for flows."""
+    return await traffic_flows_tools.get_flow_risks(
+        site_id, settings, time_range, min_risk_level
+    )
+
+
+@mcp.tool()
+async def get_flow_trends(
+    site_id: str,
+    time_range: str = "7d",
+    interval: str = "1h",
+) -> list[dict]:
+    """Get historical flow trends."""
+    return await traffic_flows_tools.get_flow_trends(
+        site_id, settings, time_range, interval
+    )
+
+
+@mcp.tool()
+async def filter_traffic_flows(
+    site_id: str,
+    filter_expression: str,
+    time_range: str = "24h",
+    limit: int | None = None,
+) -> list[dict]:
+    """Filter flows using a complex filter expression."""
+    return await traffic_flows_tools.filter_traffic_flows(
+        site_id, settings, filter_expression, time_range, limit
+    )
+
+
+# Site Manager Tools
+@mcp.tool()
+async def list_all_sites_aggregated() -> list[dict]:
+    """List all sites with aggregated stats from Site Manager API."""
+    return await site_manager_tools.list_all_sites_aggregated(settings)
+
+
+@mcp.tool()
+async def get_internet_health(site_id: str | None = None) -> dict:
+    """Get internet health metrics across sites."""
+    return await site_manager_tools.get_internet_health(settings, site_id)
+
+
+@mcp.tool()
+async def get_site_health_summary(site_id: str | None = None) -> dict:
+    """Get health summary for all sites or a specific site."""
+    return await site_manager_tools.get_site_health_summary(settings, site_id)
+
+
+@mcp.tool()
+async def get_cross_site_statistics() -> dict:
+    """Get aggregate statistics across multiple sites."""
+    return await site_manager_tools.get_cross_site_statistics(settings)
+
+
+@mcp.tool()
+async def list_vantage_points() -> list[dict]:
+    """List all Vantage Points."""
+    return await site_manager_tools.list_vantage_points(settings)
+
+
+# Additional MCP Resources
+@mcp.resource("sites://{site_id}/firewall/matrix")
+async def get_zbf_matrix_resource(site_id: str) -> str:
+    """Get ZBF policy matrix for a site.
+
+    Args:
+        site_id: Site identifier
+
+    Returns:
+        JSON string of ZBF matrix
+    """
+    matrix = await zbf_matrix_tools.get_zbf_matrix(site_id, settings)
+    import json
+
+    return json.dumps(matrix, indent=2)
+
+
+@mcp.resource("sites://{site_id}/traffic/flows")
+async def get_traffic_flows_resource(site_id: str) -> str:
+    """Get traffic flows for a site.
+
+    Args:
+        site_id: Site identifier
+
+    Returns:
+        JSON string of traffic flows
+    """
+    flows = await traffic_flows_tools.get_traffic_flows(site_id, settings)
+    import json
+
+    return json.dumps(flows, indent=2)
+
+
+@mcp.resource("site-manager://sites")
+async def get_site_manager_sites_resource() -> str:
+    """Get all sites from Site Manager API.
+
+    Returns:
+        JSON string of sites list
+    """
+    return await site_manager_res.get_all_sites()
+
+
+@mcp.resource("site-manager://health")
+async def get_site_manager_health_resource() -> str:
+    """Get cross-site health metrics.
+
+    Returns:
+        JSON string of health metrics
+    """
+    return await site_manager_res.get_health_metrics()
+
+
+@mcp.resource("site-manager://internet-health")
+async def get_site_manager_internet_health_resource() -> str:
+    """Get internet connectivity status.
+
+    Returns:
+        JSON string of internet health
+    """
+    return await site_manager_res.get_internet_health_status()
 
 
 def main() -> None:

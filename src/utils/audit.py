@@ -164,3 +164,43 @@ def log_audit(
     """
     logger = get_audit_logger(log_file)
     logger.log_operation(operation, parameters, result, user, site_id, dry_run)
+
+
+async def audit_action(
+    settings: Any,
+    action_type: str,
+    resource_type: str,
+    resource_id: str,
+    site_id: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    """Audit a mutating action.
+
+    Args:
+        settings: Application settings
+        action_type: Type of action (e.g., "create_firewall_zone")
+        resource_type: Type of resource (e.g., "firewall_zone")
+        resource_id: Resource identifier
+        site_id: Site identifier
+        details: Additional details about the action
+    """
+    parameters = {
+        "action_type": action_type,
+        "resource_type": resource_type,
+        "resource_id": resource_id,
+        "site_id": site_id,
+    }
+
+    if details:
+        parameters["details"] = details
+
+    # Get audit log file from settings if available
+    log_file = getattr(settings, "audit_log_file", None)
+
+    log_audit(
+        operation=action_type,
+        parameters=parameters,
+        result="success",
+        site_id=site_id,
+        log_file=log_file,
+    )

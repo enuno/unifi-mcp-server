@@ -161,9 +161,7 @@ class TestTrafficFlowTools:
             assert call_args[1]["params"]["time_range"] == "12h"
 
     @pytest.mark.asyncio
-    async def test_get_traffic_flows_endpoint_not_available(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_traffic_flows_endpoint_not_available(self, mock_settings: Settings) -> None:
         """Test getting traffic flows when endpoint is not available."""
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -223,9 +221,7 @@ class TestTrafficFlowTools:
             assert result["total_flows"] == 0
 
     @pytest.mark.asyncio
-    async def test_get_traffic_flow_details(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_traffic_flow_details(self, mock_settings: Settings) -> None:
         """Test getting details for a specific traffic flow."""
         flow_data = {
             "data": {
@@ -294,22 +290,20 @@ class TestTrafficFlowTools:
             mock_instance.authenticate = AsyncMock()
             mock_instance.is_authenticated = True
             # First call fails, second call (fallback) succeeds
-            mock_instance.get = AsyncMock(
-                side_effect=[Exception("404"), sample_traffic_flow_data]
-            )
+            mock_instance.get = AsyncMock(side_effect=[Exception("404"), sample_traffic_flow_data])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await traffic_flows.get_top_flows(
-                "default", mock_settings, limit=2
-            )
+            result = await traffic_flows.get_top_flows("default", mock_settings, limit=2)
 
             # Should return flows sorted by bytes (flow-001 has more bytes)
             assert len(result) == 2
             assert result[0]["flow_id"] == "flow-001"
-            assert result[0]["bytes_sent"] + result[0]["bytes_received"] > \
-                   result[1]["bytes_sent"] + result[1]["bytes_received"]
+            assert (
+                result[0]["bytes_sent"] + result[0]["bytes_received"]
+                > result[1]["bytes_sent"] + result[1]["bytes_received"]
+            )
 
     @pytest.mark.asyncio
     async def test_get_flow_risks(
@@ -325,9 +319,7 @@ class TestTrafficFlowTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await traffic_flows.get_flow_risks(
-                "default", mock_settings, time_range="24h"
-            )
+            result = await traffic_flows.get_flow_risks("default", mock_settings, time_range="24h")
 
             assert len(result) == 2
             assert result[0]["flow_id"] == "flow-001"
@@ -352,14 +344,14 @@ class TestTrafficFlowTools:
                 "default", mock_settings, min_risk_level="high"
             )
 
+            # Verify result is valid
+            assert len(result) == 2
             # Verify params were passed
             call_args = mock_instance.get.call_args
             assert call_args[1]["params"]["min_risk_level"] == "high"
 
     @pytest.mark.asyncio
-    async def test_get_flow_risks_endpoint_not_available(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_flow_risks_endpoint_not_available(self, mock_settings: Settings) -> None:
         """Test getting flow risks when endpoint not available."""
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -403,9 +395,7 @@ class TestTrafficFlowTools:
             assert result[0]["total_bytes"] == 1000000
 
     @pytest.mark.asyncio
-    async def test_get_flow_trends_endpoint_not_available(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_flow_trends_endpoint_not_available(self, mock_settings: Settings) -> None:
         """Test getting flow trends when endpoint not available."""
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -457,9 +447,7 @@ class TestTrafficFlowTools:
             mock_instance.authenticate = AsyncMock()
             mock_instance.is_authenticated = True
             # First call fails, second call (fallback) succeeds
-            mock_instance.get = AsyncMock(
-                side_effect=[Exception("404"), sample_traffic_flow_data]
-            )
+            mock_instance.get = AsyncMock(side_effect=[Exception("404"), sample_traffic_flow_data])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
@@ -483,9 +471,7 @@ class TestTrafficFlowTools:
             mock_instance = AsyncMock()
             mock_instance.authenticate = AsyncMock()
             mock_instance.is_authenticated = True
-            mock_instance.get = AsyncMock(
-                side_effect=[Exception("404"), sample_traffic_flow_data]
-            )
+            mock_instance.get = AsyncMock(side_effect=[Exception("404"), sample_traffic_flow_data])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance

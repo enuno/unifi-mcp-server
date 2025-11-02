@@ -4,7 +4,7 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import Settings
-from ..models.traffic_flow import FlowRisk, FlowStatistics, FlowView, TrafficFlow
+from ..models.traffic_flow import FlowRisk, FlowStatistics, TrafficFlow
 from ..utils import get_logger
 
 logger = get_logger(__name__)
@@ -69,9 +69,7 @@ async def get_traffic_flows(
         return [TrafficFlow(**flow).model_dump() for flow in data]
 
 
-async def get_flow_statistics(
-    site_id: str, settings: Settings, time_range: str = "24h"
-) -> dict:
+async def get_flow_statistics(site_id: str, settings: Settings, time_range: str = "24h") -> dict:
     """Get aggregate flow statistics.
 
     Args:
@@ -97,16 +95,12 @@ async def get_flow_statistics(
         except Exception as e:
             logger.warning(f"Flow statistics endpoint not available: {e}")
             # Return empty statistics
-            return FlowStatistics(
-                site_id=site_id, time_range=time_range
-            ).model_dump()
+            return FlowStatistics(site_id=site_id, time_range=time_range).model_dump()
 
         return FlowStatistics(**data).model_dump()
 
 
-async def get_traffic_flow_details(
-    site_id: str, flow_id: str, settings: Settings
-) -> dict:
+async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Settings) -> dict:
     """Get details for a specific traffic flow.
 
     Args:
@@ -124,9 +118,7 @@ async def get_traffic_flow_details(
             await client.authenticate()
 
         try:
-            response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows/{flow_id}"
-            )
+            response = await client.get(f"/integration/v1/sites/{site_id}/traffic/flows/{flow_id}")
             data = response.get("data", response)
         except Exception as e:
             logger.warning(f"Traffic flow details endpoint not available: {e}")
@@ -276,7 +268,9 @@ async def filter_traffic_flows(
         List of filtered traffic flows
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Filtering traffic flows for site {site_id} with expression: {filter_expression}")
+        logger.info(
+            f"Filtering traffic flows for site {site_id} with expression: {filter_expression}"
+        )
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -298,4 +292,3 @@ async def filter_traffic_flows(
             return flows[:limit] if limit else flows
 
         return [TrafficFlow(**flow).model_dump() for flow in data]
-

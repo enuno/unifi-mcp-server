@@ -160,6 +160,8 @@ async def update_firewall_zone(
         )
 
         return FirewallZone(**data).model_dump()
+
+
 async def assign_network_to_zone(
     site_id: str,
     zone_id: str,
@@ -184,9 +186,7 @@ async def assign_network_to_zone(
     validate_confirmation(confirm, "assign network to zone")
 
     async with UniFiClient(settings) as client:
-        logger.info(
-            f"Assigning network {network_id} to zone {zone_id} on site {site_id}"
-        )
+        logger.info(f"Assigning network {network_id} to zone {zone_id} on site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -222,16 +222,13 @@ async def assign_network_to_zone(
         payload = {"networks": updated_networks}
 
         if dry_run:
-            logger.info(
-                f"[DRY RUN] Would assign network {network_id} to zone {zone_id}"
-            )
+            logger.info(f"[DRY RUN] Would assign network {network_id} to zone {zone_id}")
             return {"dry_run": True, "payload": payload}
 
-        response = await client.put(
+        await client.put(
             f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}",
             json_data=payload,
         )
-        data = response.get("data", response)
 
         # Audit the action
         await audit_action(
@@ -250,9 +247,7 @@ async def assign_network_to_zone(
         ).model_dump()
 
 
-async def get_zone_networks(
-    site_id: str, zone_id: str, settings: Settings
-) -> list[dict]:
+async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> list[dict]:
     """List all networks in a zone.
 
     Args:
@@ -269,9 +264,7 @@ async def get_zone_networks(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}"
-        )
+        response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}")
         zone_data = response.get("data", {})
         network_ids = zone_data.get("networks", [])
 
@@ -300,4 +293,3 @@ async def get_zone_networks(
                 )
 
         return networks
-

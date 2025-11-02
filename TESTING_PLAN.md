@@ -9,6 +9,7 @@ This document outlines the comprehensive testing strategy for the UniFi MCP Serv
 ### Completed ✅
 
 #### Phase 1: New v0.2.0 Models (100% Coverage)
+
 - **File**: `tests/unit/test_new_models.py`
 - **Tests**: 36 comprehensive tests
 - **Coverage**: 100% for all new models
@@ -18,6 +19,7 @@ This document outlines the comprehensive testing strategy for the UniFi MCP Serv
   - Site Manager: `SiteHealthSummary`, `InternetHealthMetrics`, `CrossSiteStatistics`, `VantagePoint`
 
 #### Phase 2: ZBF Tools & Infrastructure (80%+ Coverage)
+
 - **File**: `tests/unit/test_zbf_tools.py`
 - **Tests**: 22 comprehensive tests
 - **Coverage**:
@@ -29,6 +31,7 @@ This document outlines the comprehensive testing strategy for the UniFi MCP Serv
   - Dry-run and confirmation testing patterns
 
 #### Phase 3: Traffic Flow Tools (86%+ Coverage)
+
 - **File**: `tests/unit/test_traffic_flow_tools.py`
 - **Tests**: 16 comprehensive tests
 - **Coverage**: `traffic_flows.py`: 86.62%
@@ -41,6 +44,7 @@ This document outlines the comprehensive testing strategy for the UniFi MCP Serv
   - Complex filtering with fallback logic
 
 ### Overall Metrics
+
 ```
 Total Tests: 179 passing
 Overall Coverage: 34.10%
@@ -52,10 +56,12 @@ Files with 100% Coverage: 12 (all models)
 ### Priority 1: New Feature Tools (Critical)
 
 #### 1.1 Site Manager Tools & Resources
+
 **Estimated Time**: 4-5 hours
 **Target Coverage**: 80%+
 
 **Files to Test**:
+
 - `src/api/site_manager_client.py` (0% → 80%)
 - `src/tools/site_manager.py` (0% → 80%)
 - `src/resources/site_manager.py` (0% → 80%)
@@ -63,6 +69,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_site_manager_tools.py`
 
 **Test Scenarios**:
+
 - Multi-site health monitoring
 - Cross-site statistics aggregation
 - Internet health metrics retrieval
@@ -73,6 +80,7 @@ Files with 100% Coverage: 12 (all models)
 ### Priority 2: Existing Core Tools (Important)
 
 #### 2.1 WiFi Management
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 75%+
 
@@ -81,6 +89,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_wifi_tools.py`
 
 **Test Scenarios**:
+
 - SSID configuration
 - WiFi network creation/modification
 - Channel management
@@ -88,6 +97,7 @@ Files with 100% Coverage: 12 (all models)
 - Client connection management
 
 #### 2.2 Firewall Management
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 75%+
 
@@ -96,6 +106,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_firewall_tools.py`
 
 **Test Scenarios**:
+
 - Firewall rule creation/deletion
 - Rule prioritization
 - Port-based filtering
@@ -103,6 +114,7 @@ Files with 100% Coverage: 12 (all models)
 - Confirmation and dry-run modes
 
 #### 2.3 Port Forwarding
+
 **Estimated Time**: 2-3 hours
 **Target Coverage**: 75%+
 
@@ -111,12 +123,14 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_port_forwarding_tools.py`
 
 **Test Scenarios**:
+
 - Port forward rule creation
 - NAT configuration
 - Rule validation
 - Conflict detection
 
 #### 2.4 Device Control
+
 **Estimated Time**: 2-3 hours
 **Target Coverage**: 75%+
 
@@ -125,6 +139,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_device_control_tools.py`
 
 **Test Scenarios**:
+
 - Device adoption
 - Device restart/reboot
 - Device upgrade
@@ -132,6 +147,7 @@ Files with 100% Coverage: 12 (all models)
 - Locate device
 
 #### 2.5 Network Configuration
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 75%+
 
@@ -140,32 +156,38 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_network_config_tools.py`
 
 **Test Scenarios**:
+
 - VLAN configuration
 - DHCP settings
 - DNS configuration
 - Network object creation
 
 #### 2.6 DPI & Application Control
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 75%+
 
 **Files**:
+
 - `src/tools/dpi.py` (0% → 75%)
 - `src/tools/dpi_tools.py` (0% → 75%)
 
 **Test File**: `tests/unit/test_dpi_tools.py`
 
 **Test Scenarios**:
+
 - DPI statistics retrieval
 - Application identification
 - Traffic categorization
 - Application blocking
 
 #### 2.7 Additional Tools
+
 **Estimated Time**: 4-5 hours
 **Target Coverage**: 70%+
 
 **Files**:
+
 - `src/tools/acls.py` (0% → 70%)
 - `src/tools/vouchers.py` (0% → 70%)
 - `src/tools/wans.py` (0% → 70%)
@@ -175,16 +197,19 @@ Files with 100% Coverage: 12 (all models)
 ### Priority 3: Core Infrastructure (Important)
 
 #### 3.1 Webhooks
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 80%+
 
 **Files**:
+
 - `src/webhooks/receiver.py` (0% → 80%)
 - `src/webhooks/handlers.py` (0% → 80%)
 
 **Test File**: `tests/unit/test_webhooks.py`
 
 **Test Scenarios**:
+
 - Webhook reception and parsing
 - Event handling
 - Signature validation
@@ -192,6 +217,7 @@ Files with 100% Coverage: 12 (all models)
 - Async event processing
 
 #### 3.2 Cache Layer
+
 **Estimated Time**: 3-4 hours
 **Target Coverage**: 80%+
 
@@ -200,6 +226,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_cache.py`
 
 **Test Scenarios**:
+
 - Cache get/set operations
 - TTL expiration
 - Cache invalidation
@@ -207,6 +234,7 @@ Files with 100% Coverage: 12 (all models)
 - Thread safety
 
 #### 3.3 Main Server
+
 **Estimated Time**: 2-3 hours
 **Target Coverage**: 70%+
 
@@ -215,6 +243,7 @@ Files with 100% Coverage: 12 (all models)
 **Test File**: `tests/unit/test_main.py`
 
 **Test Scenarios**:
+
 - MCP server initialization
 - Tool registration
 - Resource registration
@@ -222,10 +251,12 @@ Files with 100% Coverage: 12 (all models)
 - Graceful shutdown
 
 #### 3.4 Utilities Enhancement
+
 **Estimated Time**: 2-3 hours
 **Target Coverage**: 95%+
 
 **Files**:
+
 - `src/utils/audit.py` (14.44% → 95%)
 - `src/utils/validators.py` (97.14% → 100%)
 
@@ -234,36 +265,42 @@ Files with 100% Coverage: 12 (all models)
 ### Priority 4: Integration & Performance Tests
 
 #### 4.1 Integration Tests
+
 **Estimated Time**: 4-5 hours
 **Target Coverage**: Critical paths
 
 **Directory**: `tests/integration/`
 
 **Test Files**:
+
 - `test_zbf_integration.py` - End-to-end ZBF workflows
 - `test_traffic_flows_integration.py` - Real-time flow monitoring
 - `test_site_manager_integration.py` - Multi-site operations
 - `test_api_integration.py` - Full API client workflows
 
 **Test Scenarios**:
+
 - Full ZBF policy creation → application → verification
 - Traffic flow monitoring → risk detection → alerting
 - Multi-site health checks → aggregation → reporting
 - API authentication → request → response validation
 
 #### 4.2 Performance Tests
+
 **Estimated Time**: 3-4 hours
 **Target**: Benchmark and optimize
 
 **Directory**: `tests/performance/`
 
 **Test Files**:
+
 - `test_traffic_flow_performance.py` - Real-time data processing
 - `test_cache_performance.py` - Cache efficiency
 - `test_rate_limiting.py` - Rate limiter stress tests
 - `test_concurrent_operations.py` - Concurrent API calls
 
 **Performance Targets**:
+
 - Traffic flow processing: >1000 flows/second
 - Cache hit rate: >90%
 - Rate limiter accuracy: ±5%

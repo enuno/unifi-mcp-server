@@ -31,7 +31,9 @@ class SiteManagerResource:
         async with SiteManagerClient(self.settings) as client:
             response = await client.list_sites()
             sites = response.get("data", response.get("sites", []))
-            return "\n".join([f"Site: {s.get('name', 'Unknown')} ({s.get('id', 'unknown')})" for s in sites])
+            return "\n".join(
+                [f"Site: {s.get('name', 'Unknown')} ({s.get('id', 'unknown')})" for s in sites]
+            )
 
     async def get_health_metrics(self) -> str:
         """Get cross-site health metrics.
@@ -60,4 +62,3 @@ class SiteManagerResource:
             response = await client.get_internet_health()
             health_data = response.get("data", response)
             return f"Internet Health: {health_data}"
-

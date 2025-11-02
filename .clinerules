@@ -152,17 +152,17 @@ async def example_tool(
 ) -> dict:
     """
     Brief description of what the tool does.
-    
+
     Args:
         site_id: UniFi site identifier
         param1: Description of param1
         optional_param: Description of optional parameter
         confirm: Required True for mutating operations
         dry_run: Preview changes without applying
-        
+
     Returns:
         Dictionary containing operation results
-        
+
     Raises:
         ConfirmationRequiredError: If mutating operation lacks confirm=True
         ValidationError: If input validation fails
@@ -171,28 +171,28 @@ async def example_tool(
     # Validate inputs
     if not site_id or not param1:
         raise ValidationError("site_id and param1 are required")
-    
+
     # Check confirmation for mutating operations
     if not confirm and not dry_run:
         raise ConfirmationRequiredError("example_tool")
-    
+
     # Log operation (audit logging for mutating operations)
     logger.info(f"Executing example_tool: site={site_id}, dry_run={dry_run}")
-    
+
     # Implement logic
     if dry_run:
         preview = await generate_preview(site_id, param1)
         return {"status": "preview", "changes": preview}
-    
+
     try:
         result = await perform_operation(site_id, param1)
     except APIError as e:
         logger.error(f"API operation failed: {e}")
         raise
-    
+
     # Invalidate cache if needed
     await cache.invalidate(f"cache_key:{site_id}")
-    
+
     return {"status": "success", "data": result}
 ```
 
@@ -350,10 +350,10 @@ mcp = FastMCP("UniFi MCP Server")
 @mcp.resource("sites://{site_id}/devices")
 async def list_devices_resource(site_id: str) -> str:
     """Expose devices as MCP resource.
-    
+
     Args:
         site_id: UniFi site identifier
-        
+
     Returns:
         JSON string of devices list
     """
@@ -361,13 +361,13 @@ async def list_devices_resource(site_id: str) -> str:
     cached = await cache.get(f"devices:{site_id}")
     if cached:
         return cached
-    
+
     devices = await get_devices(site_id)
     result = json.dumps(devices, indent=2)
-    
+
     # Cache result
     await cache.set(f"devices:{site_id}", result, ttl=60)
-    
+
     return result
 ```
 
@@ -387,17 +387,17 @@ receiver = WebhookReceiver(
 @receiver.handler("device.connected")
 async def on_device_connected(event: dict):
     """Handle device connection events.
-    
+
     Args:
         event: Webhook event payload (validated HMAC)
     """
     logger.info(f"Device connected: {event.get('device_mac')}")
-    
+
     # Invalidate relevant caches
     site_id = event.get('site_id', 'default')
     await cache.invalidate(f"devices:{site_id}")
     await cache.invalidate(f"clients:{site_id}")
-    
+
     # Process event
     await handle_device_event(event)
 ```

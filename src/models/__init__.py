@@ -7,8 +7,6 @@ from .dpi import Country, DPIApplication, DPICategory
 from .firewall_zone import FirewallZone
 from .network import Network
 from .site import Site
-from .voucher import Voucher
-from .wan import WANConnection
 from .site_manager import (
     CrossSiteStatistics,
     InternetHealthMetrics,
@@ -16,12 +14,9 @@ from .site_manager import (
     VantagePoint,
 )
 from .traffic_flow import FlowRisk, FlowStatistics, FlowView, TrafficFlow
-from .zbf_matrix import (
-    ApplicationBlockRule,
-    ZoneNetworkAssignment,
-    ZonePolicy,
-    ZonePolicyMatrix,
-)
+from .voucher import Voucher
+from .wan import WANConnection
+from .zbf_matrix import ApplicationBlockRule, ZoneNetworkAssignment, ZonePolicy, ZonePolicyMatrix
 
 __all__ = [
     "Site",

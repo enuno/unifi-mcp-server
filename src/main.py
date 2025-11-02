@@ -7,12 +7,7 @@ from agnost import track
 from fastmcp import FastMCP
 
 from .config import Settings
-from .resources import (
-    ClientsResource,
-    DevicesResource,
-    NetworksResource,
-    SitesResource,
-)
+from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
 from .resources import site_manager as site_manager_resource
 from .tools import acls as acls_tools
 from .tools import application as application_tools
@@ -1034,13 +1029,9 @@ async def block_application_by_zone(
 
 
 @mcp.tool()
-async def list_blocked_applications(
-    site_id: str, zone_id: str | None = None
-) -> list[dict]:
+async def list_blocked_applications(site_id: str, zone_id: str | None = None) -> list[dict]:
     """List applications blocked per zone."""
-    return await zbf_matrix_tools.list_blocked_applications(
-        site_id, zone_id, settings
-    )
+    return await zbf_matrix_tools.list_blocked_applications(site_id, zone_id, settings)
 
 
 @mcp.tool()
@@ -1090,9 +1081,7 @@ async def get_traffic_flows(
 
 
 @mcp.tool()
-async def get_flow_statistics(
-    site_id: str, time_range: str = "24h"
-) -> dict:
+async def get_flow_statistics(site_id: str, time_range: str = "24h") -> dict:
     """Get aggregate flow statistics."""
     return await traffic_flows_tools.get_flow_statistics(site_id, settings, time_range)
 
@@ -1100,9 +1089,7 @@ async def get_flow_statistics(
 @mcp.tool()
 async def get_traffic_flow_details(site_id: str, flow_id: str) -> dict:
     """Get details for a specific traffic flow."""
-    return await traffic_flows_tools.get_traffic_flow_details(
-        site_id, flow_id, settings
-    )
+    return await traffic_flows_tools.get_traffic_flow_details(site_id, flow_id, settings)
 
 
 @mcp.tool()
@@ -1113,9 +1100,7 @@ async def get_top_flows(
     sort_by: str = "bytes",
 ) -> list[dict]:
     """Get top bandwidth-consuming flows."""
-    return await traffic_flows_tools.get_top_flows(
-        site_id, settings, limit, time_range, sort_by
-    )
+    return await traffic_flows_tools.get_top_flows(site_id, settings, limit, time_range, sort_by)
 
 
 @mcp.tool()
@@ -1125,9 +1110,7 @@ async def get_flow_risks(
     min_risk_level: str | None = None,
 ) -> list[dict]:
     """Get risk assessment for flows."""
-    return await traffic_flows_tools.get_flow_risks(
-        site_id, settings, time_range, min_risk_level
-    )
+    return await traffic_flows_tools.get_flow_risks(site_id, settings, time_range, min_risk_level)
 
 
 @mcp.tool()
@@ -1137,9 +1120,7 @@ async def get_flow_trends(
     interval: str = "1h",
 ) -> list[dict]:
     """Get historical flow trends."""
-    return await traffic_flows_tools.get_flow_trends(
-        site_id, settings, time_range, interval
-    )
+    return await traffic_flows_tools.get_flow_trends(site_id, settings, time_range, interval)
 
 
 @mcp.tool()

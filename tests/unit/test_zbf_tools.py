@@ -1,6 +1,6 @@
 """Unit tests for Zone-Based Firewall (ZBF) tools."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -120,9 +120,7 @@ class TestFirewallZoneTools:
             mock_instance.get.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_firewall_zone_minimal(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_create_firewall_zone_minimal(self, mock_settings: Settings) -> None:
         """Test creating a firewall zone with minimal parameters."""
         zone_response = {
             "data": {
@@ -192,9 +190,7 @@ class TestFirewallZoneTools:
             assert "net-dmz-001" in result["network_ids"]
 
     @pytest.mark.asyncio
-    async def test_create_firewall_zone_dry_run(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_create_firewall_zone_dry_run(self, mock_settings: Settings) -> None:
         """Test creating a firewall zone with dry run."""
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -218,9 +214,7 @@ class TestFirewallZoneTools:
         assert result["payload"]["description"] == "Test description"
 
     @pytest.mark.asyncio
-    async def test_create_firewall_zone_without_confirmation(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_create_firewall_zone_without_confirmation(self, mock_settings: Settings) -> None:
         """Test creating a firewall zone without confirmation raises error."""
         with pytest.raises(ValidationError, match="confirmation"):
             await firewall_zones.create_firewall_zone(
@@ -298,9 +292,7 @@ class TestFirewallZoneTools:
             mock_instance.is_authenticated = False
 
             # Mock multiple get/put calls
-            mock_instance.get = AsyncMock(
-                side_effect=[network_response, zone_response]
-            )
+            mock_instance.get = AsyncMock(side_effect=[network_response, zone_response])
             mock_instance.put = AsyncMock(return_value=updated_zone_response)
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
@@ -320,9 +312,7 @@ class TestFirewallZoneTools:
             assert result["network_name"] == "Office Network"
 
     @pytest.mark.asyncio
-    async def test_assign_network_already_assigned(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_assign_network_already_assigned(self, mock_settings: Settings) -> None:
         """Test assigning a network that's already assigned."""
         zone_response = {
             "data": {
@@ -343,9 +333,7 @@ class TestFirewallZoneTools:
             mock_instance = AsyncMock()
             mock_instance.authenticate = AsyncMock()
             mock_instance.is_authenticated = False
-            mock_instance.get = AsyncMock(
-                side_effect=[network_response, zone_response]
-            )
+            mock_instance.get = AsyncMock(side_effect=[network_response, zone_response])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
@@ -398,9 +386,7 @@ class TestFirewallZoneTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await firewall_zones.get_zone_networks(
-                "default", "zone-lan", mock_settings
-            )
+            result = await firewall_zones.get_zone_networks("default", "zone-lan", mock_settings)
 
             assert len(result) == 2
             assert result[0]["network_id"] == "net-001"
@@ -439,9 +425,7 @@ class TestZBFMatrixTools:
             assert result["default_policy"] == "allow"
 
     @pytest.mark.asyncio
-    async def test_get_zbf_matrix_fallback_to_zones(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_zbf_matrix_fallback_to_zones(self, mock_settings: Settings) -> None:
         """Test getting ZBF matrix when matrix endpoint doesn't exist."""
         zones_response = {
             "data": [
@@ -456,9 +440,7 @@ class TestZBFMatrixTools:
             mock_instance.is_authenticated = False
 
             # First call (matrix) raises exception, second call (zones) succeeds
-            mock_instance.get = AsyncMock(
-                side_effect=[Exception("404 not found"), zones_response]
-            )
+            mock_instance.get = AsyncMock(side_effect=[Exception("404 not found"), zones_response])
             mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
@@ -485,9 +467,7 @@ class TestZBFMatrixTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await zbf_matrix.get_zone_policies(
-                "default", "zone-lan", mock_settings
-            )
+            result = await zbf_matrix.get_zone_policies("default", "zone-lan", mock_settings)
 
             assert len(result) == 2
             assert result[0]["source_zone_id"] == "zone-lan"
@@ -496,9 +476,7 @@ class TestZBFMatrixTools:
             assert result[1]["action"] == "deny"
 
     @pytest.mark.asyncio
-    async def test_get_zone_policies_endpoint_not_found(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_get_zone_policies_endpoint_not_found(self, mock_settings: Settings) -> None:
         """Test getting zone policies when endpoint doesn't exist."""
         with patch("src.tools.zbf_matrix.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -509,9 +487,7 @@ class TestZBFMatrixTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await zbf_matrix.get_zone_policies(
-                "default", "zone-lan", mock_settings
-            )
+            result = await zbf_matrix.get_zone_policies("default", "zone-lan", mock_settings)
 
             assert result == []
 
@@ -557,9 +533,7 @@ class TestZBFMatrixTools:
             assert result["priority"] == 100
 
     @pytest.mark.asyncio
-    async def test_update_zbf_policy_invalid_action(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_update_zbf_policy_invalid_action(self, mock_settings: Settings) -> None:
         """Test updating ZBF policy with invalid action."""
         with pytest.raises(ValueError, match="allow.*deny"):
             await zbf_matrix.update_zbf_policy(
@@ -572,9 +546,7 @@ class TestZBFMatrixTools:
             )
 
     @pytest.mark.asyncio
-    async def test_update_zbf_policy_without_confirmation(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_update_zbf_policy_without_confirmation(self, mock_settings: Settings) -> None:
         """Test updating ZBF policy without confirmation."""
         with pytest.raises(ValidationError, match="confirmation"):
             await zbf_matrix.update_zbf_policy(
@@ -587,9 +559,7 @@ class TestZBFMatrixTools:
             )
 
     @pytest.mark.asyncio
-    async def test_update_zbf_policy_dry_run(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_update_zbf_policy_dry_run(self, mock_settings: Settings) -> None:
         """Test updating ZBF policy with dry run."""
         with patch("src.tools.zbf_matrix.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -616,9 +586,7 @@ class TestZBFMatrixTools:
         assert result["payload"]["action"] == "allow"
 
     @pytest.mark.asyncio
-    async def test_block_application_by_zone(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_block_application_by_zone(self, mock_settings: Settings) -> None:
         """Test blocking an application by zone."""
         dpi_response = {
             "data": [
@@ -663,9 +631,7 @@ class TestZBFMatrixTools:
             assert result["enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_block_application_invalid_action(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_block_application_invalid_action(self, mock_settings: Settings) -> None:
         """Test blocking application with invalid action."""
         with pytest.raises(ValueError, match="block.*allow"):
             await zbf_matrix.block_application_by_zone(
@@ -678,9 +644,7 @@ class TestZBFMatrixTools:
             )
 
     @pytest.mark.asyncio
-    async def test_list_blocked_applications(
-        self, mock_settings: Settings
-    ) -> None:
+    async def test_list_blocked_applications(self, mock_settings: Settings) -> None:
         """Test listing blocked applications."""
         blocked_apps_response = {
             "data": [
@@ -732,9 +696,7 @@ class TestZBFMatrixTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            result = await zbf_matrix.list_blocked_applications(
-                "default", None, mock_settings
-            )
+            result = await zbf_matrix.list_blocked_applications("default", None, mock_settings)
 
             assert result == []
 

@@ -130,16 +130,19 @@ AGNOST_DISABLE_OUTPUT=false  # Set to true to disable output/result tracking
 The agnost integration provides granular control over what data is tracked:
 
 **Input Tracking (`disable_input`):**
+
 - When `false` (default): Tool input parameters are tracked
 - When `true`: Input parameters are excluded from tracking
 - Use this to prevent sensitive configuration data from being sent
 
 **Output Tracking (`disable_output`):**
+
 - When `false` (default): Tool results and outputs are tracked
 - When `true`: Output data is excluded from tracking
 - Use this to prevent sensitive response data from being sent
 
 **Example - Privacy-Focused Configuration:**
+
 ```env
 AGNOST_ENABLED=true
 AGNOST_ORG_ID=your-org-id
@@ -153,6 +156,7 @@ AGNOST_DISABLE_OUTPUT=true  # Don't track output data
 The following metrics are automatically tracked by agnost.ai:
 
 **Tool Invocation Metrics:**
+
 - Tool name
 - Input parameters (if `disable_input=false`)
 - Output results (if `disable_output=false`)
@@ -161,18 +165,21 @@ The following metrics are automatically tracked by agnost.ai:
 - Error messages (if any)
 
 **Resource Access Metrics:**
+
 - Resource URI accessed
 - Response data (if `disable_output=false`)
 - Response size
 - Access patterns
 
 **Error Metrics:**
+
 - Error type and message
 - Stack trace and context
 - Request metadata
 - Frequency and patterns
 
 **Performance Metrics:**
+
 - Average execution time per tool
 - Tool usage frequency
 - Peak usage times
@@ -181,18 +188,21 @@ The following metrics are automatically tracked by agnost.ai:
 #### Privacy & Security
 
 **Data Protection:**
+
 - Granular control via `disable_input` and `disable_output` flags
 - Sensitive data (API keys, passwords) automatically masked in logs
 - All data encrypted in transit (HTTPS)
 - Opt-in only (disabled by default)
 
 **Privacy Controls:**
+
 - Disable input tracking to prevent parameter exposure
 - Disable output tracking to prevent response data exposure
 - Complete opt-out by setting `AGNOST_ENABLED=false`
 - No personally identifiable information (PII) collected by default
 
 **Compliance:**
+
 - GDPR compliant data handling
 - Configurable data retention policies via agnost.ai dashboard
 - Transparent data collection (documented in this API guide)
@@ -201,6 +211,7 @@ The following metrics are automatically tracked by agnost.ai:
 #### Example Configurations
 
 **Full Tracking (Docker):**
+
 ```bash
 docker run -i \
   --name unifi-mcp \
@@ -212,6 +223,7 @@ docker run -i \
 ```
 
 **Privacy-Focused Tracking (Claude Desktop):**
+
 ```json
 {
   "mcpServers": {
@@ -232,6 +244,7 @@ docker run -i \
 ```
 
 **Metadata-Only Tracking:**
+
 ```env
 AGNOST_ENABLED=true
 AGNOST_ORG_ID=your-org-id
@@ -242,7 +255,7 @@ AGNOST_DISABLE_OUTPUT=true
 
 #### Viewing Analytics
 
-Once configured, visit your agnost.ai dashboard at https://app.agnost.ai to view:
+Once configured, visit your agnost.ai dashboard at <https://app.agnost.ai> to view:
 
 - **Real-time Performance Metrics**: Tool execution times and latency
 - **Usage Trends**: Most frequently used tools and resources
@@ -265,6 +278,7 @@ open http://localhost:8080
 ```
 
 MCP Toolbox provides:
+
 - Real-time performance monitoring
 - Visual analytics and graphs
 - Error tracking and debugging

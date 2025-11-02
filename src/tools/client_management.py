@@ -327,7 +327,7 @@ async def authorize_guest(
                 auth_data["params"]["downloadLimit"] = download_limit_kbps
 
             # Authorize guest using new API endpoint
-            response = await client.post(
+            await client.post(
                 f"/integration/v1/sites/{site_id}/clients/{client_mac}/action",
                 json_data=auth_data,
             )
@@ -432,7 +432,7 @@ async def limit_bandwidth(
                 limit_data["params"]["downloadLimit"] = download_limit_kbps
 
             # Apply bandwidth limits using new API endpoint
-            response = await client.post(
+            await client.post(
                 f"/integration/v1/sites/{site_id}/clients/{client_mac}/action",
                 json_data=limit_data,
             )

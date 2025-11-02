@@ -177,7 +177,7 @@ class UniFiClient:
     ) -> Dict[str, Any]:
         """
         Make authenticated request to UniFi API.
-        
+
         Handles authentication, retries, and error handling.
         """
         # Centralized implementation

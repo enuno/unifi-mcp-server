@@ -39,9 +39,7 @@ async def list_all_sites_aggregated(settings: Settings) -> list[dict]:
         return sites
 
 
-async def get_internet_health(
-    settings: Settings, site_id: str | None = None
-) -> dict:
+async def get_internet_health(settings: Settings, site_id: str | None = None) -> dict:
     """Get internet health metrics across sites.
 
     Args:
@@ -63,9 +61,7 @@ async def get_internet_health(
         return InternetHealthMetrics(**data).model_dump()
 
 
-async def get_site_health_summary(
-    settings: Settings, site_id: str | None = None
-) -> dict:
+async def get_site_health_summary(settings: Settings, site_id: str | None = None) -> dict:
     """Get health summary for all sites or a specific site.
 
     Args:
@@ -170,4 +166,3 @@ async def list_vantage_points(settings: Settings) -> list[dict]:
         data = response.get("data", response.get("vantage_points", []))
 
         return [VantagePoint(**vp).model_dump() for vp in data]
-

@@ -115,6 +115,7 @@ docker-compose down
 ```
 
 **Included Services:**
+
 - **UniFi MCP Server**: Main MCP server with 40 tools
 - **MCP Toolbox**: Web-based analytics dashboard (port 8080)
 - **Redis**: High-performance caching layer
@@ -370,6 +371,7 @@ pytest -m integration
 ```
 
 **Current Test Coverage**:
+
 - **Overall**: 34.10% (179 tests passing)
 - **New v0.2.0 Models**: 100% (36 tests)
 - **ZBF Tools**: 82.68% (22 tests)

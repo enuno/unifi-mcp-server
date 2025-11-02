@@ -1,7 +1,8 @@
 """Site Manager API models."""
 
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class SiteHealthSummary(BaseModel):
@@ -56,7 +57,4 @@ class VantagePoint(BaseModel):
     latitude: float | None = Field(None, description="Latitude")
     longitude: float | None = Field(None, description="Longitude")
     status: Literal["active", "inactive"] = Field(..., description="Status")
-    site_ids: list[str] = Field(
-        default_factory=list, description="Associated site IDs"
-    )
-
+    site_ids: list[str] = Field(default_factory=list, description="Associated site IDs")

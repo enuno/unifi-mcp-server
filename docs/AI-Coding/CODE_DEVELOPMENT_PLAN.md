@@ -7,6 +7,7 @@ This plan incorporates the latest UniFi API endpoint additions and enhancements.
 The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and Access API, supporting automation by AI/agent integrations. Tracks the most recent API endpoints, advanced filtering, error reporting, and expanded resource management (Devices, VLANs, ACLs, Firewall, etc).
 
 ### Key Updates
+
 - All core CRUD endpoints and actions now reflect official `/integration/v1` API structure
 - Full support for extended resources: Firewall Zones, VLANs, ACLs, WANs, DPI categories, and Hotspot Vouchers
 - Implements structured filtering and standardized error schemas throughout
@@ -14,11 +15,13 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 ## Development Phases (Revised)
 
 ### Phase 1: Core Infrastructure Setup
+
 - **Support all authentication mechanisms and API URL variants per new endpoint specs**
 - Update Pydantic config and client abstractions to handle dynamic resource paths (including new resources)
 - Add retry/backoff and error parsing for new error message structure
 
 ### Phase 2: MCP Resources Implementation
+
 - Implement read-only MCP resources for all categories:
   - Sites (`sites://`)
   - Devices (`sites://{site_id}/devices`), supporting both adopted and pending devices
@@ -29,6 +32,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 - Add caching strategies for high-traffic endpoints (e.g., DPI categories/applications)
 
 ### Phase 3: MCP Tools - Read Operations
+
 - Tools for retrieving details/statistics for every resource:
   - Device/Port/Client/Firewall action history, VLAN config, ACL rule detail, WAN link detail
   - Hotspot voucher generation/reporting
@@ -37,6 +41,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 - *Unit test all query/fetch code against latest schema*
 
 ### Phase 4: MCP Tools - Write Operations (Mutating)
+
 - Implement safe, parameterized mutating tools for all official endpoints, e.g.:
   - Create/update/delete firewall zones, ACLs, VLANs, hotspot vouchers
   - Device adoption and administrative actions (restart, upgrade, PoE power cycle)
@@ -46,18 +51,21 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 - Log all mutations with request/response data for auditability
 
 ### Phase 5: Advanced Features
+
 - Webhook support and real-time event monitoring for device/client/WAN/ACL changes
 - Dashboard/resource health metrics with error code/response parsing
 - Integrate cache invalidation, TTL options, and high-frequency endpoint optimization
 - *Add documentation on new endpoints in API.md and usage examples for new tools*
 
 ### Phase 6: Testing and QA (Revision)
+
 - Update tests to cover all new endpoints and error responses
 - Raise coverage requirement to ≥90% on new modules
 - Integration test all resource and tool combinations for Sites, Devices, VLANs, Vouchers, ACLs, etc.
 - Security, performance, and load-testing of extended endpoints
 
 ### Phase 7: Documentation and Deployment
+
 - Fully document each new MCP resource and tool with request/response examples in `API.md`
 - Update configuration and deployment examples for Docker, Compose, and bare Python in `docs/`
 - Add CI/CD steps for automated publishing and test matrix across new resource categories
@@ -65,6 +73,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 ---
 
 ## Update Checklist
+
 - [x] All core and supporting endpoints mapped (Devices, VLANs, ACLs, WANs, Firewall, DPI)
 - [x] Read/write tools audit against new schema
 - [x] Filtering, pagination, error handling, and query parameter tests
@@ -76,12 +85,14 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 ### Completed Implementations
 
 #### Phase 1: Core Infrastructure
+
 - ✅ Enhanced API client with full `/integration/v1` support
 - ✅ Pydantic models for all new resources (ACLs, Vouchers, Firewall Zones, WANs, DPI)
 - ✅ Structured error handling and request ID propagation
 - ✅ Rate limiting and retry/backoff mechanisms
 
 #### Phase 2: MCP Resources
+
 - ✅ Sites resources (`sites://`)
 - ✅ Devices resources with adopted and pending device support
 - ✅ Clients resources
@@ -89,6 +100,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 - ✅ All list resources support pagination (offset/limit) and filtering
 
 #### Phase 3: MCP Tools - Read Operations
+
 - ✅ **Application Info**: Get UniFi application version and capabilities
 - ✅ **Devices**: List pending devices, get device details, search devices
 - ✅ **Clients**: Get client details, list active clients, search clients
@@ -102,6 +114,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 - ✅ **Country Information**: List countries for configuration
 
 #### Phase 4: MCP Tools - Write Operations
+
 - ✅ **Device Management**:
   - Adopt pending devices
   - Execute device actions (restart, upgrade, locate)
@@ -188,6 +201,7 @@ The UniFi MCP Server exposes the official UniFi Network Controller, Protect, and
 ### API Endpoints Implemented
 
 All endpoints from the UniFi API v10.0.140 documentation:
+
 - ✅ `/integration/v1/application/info`
 - ✅ `/integration/v1/sites`
 - ✅ `/integration/v1/sites/{siteId}/devices/pending`
@@ -208,24 +222,28 @@ All endpoints from the UniFi API v10.0.140 documentation:
 ### Next Steps (Future Enhancements)
 
 #### Phase 5: Advanced Features (Planned)
+
 - [ ] Webhook support for real-time event monitoring
 - [ ] Dashboard/resource health metrics
 - [ ] Cache invalidation and TTL optimization
 - [ ] Additional MCP resources for new endpoints
 
 #### Phase 6: Testing and QA (In Progress)
+
 - [ ] Unit tests for all new tools
 - [ ] Integration tests for API endpoints
 - [ ] Raise coverage to ≥90% on new modules
 - [ ] Performance and load testing
 
 #### Phase 7: Documentation and Deployment
+
 - [ ] Complete API.md with all new endpoints
 - [ ] Update deployment examples
 - [ ] CI/CD pipeline enhancements
 
 ## Resources
-- UniFi API documentation (https://developer.ui.com)
+
+- UniFi API documentation (<https://developer.ui.com>)
 - In-app Swagger/OpenAPI docs: `https://{GATEWAY_HOST}:{GATEWAY_PORT}/docs`
 - Updated `UNIFI_API.md` file
 

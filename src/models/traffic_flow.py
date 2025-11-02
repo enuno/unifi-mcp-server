@@ -1,7 +1,8 @@
 """Traffic flow models."""
 
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class TrafficFlow(BaseModel):
@@ -50,12 +51,8 @@ class FlowRisk(BaseModel):
 
     flow_id: str = Field(..., description="Flow identifier")
     risk_score: float = Field(..., description="Risk score (0-100)")
-    risk_level: Literal["low", "medium", "high", "critical"] = Field(
-        ..., description="Risk level"
-    )
-    indicators: list[str] = Field(
-        default_factory=list, description="List of risk indicators"
-    )
+    risk_level: Literal["low", "medium", "high", "critical"] = Field(..., description="Risk level")
+    indicators: list[str] = Field(default_factory=list, description="List of risk indicators")
     threat_type: str | None = Field(None, description="Type of threat detected")
     description: str | None = Field(None, description="Risk description")
 
@@ -70,4 +67,3 @@ class FlowView(BaseModel):
     filter_expression: str | None = Field(None, description="Filter expression")
     time_range: str = Field("24h", description="Time range")
     created_at: str = Field(..., description="Creation timestamp (ISO)")
-

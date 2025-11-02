@@ -79,16 +79,16 @@ This release will mark the transition of the UniFi MCP Server into a comprehensi
 
 ## 4. Implementation Priorities
 
-1.  **Phase 1: Zone-Based Firewall (Critical)**
+1. **Phase 1: Zone-Based Firewall (Critical)**
     - This is the highest priority, as it affects all users of UniFi Network 9.0+.
     - Implementation will require a deep understanding of the new ZBF API and its data models.
-2.  **Phase 2: Traffic Flows Integration (Essential)**
+2. **Phase 2: Traffic Flows Integration (Essential)**
     - This is essential for modern security and compliance requirements.
     - Implementation will involve real-time data processing and analytics.
-3.  **Phase 3: Site Manager API (Required)**
+3. **Phase 3: Site Manager API (Required)**
     - This is required for enterprise deployments and multi-site management.
     - Implementation will require a robust and scalable architecture.
-4.  **Phase 4: Object-Oriented Networking (Automation)**
+4. **Phase 4: Object-Oriented Networking (Automation)**
     - This will provide significant efficiency gains for users.
     - Implementation will build on the ZBF and Traffic Flows features.
 

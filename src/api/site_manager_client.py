@@ -5,14 +5,7 @@ from typing import Any
 import httpx
 
 from ..config import Settings
-from ..utils import (
-    APIError,
-    AuthenticationError,
-    NetworkError,
-    RateLimitError,
-    ResourceNotFoundError,
-    get_logger,
-)
+from ..utils import APIError, AuthenticationError, NetworkError, ResourceNotFoundError, get_logger
 
 logger = get_logger(__name__)
 
@@ -76,14 +69,10 @@ class SiteManagerClient:
                 self._authenticated = True
                 self.logger.info("Successfully authenticated with Site Manager API")
             else:
-                raise AuthenticationError(
-                    f"Authentication failed: {response.status_code}"
-                )
+                raise AuthenticationError(f"Authentication failed: {response.status_code}")
         except Exception as e:
             self.logger.error(f"Site Manager authentication failed: {e}")
-            raise AuthenticationError(
-                f"Failed to authenticate with Site Manager API: {e}"
-            ) from e
+            raise AuthenticationError(f"Failed to authenticate with Site Manager API: {e}") from e
 
     async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         """Make a GET request to Site Manager API.
@@ -114,21 +103,23 @@ class SiteManagerClient:
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
-                raise AuthenticationError("Site Manager API authentication failed")
+                raise AuthenticationError("Site Manager API authentication failed") from e
             elif e.response.status_code == 404:
-                raise ResourceNotFoundError("resource", endpoint)
+                raise ResourceNotFoundError("resource", endpoint) from e
             else:
                 raise APIError(
                     message=f"Site Manager API error: {e.response.text}",
                     status_code=e.response.status_code,
-                )
+                ) from e
         except httpx.NetworkError as e:
             raise NetworkError(f"Network communication failed: {e}") from e
         except Exception as e:
             self.logger.error(f"Unexpected error in Site Manager API request: {e}")
             raise APIError(f"Unexpected error: {e}") from e
 
-    async def list_sites(self, limit: int | None = None, offset: int | None = None) -> dict[str, Any]:
+    async def list_sites(
+        self, limit: int | None = None, offset: int | None = None
+    ) -> dict[str, Any]:
         """List all sites from Site Manager API.
 
         Args:
@@ -183,4 +174,3 @@ class SiteManagerClient:
             Response with Vantage Points list
         """
         return await self.get("vantage-points")
-

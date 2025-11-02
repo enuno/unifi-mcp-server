@@ -2,12 +2,7 @@
 
 from ..api.client import UniFiClient
 from ..config import Settings
-from ..models.zbf_matrix import (
-    ApplicationBlockRule,
-    ZoneNetworkAssignment,
-    ZonePolicy,
-    ZonePolicyMatrix,
-)
+from ..models.zbf_matrix import ApplicationBlockRule, ZonePolicy, ZonePolicyMatrix
 from ..utils import audit_action, get_logger, validate_confirmation
 
 logger = get_logger(__name__)
@@ -31,18 +26,12 @@ async def get_zbf_matrix(site_id: str, settings: Settings) -> dict:
 
         # Get matrix endpoint - fallback to zones if matrix doesn't exist
         try:
-            response = await client.get(
-                f"/integration/v1/sites/{site_id}/firewall/zones/matrix"
-            )
+            response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones/matrix")
             data = response.get("data", response)
         except Exception:
             # If matrix endpoint doesn't exist, construct from zones
-            logger.warning(
-                "ZBF matrix endpoint not available, constructing from zones"
-            )
-            zones_response = await client.get(
-                f"/integration/v1/sites/{site_id}/firewall/zones"
-            )
+            logger.warning("ZBF matrix endpoint not available, constructing from zones")
+            zones_response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones")
             zones_data = zones_response.get("data", [])
             zone_ids = [zone.get("_id") for zone in zones_data if zone.get("_id")]
 
@@ -56,9 +45,7 @@ async def get_zbf_matrix(site_id: str, settings: Settings) -> dict:
         return ZonePolicyMatrix(**data).model_dump()
 
 
-async def get_zone_policies(
-    site_id: str, zone_id: str, settings: Settings
-) -> list[dict]:
+async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> list[dict]:
     """Get policies for a specific zone.
 
     Args:
@@ -82,9 +69,7 @@ async def get_zone_policies(
             data = response.get("data", [])
         except Exception:
             # If endpoint doesn't exist, return empty list
-            logger.warning(
-                f"Zone policies endpoint not available for zone {zone_id}"
-            )
+            logger.warning(f"Zone policies endpoint not available for zone {zone_id}")
             return []
 
         return [ZonePolicy(**policy).model_dump() for policy in data]
@@ -125,9 +110,7 @@ async def update_zbf_policy(
         raise ValueError("Action must be 'allow' or 'deny'")
 
     async with UniFiClient(settings) as client:
-        logger.info(
-            f"Updating ZBF policy from zone {source_zone_id} to {destination_zone_id}"
-        )
+        logger.info(f"Updating ZBF policy from zone {source_zone_id} to {destination_zone_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -158,9 +141,7 @@ async def update_zbf_policy(
             logger.error(f"Failed to update ZBF policy: {e}")
             # If endpoint doesn't exist, return dry-run result
             if "404" in str(e) or "not found" in str(e).lower():
-                logger.warning(
-                    "ZBF policy endpoint not available, returning dry-run result"
-                )
+                logger.warning("ZBF policy endpoint not available, returning dry-run result")
                 return {"dry_run": True, "payload": payload, "note": "Endpoint not available"}
             raise
 
@@ -210,9 +191,7 @@ async def block_application_by_zone(
         raise ValueError("Action must be 'block' or 'allow'")
 
     async with UniFiClient(settings) as client:
-        logger.info(
-            f"Blocking application {application_id} in zone {zone_id} on site {site_id}"
-        )
+        logger.info(f"Blocking application {application_id} in zone {zone_id} on site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -242,9 +221,7 @@ async def block_application_by_zone(
             payload["application_name"] = application_name
 
         if dry_run:
-            logger.info(
-                f"[DRY RUN] Would block application with payload: {payload}"
-            )
+            logger.info(f"[DRY RUN] Would block application with payload: {payload}")
             return {"dry_run": True, "payload": payload}
 
         try:
@@ -300,7 +277,9 @@ async def list_blocked_applications(
 
         endpoint = f"/integration/v1/sites/{site_id}/firewall/zones/applications/blocked"
         if zone_id:
-            endpoint = f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/applications/blocked"
+            endpoint = (
+                f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/applications/blocked"
+            )
 
         try:
             response = await client.get(endpoint)
@@ -311,4 +290,3 @@ async def list_blocked_applications(
             return []
 
         return [ApplicationBlockRule(**rule).model_dump() for rule in data]
-

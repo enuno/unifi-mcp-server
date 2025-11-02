@@ -75,6 +75,7 @@ nano .env  # or use your preferred editor
 ```
 
 **Required environment variables:**
+
 ```env
 # UniFi API Configuration
 UNIFI_API_KEY=your-unifi-api-key-here
@@ -238,6 +239,7 @@ Deep dive into performance and usage:
 - **P99**: 99th percentile - 99% of requests faster than this
 
 **Interpreting Response Times:**
+
 - < 100ms: Excellent
 - 100-500ms: Good
 - 500ms-1s: Acceptable
@@ -249,6 +251,7 @@ Deep dive into performance and usage:
 - **Per-Tool Success Rate**: Success rate for individual tools
 
 **Healthy Ranges:**
+
 - \> 99%: Excellent
 - 95-99%: Good
 - 90-95%: Needs attention
@@ -287,6 +290,7 @@ For each MCP resource:
 Click any tool invocation in the dashboard to see:
 
 **Request Details:**
+
 - Tool name
 - Input parameters (if tracking enabled)
 - Timestamp
@@ -294,6 +298,7 @@ Click any tool invocation in the dashboard to see:
 - Headers (if available)
 
 **Response Details:**
+
 - Output data (if tracking enabled)
 - Response time
 - Success/failure status
@@ -337,23 +342,28 @@ Watch your MCP server in real-time:
 **Problem**: Cannot access `http://localhost:8080`
 
 **Solutions**:
+
 1. Check if Toolbox container is running:
+
    ```bash
    docker-compose ps mcp-toolbox
    ```
 
 2. Check Toolbox logs:
+
    ```bash
    docker-compose logs mcp-toolbox
    ```
 
 3. Verify port is not in use:
+
    ```bash
    lsof -i :8080  # macOS/Linux
    netstat -ano | findstr :8080  # Windows
    ```
 
 4. Try a different port:
+
    ```env
    TOOLBOX_PORT=9090
    ```
@@ -363,18 +373,22 @@ Watch your MCP server in real-time:
 **Problem**: Dashboard loads but shows no data
 
 **Solutions**:
+
 1. Verify agnost tracking is enabled:
+
    ```env
    AGNOST_ENABLED=true
    AGNOST_ORG_ID=your-org-id-here
    ```
 
 2. Check MCP server logs for tracking errors:
+
    ```bash
    docker-compose logs unifi-mcp | grep -i agnost
    ```
 
 3. Verify MCP server is making tool calls:
+
    ```bash
    docker-compose logs unifi-mcp | grep -i "tool"
    ```
@@ -386,7 +400,9 @@ Watch your MCP server in real-time:
 **Problem**: Can't log in to dashboard
 
 **Solutions**:
+
 1. Verify credentials in `.env`:
+
    ```env
    TOOLBOX_AUTH_ENABLED=true
    TOOLBOX_USERNAME=admin
@@ -394,11 +410,13 @@ Watch your MCP server in real-time:
    ```
 
 2. Restart Toolbox container:
+
    ```bash
    docker-compose restart mcp-toolbox
    ```
 
 3. Disable authentication temporarily for testing:
+
    ```env
    TOOLBOX_AUTH_ENABLED=false
    ```
@@ -408,13 +426,17 @@ Watch your MCP server in real-time:
 **Problem**: Toolbox container using too much memory
 
 **Solutions**:
+
 1. Reduce data retention period (configure in agnost.ai dashboard)
 2. Enable input/output tracking controls:
+
    ```env
    AGNOST_DISABLE_INPUT=true
    AGNOST_DISABLE_OUTPUT=true
    ```
+
 3. Add memory limits to docker-compose.yml:
+
    ```yaml
    mcp-toolbox:
      mem_limit: 512m
@@ -427,6 +449,7 @@ Watch your MCP server in real-time:
 ### Best Practices
 
 1. **Enable Authentication**
+
    ```env
    TOOLBOX_AUTH_ENABLED=true
    TOOLBOX_PASSWORD=strong-random-password
@@ -438,6 +461,7 @@ Watch your MCP server in real-time:
    - Use a password manager
 
 3. **Restrict Network Access**
+
    ```yaml
    # docker-compose.yml
    mcp-toolbox:
@@ -451,6 +475,7 @@ Watch your MCP server in real-time:
    - Redirect HTTP to HTTPS
 
 5. **Control Data Tracking**
+
    ```env
    AGNOST_DISABLE_INPUT=true   # Don't track input params
    AGNOST_DISABLE_OUTPUT=true  # Don't track output data
@@ -459,18 +484,21 @@ Watch your MCP server in real-time:
 ### Data Privacy
 
 **What Gets Tracked:**
+
 - Tool names and execution times (always)
 - Input parameters (if `AGNOST_DISABLE_INPUT=false`)
 - Output results (if `AGNOST_DISABLE_OUTPUT=false`)
 - Error messages and stack traces (always)
 
 **What Doesn't Get Tracked:**
+
 - UniFi API keys (always masked)
 - Passwords (always masked)
 - Authentication tokens (always masked)
 - Personal data (unless explicitly in parameters)
 
 **Data Retention:**
+
 - Default: 30 days
 - Configurable in agnost.ai dashboard
 - Can be deleted manually at any time
@@ -478,6 +506,7 @@ Watch your MCP server in real-time:
 ### Network Security
 
 **Recommended Firewall Rules:**
+
 ```bash
 # Allow Toolbox only from local network
 iptables -A INPUT -p tcp --dport 8080 -s 192.168.1.0/24 -j ACCEPT
@@ -485,6 +514,7 @@ iptables -A INPUT -p tcp --dport 8080 -j DROP
 ```
 
 **Production Deployment:**
+
 - Use VPN for remote access
 - Deploy behind a firewall
 - Use reverse proxy with SSL
@@ -544,15 +574,15 @@ docker inspect --format='{{json .State.Health}}' mcp-toolbox | jq
 
 ### Resources
 
-- **Agnost.ai Documentation**: https://docs.agnost.ai
-- **MCP Toolbox GitHub**: https://github.com/googleapis/genai-toolbox
-- **UniFi MCP Server**: https://github.com/enuno/unifi-mcp-server
+- **Agnost.ai Documentation**: <https://docs.agnost.ai>
+- **MCP Toolbox GitHub**: <https://github.com/googleapis/genai-toolbox>
+- **UniFi MCP Server**: <https://github.com/enuno/unifi-mcp-server>
 
 ### Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/enuno/unifi-mcp-server/issues)
 - **GitHub Discussions**: [Ask questions and share ideas](https://github.com/enuno/unifi-mcp-server/discussions)
-- **Agnost Support**: support@agnost.ai
+- **Agnost Support**: <support@agnost.ai>
 
 ---
 
@@ -562,7 +592,7 @@ docker inspect --format='{{json .State.Health}}' mcp-toolbox | jq
 A: No, agnost.ai and MCP Toolbox are completely optional. The UniFi MCP server works without them.
 
 **Q: Is MCP Toolbox free?**
-A: Check agnost.ai pricing at https://agnost.ai/pricing
+A: Check agnost.ai pricing at <https://agnost.ai/pricing>
 
 **Q: Can I run Toolbox without Docker?**
 A: Yes, but Docker is recommended. See agnost.ai documentation for alternative deployment methods.
@@ -574,6 +604,7 @@ A: You control data collection with `AGNOST_DISABLE_INPUT` and `AGNOST_DISABLE_O
 A: Yes! MCP Toolbox works with any MCP server that implements agnost tracking.
 
 **Q: How do I update Toolbox to the latest version?**
+
 ```bash
 docker-compose pull mcp-toolbox
 docker-compose up -d mcp-toolbox

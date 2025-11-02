@@ -96,12 +96,14 @@
 ### Dependency Updates
 
 **pyproject.toml** (pyproject.toml:31)
+
 - Added: `agnost>=0.1.0`
 - Removed: `PyJWT>=2.8.0` (not needed - agnost handles tracking internally)
 
 ### Configuration Changes
 
 **src/main.py** (src/main.py:37-69)
+
 - Removed custom JWT user identification (not needed for FastMCP)
 - Simplified agnost integration to match official documentation
 - Added environment-based configuration:
@@ -132,32 +134,40 @@
 ## Technical Decisions
 
 ### 1. Organization ID vs API Key
+
 **Decision**: Use AGNOST_ORG_ID instead of AGNOST_API_KEY
 **Rationale**: Official agnost.ai FastMCP documentation specifies organization ID, not API keys. This aligns with their authentication model.
 
 ### 2. Removed Custom User Identification
+
 **Decision**: Removed JWT-based user identification function
 **Rationale**: FastMCP with agnost handles tracking automatically. Custom identification was unnecessary complexity and not part of official implementation.
 
 ### 3. Docker Compose as Recommended Deployment
+
 **Decision**: Position Docker Compose as the recommended production deployment method
 **Rationale**:
+
 - Provides complete stack (MCP + Redis + Toolbox)
 - Easier configuration management
 - Better for production monitoring
 - Includes health checks and restart policies
 
 ### 4. Privacy-First Tracking Configuration
+
 **Decision**: Tracking disabled by default, with granular controls
 **Rationale**:
+
 - Opt-in respects user privacy
 - `disable_input` and `disable_output` flags provide control
 - Users can choose metadata-only tracking
 - Aligns with GDPR and privacy best practices
 
 ### 5. MCP Toolbox Integration
+
 **Decision**: Include MCP Toolbox as optional analytics dashboard
 **Rationale**:
+
 - Provides visual analytics without coding
 - Real-time debugging capabilities
 - Historical performance data
@@ -182,6 +192,7 @@
 ### Next Steps
 
 1. **Test the complete Docker Compose stack**:
+
    ```bash
    cp .env.docker.example .env
    # Edit .env with credentials
@@ -213,19 +224,23 @@
 ## Security & Dependencies
 
 ### Vulnerabilities
+
 - None identified
 - All dependencies current
 
 ### Package Updates Needed
+
 - None at this time
 - `agnost>=0.1.0` is latest version
 
 ### Deprecated Packages
+
 - None identified
 
 ### Security Considerations
 
 **Implemented**:
+
 - ✅ Tracking disabled by default (opt-in)
 - ✅ Granular privacy controls (disable_input, disable_output)
 - ✅ Sensitive data masking (API keys, passwords)
@@ -238,6 +253,7 @@
 - ✅ Minimal Docker image (python:3.12-slim)
 
 **Best Practices Applied**:
+
 - Environment-based configuration
 - No sensitive defaults
 - Explicit opt-in for tracking
@@ -247,11 +263,13 @@
 ## Performance Impact
 
 ### Agnost Tracking Overhead
+
 - **Minimal**: Async operation, non-blocking
 - **Configurable**: Can disable input/output for lower overhead
 - **Negligible for most use cases**: < 1ms per tool call
 
 ### Docker Compose Resource Usage
+
 - **unifi-mcp**: ~50-100MB RAM, minimal CPU
 - **mcp-toolbox**: ~100-200MB RAM, minimal CPU
 - **redis**: ~10-50MB RAM, minimal CPU
@@ -260,6 +278,7 @@
 ## Testing Performed
 
 ### Manual Testing
+
 - ✅ Verified all new files are syntactically correct
 - ✅ Checked environment variable naming consistency
 - ✅ Validated YAML syntax in docker-compose.yml
@@ -267,6 +286,7 @@
 - ✅ Confirmed code follows project standards
 
 ### Not Yet Tested (Requires Real Environment)
+
 - [ ] Docker Compose startup
 - [ ] Agnost tracking functionality
 - [ ] MCP Toolbox dashboard access
@@ -284,6 +304,7 @@
 ### Files to Commit
 
 **New Files**:
+
 1. DEVELOPMENT_PLAN.md
 2. docker-compose.yml
 3. .env.docker.example
@@ -292,6 +313,7 @@
 6. session-work.md
 
 **Modified Files**:
+
 1. src/main.py
 2. pyproject.toml
 3. .env.example
@@ -313,12 +335,14 @@
 ### Implementation Highlights
 
 **Correct Agnost Integration**:
+
 - Initially implemented with API key and custom JWT user identification
 - Corrected to use Organization ID per official documentation
 - Removed unnecessary complexity (JWT decoding, custom identify function)
 - Simpler, cleaner, more maintainable implementation
 
 **Docker Compose Architecture**:
+
 - Three-service stack: MCP server, Toolbox, Redis
 - Proper networking with bridge network
 - Health checks for all services
@@ -327,12 +351,14 @@
 - Production-ready with restart policies
 
 **Documentation Quality**:
+
 - MCP_TOOLBOX.md is comprehensive (400+ lines)
 - DEVELOPMENT_PLAN.md provides strategic vision (700+ lines)
 - API.md updated with complete tracking documentation
 - All docs include examples and troubleshooting
 
 **Privacy & Security**:
+
 - Opt-in by default
 - Clear privacy controls
 - Sensitive data automatically masked
@@ -342,18 +368,21 @@
 ### Future Enhancements
 
 **Monitoring**:
+
 - Prometheus metrics export
 - Grafana dashboards
 - Custom alerting rules
 - Performance benchmarking
 
 **Analytics**:
+
 - ML-based anomaly detection
 - Predictive capacity planning
 - Usage pattern recommendations
 - Cost optimization insights
 
 **Deployment**:
+
 - Kubernetes manifests
 - Helm charts
 - Terraform configurations

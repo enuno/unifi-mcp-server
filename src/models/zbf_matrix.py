@@ -1,7 +1,8 @@
 """Zone-Based Firewall matrix models."""
 
-from pydantic import BaseModel, Field
 from typing import Literal
+
+from pydantic import BaseModel, Field
 
 
 class ZonePolicy(BaseModel):
@@ -46,4 +47,3 @@ class ZoneNetworkAssignment(BaseModel):
     network_id: str = Field(..., description="Network identifier")
     network_name: str | None = Field(None, description="Network name")
     assigned_at: str | None = Field(None, description="ISO timestamp of assignment")
-

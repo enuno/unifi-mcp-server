@@ -1,0 +1,193 @@
+---
+description: UniFi API integration guidelines and patterns
+globs: ["src/api/**/*.py", "src/tools/**/*.py"]
+alwaysApply: true
+---
+
+# UniFi API Guidelines
+
+## Authentication with API Keys
+
+This project uses the **official UniFi Cloud API** with API key authentication.
+
+**Authentication Method:**
+
+- Use `UNIFI_API_KEY` environment variable for authentication
+- API key is passed via the `X-API-Key` HTTP header
+- No session management or cookies required (stateless authentication)
+
+**NEVER hardcode API keys:**
+
+```python
+# ❌ BAD - Hardcoded API key
+headers = {
+    "X-API-Key": "abc123def456..."
+}
+
+# ✅ GOOD - Load from environment
+from src.config.config import Settings
+
+settings = Settings()
+headers = {
+    "X-API-Key": settings.api_key
+}
+```
+
+## API Access Modes
+
+Support both cloud and local gateway access modes:
+
+**Cloud API (Default):**
+```python
+# Base URL: https://api.ui.com/v1/
+settings.api_type = "cloud"
+settings.cloud_api_url = "https://api.ui.com"
+```
+
+**Local Gateway Proxy:**
+```python
+# Base URL: https://{gateway-ip}/proxy/network/integration/v1/
+settings.api_type = "local"
+settings.local_host = "192.168.1.1"
+settings.local_port = 443
+```
+
+## Read-Only Limitation
+
+**IMPORTANT:** The Early Access API is currently **read-only**.
+
+```python
+# ✅ ALLOWED - Read operations
+async def list_devices(site_id: str):
+    """List all devices - read operation."""
+    devices = await client.get(f"/v1/sites/{site_id}/devices")
+    return devices
+
+# ❌ NOT AVAILABLE - Write operations (will fail)
+async def create_network(name: str, vlan_id: int):
+    """Create network - not yet supported in EA API."""
+    # This will return 403 Forbidden in current API version
+    raise NotImplementedError(
+        "Write operations are not available in the Early Access API. "
+        "This feature will be available in v1 Stable release."
+    )
+```
+
+**Handling write requests:**
+
+- Document that write operations are not yet available
+- Return clear error messages to users
+- Consider implementing a "preview" mode that shows what would be created
+- Monitor UniFi API release notes for v1 Stable availability
+
+## Rate Limiting Considerations
+
+Implement proper rate limiting to respect API limits:
+
+**Current Limits:**
+
+- Early Access: 100 requests/minute
+- v1 Stable (future): 10,000 requests/minute
+
+**Best Practices:**
+
+- Cache frequently accessed data (devices, sites, networks)
+- Batch operations when possible
+- Implement exponential backoff for 429 errors
+- Use configurable rate limits via `UNIFI_RATE_LIMIT` environment variable
+- Log rate limit warnings for monitoring
+
+## API Error Handling
+
+Handle UniFi API-specific errors gracefully:
+
+```python
+import httpx
+from typing import Dict, Any
+
+class UniFiAPIError(Exception):
+    """Base exception for UniFi API errors."""
+    pass
+
+class UniFiAuthenticationError(UniFiAPIError):
+    """Authentication failed - invalid API key."""
+    pass
+
+class UniFiRateLimitError(UniFiAPIError):
+    """Rate limit exceeded."""
+    pass
+
+async def safe_api_request(
+    client: httpx.AsyncClient,
+    method: str,
+    endpoint: str,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Make a safe API request with proper error handling.
+
+    Args:
+        client: HTTP client
+        method: HTTP method (GET, POST, etc.)
+        endpoint: API endpoint
+        **kwargs: Additional request parameters
+
+    Returns:
+        Response data as dictionary
+
+    Raises:
+        UniFiAuthenticationError: Invalid API key
+        UniFiRateLimitError: Rate limit exceeded
+        UniFiAPIError: Other API errors
+    """
+    try:
+        response = await client.request(method, endpoint, **kwargs)
+        response.raise_for_status()
+        return response.json()
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            raise UniFiAuthenticationError(
+                "Invalid API key. Please check your UNIFI_API_KEY."
+            )
+        elif e.response.status_code == 429:
+            retry_after = e.response.headers.get("Retry-After", 60)
+            raise UniFiRateLimitError(
+                f"Rate limit exceeded. Retry after {retry_after} seconds."
+            )
+        else:
+            raise UniFiAPIError(f"API error: {e.response.status_code}")
+
+    except httpx.RequestError as e:
+        raise UniFiAPIError(f"Request failed: {str(e)}")
+```
+
+## Centralize API Calls
+
+Keep all API interactions in dedicated modules:
+
+```python
+# src/api/client.py
+class UniFiClient:
+    async def request(
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Make authenticated request to UniFi API.
+        
+        Handles authentication, retries, and error handling.
+        """
+        # Centralized implementation
+        pass
+```
+
+## Official API Documentation
+
+Always reference the official UniFi API documentation:
+
+- **Getting Started**: https://developer.ui.com/site-manager-api/gettingstarted
+- **Project Reference**: `docs/UNIFI_API.md` (comprehensive guide)
+- **API Tutorial**: https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access

@@ -70,6 +70,13 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_DEFAULT_SITE",
     )
 
+    # Site Manager API Configuration
+    site_manager_enabled: bool = Field(
+        default=False,
+        description="Enable Site Manager API (multi-site management)",
+        validation_alias="UNIFI_SITE_MANAGER_ENABLED",
+    )
+
     # Rate Limiting Configuration
     rate_limit_requests: int = Field(
         default=100,

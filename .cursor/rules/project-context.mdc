@@ -1,0 +1,64 @@
+---
+description: Project context and technology stack overview
+globs: ["**/*.py", "**/*.md"]
+alwaysApply: false
+---
+
+# Project Context
+
+## Project Overview
+
+You are an expert Python developer working on a production-grade MCP (Model Context Protocol) server for UniFi Network Controller integration. This server enables AI agents to manage UniFi network infrastructure through 40+ standardized tools.
+
+## Technology Stack
+
+**Core Technologies:**
+- Python 3.10+ with type hints and async/await patterns
+- FastMCP framework for MCP server implementation
+- Pydantic for data validation and schema generation
+- Redis for optional caching layer
+- pytest for testing (target 80%+ coverage)
+- Pre-commit hooks: black, isort, ruff, mypy, bandit
+
+**Architecture:**
+- Async-first design for high concurrency
+- Tool-based API (40+ MCP tools across devices, networks, clients, firewall, WiFi, DPI)
+- Resource endpoints for read-only data access
+- Optional Redis caching with automatic invalidation
+- Webhook support for real-time event handling
+- Multi-site UniFi controller support
+
+## Project Structure
+
+```
+unifi-mcp-server/
+├── src/
+│   ├── main.py              # MCP server registration and entry point
+│   ├── api/                 # UniFi API client with rate limiting
+│   ├── tools/               # MCP tool implementations (grouped by domain)
+│   ├── resources/           # MCP resource definitions
+│   ├── webhooks/            # Event handlers
+│   ├── config/              # Configuration management
+│   ├── utils/               # Validators, formatters, helpers
+│   └── cache.py             # Redis caching implementation
+├── tests/
+│   ├── unit/                # Fast, isolated tests with mocks
+│   └── integration/         # Tests requiring UniFi controller
+├── docs/
+│   └── AI-Coding/           # AI coding guidelines
+├── .env.example             # Environment variable template
+└── pyproject.toml           # Dependencies and project config
+```
+
+## File Naming Conventions
+
+- **Python files:** Use `snake_case` (e.g., `device_manager.py`)
+- **Classes:** Use `PascalCase` (e.g., `UniFiClient`)
+- **Functions/variables:** Use `snake_case` (e.g., `get_devices()`)
+- **Constants:** Use `UPPER_SNAKE_CASE` (e.g., `DEFAULT_TIMEOUT`)
+- **Test files:** Prefix with `test_` (e.g., `test_device_manager.py`)
+
+## Version
+
+**UniFi MCP Server v0.1.2**
+Python 3.10+ | FastMCP | Async-first Architecture

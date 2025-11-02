@@ -1,0 +1,93 @@
+---
+description: MCP tool implementation pattern and structure
+globs: ["src/tools/**/*.py"]
+alwaysApply: true
+---
+
+# MCP Tool Implementation Pattern
+
+Every MCP tool should follow this structure:
+
+```python
+from typing import Optional, Literal
+from pydantic import BaseModel, Field
+from fastmcp import FastMCP
+
+mcp = FastMCP("UniFi MCP Server")
+
+@mcp.tool()
+async def tool_name(
+    # Required parameters first
+    site_id: str,
+    resource_id: str,
+    
+    # Optional parameters with defaults
+    optional_param: Optional[str] = None,
+    
+    # Safety parameters for mutating operations
+    confirm: bool = False,
+    dry_run: bool = False
+) -> dict:
+    """
+    Clear, concise description of what the tool does.
+    
+    Args:
+        site_id: Always include site_id for multi-site support
+        resource_id: Specific resource identifier
+        optional_param: Description of optional parameter
+        confirm: REQUIRED True for mutating operations (safety)
+        dry_run: Preview changes without applying them
+        
+    Returns:
+        Dictionary with operation results. Specify structure.
+        
+    Raises:
+        MCPError: For all MCP-specific errors
+        ValueError: For invalid inputs
+        UniFiConnectionError: For API connection issues
+    """
+    # 1. Input validation
+    if not site_id:
+        raise ValueError("site_id is required")
+    
+    # 2. Safety checks for mutating operations
+    if not confirm and not dry_run:
+        raise MCPError("This operation requires confirm=True")
+    
+    # 3. Audit logging
+    logger.info(
+        f"tool_name: site={site_id}, id={resource_id}, dry_run={dry_run}",
+        extra={"operation": "tool_name", "site_id": site_id}
+    )
+    
+    # 4. Dry-run mode
+    if dry_run:
+        preview = await generate_preview(site_id, resource_id)
+        return {"status": "preview", "changes": preview}
+    
+    # 5. Execute operation
+    try:
+        result = await execute_operation(site_id, resource_id)
+    except UniFiAPIError as e:
+        logger.error(f"Operation failed: {e}")
+        raise MCPError(f"Failed to execute operation: {str(e)}")
+    
+    # 6. Cache invalidation (if applicable)
+    if result.get("success"):
+        await cache.invalidate(f"resource:{site_id}")
+    
+    # 7. Return structured result
+    return {
+        "status": "success",
+        "resource_id": resource_id,
+        "data": result
+    }
+```
+
+## MCP-Specific Guidelines
+
+- Use `@mcp.tool()` decorator for tool definitions
+- Use `@mcp.resource()` decorator for resource endpoints
+- Always include `site_id` for multi-site support
+- Implement proper error handling with custom exceptions
+- Return structured dictionaries for consistency

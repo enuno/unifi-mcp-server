@@ -7,6 +7,7 @@ This document provides comprehensive documentation for the Model Context Protoco
 - [Overview](#overview)
 - [Configuration](#configuration)
 - [Authentication](#authentication)
+- [Performance Tracking](#performance-tracking)
 - [MCP Tools](#mcp-tools)
 - [MCP Resources](#mcp-resources)
 - [Error Handling](#error-handling)
@@ -89,6 +90,190 @@ mcp:
 ```
 
 **Note:** Environment variables take precedence over configuration file settings.
+
+## Performance Tracking
+
+### Agnost.ai Integration (Optional)
+
+The UniFi MCP Server includes optional performance tracking powered by [agnost.ai](https://agnost.ai) to monitor server performance, usage patterns, and identify optimization opportunities.
+
+#### Features
+
+- **Real-time Performance Metrics**: Track tool execution times, success rates, and error patterns
+- **User Analytics**: Monitor which tools are most frequently used and by whom
+- **Resource Access Patterns**: Understand how MCP resources are accessed
+- **Error Tracking**: Automatic error capture with stack traces and context
+- **Custom Event Tracking**: Track specific business events (device adoptions, configuration changes)
+- **Dashboard**: Visual analytics dashboard for performance insights
+
+#### Configuration
+
+Performance tracking is disabled by default and can be enabled via environment variables:
+
+```env
+# Enable performance tracking
+AGNOST_ENABLED=true
+
+# Agnost Organization ID (obtain from https://app.agnost.ai)
+AGNOST_ORG_ID=your-organization-id-here
+
+# Optional: Custom endpoint (defaults to https://api.agnost.ai)
+AGNOST_ENDPOINT=https://api.agnost.ai
+
+# Optional: Control what data is tracked
+AGNOST_DISABLE_INPUT=false   # Set to true to disable input parameter tracking
+AGNOST_DISABLE_OUTPUT=false  # Set to true to disable output/result tracking
+```
+
+#### Tracking Controls
+
+The agnost integration provides granular control over what data is tracked:
+
+**Input Tracking (`disable_input`):**
+- When `false` (default): Tool input parameters are tracked
+- When `true`: Input parameters are excluded from tracking
+- Use this to prevent sensitive configuration data from being sent
+
+**Output Tracking (`disable_output`):**
+- When `false` (default): Tool results and outputs are tracked
+- When `true`: Output data is excluded from tracking
+- Use this to prevent sensitive response data from being sent
+
+**Example - Privacy-Focused Configuration:**
+```env
+AGNOST_ENABLED=true
+AGNOST_ORG_ID=your-org-id
+AGNOST_DISABLE_INPUT=true   # Don't track input parameters
+AGNOST_DISABLE_OUTPUT=true  # Don't track output data
+# This configuration tracks only tool names, execution times, and success/failure
+```
+
+#### Tracked Metrics
+
+The following metrics are automatically tracked by agnost.ai:
+
+**Tool Invocation Metrics:**
+- Tool name
+- Input parameters (if `disable_input=false`)
+- Output results (if `disable_output=false`)
+- Execution time (milliseconds)
+- Success/failure status
+- Error messages (if any)
+
+**Resource Access Metrics:**
+- Resource URI accessed
+- Response data (if `disable_output=false`)
+- Response size
+- Access patterns
+
+**Error Metrics:**
+- Error type and message
+- Stack trace and context
+- Request metadata
+- Frequency and patterns
+
+**Performance Metrics:**
+- Average execution time per tool
+- Tool usage frequency
+- Peak usage times
+- Success/failure rates
+
+#### Privacy & Security
+
+**Data Protection:**
+- Granular control via `disable_input` and `disable_output` flags
+- Sensitive data (API keys, passwords) automatically masked in logs
+- All data encrypted in transit (HTTPS)
+- Opt-in only (disabled by default)
+
+**Privacy Controls:**
+- Disable input tracking to prevent parameter exposure
+- Disable output tracking to prevent response data exposure
+- Complete opt-out by setting `AGNOST_ENABLED=false`
+- No personally identifiable information (PII) collected by default
+
+**Compliance:**
+- GDPR compliant data handling
+- Configurable data retention policies via agnost.ai dashboard
+- Transparent data collection (documented in this API guide)
+- Data encrypted in transit and at rest
+
+#### Example Configurations
+
+**Full Tracking (Docker):**
+```bash
+docker run -i \
+  --name unifi-mcp \
+  -e UNIFI_API_KEY=your-unifi-api-key \
+  -e UNIFI_API_TYPE=cloud \
+  -e AGNOST_ENABLED=true \
+  -e AGNOST_ORG_ID=your-organization-id \
+  ghcr.io/enuno/unifi-mcp-server:latest
+```
+
+**Privacy-Focused Tracking (Claude Desktop):**
+```json
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/unifi-mcp-server", "run", "mcp", "run", "src/main.py"],
+      "env": {
+        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_TYPE": "cloud",
+        "AGNOST_ENABLED": "true",
+        "AGNOST_ORG_ID": "your-org-id",
+        "AGNOST_DISABLE_INPUT": "true",
+        "AGNOST_DISABLE_OUTPUT": "true"
+      }
+    }
+  }
+}
+```
+
+**Metadata-Only Tracking:**
+```env
+AGNOST_ENABLED=true
+AGNOST_ORG_ID=your-org-id
+AGNOST_DISABLE_INPUT=true
+AGNOST_DISABLE_OUTPUT=true
+# Tracks only: tool names, execution times, success/failure rates
+```
+
+#### Viewing Analytics
+
+Once configured, visit your agnost.ai dashboard at https://app.agnost.ai to view:
+
+- **Real-time Performance Metrics**: Tool execution times and latency
+- **Usage Trends**: Most frequently used tools and resources
+- **Error Rates**: Failure patterns and error types
+- **Performance Bottlenecks**: Slowest operations and optimization opportunities
+- **Historical Data**: Trends over time for capacity planning
+
+For more information, see the [agnost.ai FastMCP documentation](https://docs.agnost.ai/fastmcp).
+
+### MCP Toolbox Dashboard
+
+For a web-based analytics dashboard with visual metrics and debugging tools, use MCP Toolbox:
+
+```bash
+# Start with Docker Compose
+docker-compose up -d
+
+# Access dashboard
+open http://localhost:8080
+```
+
+MCP Toolbox provides:
+- Real-time performance monitoring
+- Visual analytics and graphs
+- Error tracking and debugging
+- Historical trend analysis
+- Request/response inspection
+
+See [MCP_TOOLBOX.md](MCP_TOOLBOX.md) for complete documentation.
+
+---
 
 ## Authentication
 

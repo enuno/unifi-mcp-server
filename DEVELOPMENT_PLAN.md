@@ -307,6 +307,7 @@ The following features represent critical gaps in the current implementation tha
 UniFi Network 9.0 introduced Zone-Based Firewall rules, fundamentally changing how traffic is managed by grouping devices and services into zones.
 
 **Missing Capabilities:**
+
 - Zone creation and management endpoints
 - Zone types: Internal, External, Gateway, VPN
 - Zone-to-zone traffic policies and matrix operations
@@ -315,10 +316,12 @@ UniFi Network 9.0 introduced Zone-Based Firewall rules, fundamentally changing h
 - Quick application blocking using zone-based rules
 
 **Current Implementation:**
+
 - Traditional firewall rules in `src/unifi_mcp_server/tools/firewall.py`
 - No ZBF-specific data models or endpoints
 
 **API Endpoints Required:**
+
 - `/api/s/{site}/rest/firewallzone` - Zone management
 - `/api/s/{site}/rest/firewallzonematrix` - Zone-to-zone policies
 - Zone assignment operations for devices and networks
@@ -330,6 +333,7 @@ UniFi Network 9.0 introduced Zone-Based Firewall rules, fundamentally changing h
 UniFi Network 9.0 significantly enhanced traffic flow monitoring beyond basic Deep Packet Inspection.
 
 **Missing Capabilities:**
+
 - Real-time traffic flow visualization with packet counts
 - Flow ID tracking and connection details
 - Application-level traffic analysis beyond DPI categories
@@ -339,10 +343,12 @@ UniFi Network 9.0 significantly enhanced traffic flow monitoring beyond basic De
 - Live bandwidth monitoring with streaming updates (10-15 second intervals)
 
 **Current Implementation:**
+
 - DPI statistics tools in `src/unifi_mcp_server/tools/dpi.py`
 - Static statistics retrieval only
 
 **API Endpoints Required:**
+
 - `/api/s/{site}/stat/trafficflow` - Real-time flow data
 - `/api/s/{site}/rest/trafficflow` - Flow management
 - Flow filtering and custom view operations
@@ -355,6 +361,7 @@ UniFi Network 9.0 significantly enhanced traffic flow monitoring beyond basic De
 UniFi now provides sophisticated Quality of Service capabilities for traffic prioritization and shaping.
 
 **Missing Capabilities:**
+
 - Application-based traffic prioritization
 - Pre-configured ProAV profiles (Dante, Q-SYS, SDVoE)
 - Category-based traffic shaping
@@ -364,10 +371,12 @@ UniFi now provides sophisticated Quality of Service capabilities for traffic pri
 - Per-application bandwidth limits
 
 **Current Implementation:**
+
 - Basic network configuration only
 - No dedicated QoS tools
 
 **API Endpoints Required:**
+
 - `/api/s/{site}/rest/trafficroute` - Traffic routing rules
 - `/api/s/{site}/rest/qosprofile` - QoS profile management
 - ProAV profile configuration endpoints
@@ -380,6 +389,7 @@ UniFi now provides sophisticated Quality of Service capabilities for traffic pri
 UniFi Network 9.0 introduced SiteMagic SD-WAN with hub-and-spoke and mesh topologies.
 
 **Missing Capabilities:**
+
 - Hub-and-spoke topology configuration (up to 1,000 locations)
 - Redundant failover hub setup for disaster recovery
 - License-free site-to-site VPN at scale
@@ -389,9 +399,11 @@ UniFi Network 9.0 introduced SiteMagic SD-WAN with hub-and-spoke and mesh topolo
 - Automated failover configuration
 
 **Current Implementation:**
+
 - No SD-WAN management capabilities
 
 **API Endpoints Required:**
+
 - SD-WAN topology configuration endpoints
 - Hub-and-spoke architecture management
 - Site-to-site VPN automation
@@ -405,6 +417,7 @@ UniFi Network 9.0 introduced SiteMagic SD-WAN with hub-and-spoke and mesh topolo
 UniFi distinguishes between system-level and network-only backups with cloud integration.
 
 **Missing Capabilities:**
+
 - System config backups (complete OS, application, device configs)
 - Network-only backups (network settings and device configurations)
 - Automated cloud backup management (weekly + pre-update)
@@ -413,9 +426,11 @@ UniFi distinguishes between system-level and network-only backups with cloud int
 - Backup scheduling and retention policies
 
 **Current Implementation:**
+
 - None (mentioned in roadmap but not implemented)
 
 **API Endpoints Required:**
+
 - `/api/cmd/backup` - Trigger backup creation
 - `/api/backup/list-backups` - List available backups
 - `/api/backup/delete-backup` - Delete specific backup
@@ -429,6 +444,7 @@ UniFi distinguishes between system-level and network-only backups with cloud int
 UniFi provides comprehensive alerting for network events and performance thresholds.
 
 **Missing Capabilities:**
+
 - Configurable alert triggers (device offline, login attempts, performance)
 - Email and push notification configuration
 - Location-based notifications (geofencing)
@@ -438,9 +454,11 @@ UniFi provides comprehensive alerting for network events and performance thresho
 - SMTP and SSO email service configuration
 
 **Current Implementation:**
+
 - No alert or notification management tools
 
 **API Endpoints Required:**
+
 - System log settings configuration
 - Per-admin notification preference endpoints
 - Email service configuration (SMTP/SSO)
@@ -454,6 +472,7 @@ UniFi provides comprehensive alerting for network events and performance thresho
 UniFi supports WireGuard and OpenVPN with advanced features.
 
 **Missing Capabilities:**
+
 - WireGuard VPN server configuration
 - OpenVPN client/server management
 - VPN client peer management with QR code generation
@@ -463,9 +482,11 @@ UniFi supports WireGuard and OpenVPN with advanced features.
 - VPN credential generation and revocation
 
 **Current Implementation:**
+
 - None (mentioned in v1.0.0 roadmap)
 
 **API Endpoints Required:**
+
 - VPN server configuration endpoints
 - Client/peer credential generation
 - VPN interface management for policy routes
@@ -479,6 +500,7 @@ UniFi supports WireGuard and OpenVPN with advanced features.
 UniFi provides detailed network topology visualization data.
 
 **Missing Capabilities:**
+
 - Network topology graph data retrieval
 - Device interconnection details
 - Port-level connection mapping
@@ -487,9 +509,11 @@ UniFi provides detailed network topology visualization data.
 - Automated network diagram generation
 
 **Current Implementation:**
+
 - No topology or mapping capabilities
 
 **API Endpoints Required:**
+
 - `/api/s/{site}/stat/topology` - Topology graph data
 - Device connection details
 - Port mapping information
@@ -502,6 +526,7 @@ UniFi provides detailed network topology visualization data.
 UniFi provides advanced guest portal and RADIUS authentication features.
 
 **Missing Capabilities:**
+
 - RADIUS profile CRUD operations (only listing implemented)
 - Guest portal customization API
 - Voucher system with bandwidth/time limits
@@ -512,11 +537,13 @@ UniFi provides advanced guest portal and RADIUS authentication features.
 - Guest authorization code management
 
 **Current Implementation:**
+
 - RADIUS profile listing in `src/unifi_mcp_server/tools/radius.py`
 - RADIUS account listing only
 - No voucher or guest portal tools
 
 **API Endpoints Required:**
+
 - `/api/s/{site}/rest/radiusprofile` - Full CRUD operations
 - `/api/s/{site}/rest/account` - RADIUS account management
 - `/api/s/{site}/rest/hotspotpackage` - Hotspot package configuration
@@ -530,6 +557,7 @@ UniFi provides advanced guest portal and RADIUS authentication features.
 UniFi Identity and Access represent separate applications with their own APIs.
 
 **Missing Capabilities:**
+
 - Identity Endpoint API for unified authentication
 - Smart door access via mobile/wearable devices
 - One-click WiFi and VPN access
@@ -542,6 +570,7 @@ UniFi Identity and Access represent separate applications with their own APIs.
 - Visitor management
 
 **Current Implementation:**
+
 - None (unifi-mcp-server focuses on Network application only)
 
 **Consideration:**

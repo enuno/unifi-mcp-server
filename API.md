@@ -1450,6 +1450,7 @@ result = await mcp.call_tool("get_connection_states", {
 ```
 
 **Connection States:**
+
 - `active`: Flow is currently active
 - `closed`: Flow closed normally
 - `timed_out`: Flow timed out (no activity for 5+ minutes)
@@ -2092,4 +2093,3 @@ For issues, questions, or contributions:
 ---
 
 **Last Updated:** 2025-10-17 | **API Version:** 0.1.0
-

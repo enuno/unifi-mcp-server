@@ -1,19 +1,11 @@
 """Integration tests for traffic flow features."""
 
-import asyncio
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from src.config import Settings
-from src.models.traffic_flow import (
-    BlockFlowAction,
-    ClientFlowAggregation,
-    ConnectionState,
-    FlowStreamUpdate,
-    TrafficFlow,
-)
 from src.tools.traffic_flows import (
     block_flow_application,
     block_flow_destination_ip,
@@ -136,9 +128,7 @@ async def test_get_client_flow_aggregation(settings, sample_flow):
                 mock_client.return_value = mock_instance
 
                 # Get aggregation
-                agg = await get_client_flow_aggregation(
-                    "default", "aa:bb:cc:dd:ee:ff", settings
-                )
+                agg = await get_client_flow_aggregation("default", "aa:bb:cc:dd:ee:ff", settings)
 
                 # Verify aggregation
                 assert agg["client_mac"] == "aa:bb:cc:dd:ee:ff"
@@ -251,9 +241,7 @@ async def test_export_traffic_flows_json(settings, sample_flow):
             mock_client.return_value = mock_instance
 
             # Export to JSON
-            result = await export_traffic_flows(
-                "default", settings, export_format="json"
-            )
+            result = await export_traffic_flows("default", settings, export_format="json")
 
             # Verify export
             assert result is not None
@@ -301,9 +289,7 @@ async def test_get_flow_analytics(settings, sample_flow):
                         "total_flows": 1,
                         "total_bytes": 3072000,
                     }
-                    mock_get_states.return_value = [
-                        {"flow_id": "flow123", "state": "active"}
-                    ]
+                    mock_get_states.return_value = [{"flow_id": "flow123", "state": "active"}]
 
                     mock_instance = AsyncMock()
                     mock_instance.__aenter__.return_value = mock_instance

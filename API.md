@@ -1319,6 +1319,494 @@ result = await mcp.call_tool("get_client_dpi", {
 }
 ```
 
+### Traffic Flow Monitoring (v0.2.0)
+
+Real-time traffic flow monitoring and analysis for UniFi Network 9.0+. Provides comprehensive network visibility, security quick-response capabilities, and advanced analytics.
+
+#### `get_traffic_flows`
+
+Retrieve traffic flows with optional filtering.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `source_ip` (string, optional): Filter by source IP address
+- `destination_ip` (string, optional): Filter by destination IP address
+- `protocol` (string, optional): Filter by protocol (tcp/udp/icmp)
+- `application_id` (string, optional): Filter by DPI application ID
+- `time_range` (string, optional): Time range (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
+- `limit` (integer, optional): Maximum number of flows to return
+- `offset` (integer, optional): Number of flows to skip
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_traffic_flows", {
+    "site_id": "default",
+    "protocol": "tcp",
+    "time_range": "1h",
+    "limit": 100
+})
+```
+
+**Response:**
+
+```json
+[
+  {
+    "flow_id": "flow_123abc",
+    "site_id": "default",
+    "source_ip": "192.168.1.100",
+    "source_port": 50000,
+    "destination_ip": "8.8.8.8",
+    "destination_port": 443,
+    "protocol": "tcp",
+    "application_id": "app_https",
+    "application_name": "HTTPS",
+    "bytes_sent": 1024000,
+    "bytes_received": 2048000,
+    "packets_sent": 1000,
+    "packets_received": 2000,
+    "start_time": "2025-11-08T10:30:00Z",
+    "end_time": null,
+    "duration": null,
+    "client_mac": "aa:bb:cc:dd:ee:ff",
+    "device_id": "device_123"
+  }
+]
+```
+
+#### `stream_traffic_flows`
+
+Stream real-time traffic flow updates with bandwidth rate calculations.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `interval_seconds` (integer, optional): Update interval in seconds (default: 15)
+- `filter_expression` (string, optional): Filter expression
+
+**Example:**
+
+```python
+# Returns an async generator
+stream = await mcp.call_tool("stream_traffic_flows", {
+    "site_id": "default",
+    "interval_seconds": 10
+})
+```
+
+**Response (streamed):**
+
+```json
+{
+  "update_type": "new",
+  "flow": {
+    "flow_id": "flow_123abc",
+    "source_ip": "192.168.1.100",
+    "destination_ip": "8.8.8.8",
+    "bytes_sent": 1024000,
+    "bytes_received": 2048000
+  },
+  "timestamp": "2025-11-08T10:30:15Z",
+  "bandwidth_rate": {
+    "bps": 819200,
+    "upload_bps": 273066,
+    "download_bps": 546134
+  }
+}
+```
+
+#### `get_connection_states`
+
+Get connection states for all traffic flows.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range for flows (default: 1h)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_connection_states", {
+    "site_id": "default",
+    "time_range": "1h"
+})
+```
+
+**Response:**
+
+```json
+[
+  {
+    "flow_id": "flow_123abc",
+    "state": "active",
+    "last_seen": "2025-11-08T10:30:00Z",
+    "total_duration": 300,
+    "termination_reason": null
+  }
+]
+```
+
+**Connection States:**
+- `active`: Flow is currently active
+- `closed`: Flow closed normally
+- `timed_out`: Flow timed out (no activity for 5+ minutes)
+
+#### `get_client_flow_aggregation`
+
+Get comprehensive traffic aggregation for a specific client.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `client_mac` (string, required): Client MAC address
+- `time_range` (string, optional): Time range (default: 24h)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_client_flow_aggregation", {
+    "site_id": "default",
+    "client_mac": "aa:bb:cc:dd:ee:ff",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+
+```json
+{
+  "client_mac": "aa:bb:cc:dd:ee:ff",
+  "client_ip": "192.168.1.100",
+  "site_id": "default",
+  "total_flows": 1523,
+  "total_bytes": 15360000000,
+  "total_packets": 12000000,
+  "active_flows": 45,
+  "closed_flows": 1478,
+  "auth_failures": 0,
+  "top_applications": [
+    {"application": "HTTPS", "bytes": 8589934592},
+    {"application": "YouTube", "bytes": 4294967296}
+  ],
+  "top_destinations": [
+    {"destination_ip": "8.8.8.8", "bytes": 2147483648}
+  ]
+}
+```
+
+#### `block_flow_source_ip`
+
+Block source IP address from a suspicious traffic flow.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `flow_id` (string, required): Flow identifier to block
+- `duration` (string, optional): Block duration - "permanent" or "temporary" (default: permanent)
+- `expires_in_hours` (integer, optional): Hours until expiration (for temporary blocks)
+- `confirm` (boolean, required): Confirmation flag (must be true)
+- `dry_run` (boolean, optional): Validate without executing (default: false)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("block_flow_source_ip", {
+    "site_id": "default",
+    "flow_id": "suspicious_flow_123",
+    "duration": "temporary",
+    "expires_in_hours": 24,
+    "confirm": True
+})
+```
+
+**Response:**
+
+```json
+{
+  "action_id": "action_abc123",
+  "block_type": "source_ip",
+  "blocked_target": "192.168.1.100",
+  "rule_id": "rule_fw123",
+  "duration": "temporary",
+  "expires_at": "2025-11-09T10:30:00Z",
+  "created_at": "2025-11-08T10:30:00Z"
+}
+```
+
+#### `block_flow_destination_ip`
+
+Block destination IP address from a traffic flow.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `flow_id` (string, required): Flow identifier to block
+- `duration` (string, optional): Block duration (default: permanent)
+- `expires_in_hours` (integer, optional): Hours until expiration
+- `confirm` (boolean, required): Confirmation flag
+- `dry_run` (boolean, optional): Validate without executing
+
+**Example:**
+
+```python
+result = await mcp.call_tool("block_flow_destination_ip", {
+    "site_id": "default",
+    "flow_id": "malicious_flow_456",
+    "confirm": True
+})
+```
+
+#### `block_flow_application`
+
+Block application identified in a traffic flow using Zone-Based Firewall or traditional rules.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `flow_id` (string, required): Flow identifier to block
+- `use_zbf` (boolean, optional): Use Zone-Based Firewall if available (default: true)
+- `zone_id` (string, optional): Specific zone ID for ZBF blocking
+- `confirm` (boolean, required): Confirmation flag
+- `dry_run` (boolean, optional): Validate without executing
+
+**Example:**
+
+```python
+result = await mcp.call_tool("block_flow_application", {
+    "site_id": "default",
+    "flow_id": "torrent_flow_789",
+    "use_zbf": True,
+    "confirm": True
+})
+```
+
+**Response:**
+
+```json
+{
+  "action_id": "action_def456",
+  "block_type": "application",
+  "blocked_target": "app_bittorrent",
+  "rule_id": "rule_fw456",
+  "zone_id": "zone_internal",
+  "duration": "permanent",
+  "created_at": "2025-11-08T10:30:00Z"
+}
+```
+
+**Note:** Automatically uses ZBF if available, falls back to traditional firewall rules.
+
+#### `export_traffic_flows`
+
+Export traffic flows to JSON or CSV format.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `export_format` (string, optional): Export format - "json" or "csv" (default: json)
+- `time_range` (string, optional): Time range (default: 24h)
+- `include_fields` (array, optional): Specific fields to include (null = all fields)
+- `filter_expression` (string, optional): Filter expression
+- `max_records` (integer, optional): Maximum number of records
+
+**Example:**
+
+```python
+result = await mcp.call_tool("export_traffic_flows", {
+    "site_id": "default",
+    "export_format": "csv",
+    "time_range": "24h",
+    "include_fields": ["source_ip", "destination_ip", "bytes_sent", "application_name"],
+    "max_records": 10000
+})
+```
+
+**Response:**
+
+```csv
+source_ip,destination_ip,bytes_sent,application_name
+192.168.1.100,8.8.8.8,1024000,HTTPS
+192.168.1.101,1.1.1.1,512000,DNS
+...
+```
+
+#### `get_flow_analytics`
+
+Get comprehensive flow analytics dashboard.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range (default: 24h)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_flow_analytics", {
+    "site_id": "default",
+    "time_range": "24h"
+})
+```
+
+**Response:**
+
+```json
+{
+  "site_id": "default",
+  "time_range": "24h",
+  "statistics": {
+    "total_flows": 15230,
+    "total_bytes": 153600000000,
+    "total_bytes_sent": 51200000000,
+    "total_bytes_received": 102400000000
+  },
+  "protocol_distribution": {
+    "tcp": 12000,
+    "udp": 3000,
+    "icmp": 230
+  },
+  "application_distribution": {
+    "HTTPS": {"count": 5000, "bytes": 51539607552},
+    "YouTube": {"count": 1500, "bytes": 25769803776}
+  },
+  "state_distribution": {
+    "active": 450,
+    "closed": 14500,
+    "timed_out": 280
+  },
+  "total_flows": 15230,
+  "total_states": 15230
+}
+```
+
+#### `get_flow_statistics`
+
+Get aggregated flow statistics.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range (default: 24h)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_flow_statistics", {
+    "site_id": "default",
+    "time_range": "7d"
+})
+```
+
+#### `get_traffic_flow_details`
+
+Get detailed information for a specific traffic flow.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `flow_id` (string, required): Flow identifier
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_traffic_flow_details", {
+    "site_id": "default",
+    "flow_id": "flow_123abc"
+})
+```
+
+#### `get_top_flows`
+
+Get top bandwidth-consuming flows.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Number of top flows (default: 10)
+- `time_range` (string, optional): Time range (default: 24h)
+- `sort_by` (string, optional): Sort by field - "bytes", "packets", or "duration" (default: bytes)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_top_flows", {
+    "site_id": "default",
+    "limit": 20,
+    "sort_by": "bytes"
+})
+```
+
+#### `get_flow_risks`
+
+Get risk assessment for traffic flows.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range (default: 24h)
+- `min_risk_level` (string, optional): Minimum risk level - "low", "medium", "high", "critical"
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_flow_risks", {
+    "site_id": "default",
+    "min_risk_level": "high"
+})
+```
+
+#### `get_flow_trends`
+
+Get historical flow trends.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `time_range` (string, optional): Time range (default: 7d)
+- `interval` (string, optional): Time interval - "1h", "6h", "1d" (default: 1h)
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_flow_trends", {
+    "site_id": "default",
+    "time_range": "7d",
+    "interval": "6h"
+})
+```
+
+#### `filter_traffic_flows`
+
+Filter flows using complex filter expressions.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `filter_expression` (string, required): Filter expression (e.g., "bytes > 1000000 AND protocol = 'tcp'")
+- `time_range` (string, optional): Time range (default: 24h)
+- `limit` (integer, optional): Maximum number of flows
+
+**Example:**
+
+```python
+result = await mcp.call_tool("filter_traffic_flows", {
+    "site_id": "default",
+    "filter_expression": "bytes > 10000000 AND protocol = 'tcp'",
+    "limit": 100
+})
+```
+
+**Use Cases:**
+
+- **Security Operations**: Real-time threat detection and automated blocking
+- **Network Monitoring**: Live bandwidth and connection tracking
+- **Compliance**: Flow data export for audit requirements
+- **Troubleshooting**: Connection state analysis and client profiling
+- **Analytics**: Application usage patterns and network insights
+
 ### Caching (Optional)
 
 The MCP server includes optional Redis-based caching to reduce API calls and improve performance.

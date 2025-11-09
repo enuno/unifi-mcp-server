@@ -67,3 +67,71 @@ class FlowView(BaseModel):
     filter_expression: str | None = Field(None, description="Filter expression")
     time_range: str = Field("24h", description="Time range")
     created_at: str = Field(..., description="Creation timestamp (ISO)")
+
+
+class FlowStreamUpdate(BaseModel):
+    """Real-time flow update for streaming."""
+
+    update_type: Literal["new", "update", "closed"] = Field(..., description="Update type")
+    flow: TrafficFlow = Field(..., description="Flow data")
+    timestamp: str = Field(..., description="Update timestamp (ISO)")
+    bandwidth_rate: dict[str, float] | None = Field(
+        None, description="Current bandwidth rates (bps)"
+    )
+
+
+class ConnectionState(BaseModel):
+    """Connection state tracking."""
+
+    flow_id: str = Field(..., description="Flow identifier")
+    state: Literal["active", "closed", "timed_out"] = Field(..., description="Connection state")
+    last_seen: str = Field(..., description="Last activity timestamp (ISO)")
+    total_duration: int | None = Field(None, description="Total duration in seconds")
+    termination_reason: str | None = Field(None, description="Reason for connection closure")
+
+
+class ClientFlowAggregation(BaseModel):
+    """Client traffic aggregation with enhanced metrics."""
+
+    client_mac: str = Field(..., description="Client MAC address")
+    client_ip: str | None = Field(None, description="Client IP address")
+    site_id: str = Field(..., description="Site identifier")
+    total_flows: int = Field(0, description="Total number of flows")
+    total_bytes: int = Field(0, description="Total bytes transferred")
+    total_packets: int = Field(0, description="Total packets transferred")
+    active_flows: int = Field(0, description="Currently active flows")
+    closed_flows: int = Field(0, description="Closed flows")
+    auth_failures: int = Field(0, description="Authentication failure count")
+    top_applications: list[dict] = Field(
+        default_factory=list, description="Top applications by bandwidth"
+    )
+    top_destinations: list[dict] = Field(default_factory=list, description="Top destination IPs")
+
+
+class FlowExportConfig(BaseModel):
+    """Configuration for flow export."""
+
+    export_format: Literal["csv", "json", "pcap"] = Field(..., description="Export format")
+    time_range: str = Field(..., description="Time range for export")
+    include_fields: list[str] | None = Field(
+        None, description="Specific fields to include (None = all)"
+    )
+    filter_expression: str | None = Field(None, description="Filter expression")
+    max_records: int | None = Field(None, description="Maximum number of records")
+
+
+class BlockFlowAction(BaseModel):
+    """Result of a flow block action."""
+
+    action_id: str = Field(..., description="Block action identifier")
+    block_type: Literal["source_ip", "destination_ip", "application"] = Field(
+        ..., description="Type of block"
+    )
+    blocked_target: str = Field(..., description="Blocked IP or application ID")
+    rule_id: str | None = Field(None, description="Created firewall rule ID")
+    zone_id: str | None = Field(None, description="Zone ID if using ZBF")
+    duration: Literal["permanent", "temporary"] | None = Field(
+        None, description="Block duration type"
+    )
+    expires_at: str | None = Field(None, description="Expiration timestamp for temporary blocks")
+    created_at: str = Field(..., description="Creation timestamp (ISO)")

@@ -587,6 +587,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Basic DPI statistics implemented
 
 **Missing:**
+
 - Historical DPI trend analysis
 - Application usage patterns over time
 - Comparative analytics across time periods
@@ -597,6 +598,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Not implemented
 
 **Missing:**
+
 - `/api/s/{site}/stat/spectrumscan` - RF spectrum scan results
 - Channel utilization analysis
 - Interference detection and reporting
@@ -606,6 +608,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Not implemented
 
 **Missing:**
+
 - `/api/s/{site}/cmd/devmgr/speedtest` - Trigger speed test
 - `/api/s/{site}/cmd/devmgr/speedtest-status` - Check status
 - Historical speed test results
@@ -615,6 +618,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Not implemented
 
 **Missing:**
+
 - `/api/s/{site}/cmd/devmgr/migrate` - Device migration
 - `/api/s/{site}/cmd/devmgr/cancel-migrate` - Cancel migration
 - Cross-controller device transfer
@@ -624,6 +628,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Partially implemented (GET only)
 
 **Missing:**
+
 - `/api/s/{site}/rest/dynamicdns` - PUT/POST operations
 - Full CRUD for DDNS providers
 - Custom DDNS service configuration
@@ -633,6 +638,7 @@ The following features represent moderate-priority gaps that enhance functionali
 **Current Status:** Not implemented
 
 **Missing:**
+
 - `/api/s/{site}/rest/tag` - Tagged MAC addresses
 - Tag creation, assignment, and management
 - Device grouping via tags
@@ -1813,4 +1819,3 @@ This development plan is based on extensive research from the following authorit
 - **Feedback Mechanisms:**
   - Community feedback will be collected through GitHub issues, surveys, and community forums.
   - This feedback will be used to inform the future development of the project.
-

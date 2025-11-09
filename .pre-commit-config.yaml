@@ -95,6 +95,7 @@ repos:
       - id: markdownlint
         name: Lint Markdown files
         args: [--fix]
+        exclude: ^docs/
 
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint

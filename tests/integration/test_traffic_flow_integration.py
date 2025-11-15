@@ -145,8 +145,8 @@ async def test_block_flow_source_ip(settings, sample_flow):
     """Test blocking source IP from flow."""
     with patch("src.tools.traffic_flows.UniFiClient") as mock_client:
         with patch("src.tools.traffic_flows.get_traffic_flow_details") as mock_get_details:
-            with patch("src.tools.traffic_flows.create_firewall_rule") as mock_create_rule:
-                with patch("src.tools.traffic_flows.audit_action") as mock_audit:
+            with patch("src.tools.firewall.create_firewall_rule", new_callable=AsyncMock) as mock_create_rule:
+                with patch("src.tools.traffic_flows.audit_action", new_callable=AsyncMock) as mock_audit:
                     # Setup mocks
                     mock_get_details.return_value = sample_flow
                     mock_create_rule.return_value = {"_id": "rule123"}
@@ -175,8 +175,8 @@ async def test_block_flow_destination_ip(settings, sample_flow):
     """Test blocking destination IP from flow."""
     with patch("src.tools.traffic_flows.UniFiClient") as mock_client:
         with patch("src.tools.traffic_flows.get_traffic_flow_details") as mock_get_details:
-            with patch("src.tools.traffic_flows.create_firewall_rule") as mock_create_rule:
-                with patch("src.tools.traffic_flows.audit_action") as mock_audit:
+            with patch("src.tools.firewall.create_firewall_rule", new_callable=AsyncMock) as mock_create_rule:
+                with patch("src.tools.traffic_flows.audit_action", new_callable=AsyncMock) as mock_audit:
                     # Setup mocks
                     mock_get_details.return_value = sample_flow
                     mock_create_rule.return_value = {"_id": "rule124"}
@@ -204,8 +204,8 @@ async def test_block_flow_application(settings, sample_flow):
     """Test blocking application from flow."""
     with patch("src.tools.traffic_flows.UniFiClient") as mock_client:
         with patch("src.tools.traffic_flows.get_traffic_flow_details") as mock_get_details:
-            with patch("src.tools.traffic_flows.create_firewall_rule") as mock_create_rule:
-                with patch("src.tools.traffic_flows.audit_action") as mock_audit:
+            with patch("src.tools.firewall.create_firewall_rule", new_callable=AsyncMock) as mock_create_rule:
+                with patch("src.tools.traffic_flows.audit_action", new_callable=AsyncMock) as mock_audit:
                     # Setup mocks
                     mock_get_details.return_value = sample_flow
                     mock_create_rule.return_value = {"_id": "rule125"}

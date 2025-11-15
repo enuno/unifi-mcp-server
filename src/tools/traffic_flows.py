@@ -21,6 +21,7 @@ from ..models.traffic_flow import (
     TrafficFlow,
 )
 from ..utils import audit_action, get_logger, validate_confirmation
+from .firewall import create_firewall_rule
 
 logger = get_logger(__name__)
 
@@ -636,7 +637,7 @@ async def block_flow_source_ip(
             action="drop",
             protocol="all",
             settings=settings,
-            src_address=source_ip,
+            source=source_ip,
             enabled=True,
             confirm=True,
         )
@@ -732,7 +733,7 @@ async def block_flow_destination_ip(
             action="drop",
             protocol="all",
             settings=settings,
-            dst_address=destination_ip,
+            destination=destination_ip,
             enabled=True,
             confirm=True,
         )

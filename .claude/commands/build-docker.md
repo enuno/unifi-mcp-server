@@ -1,5 +1,11 @@
 ---
 description: Build and test Docker image locally
+allowed-tools:
+  - Bash(docker:*)
+  - Read
+  - Write
+author: project
+version: 1.0.0
 ---
 
 Build the Docker image locally and verify it works.

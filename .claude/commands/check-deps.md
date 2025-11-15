@@ -1,5 +1,13 @@
 ---
 description: Check for outdated or vulnerable dependencies
+allowed-tools:
+  - Bash(uv:*)
+  - Bash(safety:*)
+  - Bash(pip:*)
+  - Bash(pip3:*)
+  - Read
+author: project
+version: 1.0.0
 ---
 
 Check project dependencies for updates and vulnerabilities.

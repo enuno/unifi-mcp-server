@@ -1,5 +1,13 @@
 ---
 description: Run security scans and vulnerability checks
+allowed-tools:
+  - Bash(bandit:*)
+  - Bash(safety:*)
+  - Bash(detect-secrets:*)
+  - Bash(~/.cache/pre-commit/*/py_env-python3/bin/detect-secrets:*)
+  - Read
+author: project
+version: 1.0.0
 ---
 
 Run comprehensive security scans on the project.

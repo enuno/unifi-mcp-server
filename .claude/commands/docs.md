@@ -1,5 +1,13 @@
 ---
 description: Generate or update project documentation
+allowed-tools:
+  - Read
+  - Edit
+  - Grep
+  - Glob
+  - Bash(git:*)
+author: project
+version: 1.0.0
 ---
 
 Review and update project documentation.

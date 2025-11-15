@@ -1,5 +1,14 @@
 ---
 description: Set up the development environment
+allowed-tools:
+  - Bash(uv:*)
+  - Bash(pre-commit:*)
+  - Bash(pytest:*)
+  - Bash(cp:*)
+  - Read
+  - Write
+author: project
+version: 1.0.0
 ---
 
 Set up a complete development environment for the UniFi MCP Server project.

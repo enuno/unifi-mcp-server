@@ -1,5 +1,14 @@
 ---
 description: Auto-format all Python code
+allowed-tools:
+  - Bash(black:*)
+  - Bash(isort:*)
+  - Bash(ruff:*)
+  - Bash(/Users/elvis/Library/Python/3.12/bin/black:*)
+  - Bash(/Users/elvis/Library/Python/3.12/bin/isort:*)
+  - Bash(/Users/elvis/Library/Python/3.12/bin/ruff:*)
+author: project
+version: 1.0.0
 ---
 
 Automatically format all Python code in the project.

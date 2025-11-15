@@ -1,5 +1,13 @@
 ---
 description: Create a pull request with AI-generated description
+allowed-tools:
+  - Bash(git:*)
+  - Bash(gh:*)
+  - Read
+  - Grep
+  - Glob
+author: project
+version: 1.0.0
 ---
 
 Create a comprehensive pull request for the current branch.

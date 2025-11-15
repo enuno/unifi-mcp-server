@@ -1,5 +1,13 @@
 ---
 description: Run the full test suite with coverage reporting
+allowed-tools:
+  - Bash(pytest:*)
+  - Bash(python:*)
+  - Bash(python3:*)
+  - Bash(/Users/elvis/Library/Python/3.12/bin/pytest:*)
+  - Read
+author: project
+version: 1.0.0
 ---
 
 Run the project's test suite with coverage reporting.

@@ -1,5 +1,11 @@
 ---
 description: Clean build artifacts and cache files
+allowed-tools:
+  - Bash(find:*)
+  - Bash(rm:*)
+  - Bash(du:*)
+author: project
+version: 1.0.0
 ---
 
 Clean all build artifacts, cache files, and temporary files from the project.

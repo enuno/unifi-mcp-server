@@ -21,7 +21,6 @@ from ..models.traffic_flow import (
     TrafficFlow,
 )
 from ..utils import audit_action, get_logger, validate_confirmation
-from .firewall import create_firewall_rule
 
 logger = get_logger(__name__)
 

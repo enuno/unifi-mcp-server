@@ -1,6 +1,6 @@
 """Deep Packet Inspection (DPI) models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DPICategory(BaseModel):
@@ -13,11 +13,7 @@ class DPICategory(BaseModel):
     # Application count
     app_count: int | None = Field(None, description="Number of applications in this category")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class DPIApplication(BaseModel):
@@ -37,11 +33,7 @@ class DPIApplication(BaseModel):
     )
     ports: list[int] = Field(default_factory=list, description="Common ports used")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
 class Country(BaseModel):
@@ -55,8 +47,4 @@ class Country(BaseModel):
     # Regulatory information
     regulatory_domain: str | None = Field(None, description="Regulatory domain for wireless")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

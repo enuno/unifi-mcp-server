@@ -1,6 +1,6 @@
 """Access Control List (ACL) models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ACLRule(BaseModel):
@@ -38,8 +38,4 @@ class ACLRule(BaseModel):
     byte_count: int | None = Field(None, description="Bytes matched by this rule")
     packet_count: int | None = Field(None, description="Packets matched by this rule")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

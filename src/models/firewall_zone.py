@@ -1,6 +1,6 @@
 """Firewall zone models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FirewallZone(BaseModel):
@@ -25,8 +25,4 @@ class FirewallZone(BaseModel):
     # Metadata
     is_predefined: bool = Field(False, description="Whether this is a system-defined zone")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

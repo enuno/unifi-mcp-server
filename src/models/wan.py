@@ -1,6 +1,6 @@
 """WAN connection models."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WANConnection(BaseModel):
@@ -45,8 +45,4 @@ class WANConnection(BaseModel):
     # ISP information
     isp_name: str | None = Field(None, description="ISP name")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

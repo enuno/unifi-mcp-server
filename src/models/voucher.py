@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Voucher(BaseModel):
@@ -39,8 +39,4 @@ class Voucher(BaseModel):
     note: str | None = Field(None, description="Admin notes")
     admin_name: str | None = Field(None, description="Admin who created voucher")
 
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

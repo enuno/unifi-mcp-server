@@ -4,7 +4,7 @@ import asyncio
 import csv
 import json
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from io import StringIO
 from typing import Any
 from uuid import uuid4
@@ -354,7 +354,7 @@ async def stream_traffic_flows(
                 )
                 data = response.get("data", [])
 
-                current_time = datetime.now(UTC).isoformat()
+                current_time = datetime.now(timezone.utc).isoformat()
 
                 for flow_data in data:
                     flow = TrafficFlow(**flow_data)
@@ -441,7 +441,7 @@ async def get_connection_states(
 
         # Determine connection states
         states = []
-        current_time = datetime.now(UTC)
+        current_time = datetime.now(timezone.utc)
 
         for flow in flows:
             flow_obj = TrafficFlow(**flow)
@@ -610,7 +610,7 @@ async def block_flow_source_ip(
         # Calculate expiration
         expires_at = None
         if duration == "temporary" and expires_in_hours:
-            expires_at = (datetime.now(UTC) + timedelta(hours=expires_in_hours)).isoformat()
+            expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)).isoformat()
 
         # Create firewall rule to block this IP
         from .firewall import create_firewall_rule
@@ -626,7 +626,7 @@ async def block_flow_source_ip(
                 blocked_target=source_ip,
                 duration=duration,
                 expires_at=expires_at,
-                created_at=datetime.now(UTC).isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ).model_dump()
 
         # Create blocking rule
@@ -661,7 +661,7 @@ async def block_flow_source_ip(
             rule_id=rule_id,
             duration=duration,
             expires_at=expires_at,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         ).model_dump()
 
 
@@ -706,7 +706,7 @@ async def block_flow_destination_ip(
         # Calculate expiration
         expires_at = None
         if duration == "temporary" and expires_in_hours:
-            expires_at = (datetime.now(UTC) + timedelta(hours=expires_in_hours)).isoformat()
+            expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)).isoformat()
 
         # Create firewall rule to block this IP
         from .firewall import create_firewall_rule
@@ -722,7 +722,7 @@ async def block_flow_destination_ip(
                 blocked_target=destination_ip,
                 duration=duration,
                 expires_at=expires_at,
-                created_at=datetime.now(UTC).isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
             ).model_dump()
 
         # Create blocking rule
@@ -757,7 +757,7 @@ async def block_flow_destination_ip(
             rule_id=rule_id,
             duration=duration,
             expires_at=expires_at,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         ).model_dump()
 
 
@@ -801,7 +801,7 @@ async def block_flow_application(
             raise ValueError(f"No application ID found for flow {flow_id}")
 
         action_id = str(uuid4())
-        created_at = datetime.now(UTC).isoformat()
+        created_at = datetime.now(timezone.utc).isoformat()
 
         if dry_run:
             logger.info(f"[DRY RUN] Would block application {application_name} ({application_id})")

@@ -14,7 +14,6 @@ from src.tools.wifi import (
 )
 from src.utils.exceptions import ConfirmationRequiredError, ResourceNotFoundError
 
-
 # ============================================================================
 # Test Fixtures
 # ============================================================================

@@ -1,6 +1,6 @@
 """Integration tests for traffic flow features."""
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -46,7 +46,7 @@ def sample_flow():
         "bytes_received": 2048000,
         "packets_sent": 1000,
         "packets_received": 2000,
-        "start_time": datetime.now(UTC).isoformat(),
+        "start_time": datetime.now(timezone.utc).isoformat(),
         "end_time": None,
         "duration": None,
         "client_mac": "aa:bb:cc:dd:ee:ff",
@@ -117,7 +117,7 @@ async def test_get_client_flow_aggregation(settings, sample_flow):
                     {
                         "flow_id": "flow123",
                         "state": "active",
-                        "last_seen": datetime.now(UTC).isoformat(),
+                        "last_seen": datetime.now(timezone.utc).isoformat(),
                         "total_duration": None,
                         "termination_reason": None,
                     }

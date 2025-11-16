@@ -4,17 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.tools.wifi import (
-    create_wlan,
-    delete_wlan,
-    get_wlan_statistics,
-    list_wlans,
-    update_wlan,
-)
-from src.utils.exceptions import (
-    ResourceNotFoundError,
-    ValidationError,
-)
+from src.tools.wifi import create_wlan, delete_wlan, get_wlan_statistics, list_wlans, update_wlan
+from src.utils.exceptions import ResourceNotFoundError, ValidationError
 
 # ============================================================================
 # Test Fixtures

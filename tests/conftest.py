@@ -2,6 +2,19 @@
 
 import pytest
 
+from src.config import Settings
+
+
+@pytest.fixture
+def settings() -> Settings:
+    """Create test settings."""
+    return Settings(
+        api_key="test-api-key-XXZDILlzznocKT6JG7_s9VlMAW0HD8Ew",
+        api_type="cloud",
+        host="api.ui.com",
+        verify_ssl=True,
+    )
+
 
 @pytest.fixture(autouse=True)
 def reset_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.config import Settings
 from src.tools.wifi import (
     create_wlan,
     delete_wlan,
@@ -12,7 +11,11 @@ from src.tools.wifi import (
     list_wlans,
     update_wlan,
 )
-from src.utils.exceptions import ConfirmationRequiredError, ResourceNotFoundError
+from src.utils.exceptions import (
+    ConfirmationRequiredError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 
 # ============================================================================
 # Test Fixtures
@@ -473,7 +476,7 @@ async def test_get_wlan_statistics_no_data(settings):
 @pytest.mark.asyncio
 async def test_create_wlan_invalid_site_id(settings):
     """Test creating WLAN with invalid site ID."""
-    with pytest.raises(Exception):  # ValidationError or similar
+    with pytest.raises(ValidationError):
         await create_wlan(
             site_id="",  # Invalid empty site ID
             name="TestSSID",
@@ -486,33 +489,22 @@ async def test_create_wlan_invalid_site_id(settings):
 @pytest.mark.asyncio
 async def test_list_wlans_invalid_pagination(settings):
     """Test listing WLANs with invalid pagination parameters."""
-    with pytest.raises(Exception):  # ValidationError for negative values
+    with pytest.raises(ValidationError):
         await list_wlans(site_id="default", settings=settings, limit=-1, offset=-1)
 
 
 @pytest.mark.asyncio
 async def test_create_wlan_wpa_without_password(settings):
     """Test creating WPA network without password should fail."""
-    # This test depends on validation logic in create_wlan
-    # Adjust based on actual implementation
-    with patch("src.tools.wifi.UniFiClient") as mock_client:
-        mock_instance = AsyncMock()
-        mock_instance.__aenter__.return_value = mock_instance
-        mock_instance.is_authenticated = True
-        # Depending on implementation, this might raise ValidationError
-        # or API might reject it - adjust test accordingly
-        mock_instance.post.side_effect = Exception("Password required for WPA")
-        mock_client.return_value = mock_instance
-
-        with pytest.raises(Exception):
-            await create_wlan(
-                site_id="default",
-                name="TestSSID",
-                security="wpapsk",
-                # Missing password parameter
-                settings=settings,
-                confirm=True,
-            )
+    with pytest.raises(ValidationError):
+        await create_wlan(
+            site_id="default",
+            name="TestSSID",
+            security="wpapsk",
+            # Missing password parameter
+            settings=settings,
+            confirm=True,
+        )
 
 
 # ============================================================================

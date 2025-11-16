@@ -610,7 +610,9 @@ async def block_flow_source_ip(
         # Calculate expiration
         expires_at = None
         if duration == "temporary" and expires_in_hours:
-            expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)).isoformat()
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
+            ).isoformat()
 
         # Create firewall rule to block this IP
         from .firewall import create_firewall_rule
@@ -706,7 +708,9 @@ async def block_flow_destination_ip(
         # Calculate expiration
         expires_at = None
         if duration == "temporary" and expires_in_hours:
-            expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)).isoformat()
+            expires_at = (
+                datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
+            ).isoformat()
 
         # Create firewall rule to block this IP
         from .firewall import create_firewall_rule

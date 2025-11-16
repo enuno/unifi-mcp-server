@@ -6,14 +6,16 @@ from src.config import Settings
 
 
 @pytest.fixture
-def settings() -> Settings:
+def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Create test settings."""
-    return Settings(
-        api_key="test-api-key-XXZDILlzznocKT6JG7_s9VlMAW0HD8Ew",
-        api_type="cloud",
-        host="api.ui.com",
-        verify_ssl=True,
-    )
+    # Set environment variables for Settings to read
+    monkeypatch.setenv("UNIFI_API_KEY", "test-api-key-XXZDILlzznocKT6JG7_s9VlMAW0HD8Ew")
+    monkeypatch.setenv("UNIFI_API_TYPE", "cloud")
+    monkeypatch.setenv("UNIFI_HOST", "api.ui.com")
+    monkeypatch.setenv("UNIFI_VERIFY_SSL", "true")
+
+    # Settings will read from environment variables
+    return Settings()
 
 
 @pytest.fixture(autouse=True)

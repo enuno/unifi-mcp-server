@@ -398,7 +398,9 @@ async def test_delete_wlan_success(settings):
         mock_instance.delete.return_value = {"success": True}
         mock_client.return_value = mock_instance
 
-        result = await delete_wlan(site_id="default", wlan_id="wlan123", settings=settings, confirm=True)
+        result = await delete_wlan(
+            site_id="default", wlan_id="wlan123", settings=settings, confirm=True
+        )
 
         assert result["success"] is True
         mock_instance.delete.assert_called_once_with("/ea/sites/default/rest/wlanconf/wlan123")

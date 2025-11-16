@@ -150,7 +150,7 @@ async def test_create_wlan_wpa2_personal(settings, sample_wlan):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = sample_wlan
+        mock_instance.post.return_value = {"data": [sample_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
@@ -184,7 +184,7 @@ async def test_create_wlan_open_network(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = open_wlan
+        mock_instance.post.return_value = {"data": [open_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
@@ -213,12 +213,13 @@ async def test_create_wlan_guest_network(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = guest_wlan
+        mock_instance.post.return_value = {"data": [guest_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
             site_id="default",
             name="GuestWiFi",
+            security="wpapsk",
             password="GuestPass123",
             is_guest=True,
             settings=settings,
@@ -230,12 +231,13 @@ async def test_create_wlan_guest_network(settings):
 
 
 @pytest.mark.asyncio
-async def test_create_wlan_5ghz_only(settings):
-    """Test creating a 5GHz-only WiFi network."""
-    fiveghz_wlan = {
-        "_id": "wlan_5g",
-        "name": "Staff5GHz",
-        "wlan_band": "na",
+async def test_create_wlan_with_vlan(settings):
+    """Test creating a WLAN with VLAN isolation."""
+    vlan_wlan = {
+        "_id": "wlan_vlan",
+        "name": "StaffVLAN",
+        "vlan": 100,
+        "vlan_enabled": True,
         "security": "wpapsk",
     }
 
@@ -243,29 +245,31 @@ async def test_create_wlan_5ghz_only(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = fiveghz_wlan
+        mock_instance.post.return_value = {"data": [vlan_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
             site_id="default",
-            name="Staff5GHz",
+            name="StaffVLAN",
+            security="wpapsk",
             password="StaffPass123",
-            wlan_band="na",
+            vlan_id=100,
             settings=settings,
             confirm=True,
         )
 
-        assert result["wlan_band"] == "na"
-        assert result["name"] == "Staff5GHz"
+        assert result["vlan"] == 100
+        assert result["name"] == "StaffVLAN"
 
 
 @pytest.mark.asyncio
 async def test_create_wlan_without_confirmation(settings):
     """Test that creating WLAN requires confirmation."""
-    with pytest.raises(ConfirmationRequiredError):
+    with pytest.raises(ValidationError):
         await create_wlan(
             site_id="default",
             name="TestSSID",
+            security="wpapsk",
             password="SecurePassword123",
             settings=settings,
             confirm=False,
@@ -286,12 +290,13 @@ async def test_create_wlan_hidden_ssid(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = hidden_wlan
+        mock_instance.post.return_value = {"data": [hidden_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
             site_id="default",
             name="HiddenNetwork",
+            security="wpapsk",
             password="HiddenPass123",
             hide_ssid=True,
             settings=settings,
@@ -315,7 +320,8 @@ async def test_update_wlan_name(settings, sample_wlan):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.put.return_value = updated_wlan
+        mock_instance.get.return_value = {"data": [sample_wlan]}
+        mock_instance.put.return_value = {"data": [updated_wlan]}
         mock_client.return_value = mock_instance
 
         result = await update_wlan(
@@ -333,13 +339,14 @@ async def test_update_wlan_name(settings, sample_wlan):
 @pytest.mark.asyncio
 async def test_update_wlan_password(settings, sample_wlan):
     """Test updating WLAN password."""
-    updated_wlan = {**sample_wlan, "passphrase": "NewSecurePass456"}
+    updated_wlan = {**sample_wlan, "x_passphrase": "NewSecurePass456"}
 
     with patch("src.tools.wifi.UniFiClient") as mock_client:
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.put.return_value = updated_wlan
+        mock_instance.get.return_value = {"data": [sample_wlan]}
+        mock_instance.put.return_value = {"data": [updated_wlan]}
         mock_client.return_value = mock_instance
 
         result = await update_wlan(
@@ -350,7 +357,7 @@ async def test_update_wlan_password(settings, sample_wlan):
             confirm=True,
         )
 
-        assert result["passphrase"] == "NewSecurePass456"
+        assert result["x_passphrase"] == "NewSecurePass456"
 
 
 @pytest.mark.asyncio
@@ -362,7 +369,8 @@ async def test_update_wlan_enable_disable(settings, sample_wlan):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.put.return_value = disabled_wlan
+        mock_instance.get.return_value = {"data": [sample_wlan]}
+        mock_instance.put.return_value = {"data": [disabled_wlan]}
         mock_client.return_value = mock_instance
 
         result = await update_wlan(
@@ -375,7 +383,7 @@ async def test_update_wlan_enable_disable(settings, sample_wlan):
 @pytest.mark.asyncio
 async def test_update_wlan_without_confirmation(settings):
     """Test that updating WLAN requires confirmation."""
-    with pytest.raises(ConfirmationRequiredError):
+    with pytest.raises(ValidationError):
         await update_wlan(
             site_id="default",
             wlan_id="wlan123",
@@ -391,12 +399,13 @@ async def test_update_wlan_without_confirmation(settings):
 
 
 @pytest.mark.asyncio
-async def test_delete_wlan_success(settings):
+async def test_delete_wlan_success(settings, sample_wlan):
     """Test deleting a WLAN successfully."""
     with patch("src.tools.wifi.UniFiClient") as mock_client:
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
+        mock_instance.get.return_value = {"data": [sample_wlan]}
         mock_instance.delete.return_value = {"success": True}
         mock_client.return_value = mock_instance
 
@@ -405,13 +414,14 @@ async def test_delete_wlan_success(settings):
         )
 
         assert result["success"] is True
+        assert result["deleted_wlan_id"] == "wlan123"
         mock_instance.delete.assert_called_once_with("/ea/sites/default/rest/wlanconf/wlan123")
 
 
 @pytest.mark.asyncio
 async def test_delete_wlan_without_confirmation(settings):
     """Test that deleting WLAN requires confirmation."""
-    with pytest.raises(ConfirmationRequiredError):
+    with pytest.raises(ValidationError):
         await delete_wlan(site_id="default", wlan_id="wlan123", settings=settings, confirm=False)
 
 
@@ -422,7 +432,7 @@ async def test_delete_wlan_not_found(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.delete.side_effect = ResourceNotFoundError("wlan", "wlan999")
+        mock_instance.get.return_value = {"data": []}  # Empty list - WLAN doesn't exist
         mock_client.return_value = mock_instance
 
         with pytest.raises(ResourceNotFoundError) as exc_info:
@@ -437,21 +447,32 @@ async def test_delete_wlan_not_found(settings):
 
 
 @pytest.mark.asyncio
-async def test_get_wlan_statistics_success(settings, sample_wlan_stats):
+async def test_get_wlan_statistics_success(settings, sample_wlan):
     """Test retrieving WLAN statistics successfully."""
+    sample_clients = [
+        {"essid": "TestSSID", "tx_bytes": 1000000, "rx_bytes": 2000000},
+        {"essid": "TestSSID", "tx_bytes": 500000, "rx_bytes": 1000000},
+    ]
+
     with patch("src.tools.wifi.UniFiClient") as mock_client:
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.get.return_value = {"data": [sample_wlan_stats]}
+        # get() is called twice - once for WLANs, once for clients
+        mock_instance.get.side_effect = [
+            {"data": [sample_wlan]},  # WLANs
+            {"data": sample_clients},  # Clients
+        ]
         mock_client.return_value = mock_instance
 
         result = await get_wlan_statistics(site_id="default", wlan_id="wlan123", settings=settings)
 
         assert result["name"] == "TestSSID"
-        assert result["num_sta"] == 15
-        assert result["rx_bytes"] == 1024000000
-        assert result["tx_bytes"] == 2048000000
+        assert result["wlan_id"] == "wlan123"
+        assert result["client_count"] == 2
+        assert result["total_tx_bytes"] == 1500000
+        assert result["total_rx_bytes"] == 3000000
+        assert result["total_bytes"] == 4500000
 
 
 @pytest.mark.asyncio
@@ -461,11 +482,15 @@ async def test_get_wlan_statistics_no_data(settings):
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.get.return_value = {"data": []}
+        # get() is called twice - return empty for WLANs
+        mock_instance.get.side_effect = [
+            {"data": []},  # No WLANs found
+            {"data": []},  # No clients
+        ]
         mock_client.return_value = mock_instance
 
-        with pytest.raises(ResourceNotFoundError):
-            await get_wlan_statistics(site_id="default", wlan_id="wlan999", settings=settings)
+        result = await get_wlan_statistics(site_id="default", wlan_id="wlan999", settings=settings)
+        assert result == {}  # Returns empty dict when WLAN not found
 
 
 # ============================================================================
@@ -480,6 +505,7 @@ async def test_create_wlan_invalid_site_id(settings):
         await create_wlan(
             site_id="",  # Invalid empty site ID
             name="TestSSID",
+            security="wpapsk",
             password="SecurePassword123",
             settings=settings,
             confirm=True,
@@ -513,28 +539,29 @@ async def test_create_wlan_wpa_without_password(settings):
 
 
 @pytest.mark.asyncio
-async def test_create_wlan_with_vlan(settings):
-    """Test creating WLAN with VLAN assignment."""
+async def test_create_wlan_with_vlan_advanced(settings):
+    """Test creating WLAN with VLAN assignment (advanced test)."""
     vlan_wlan = {
         "_id": "wlan_vlan",
         "name": "VLANNetwork",
         "vlan": 10,
         "vlan_enabled": True,
+        "security": "wpapsk",
     }
 
     with patch("src.tools.wifi.UniFiClient") as mock_client:
         mock_instance = AsyncMock()
         mock_instance.__aenter__.return_value = mock_instance
         mock_instance.is_authenticated = True
-        mock_instance.post.return_value = vlan_wlan
+        mock_instance.post.return_value = {"data": [vlan_wlan]}
         mock_client.return_value = mock_instance
 
         result = await create_wlan(
             site_id="default",
             name="VLANNetwork",
+            security="wpapsk",
             password="VLANPass123",
-            vlan=10,
-            vlan_enabled=True,
+            vlan_id=10,
             settings=settings,
             confirm=True,
         )

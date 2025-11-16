@@ -12,7 +12,6 @@ from src.tools.wifi import (
     update_wlan,
 )
 from src.utils.exceptions import (
-    ConfirmationRequiredError,
     ResourceNotFoundError,
     ValidationError,
 )

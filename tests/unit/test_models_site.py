@@ -1,6 +1,7 @@
 """Unit tests for Site model with Cloud and Local API compatibility."""
 
 import pytest
+from pydantic import ValidationError
 
 from src.models.site import Site
 

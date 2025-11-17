@@ -159,7 +159,7 @@ class TestSiteMixedAPI:
     def test_unknown_site_fallback(self):
         """Test fallback when no ID fields are present."""
         # This should still raise validation error because id is required
-        with pytest.raises(ValueError, match="Field required"):
+        with pytest.raises(ValidationError, match="Field required"):
             Site(name="Just a name")
 
 

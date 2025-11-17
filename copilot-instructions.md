@@ -30,10 +30,10 @@ async def delete_firewall_rule(
 ) -> Dict[str, Any]:
     if not confirm and not dry_run:
         raise ValueError("Must set confirm=True or dry_run=True")
-    
+
     if dry_run:
         return {"status": "preview", "action": "would_delete", "rule_id": rule_id}
-    
+
     # Log to audit.log before execution
     logger.info(f"Deleting firewall rule {rule_id} in site {site_id}")
     # ... actual deletion
@@ -56,7 +56,7 @@ class NetworkConfig(BaseModel):
     vlan_id: Annotated[int, Field(ge=1, le=4094)]
     cidr: str
     dhcp_enabled: bool = True
-    
+
     @field_validator('cidr')
     @classmethod
     def validate_cidr(cls, v: str) -> str:
@@ -80,11 +80,11 @@ Example:
 async def fetch_multiple_sites(site_ids: list[str]) -> list[dict]:
     """Fetch multiple sites concurrently with rate limiting."""
     semaphore = asyncio.Semaphore(5)  # Max 5 concurrent requests
-    
+
     async def fetch_one(site_id: str) -> dict:
         async with semaphore:
             return await api.get_site(site_id)
-    
+
     return await asyncio.gather(*[fetch_one(sid) for sid in site_ids])
 ```
 
@@ -101,47 +101,47 @@ async def tool_name(
 ) -> ToolResponse:
     """
     Brief description.
-    
+
     Args:
         site_id: UniFi site identifier (e.g., 'default')
         dry_run: Preview changes without applying them
         confirm: Required for mutating operations (must be True)
-    
+
     Returns:
         Dictionary containing operation results
-        
+
     Raises:
         ValueError: For invalid parameters or missing confirmation
         UniFiAPIError: For API-related errors
     """
     # 1. Input validation
     validate_site_id(site_id)
-    
+
     # 2. Safety check for mutating operations
     if is_mutating_operation and not confirm and not dry_run:
         raise ValueError("Must set confirm=True or dry_run=True")
-    
+
     # 3. Cache check (if applicable)
     if cached_data := await cache.get(cache_key):
         return cached_data
-    
+
     # 4. Dry-run preview
     if dry_run:
         return {"status": "preview", "action": "would_perform", ...}
-    
+
     # 5. Audit logging
     logger.info(f"Executing {tool_name} for site {site_id}")
-    
+
     # 6. API call with error handling
     try:
         result = await api.call(...)
     except UniFiAPIError as e:
         logger.error(f"API error: {e}")
         raise
-    
+
     # 7. Cache invalidation (if applicable)
     await cache.invalidate_related(cache_keys)
-    
+
     # 8. Return typed response
     return ToolResponse.model_validate(result)
 ```
@@ -163,7 +163,7 @@ async def test_create_network_success():
     """Test successful network creation."""
     mock_api = AsyncMock()
     mock_api.create_network.return_value = {"_id": "123", "name": "TestNet"}
-    
+
     with patch('src.api.client.UniFiAPI', return_value=mock_api):
         result = await create_network(
             site_id="default",
@@ -172,7 +172,7 @@ async def test_create_network_success():
             cidr="10.0.100.0/24",
             confirm=True
         )
-    
+
     assert result["name"] == "TestNet"
     mock_api.create_network.assert_called_once()
 
@@ -252,7 +252,7 @@ def validate_site_id(site_id: str) -> None:
 def mask_sensitive_data(data: dict) -> dict:
     """Mask passwords, API keys, and other sensitive fields."""
     sensitive_keys = {"password", "api_key", "x_password", "secret"}
-    
+
     return {
         k: "***REDACTED***" if k.lower() in sensitive_keys else v
         for k, v in data.items()
@@ -270,7 +270,7 @@ try:
 except Exception as e:
     # Log full error internally
     logger.error(f"Internal error: {e}", exc_info=True)
-    
+
     # Return sanitized error to user
     raise UniFiAPIError("Failed to complete operation. Check logs for details.")
 ```
@@ -298,10 +298,10 @@ async def invalidate_network_cache(site_id: str, network_id: str = None) -> None
         f"networks:{site_id}:all",
         f"sites:{site_id}:networks",
     ]
-    
+
     if network_id:
         patterns.append(f"networks:{site_id}:{network_id}")
-    
+
     await cache.delete_many(patterns)
 ```
 
@@ -324,13 +324,13 @@ async def create_firewall_rule(
 ) -> Dict[str, Any]:
     """
     Create a new firewall rule in the UniFi controller.
-    
+
     This tool creates Layer 3/4 firewall rules with support for:
     - Source/destination IP filtering (CIDR notation)
     - Protocol filtering (TCP, UDP, ICMP, or all)
     - Port-based filtering
     - Accept/Drop/Reject actions
-    
+
     Args:
         site_id: UniFi site identifier (e.g., 'default')
         name: Human-readable rule name (max 64 chars)
@@ -342,7 +342,7 @@ async def create_firewall_rule(
         enabled: Whether the rule is active (default: True)
         confirm: Must be True to create the rule (safety check)
         dry_run: Preview the rule without creating it
-    
+
     Returns:
         Dictionary containing:
             - _id: Unique rule identifier
@@ -350,11 +350,11 @@ async def create_firewall_rule(
             - action: Configured action
             - enabled: Rule status
             - ruleset: Associated ruleset name
-    
+
     Raises:
         ValueError: If parameters are invalid or confirm=True not set
         UniFiAPIError: If the UniFi API request fails
-    
+
     Example:
         >>> result = await create_firewall_rule(
         ...     site_id="default",
@@ -464,7 +464,7 @@ class ErrorResponse(BaseModel):
     error: str
     error_type: str
     details: Optional[Dict[str, Any]] = None
-    
+
     @classmethod
     def validation_error(cls, field: str, message: str) -> "ErrorResponse":
         return cls(
@@ -483,10 +483,10 @@ async def get_device_resource(uri: str) -> Resource:
     match = re.match(r"sites://([^/]+)/devices/([^/]+)", uri)
     if not match:
         raise ValueError(f"Invalid URI format: {uri}")
-    
+
     site_id, device_id = match.groups()
     device = await api.get_device(site_id, device_id)
-    
+
     return Resource(
         uri=uri,
         name=device["name"],
@@ -501,11 +501,11 @@ from asyncio import Semaphore
 
 class RateLimiter:
     """Rate limiter using token bucket algorithm."""
-    
+
     def __init__(self, max_calls: int, period: float):
         self.semaphore = Semaphore(max_calls)
         self.period = period
-    
+
     async def acquire(self):
         async with self.semaphore:
             await asyncio.sleep(self.period / self.semaphore._value)
@@ -523,14 +523,14 @@ async def batch_restart_devices(
     """Restart multiple devices concurrently with rate limiting."""
     if not confirm:
         raise ValueError("Must set confirm=True")
-    
+
     # Limit to 5 concurrent restarts
     semaphore = asyncio.Semaphore(5)
-    
+
     async def restart_one(device_id: str) -> Dict[str, Any]:
         async with semaphore:
             return await restart_device(site_id, device_id, confirm=True)
-    
+
     return await asyncio.gather(
         *[restart_one(did) for did in device_ids],
         return_exceptions=True  # Don't fail entire batch on single error
@@ -563,10 +563,10 @@ for device_id in device_ids:
    ```bash
    # Run all pre-commit checks
    pre-commit run --all-files
-   
+
    # Type check
    mypy src/
-   
+
    # Security scan
    bandit -r src/
    ```

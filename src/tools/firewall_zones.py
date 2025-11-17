@@ -392,9 +392,7 @@ async def unassign_network_from_zone(
         payload = {"networks": updated_networks}
 
         if dry_run:
-            logger.info(
-                f"[DRY RUN] Would remove network {network_id} from zone {zone_id}"
-            )
+            logger.info(f"[DRY RUN] Would remove network {network_id} from zone {zone_id}")
             return {"dry_run": True, "payload": payload}
 
         await client.put(

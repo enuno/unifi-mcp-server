@@ -376,7 +376,9 @@ async def delete_zbf_policy(
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete policy from {source_zone_id} to {destination_zone_id}")
+            logger.info(
+                f"[DRY RUN] Would delete policy from {source_zone_id} to {destination_zone_id}"
+            )
             return {
                 "dry_run": True,
                 "source_zone_id": source_zone_id,

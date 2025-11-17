@@ -15,6 +15,7 @@ permissions:
   contents: write
   packages: write
   id-token: write
+  discussions: write
 
 env:
   REGISTRY: ghcr.io
@@ -146,8 +147,7 @@ jobs:
           labels: ${{ steps.docker-meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-        continue-on-error: true  # Don't fail if Dockerfile doesn't exist yet
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8
 
   create-release:
     name: Create GitHub Release
@@ -200,6 +200,8 @@ jobs:
           **Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${{ steps.version.outputs.version }}
 
           ## Docker Image
+
+          Multi-architecture support: amd64, arm64, arm/v7, arm64/v8
 
           \`\`\`bash
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
@@ -255,10 +257,133 @@ jobs:
           skip-existing: true
         continue-on-error: true  # Don't fail if package not configured yet
 
+  announce:
+    name: Create Release Announcement
+    runs-on: ubuntu-latest
+    needs: create-release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      discussions: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" =~ ^refs/tags/(.*)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+          else
+            VERSION="latest"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate announcement content
+        id: announcement
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG="Initial release of UniFi MCP Server"
+          else
+            # Get commit messages and format them
+            CHANGELOG=$(git log $PREV_TAG..HEAD --pretty=format:"- %s" --no-merges | head -10)
+          fi
+
+          # Create announcement body
+          cat > announcement.md << 'EOF'
+          # 🎉 Release ${{ steps.version.outputs.version }}
+
+          We're excited to announce the release of UniFi MCP Server ${{ steps.version.outputs.version }}!
+
+          ## 📋 What's Changed
+
+          $CHANGELOG
+
+          [View full changelog](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }})
+
+          ## 🐳 Docker Installation
+
+          Multi-architecture support: **amd64**, **arm64**, **arm/v7**, **arm64/v8**
+
+          ```bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          ```
+
+          Or using Docker Compose:
+
+          ```yaml
+          services:
+            unifi-mcp:
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+              environment:
+                - UNIFI_HOST=your-controller-host
+                - UNIFI_USERNAME=your-username
+                - UNIFI_PASSWORD=your-password
+          ```
+
+          ## 📦 Python Installation
+
+          ### Via pip
+
+          ```bash
+          pip install unifi-mcp-server==${{ steps.version.outputs.version_number }}
+          ```
+
+          ### Via uv (recommended)
+
+          ```bash
+          uv pip install unifi-mcp-server==${{ steps.version.outputs.version_number }}
+          ```
+
+          ## 📚 Documentation
+
+          - [Installation Guide](https://github.com/${{ github.repository }}#installation)
+          - [Configuration](https://github.com/${{ github.repository }}#configuration)
+          - [API Documentation](https://github.com/${{ github.repository }}/blob/main/API.md)
+
+          ## 🔗 Links
+
+          - [Release Notes](https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.version }})
+          - [Docker Hub](https://${{ env.REGISTRY }}/${{ env.IMAGE_NAME }})
+          - [PyPI Package](https://pypi.org/project/unifi-mcp-server)
+
+          ---
+
+          💬 Questions or feedback? Join the discussion below!
+          EOF
+
+      - name: Create GitHub Discussion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            /repos/${{ github.repository }}/discussions \
+            -f title="Release ${{ steps.version.outputs.version }}" \
+            -f body="$(cat announcement.md)" \
+            -f category_id="$(gh api graphql -f query='
+              query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                  discussionCategories(first: 10) {
+                    nodes {
+                      id
+                      name
+                    }
+                  }
+                }
+              }' -f owner=${{ github.repository_owner }} -f repo=${{ github.event.repository.name }} --jq '.data.repository.discussionCategories.nodes[] | select(.name=="Announcements") | .id')"
+
   notify:
     name: Notification
     runs-on: ubuntu-latest
-    needs: [create-release, publish-pypi]
+    needs: [create-release, publish-pypi, announce]
     if: always()
     steps:
       - name: Create release summary
@@ -271,3 +396,4 @@ jobs:
           echo "| Docker Build | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| GitHub Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| PyPI Publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Announcement | ${{ needs.announce.result }} |" >> $GITHUB_STEP_SUMMARY

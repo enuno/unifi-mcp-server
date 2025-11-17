@@ -45,7 +45,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
 - **Comprehensive Testing**: 179 unit tests with 34% coverage (target: 80%)
 - **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds
-- **Multi-Architecture**: Docker images for amd64 and arm64
+- **Multi-Architecture**: Docker images for amd64, arm64, arm/v7 (32-bit ARM), and arm64/v8
 
 ## Quick Start
 

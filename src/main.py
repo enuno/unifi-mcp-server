@@ -1054,6 +1054,65 @@ async def get_zone_networks(site_id: str, zone_id: str) -> list[dict]:
     return await firewall_zones_tools.get_zone_networks(site_id, zone_id, settings)
 
 
+@mcp.tool()
+async def delete_firewall_zone(
+    site_id: str,
+    zone_id: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a firewall zone (requires confirm=True)."""
+    return await firewall_zones_tools.delete_firewall_zone(
+        site_id, zone_id, settings, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def unassign_network_from_zone(
+    site_id: str,
+    zone_id: str,
+    network_id: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Remove a network from a firewall zone (requires confirm=True)."""
+    return await firewall_zones_tools.unassign_network_from_zone(
+        site_id, zone_id, network_id, settings, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def get_zone_statistics(site_id: str, zone_id: str) -> dict:
+    """Get traffic statistics for a firewall zone."""
+    return await firewall_zones_tools.get_zone_statistics(site_id, zone_id, settings)
+
+
+@mcp.tool()
+async def get_zone_matrix_policy(
+    site_id: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+) -> dict:
+    """Get a specific zone-to-zone policy."""
+    return await zbf_matrix_tools.get_zone_matrix_policy(
+        site_id, source_zone_id, destination_zone_id, settings
+    )
+
+
+@mcp.tool()
+async def delete_zbf_policy(
+    site_id: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a zone-to-zone policy (requires confirm=True)."""
+    return await zbf_matrix_tools.delete_zbf_policy(
+        site_id, source_zone_id, destination_zone_id, settings, confirm, dry_run
+    )
+
+
 # Traffic Flows Tools
 @mcp.tool()
 async def get_traffic_flows(

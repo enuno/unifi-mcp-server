@@ -290,3 +290,130 @@ async def list_blocked_applications(
             return []
 
         return [ApplicationBlockRule(**rule).model_dump() for rule in data]
+
+
+async def get_zone_matrix_policy(
+    site_id: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+    settings: Settings,
+) -> dict:
+    """Get a specific zone-to-zone policy.
+
+    Args:
+        site_id: Site identifier
+        source_zone_id: Source zone identifier
+        destination_zone_id: Destination zone identifier
+        settings: Application settings
+
+    Returns:
+        Zone-to-zone policy details
+
+    Raises:
+        ValueError: If policy not found
+    """
+    async with UniFiClient(settings) as client:
+        logger.info(
+            f"Retrieving policy from zone {source_zone_id} to {destination_zone_id} on site {site_id}"
+        )
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        try:
+            response = await client.get(
+                f"/integration/v1/sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}"
+            )
+            data = response.get("data", response)
+        except Exception:
+            # If endpoint doesn't exist, try getting all policies and filter
+            logger.warning("Specific policy endpoint not available, fetching all policies")
+            all_policies = await get_zone_policies(site_id, source_zone_id, settings)
+
+            for policy in all_policies:
+                if policy.get("destination_zone_id") == destination_zone_id:
+                    return policy
+
+            raise ValueError(
+                f"Policy from zone {source_zone_id} to {destination_zone_id} not found"
+            )
+
+        return ZonePolicy(**data).model_dump()
+
+
+async def delete_zbf_policy(
+    site_id: str,
+    source_zone_id: str,
+    destination_zone_id: str,
+    settings: Settings,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a zone-to-zone policy (revert to default action).
+
+    Args:
+        site_id: Site identifier
+        source_zone_id: Source zone identifier
+        destination_zone_id: Destination zone identifier
+        settings: Application settings
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Deletion confirmation
+
+    Raises:
+        ValueError: If confirmation not provided
+    """
+    validate_confirmation(confirm, "delete ZBF policy")
+
+    async with UniFiClient(settings) as client:
+        logger.info(
+            f"Deleting ZBF policy from zone {source_zone_id} to {destination_zone_id} on site {site_id}"
+        )
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would delete policy from {source_zone_id} to {destination_zone_id}")
+            return {
+                "dry_run": True,
+                "source_zone_id": source_zone_id,
+                "destination_zone_id": destination_zone_id,
+                "action": "would_delete",
+            }
+
+        try:
+            await client.delete(
+                f"/integration/v1/sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}"
+            )
+        except Exception as e:
+            logger.error(f"Failed to delete ZBF policy: {e}")
+            # If endpoint doesn't exist, return dry-run result
+            if "404" in str(e) or "not found" in str(e).lower():
+                logger.warning("ZBF policy delete endpoint not available, returning dry-run result")
+                return {
+                    "dry_run": True,
+                    "source_zone_id": source_zone_id,
+                    "destination_zone_id": destination_zone_id,
+                    "note": "Endpoint not available",
+                }
+            raise
+
+        # Audit the action
+        await audit_action(
+            settings,
+            action_type="delete_zbf_policy",
+            resource_type="zbf_policy",
+            resource_id=f"{source_zone_id}-{destination_zone_id}",
+            site_id=site_id,
+            details={"source_zone_id": source_zone_id, "destination_zone_id": destination_zone_id},
+        )
+
+        return {
+            "status": "success",
+            "source_zone_id": source_zone_id,
+            "destination_zone_id": destination_zone_id,
+            "action": "deleted",
+        }

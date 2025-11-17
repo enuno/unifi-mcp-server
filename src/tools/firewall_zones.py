@@ -293,3 +293,157 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
                 )
 
         return networks
+
+
+async def delete_firewall_zone(
+    site_id: str,
+    zone_id: str,
+    settings: Settings,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a firewall zone.
+
+    Args:
+        site_id: Site identifier
+        zone_id: Zone identifier to delete
+        settings: Application settings
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Deletion confirmation
+
+    Raises:
+        ValueError: If confirmation not provided
+    """
+    validate_confirmation(confirm, "delete firewall zone")
+
+    async with UniFiClient(settings) as client:
+        logger.info(f"Deleting firewall zone {zone_id} from site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would delete firewall zone {zone_id}")
+            return {"dry_run": True, "zone_id": zone_id, "action": "would_delete"}
+
+        await client.delete(f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}")
+
+        # Audit the action
+        await audit_action(
+            settings,
+            action_type="delete_firewall_zone",
+            resource_type="firewall_zone",
+            resource_id=zone_id,
+            site_id=site_id,
+            details={"zone_id": zone_id},
+        )
+
+        return {"status": "success", "zone_id": zone_id, "action": "deleted"}
+
+
+async def unassign_network_from_zone(
+    site_id: str,
+    zone_id: str,
+    network_id: str,
+    settings: Settings,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Remove a network from a firewall zone.
+
+    Args:
+        site_id: Site identifier
+        zone_id: Zone identifier
+        network_id: Network identifier to remove
+        settings: Application settings
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Network unassignment confirmation
+
+    Raises:
+        ValueError: If confirmation not provided or network not in zone
+    """
+    validate_confirmation(confirm, "unassign network from zone")
+
+    async with UniFiClient(settings) as client:
+        logger.info(f"Unassigning network {network_id} from zone {zone_id} on site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        # Get current zone configuration
+        zone_response = await client.get(
+            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}"
+        )
+        zone_data = zone_response.get("data", {})
+        current_networks = zone_data.get("networks", [])
+
+        if network_id not in current_networks:
+            raise ValueError(f"Network {network_id} is not assigned to zone {zone_id}")
+
+        # Remove network from list
+        updated_networks = [nid for nid in current_networks if nid != network_id]
+
+        payload = {"networks": updated_networks}
+
+        if dry_run:
+            logger.info(
+                f"[DRY RUN] Would remove network {network_id} from zone {zone_id}"
+            )
+            return {"dry_run": True, "payload": payload}
+
+        await client.put(
+            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}",
+            json_data=payload,
+        )
+
+        # Audit the action
+        await audit_action(
+            settings,
+            action_type="unassign_network_from_zone",
+            resource_type="zone_network_assignment",
+            resource_id=network_id,
+            site_id=site_id,
+            details={"zone_id": zone_id, "network_id": network_id},
+        )
+
+        return {
+            "status": "success",
+            "zone_id": zone_id,
+            "network_id": network_id,
+            "action": "unassigned",
+        }
+
+
+async def get_zone_statistics(
+    site_id: str,
+    zone_id: str,
+    settings: Settings,
+) -> dict:
+    """Get traffic statistics for a firewall zone.
+
+    Args:
+        site_id: Site identifier
+        zone_id: Zone identifier
+        settings: Application settings
+
+    Returns:
+        Zone traffic statistics including bandwidth usage and connection counts
+    """
+    async with UniFiClient(settings) as client:
+        logger.info(f"Fetching statistics for zone {zone_id} on site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        response = await client.get(
+            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/statistics"
+        )
+        data = response.get("data", response)
+
+        return data

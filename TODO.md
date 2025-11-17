@@ -1,10 +1,12 @@
 # UniFi MCP Server - Multi-Phase Development TODO
 
-**Last Updated**: 2025-11-08
-**Current Version**: v0.1.0 (Complete ✅)
-**Next Release**: v0.2.0 (In Progress 🚧)
+**Last Updated**: 2025-11-17
+**Current Version**: v0.1.4 (Complete ✅)
+**Next Release**: v0.2.0 (In Progress 🚧 - Planned Q1 2025)
 
 This document provides a comprehensive, phase-by-phase breakdown of development tasks based on the [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
+
+**📋 Version Correction Notice**: v0.2.0 was published prematurely on 2025-11-17. v0.1.4 contains the same code with the correct version number. The true v0.2.0 release with all planned features is targeted for Q1 2025.
 
 ---
 

@@ -7,6 +7,12 @@
 
 A Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
 
+## 📋 Version Notice
+
+**Current Stable Release**: v0.1.4
+
+*Note: v0.2.0 was published prematurely and should not be used. Please use v0.1.4, which contains the same code with the correct version number. The true v0.2.0 milestone release is planned for Q1 2025 and will include Zone-Based Firewall, Traffic Flow monitoring, and other major features. See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for details.*
+
 ## Features
 
 ### Core Capabilities

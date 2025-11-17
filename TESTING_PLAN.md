@@ -1,5 +1,7 @@
 # UniFi MCP Server - Testing Coverage Plan
 
+**📋 Version Correction Notice**: v0.2.0 was published prematurely on 2025-11-17. The current stable release is v0.1.4 (identical code). References to "v0.2.0 features" in this document refer to features being developed for the true v0.2.0 release targeted for Q1 2025.
+
 ## Executive Summary
 
 This document outlines the comprehensive testing strategy for the UniFi MCP Server, with a focus on achieving 80%+ code coverage across all modules. As of November 2025, significant progress has been made on new v0.2.0 features, with a current overall coverage of **34.10%**.

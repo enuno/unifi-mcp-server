@@ -1,6 +1,6 @@
 [project]
 name = "unifi-mcp-server"
-version = "0.2.0"
+version = "0.1.4"
 description = "A Model Context Protocol (MCP) server for UniFi Network API"
 authors = [
     {name = "Elvis", email = "elvis@homelab.local"}

@@ -1,5 +1,7 @@
 # UniFi MCP Server Development Plan
 
+**📋 Version Correction Notice**: v0.2.0 was published prematurely on 2025-11-17. The current stable release is v0.1.4 (identical code). The true v0.2.0 with all planned features is targeted for Q1 2025.
+
 ## 1. Executive Summary
 
 This document outlines the strategic roadmap for the modernization of the UniFi MCP Server. The primary goal is to align the server's capabilities with the latest advancements in the UniFi ecosystem, ensuring its continued relevance and value to users.

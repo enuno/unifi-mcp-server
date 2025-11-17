@@ -131,6 +131,7 @@ cython_debug/
 .settings/
 *.sublime-project
 *.sublime-workspace
+coverage.json
 
 # OS Files
 .DS_Store

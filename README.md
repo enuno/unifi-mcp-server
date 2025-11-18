@@ -21,6 +21,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 - **Network Configuration**: Create, update, and delete networks, VLANs, and subnets with DHCP configuration
 - **Client Management**: Query, block, unblock, and reconnect clients
 - **Firewall Rules**: Create, update, and delete firewall rules with traffic filtering
+- **Zone-Based Firewall (ZBF)**: Modern zone-based security with zone management, policy matrix, and application blocking (UniFi Network 9.0+)
 - **WiFi/SSID Management**: Create and manage wireless networks with WPA2/WPA3, guest networks, and VLAN isolation
 - **Port Forwarding**: Configure port forwarding rules for external access
 - **DPI Statistics**: Deep Packet Inspection analytics for bandwidth usage by application and category
@@ -49,7 +50,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 
 - **Async Support**: Built with async/await for high performance and concurrency
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
-- **Comprehensive Testing**: 179 unit tests with 34% coverage (target: 80%)
+- **Comprehensive Testing**: 213 unit tests with 37% coverage (target: 80%)
 - **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds
 - **Multi-Architecture**: Docker images for amd64, arm64, arm/v7 (32-bit ARM), and arm64/v8
 
@@ -122,7 +123,7 @@ docker-compose down
 
 **Included Services:**
 
-- **UniFi MCP Server**: Main MCP server with 40 tools
+- **UniFi MCP Server**: Main MCP server with 55 tools
 - **MCP Toolbox**: Web-based analytics dashboard (port 8080)
 - **Redis**: High-performance caching layer
 
@@ -328,6 +329,30 @@ async def main():
         gb = app['total_bytes'] / 1024**3
         print(f"{app['application']}: {gb:.2f} GB")
 
+    # Create Zone-Based Firewall zones (UniFi Network 9.0+)
+    lan_zone = await mcp.call_tool("create_firewall_zone", {
+        "site_id": "default",
+        "name": "LAN",
+        "description": "Trusted local network",
+        "confirm": True
+    })
+
+    iot_zone = await mcp.call_tool("create_firewall_zone", {
+        "site_id": "default",
+        "name": "IoT",
+        "description": "Internet of Things devices",
+        "confirm": True
+    })
+
+    # Set zone-to-zone policy (LAN can access IoT, but IoT cannot access LAN)
+    await mcp.call_tool("update_zbf_policy", {
+        "site_id": "default",
+        "source_zone_id": lan_zone["_id"],
+        "destination_zone_id": iot_zone["_id"],
+        "action": "accept",
+        "confirm": True
+    })
+
 asyncio.run(main())
 ```
 
@@ -378,10 +403,10 @@ pytest -m integration
 
 **Current Test Coverage**:
 
-- **Overall**: 34.10% (179 tests passing)
-- **New v0.2.0 Models**: 100% (36 tests)
-- **ZBF Tools**: 82.68% (22 tests)
+- **Overall**: 37.29% (213 tests passing)
+- **ZBF Tools**: 84.13% (34 tests) - Zone management, policy matrix, application blocking
 - **Traffic Flow Tools**: 86.62% (16 tests)
+- **New v0.2.0 Models**: 100% (36 tests)
 - **Existing Tools**: 15-95% (varying coverage)
 
 See [TESTING_PLAN.md](TESTING_PLAN.md) for the comprehensive testing roadmap.
@@ -421,16 +446,20 @@ unifi-mcp-server/
 ├── .claude/
 │   └── commands/          # Custom slash commands for development
 ├── src/
-│   ├── main.py            # MCP server entry point (40 tools registered)
+│   ├── main.py            # MCP server entry point (55 tools registered)
 │   ├── cache.py           # Redis caching implementation
 │   ├── config/            # Configuration management
 │   ├── api/               # UniFi API client with rate limiting
+│   ├── models/            # Pydantic data models
+│   │   └── zbf.py         # Zone-Based Firewall models
 │   ├── tools/             # MCP tool definitions
 │   │   ├── clients.py     # Client query tools
 │   │   ├── devices.py     # Device query tools
 │   │   ├── networks.py    # Network query tools
 │   │   ├── sites.py       # Site query tools
 │   │   ├── firewall.py    # Firewall management (Phase 4)
+│   │   ├── firewall_zones.py  # Zone-Based Firewall zone management (v0.1.4)
+│   │   ├── zbf_matrix.py  # Zone-Based Firewall policy matrix (v0.1.4)
 │   │   ├── network_config.py  # Network configuration (Phase 4)
 │   │   ├── device_control.py  # Device control (Phase 4)
 │   │   ├── client_management.py  # Client management (Phase 4)
@@ -441,7 +470,7 @@ unifi-mcp-server/
 │   ├── webhooks/          # Webhook receiver and handlers (Phase 5)
 │   └── utils/             # Utility functions and validators
 ├── tests/
-│   ├── unit/              # Unit tests (179 tests, 34% coverage)
+│   ├── unit/              # Unit tests (213 tests, 37% coverage)
 │   ├── integration/       # Integration tests (planned)
 │   └── performance/       # Performance benchmarks (planned)
 ├── docs/                  # Additional documentation
@@ -450,6 +479,7 @@ unifi-mcp-server/
 ├── pyproject.toml         # Project configuration
 ├── README.md              # This file
 ├── API.md                 # Complete API documentation
+├── ZBF_STATUS.md          # Zone-Based Firewall implementation status
 ├── TESTING_PLAN.md        # Testing strategy and roadmap
 ├── DEVELOPMENT_PLAN.md    # Development roadmap
 ├── CONTRIBUTING.md        # Contribution guidelines
@@ -514,7 +544,16 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] Redis caching with automatic invalidation
 - [x] Webhook support for real-time events
 
-**Total: 40 MCP tools + 4 MCP resources**
+**Phase 6: Zone-Based Firewall (15 tools)**
+
+- [x] Zone management (create, update, delete, list, assign networks) - 7 tools
+- [x] Zone policy matrix (get matrix, update policies, delete policies) - 5 tools
+- [x] Application blocking per zone (DPI-based blocking) - 2 tools
+- [x] Zone statistics and monitoring - 1 tool
+- [x] Type-safe Pydantic models for ZBF
+- [x] Comprehensive unit tests (84% coverage)
+
+**Total: 55 MCP tools + 4 MCP resources**
 
 ### Version 0.2.0 (Planned)
 

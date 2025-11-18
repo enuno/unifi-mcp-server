@@ -898,6 +898,460 @@ result = await mcp.call_tool("create_firewall_rule", {
 
 Modify or remove firewall rules. Requires `confirm=True`.
 
+### Zone-Based Firewall (ZBF)
+
+**Requires:** UniFi Network Application 9.0+
+
+Zone-Based Firewall provides modern, scalable network security by grouping networks into security zones and defining policies between zones. This is more flexible and manageable than traditional firewall rules.
+
+**Key Concepts:**
+
+- **Zones:** Logical groups of networks (e.g., LAN, Guest, IoT, DMZ)
+- **Zone Matrix:** Policies controlling traffic between zones
+- **Application Blocking:** DPI-based application control per zone
+- **Statistics:** Per-zone traffic analytics
+
+#### Zone Management
+
+##### `list_firewall_zones`
+
+List all configured firewall zones.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Array of zone objects with networks and metadata.
+
+**Example:**
+
+```python
+zones = await mcp.call_tool("list_firewall_zones", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": "zone-lan",
+    "site_id": "default",
+    "name": "LAN Zone",
+    "description": "Corporate network",
+    "network_ids": ["net-001", "net-002"]
+  },
+  {
+    "id": "zone-guest",
+    "site_id": "default",
+    "name": "Guest Zone",
+    "description": "Guest WiFi",
+    "network_ids": ["net-guest-001"]
+  }
+]
+```
+
+##### `create_firewall_zone`
+
+Create a new firewall zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `name` (string, required): Zone name
+- `description` (string, optional): Zone description
+- `network_ids` (array, optional): Network IDs to assign
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Created zone object.
+
+**Example:**
+
+```python
+# Dry run first
+preview = await mcp.call_tool("create_firewall_zone", {
+    "site_id": "default",
+    "name": "IoT Zone",
+    "description": "Internet of Things devices",
+    "network_ids": ["net-iot-001"],
+    "confirm": True,
+    "dry_run": True
+})
+
+# Execute
+zone = await mcp.call_tool("create_firewall_zone", {
+    "site_id": "default",
+    "name": "IoT Zone",
+    "description": "Internet of Things devices",
+    "network_ids": ["net-iot-001"],
+    "confirm": True
+})
+```
+
+##### `update_firewall_zone`
+
+Update an existing zone's name, description, or networks.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `firewall_zone_id` (string, required): Zone ID
+- `name` (string, optional): New zone name
+- `description` (string, optional): New description
+- `network_ids` (array, optional): Updated network list
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Updated zone object.
+
+##### `delete_firewall_zone`
+
+Delete a firewall zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID to delete
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Deletion confirmation.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("delete_firewall_zone", {
+    "site_id": "default",
+    "zone_id": "zone-old",
+    "confirm": True
+})
+```
+
+##### `assign_network_to_zone`
+
+Dynamically assign a network to a zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID
+- `network_id` (string, required): Network ID to assign
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Network assignment confirmation.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("assign_network_to_zone", {
+    "site_id": "default",
+    "zone_id": "zone-dmz",
+    "network_id": "net-web-001",
+    "confirm": True
+})
+```
+
+##### `unassign_network_from_zone`
+
+Remove a network from a zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID
+- `network_id` (string, required): Network ID to remove
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Network unassignment confirmation.
+
+##### `get_zone_networks`
+
+List all networks assigned to a zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID
+
+**Returns:**
+Array of network assignments with details.
+
+##### `get_zone_statistics`
+
+Get traffic statistics for a zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID
+
+**Returns:**
+Zone traffic statistics.
+
+**Example:**
+
+```python
+stats = await mcp.call_tool("get_zone_statistics", {
+    "site_id": "default",
+    "zone_id": "zone-lan"
+})
+```
+
+**Response:**
+
+```json
+{
+  "zone_id": "zone-lan",
+  "bytes_in": 1024000000,
+  "bytes_out": 2048000000,
+  "packets_in": 5000000,
+  "packets_out": 6000000,
+  "connections": 1500
+}
+```
+
+#### Zone Policy Matrix
+
+##### `get_zbf_matrix`
+
+Retrieve the complete zone-to-zone policy matrix.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Zone policy matrix with all zones and policies.
+
+**Example:**
+
+```python
+matrix = await mcp.call_tool("get_zbf_matrix", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+
+```json
+{
+  "site_id": "default",
+  "zones": ["zone-lan", "zone-guest", "zone-dmz"],
+  "policies": [
+    {
+      "source_zone_id": "zone-guest",
+      "destination_zone_id": "zone-lan",
+      "action": "deny",
+      "enabled": true
+    }
+  ],
+  "default_policy": "allow"
+}
+```
+
+##### `get_zone_policies`
+
+Get all policies for a specific source zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Source zone ID
+
+**Returns:**
+Array of policies from this zone to others.
+
+##### `get_zone_matrix_policy`
+
+Get a specific zone-to-zone policy.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `source_zone_id` (string, required): Source zone ID
+- `destination_zone_id` (string, required): Destination zone ID
+
+**Returns:**
+Specific policy details or raises ValueError if not found.
+
+**Example:**
+
+```python
+policy = await mcp.call_tool("get_zone_matrix_policy", {
+    "site_id": "default",
+    "source_zone_id": "zone-guest",
+    "destination_zone_id": "zone-lan"
+})
+```
+
+##### `update_zbf_policy`
+
+Modify a zone-to-zone firewall policy.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `source_zone_id` (string, required): Source zone ID
+- `destination_zone_id` (string, required): Destination zone ID
+- `action` (string, required): Policy action (`allow` or `deny`)
+- `description` (string, optional): Policy description
+- `priority` (integer, optional): Policy priority
+- `enabled` (boolean, optional): Enable/disable policy
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Updated policy object.
+
+**Example:**
+
+```python
+policy = await mcp.call_tool("update_zbf_policy", {
+    "site_id": "default",
+    "source_zone_id": "zone-guest",
+    "destination_zone_id": "zone-lan",
+    "action": "deny",
+    "description": "Block guest access to LAN",
+    "priority": 100,
+    "confirm": True
+})
+```
+
+##### `delete_zbf_policy`
+
+Delete a zone-to-zone policy (reverts to default action).
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `source_zone_id` (string, required): Source zone ID
+- `destination_zone_id` (string, required): Destination zone ID
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Deletion confirmation.
+
+#### Application Blocking
+
+##### `block_application_by_zone`
+
+Block specific applications using DPI within a zone.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, required): Zone ID
+- `application_id` (string, required): DPI application ID
+- `action` (string, optional): Action (`block` or `allow`, default: `block`)
+- `enabled` (boolean, optional): Enable rule (default: `true`)
+- `description` (string, optional): Rule description
+- `confirm` (boolean, required): Must be `true`
+- `dry_run` (boolean, optional): Preview changes
+
+**Returns:**
+Created application block rule.
+
+**Example:**
+
+```python
+rule = await mcp.call_tool("block_application_by_zone", {
+    "site_id": "default",
+    "zone_id": "zone-guest",
+    "application_id": "app-facebook",
+    "description": "Block social media on guest network",
+    "confirm": True
+})
+```
+
+##### `list_blocked_applications`
+
+List applications blocked in a zone or across all zones.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `zone_id` (string, optional): Filter by zone ID
+
+**Returns:**
+Array of application block rules.
+
+**Example:**
+
+```python
+# All blocked apps
+all_blocks = await mcp.call_tool("list_blocked_applications", {
+    "site_id": "default"
+})
+
+# Zone-specific blocks
+guest_blocks = await mcp.call_tool("list_blocked_applications", {
+    "site_id": "default",
+    "zone_id": "zone-guest"
+})
+```
+
+#### ZBF Best Practices
+
+**Zone Design:**
+- **LAN Zone:** Corporate/trusted devices
+- **Guest Zone:** Guest WiFi with internet-only access
+- **IoT Zone:** Smart devices with limited access
+- **DMZ Zone:** Publicly accessible services
+
+**Security Policies:**
+- Deny guest → LAN traffic
+- Allow LAN → all zones
+- Allow IoT → internet only
+- Deny IoT → LAN except specific services
+
+**Common Use Cases:**
+
+```python
+# Example: Complete guest network isolation
+guest_zone = await mcp.call_tool("create_firewall_zone", {
+    "site_id": "default",
+    "name": "Guest",
+    "network_ids": ["net-guest"],
+    "confirm": True
+})
+
+# Block guest access to LAN
+policy = await mcp.call_tool("update_zbf_policy", {
+    "site_id": "default",
+    "source_zone_id": "zone-guest",
+    "destination_zone_id": "zone-lan",
+    "action": "deny",
+    "confirm": True
+})
+
+# Block social media on guest
+fb_block = await mcp.call_tool("block_application_by_zone", {
+    "site_id": "default",
+    "zone_id": "zone-guest",
+    "application_id": "app-facebook",
+    "confirm": True
+})
+```
+
+**⚠️ Important Notes:**
+
+- ZBF requires UniFi Network Application 9.0+
+- API endpoints are speculative and may require adjustment
+- Always test with `dry_run=True` first
+- All endpoints require `confirm=True` for safety
+- Statistics may vary based on controller configuration
+
 ### Network Configuration
 
 #### `create_network`

@@ -19,12 +19,14 @@ Phase 2 of the UniFi MCP Server development has been successfully completed, del
 **File**: `src/models/traffic_flow.py`
 
 #### Existing Models (Enhanced)
+
 - ✅ `TrafficFlow` - Individual flow records
 - ✅ `FlowStatistics` - Aggregated statistics
 - ✅ `FlowRisk` - Risk assessment data
 - ✅ `FlowView` - Saved view configurations
 
 #### New Models Added
+
 - ✅ `FlowStreamUpdate` - Real-time streaming updates with bandwidth rates
 - ✅ `ConnectionState` - Connection state tracking (active, closed, timed_out)
 - ✅ `ClientFlowAggregation` - Per-client traffic aggregation with auth failures
@@ -38,9 +40,11 @@ Phase 2 of the UniFi MCP Server development has been successfully completed, del
 ### 2. Real-Time Monitoring & Streaming
 
 #### `stream_traffic_flows()` - AsyncGenerator
+
 Real-time traffic flow streaming with automatic bandwidth rate calculations.
 
 **Features**:
+
 - Polling-based streaming (15-second default interval, configurable)
 - WebSocket-ready architecture (easy upgrade path)
 - Automatic bandwidth rate calculation (bps, upload, download)
@@ -49,15 +53,18 @@ Real-time traffic flow streaming with automatic bandwidth rate calculations.
 - Efficient delta tracking
 
 **Use Cases**:
+
 - Live network monitoring dashboards
 - Real-time security threat detection
 - Bandwidth consumption tracking
 - Network performance analysis
 
 #### `get_connection_states()` - Connection Tracking
+
 Track the state of all network connections.
 
 **Features**:
+
 - State classification: active, closed, timed_out
 - Termination reason tracking
 - Duration calculation
@@ -70,9 +77,11 @@ Track the state of all network connections.
 Three powerful tools for rapid threat response:
 
 #### `block_flow_source_ip()`
+
 Block source IP addresses identified in suspicious traffic flows.
 
 **Features**:
+
 - Automatic firewall rule creation
 - Temporary or permanent blocks
 - Expiration time support (hours)
@@ -81,6 +90,7 @@ Block source IP addresses identified in suspicious traffic flows.
 - Confirmation required for safety
 
 **Example**:
+
 ```python
 # Block suspicious source IP permanently
 result = await block_flow_source_ip(
@@ -94,18 +104,22 @@ result = await block_flow_source_ip(
 ```
 
 #### `block_flow_destination_ip()`
+
 Block access to malicious destination IPs.
 
 **Features**:
+
 - Same comprehensive features as source IP blocking
 - Protect against data exfiltration
 - Block C2 servers
 - Prevent malware communications
 
 #### `block_flow_application()`
+
 Block applications by DPI signature with intelligent ZBF integration.
 
 **Features**:
+
 - Automatic ZBF zone detection
 - Fallback to traditional firewall rules
 - Application-level blocking
@@ -113,6 +127,7 @@ Block applications by DPI signature with intelligent ZBF integration.
 - Comprehensive audit trail
 
 **Example**:
+
 ```python
 # Block application using ZBF if available
 result = await block_flow_application(
@@ -130,9 +145,11 @@ result = await block_flow_application(
 ### 4. Enhanced Analytics
 
 #### `get_client_flow_aggregation()`
+
 Comprehensive per-client traffic analysis.
 
 **Metrics Provided**:
+
 - Total flows, bytes, packets
 - Active vs closed flows
 - Top applications by bandwidth
@@ -141,15 +158,18 @@ Comprehensive per-client traffic analysis.
 - Client IP resolution
 
 **Use Cases**:
+
 - Identify bandwidth hogs
 - Detect unusual client behavior
 - Client-specific troubleshooting
 - Usage billing/reporting
 
 #### `get_flow_analytics()`
+
 Comprehensive network-wide analytics dashboard.
 
 **Analytics Provided**:
+
 - Protocol distribution (tcp, udp, icmp)
 - Application distribution (count + bytes)
 - State distribution (active, closed, timed_out)
@@ -158,6 +178,7 @@ Comprehensive network-wide analytics dashboard.
 - Overall statistics
 
 **Example Output**:
+
 ```json
 {
   "site_id": "default",
@@ -185,14 +206,17 @@ Comprehensive network-wide analytics dashboard.
 ### 5. Data Export Capabilities
 
 #### `export_traffic_flows()`
+
 Export flow data in multiple formats for external analysis.
 
 **Supported Formats**:
+
 - JSON (formatted, human-readable)
 - CSV (Excel/spreadsheet compatible)
 - PCAP (planned for future)
 
 **Features**:
+
 - Field filtering (include specific fields only)
 - Record limiting (max_records)
 - Filter expression support
@@ -200,6 +224,7 @@ Export flow data in multiple formats for external analysis.
 - Efficient processing
 
 **Use Cases**:
+
 - Compliance reporting
 - Long-term data warehousing
 - External BI tool integration
@@ -207,6 +232,7 @@ Export flow data in multiple formats for external analysis.
 - Network forensics
 
 **Example**:
+
 ```python
 # Export last 24h flows to CSV
 csv_data = await export_traffic_flows(
@@ -239,6 +265,7 @@ The following tools were already implemented in the initial 70% completion:
 ## Testing & Quality Assurance
 
 ### Integration Tests
+
 **File**: `tests/integration/test_traffic_flow_integration.py`
 
 **Test Coverage**: 11 comprehensive integration tests
@@ -254,6 +281,7 @@ The following tools were already implemented in the initial 70% completion:
 9. ✅ `test_get_flow_analytics` - Analytics dashboard
 
 ### Code Quality
+
 - ✅ Formatted with Black
 - ✅ Imports sorted with isort
 - ✅ Linted with Ruff (all checks passed)
@@ -407,24 +435,28 @@ All block actions are automatically audited:
 ## Use Cases Enabled
 
 ### 1. Security Operations
+
 - Real-time threat detection and blocking
 - Automated incident response
 - Security analytics and forensics
 - Compliance reporting
 
 ### 2. Network Operations
+
 - Bandwidth monitoring and management
 - Application usage tracking
 - Client behavior analysis
 - Performance troubleshooting
 
 ### 3. Business Intelligence
+
 - Usage analytics and reporting
 - Client profiling
 - Application inventory
 - Cost allocation/chargeback
 
 ### 4. Compliance & Auditing
+
 - Data export for compliance
 - Audit trail for all actions
 - Historical flow analysis
@@ -466,15 +498,18 @@ All block actions are automatically audited:
 ## Files Modified/Created
 
 ### Modified Files
+
 1. `src/models/traffic_flow.py` - Added 5 new models
 2. `src/tools/traffic_flows.py` - Added 9 new functions (~700 lines)
 3. `TODO.md` - Updated Phase 2 status to 100% complete
 
 ### Created Files
+
 1. `tests/integration/test_traffic_flow_integration.py` - 11 integration tests
 2. `PHASE2_COMPLETION_SUMMARY.md` - This document
 
 ### Code Statistics
+
 - **Lines Added**: ~850
 - **New Functions**: 9
 - **New Models**: 5
@@ -488,11 +523,13 @@ All block actions are automatically audited:
 ### Version 0.2.0 Status Update
 
 **Before Phase 2 Completion**:
+
 - Progress: ~25%
 - Completed Phases: 0/7
 - In Progress: 3/7 (Phases 1, 2, 5)
 
 **After Phase 2 Completion**:
+
 - Progress: ~35%
 - Completed Phases: 1/7 ✅
 - In Progress: 2/7 (Phases 1, 5)

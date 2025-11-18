@@ -1211,7 +1211,7 @@ async def get_internet_health(site_id: str | None = None) -> dict:
 @mcp.tool()
 async def get_site_health_summary(site_id: str | None = None) -> dict:
     """Get health summary for all sites or a specific site."""
-    return await site_manager_tools.get_site_health_summary(settings, site_id)
+    return await site_manager_tools.get_site_health_summary(settings, site_id)  # type: ignore[return-value]
 
 
 @mcp.tool()

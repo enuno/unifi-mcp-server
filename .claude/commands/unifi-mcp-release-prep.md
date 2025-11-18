@@ -51,7 +51,7 @@ This command orchestrates the complete release preparation process including ver
 
 5. Update version numbers:
    - Update `pyproject.toml` version field
-   - Update `src/__init__.py` __version__
+   - Update `src/__init__.py` **version**
    - Update version in README.md badges
    - Update Docker image tags in documentation
 

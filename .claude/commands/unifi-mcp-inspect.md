@@ -18,9 +18,11 @@ The MCP Inspector is a web-based UI for testing MCP servers, making API calls, a
 **Prerequisites check:**
 
 1. Verify Node.js is installed:
+
    ```bash
    node --version
    ```
+
    - If not installed, provide installation instructions
 
 2. Check if .env file exists:
@@ -43,14 +45,16 @@ The MCP Inspector is a web-based UI for testing MCP servers, making API calls, a
    - Offer to help configure if needed
 
 2. Start MCP Inspector:
+
    ```bash
    npx @modelcontextprotocol/inspector uv run src/main.py
    ```
+
    - Run in background if user requests
    - Capture startup logs
 
 3. Provide usage instructions:
-   - Inspector URL (typically http://localhost:5173)
+   - Inspector URL (typically <http://localhost:5173>)
    - How to test tools:
      - Select a tool from the list
      - Fill in required parameters
@@ -83,6 +87,7 @@ The MCP Inspector is a web-based UI for testing MCP servers, making API calls, a
   5. Test confirmation/dry-run for mutating operations
 
 - Quick reference for common tools:
+
   ```
   Read-only tools (safe to test):
   - get_sites
@@ -139,6 +144,7 @@ Tips:
 **Troubleshooting:**
 
 Common issues and solutions:
+
 - Connection refused: Check if UniFi controller is accessible
 - Authentication failed: Verify credentials in .env
 - SSL errors: Set UNIFI_VERIFY_SSL=false for self-signed certs

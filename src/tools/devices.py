@@ -45,7 +45,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
             if device_data.get("_id") == device_id:
                 device = Device(**device_data)
                 logger.info(f"Retrieved device details for {device_id}")
-                return device.model_dump()
+                return device.model_dump()  # type: ignore[no-any-return]
 
         raise ResourceNotFoundError("device", device_id)
 
@@ -285,7 +285,7 @@ async def adopt_device(
         )
 
         logger.info(f"Successfully adopted device {device_id}")
-        return Device(**data).model_dump()
+        return Device(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def execute_port_action(

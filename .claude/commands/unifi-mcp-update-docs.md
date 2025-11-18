@@ -56,6 +56,7 @@ This command scans all MCP tools and resources, extracts documentation from code
 5. Generate updated documentation:
    - Table of contents with all categories
    - Tool documentation for each category:
+
      ```markdown
      ### tool_name
 
@@ -76,6 +77,7 @@ This command scans all MCP tools and resources, extracts documentation from code
        }
      }
      ```
+
      ```
 
 6. Update API.md:

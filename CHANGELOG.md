@@ -8,9 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.4] - 2025-11-17
 
 ### Version Correction Notice
+
 This release corrects a premature v0.2.0 release. The code is identical to v0.2.0, but v0.1.4 is the correct version number. The true v0.2.0 release is planned for Q1 2025 with complete Zone-Based Firewall implementation, full Traffic Flow monitoring, and 80%+ test coverage.
 
 ### Added
+
 - Comprehensive WiFi tools test suite with 23 tests and 70.34% coverage
 - Cloud API compatibility for Site model using Pydantic v2 validation_alias
 - Support for both Cloud API (`siteId`, `isOwner`) and Local API (`_id`, `name`) schemas
@@ -18,6 +20,7 @@ This release corrects a premature v0.2.0 release. The code is identical to v0.2.
 - Automatic name fallback generation for Cloud API sites without explicit names
 
 ### Fixed
+
 - **GitHub Issue #3**: Cloud API schema mismatch in Site model
   - Fixed Pydantic validation errors when using Cloud API
   - Site model now accepts `siteId` (Cloud) and `_id` (Local) field names
@@ -37,12 +40,14 @@ This release corrects a premature v0.2.0 release. The code is identical to v0.2.
 - Traffic flows formatting with Black
 
 ### Changed
+
 - Site model made backward compatible with existing Local API code
 - Enhanced Site model with Cloud API-specific fields (`is_owner`)
 - Improved test coverage from 36.83% to 41.27% overall
 - Site model test coverage: 100%
 
 ### Technical Details
+
 - All 228 tests passing
 - Test coverage: 41.27%
 - CI/CD pipelines: All checks passing
@@ -51,9 +56,11 @@ This release corrects a premature v0.2.0 release. The code is identical to v0.2.
 ## [0.2.0] - 2025-11-16 [PREMATURE - DO NOT USE]
 
 ### ⚠️ Version Correction Notice
+
 **This version was published prematurely. Please use v0.1.4 instead, which contains identical code.**
 
 The true v0.2.0 release is planned for Q1 2025 and will include:
+
 - Complete Zone-Based Firewall (ZBF) implementation (~60% complete as of this release)
 - Full Traffic Flow monitoring (~100% complete as of this release)
 - Advanced QoS and traffic management
@@ -65,6 +72,7 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 ### Original v0.2.0 Release Notes (For Reference)
 
 ### Added
+
 - Comprehensive WiFi tools test suite with 23 tests and 70.34% coverage
 - Cloud API compatibility for Site model using Pydantic v2 validation_alias
 - Support for both Cloud API (`siteId`, `isOwner`) and Local API (`_id`, `name`) schemas
@@ -72,6 +80,7 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 - Automatic name fallback generation for Cloud API sites without explicit names
 
 ### Fixed
+
 - **GitHub Issue #3**: Cloud API schema mismatch in Site model
   - Fixed Pydantic validation errors when using Cloud API
   - Site model now accepts `siteId` (Cloud) and `_id` (Local) field names
@@ -91,12 +100,14 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 - Traffic flows formatting with Black
 
 ### Changed
+
 - Site model made backward compatible with existing Local API code
 - Enhanced Site model with Cloud API-specific fields (`is_owner`)
 - Improved test coverage from 36.83% to 41.27% overall
 - Site model test coverage: 100%
 
 ### Technical Details
+
 - All 228 tests passing
 - Test coverage: 41.27%
 - CI/CD pipelines: All checks passing
@@ -105,6 +116,7 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 ## [0.1.3] - 2025-01-XX
 
 ### Initial Release
+
 - Model Context Protocol (MCP) server for UniFi Network API
 - Support for Cloud and Local Controller APIs
 - Device, Client, Network, and Site management tools

@@ -1,5 +1,7 @@
 """Firewall zone management tools."""
 
+from typing import Any
+
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import FirewallZone
@@ -12,7 +14,7 @@ logger = get_logger(__name__)
 async def list_firewall_zones(
     site_id: str,
     settings: Settings,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List all firewall zones for a site.
 
     Args:
@@ -42,7 +44,7 @@ async def create_firewall_zone(
     network_ids: list[str] | None = None,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Create a new firewall zone.
 
     Args:
@@ -66,7 +68,7 @@ async def create_firewall_zone(
             await client.authenticate()
 
         # Build request payload
-        payload = {
+        payload: dict[str, Any] = {
             "name": name,
         }
 
@@ -94,7 +96,7 @@ async def create_firewall_zone(
             details={"name": name},
         )
 
-        return FirewallZone(**data).model_dump()
+        return FirewallZone(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def update_firewall_zone(
@@ -106,7 +108,7 @@ async def update_firewall_zone(
     network_ids: list[str] | None = None,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Update an existing firewall zone.
 
     Args:
@@ -131,7 +133,7 @@ async def update_firewall_zone(
             await client.authenticate()
 
         # Build request payload with only provided fields
-        payload = {}
+        payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
         if description is not None:
@@ -159,7 +161,7 @@ async def update_firewall_zone(
             details=payload,
         )
 
-        return FirewallZone(**data).model_dump()
+        return FirewallZone(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def assign_network_to_zone(
@@ -169,7 +171,7 @@ async def assign_network_to_zone(
     settings: Settings,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Dynamically assign a network to a zone.
 
     Args:
@@ -211,7 +213,7 @@ async def assign_network_to_zone(
 
         if network_id in current_networks:
             logger.info(f"Network {network_id} already assigned to zone {zone_id}")
-            return ZoneNetworkAssignment(
+            return ZoneNetworkAssignment(  # type: ignore[no-any-return]
                 zone_id=zone_id,
                 network_id=network_id,
                 network_name=network_name,
@@ -240,14 +242,14 @@ async def assign_network_to_zone(
             details={"zone_id": zone_id, "network_id": network_id},
         )
 
-        return ZoneNetworkAssignment(
+        return ZoneNetworkAssignment(  # type: ignore[no-any-return]
             zone_id=zone_id,
             network_id=network_id,
             network_name=network_name,
         ).model_dump()
 
 
-async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> list[dict]:
+async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List all networks in a zone.
 
     Args:
@@ -301,7 +303,7 @@ async def delete_firewall_zone(
     settings: Settings,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Delete a firewall zone.
 
     Args:
@@ -351,7 +353,7 @@ async def unassign_network_from_zone(
     settings: Settings,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Remove a network from a firewall zone.
 
     Args:
@@ -422,7 +424,7 @@ async def get_zone_statistics(
     site_id: str,
     zone_id: str,
     settings: Settings,
-) -> dict:
+) -> dict[str, Any]:
     """Get traffic statistics for a firewall zone.
 
     Args:
@@ -444,4 +446,4 @@ async def get_zone_statistics(
         )
         data = response.get("data", response)
 
-        return data
+        return data  # type: ignore[no-any-return]

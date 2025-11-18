@@ -5,6 +5,7 @@
 This is a Model Context Protocol (MCP) server that provides AI agents with access to UniFi Network Controller infrastructure. The project emphasizes **safety, security, and type safety** with comprehensive testing and validation.
 
 **Tech Stack:**
+
 - Python 3.10+ with async/await patterns
 - FastMCP framework for MCP protocol implementation
 - Pydantic v2 for validation and type safety
@@ -14,13 +15,16 @@ This is a Model Context Protocol (MCP) server that provides AI agents with acces
 ## Core Architecture Principles
 
 ### 1. Safety-First Design
+
 All mutating operations MUST include:
+
 - `confirm: bool = False` parameter (must be explicitly set to `True`)
 - `dry_run: bool = False` parameter for preview mode
 - Comprehensive input validation with detailed error messages
 - Audit logging to `audit.log` for all operations
 
 Example:
+
 ```python
 async def delete_firewall_rule(
     site_id: str,
@@ -40,12 +44,14 @@ async def delete_firewall_rule(
 ```
 
 ### 2. Type Safety & Validation
+
 - Use Pydantic v2 models for ALL data structures
 - Leverage `Annotated` types with validators
 - Use `Field()` for documentation and constraints
 - Implement custom validators for complex business logic
 
 Example:
+
 ```python
 from pydantic import BaseModel, Field, field_validator
 from typing import Annotated
@@ -70,12 +76,14 @@ class NetworkConfig(BaseModel):
 ```
 
 ### 3. Async Patterns
+
 - All API calls and I/O operations use `async/await`
 - Use `asyncio.gather()` for concurrent operations
 - Implement proper error handling with async context managers
 - Rate limiting with `asyncio.Semaphore`
 
 Example:
+
 ```python
 async def fetch_multiple_sites(site_ids: list[str]) -> list[dict]:
     """Fetch multiple sites concurrently with rate limiting."""
@@ -89,6 +97,7 @@ async def fetch_multiple_sites(site_ids: list[str]) -> list[dict]:
 ```
 
 ### 4. MCP Tool Structure
+
 Each tool should follow this pattern:
 
 ```python
@@ -147,6 +156,7 @@ async def tool_name(
 ```
 
 ### 5. Testing Requirements
+
 - **Minimum 80% code coverage** for new code
 - Unit tests for all tools using pytest and pytest-asyncio
 - Mock UniFi API responses with realistic data
@@ -154,6 +164,7 @@ async def tool_name(
 - Test safety mechanisms (confirm, dry_run)
 
 Example test structure:
+
 ```python
 import pytest
 from unittest.mock import AsyncMock, patch
@@ -192,6 +203,7 @@ async def test_create_network_requires_confirmation():
 ## Code Organization
 
 ### File Structure
+
 ```
 src/
 ├── main.py              # MCP server registration and startup
@@ -227,6 +239,7 @@ src/
 ```
 
 ### Naming Conventions
+
 - **Tools**: `verb_noun` (e.g., `list_devices`, `create_network`, `delete_firewall_rule`)
 - **Models**: `PascalCase` (e.g., `DeviceInfo`, `NetworkConfig`)
 - **Functions**: `snake_case` (e.g., `validate_cidr`, `format_bandwidth`)
@@ -235,6 +248,7 @@ src/
 ## Security Best Practices
 
 ### 1. Input Validation
+
 ```python
 # Always validate external input
 def validate_vlan_id(vlan_id: int) -> None:
@@ -247,6 +261,7 @@ def validate_site_id(site_id: str) -> None:
 ```
 
 ### 2. Sensitive Data Handling
+
 ```python
 # Mask sensitive data in logs
 def mask_sensitive_data(data: dict) -> dict:
@@ -263,6 +278,7 @@ logger.info(f"API call: {mask_sensitive_data(params)}")
 ```
 
 ### 3. Error Handling
+
 ```python
 # Never expose internal details in error messages
 try:
@@ -278,7 +294,9 @@ except Exception as e:
 ## Redis Caching Patterns
 
 ### Cache Keys
+
 Use hierarchical keys with TTL differentiation:
+
 ```python
 # Format: resource_type:site_id:identifier
 CACHE_KEYS = {
@@ -291,6 +309,7 @@ CACHE_KEYS = {
 ```
 
 ### Cache Invalidation
+
 ```python
 async def invalidate_network_cache(site_id: str, network_id: str = None) -> None:
     """Invalidate network-related cache entries."""
@@ -308,7 +327,9 @@ async def invalidate_network_cache(site_id: str, network_id: str = None) -> None
 ## Documentation Standards
 
 ### Docstrings
+
 Use Google-style docstrings with type information:
+
 ```python
 async def create_firewall_rule(
     site_id: str,
@@ -372,7 +393,9 @@ async def create_firewall_rule(
 ```
 
 ### README Updates
+
 When adding new features:
+
 1. Update feature list in README.md
 2. Add examples to API.md
 3. Update DEVELOPMENT_PLAN.md roadmap
@@ -381,6 +404,7 @@ When adding new features:
 ## Git Commit Practices
 
 Follow Conventional Commits:
+
 ```
 <type>(<scope>): <subject>
 
@@ -390,6 +414,7 @@ Follow Conventional Commits:
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation only
@@ -399,6 +424,7 @@ Follow Conventional Commits:
 - `chore`: Maintenance tasks
 
 **Examples:**
+
 ```bash
 feat(tools): add WiFi/SSID management tools
 
@@ -432,6 +458,7 @@ Part of #65
 ## AI Coding Assistant Guidelines
 
 ### When to Suggest Refactoring
+
 - Code duplication across 3+ locations → extract to utility function
 - Function length > 50 lines → consider breaking into smaller functions
 - Cyclomatic complexity > 10 → simplify logic or add early returns
@@ -439,12 +466,15 @@ Part of #65
 - Hard-coded values → extract to constants or configuration
 
 ### When NOT to Refactor
+
 - Working code with 80%+ test coverage (unless fixing a bug)
 - Code that follows existing patterns (maintain consistency)
 - Performance-critical sections (profile before optimizing)
 
 ### Code Review Checklist
+
 Before suggesting a PR, verify:
+
 - [ ] All new functions have type hints and docstrings
 - [ ] Unit tests added for new functionality (80%+ coverage)
 - [ ] Safety mechanisms (confirm, dry_run) for mutating operations
@@ -458,6 +488,7 @@ Before suggesting a PR, verify:
 ## Common Patterns
 
 ### Error Response Format
+
 ```python
 class ErrorResponse(BaseModel):
     """Standardized error response."""
@@ -475,6 +506,7 @@ class ErrorResponse(BaseModel):
 ```
 
 ### Resource URI Handlers
+
 ```python
 # Format: sites://{site_id}/{resource_type}/{identifier}
 @mcp.resource("sites://{site_id}/devices/{device_id}")
@@ -496,6 +528,7 @@ async def get_device_resource(uri: str) -> Resource:
 ```
 
 ### Rate Limiting
+
 ```python
 from asyncio import Semaphore
 
@@ -514,6 +547,7 @@ class RateLimiter:
 ## Performance Considerations
 
 ### Batch Operations
+
 ```python
 async def batch_restart_devices(
     site_id: str,
@@ -538,6 +572,7 @@ async def batch_restart_devices(
 ```
 
 ### Database Query Optimization
+
 ```python
 # Prefer: Single query with filtering
 devices = await api.get_devices(site_id, device_type="uap")
@@ -550,6 +585,7 @@ for device_id in device_ids:
 ## Development Workflow
 
 1. **Create Feature Branch**
+
    ```bash
    git checkout -b feat/your-feature-name
    ```
@@ -560,6 +596,7 @@ for device_id in device_ids:
    - Run tests: `pytest tests/unit/ --cov=src`
 
 3. **Verify Code Quality**
+
    ```bash
    # Run all pre-commit checks
    pre-commit run --all-files
@@ -577,6 +614,7 @@ for device_id in device_ids:
    - Update API.md reference
 
 5. **Commit and Push**
+
    ```bash
    git add .
    git commit -m "feat(scope): description"
@@ -593,6 +631,7 @@ for device_id in device_ids:
 ### Common Issues
 
 **Import Errors:**
+
 ```python
 # Wrong: Circular import
 from src.tools.devices import list_devices
@@ -606,6 +645,7 @@ if TYPE_CHECKING:
 ```
 
 **Async Context Issues:**
+
 ```python
 # Wrong: Blocking call in async function
 result = requests.get(url)  # Blocks event loop
@@ -617,6 +657,7 @@ async with aiohttp.ClientSession() as session:
 ```
 
 **Cache Key Collisions:**
+
 ```python
 # Wrong: Generic key
 cache_key = f"device:{device_id}"  # Collides across sites
@@ -627,15 +668,16 @@ cache_key = f"devices:{site_id}:{device_id}"
 
 ## Resources
 
-- **MCP Specification**: https://spec.modelcontextprotocol.io/
-- **FastMCP Documentation**: https://github.com/jlowin/fastmcp
-- **Pydantic V2 Docs**: https://docs.pydantic.dev/latest/
-- **UniFi API Reference**: https://ubntwiki.com/products/software/unifi-controller/api
+- **MCP Specification**: <https://spec.modelcontextprotocol.io/>
+- **FastMCP Documentation**: <https://github.com/jlowin/fastmcp>
+- **Pydantic V2 Docs**: <https://docs.pydantic.dev/latest/>
+- **UniFi API Reference**: <https://ubntwiki.com/products/software/unifi-controller/api>
 - **Project Documentation**: See API.md, TESTING_PLAN.md, DEVELOPMENT_PLAN.md
 
 ## Questions?
 
 For complex architectural decisions or unclear requirements:
+
 1. Check existing patterns in the codebase
 2. Review DEVELOPMENT_PLAN.md for roadmap context
 3. Consult AGENTS.md for AI assistant guidelines

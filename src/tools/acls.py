@@ -1,5 +1,7 @@
 """Access Control List (ACL) management tools."""
 
+from typing import Any
+
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import ACLRule
@@ -33,7 +35,7 @@ async def list_acl_rules(
         if not client.is_authenticated:
             await client.authenticate()
 
-        params = {}
+        params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
@@ -67,7 +69,7 @@ async def get_acl_rule(site_id: str, acl_rule_id: str, settings: Settings) -> di
         response = await client.get(f"/integration/v1/sites/{site_id}/acls/{acl_rule_id}")
         data = response.get("data", response)
 
-        return ACLRule(**data).model_dump()
+        return ACLRule(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def create_acl_rule(
@@ -169,7 +171,7 @@ async def create_acl_rule(
             details={"name": name, "action": action},
         )
 
-        return ACLRule(**data).model_dump()
+        return ACLRule(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def update_acl_rule(
@@ -228,7 +230,7 @@ async def update_acl_rule(
             await client.authenticate()
 
         # Build request payload with only provided fields
-        payload = {}
+        payload: dict[str, Any] = {}
         if name is not None:
             payload["name"] = name
         if action is not None:
@@ -277,7 +279,7 @@ async def update_acl_rule(
             details=payload,
         )
 
-        return ACLRule(**data).model_dump()
+        return ACLRule(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def delete_acl_rule(

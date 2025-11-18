@@ -1,5 +1,7 @@
 """Zone-Based Firewall matrix management tools."""
 
+from typing import Any
+
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models.zbf_matrix import ApplicationBlockRule, ZonePolicy, ZonePolicyMatrix
@@ -8,7 +10,7 @@ from ..utils import audit_action, get_logger, validate_confirmation
 logger = get_logger(__name__)
 
 
-async def get_zbf_matrix(site_id: str, settings: Settings) -> dict:
+async def get_zbf_matrix(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve zone-to-zone policy matrix.
 
     Args:
@@ -42,10 +44,10 @@ async def get_zbf_matrix(site_id: str, settings: Settings) -> dict:
                 "default_policy": "allow",
             }
 
-        return ZonePolicyMatrix(**data).model_dump()
+        return ZonePolicyMatrix(**data).model_dump()  # type: ignore[no-any-return]
 
 
-async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> list[dict]:
+async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> list[dict[str, Any]]:
     """Get policies for a specific zone.
 
     Args:
@@ -86,7 +88,7 @@ async def update_zbf_policy(
     enabled: bool = True,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Modify inter-zone firewall policy.
 
     Args:
@@ -155,7 +157,7 @@ async def update_zbf_policy(
             details=payload,
         )
 
-        return ZonePolicy(**data).model_dump()
+        return ZonePolicy(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def block_application_by_zone(
@@ -168,7 +170,7 @@ async def block_application_by_zone(
     description: str | None = None,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Block applications using zone-based rules.
 
     Args:
@@ -250,12 +252,12 @@ async def block_application_by_zone(
             details={"zone_id": zone_id, "application_id": application_id},
         )
 
-        return ApplicationBlockRule(**data).model_dump()
+        return ApplicationBlockRule(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def list_blocked_applications(
     site_id: str, zone_id: str | None = None, settings: Settings | None = None
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List applications blocked per zone.
 
     Args:
@@ -297,7 +299,7 @@ async def get_zone_matrix_policy(
     source_zone_id: str,
     destination_zone_id: str,
     settings: Settings,
-) -> dict:
+) -> dict[str, Any]:
     """Get a specific zone-to-zone policy.
 
     Args:
@@ -338,7 +340,7 @@ async def get_zone_matrix_policy(
                 f"Policy from zone {source_zone_id} to {destination_zone_id} not found"
             )
 
-        return ZonePolicy(**data).model_dump()
+        return ZonePolicy(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def delete_zbf_policy(
@@ -348,7 +350,7 @@ async def delete_zbf_policy(
     settings: Settings,
     confirm: bool = False,
     dry_run: bool = False,
-) -> dict:
+) -> dict[str, Any]:
     """Delete a zone-to-zone policy (revert to default action).
 
     Args:

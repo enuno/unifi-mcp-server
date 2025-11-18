@@ -1,5 +1,7 @@
 """DPI (Deep Packet Inspection) and country information tools."""
 
+from typing import Any
+
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import Country, DPIApplication, DPICategory
@@ -52,7 +54,7 @@ async def list_dpi_applications(
         if not client.is_authenticated:
             await client.authenticate()
 
-        params = {}
+        params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
         if offset is not None:

@@ -99,7 +99,7 @@ class SiteManagerClient:
             response = await self.client.get(endpoint, params=params)
             response.raise_for_status()
 
-            return response.json()
+            return response.json()  # type: ignore[no-any-return]
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:

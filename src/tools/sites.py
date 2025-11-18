@@ -34,7 +34,7 @@ async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
             if site_data.get("_id") == site_id or site_data.get("name") == site_id:
                 site = Site(**site_data)
                 logger.info(f"Retrieved site details for {site_id}")
-                return site.model_dump()
+                return site.model_dump()  # type: ignore[no-any-return]
 
         raise ResourceNotFoundError("site", site_id)
 

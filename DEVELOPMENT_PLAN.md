@@ -576,6 +576,7 @@ UniFi Identity and Access represent separate applications with their own APIs.
 - None (unifi-mcp-server focuses on Network application only)
 
 **Consideration:**
+
 - These features are part of separate UniFi applications (Access, Identity)
 - May be candidates for v1.0.0 Multi-Application Platform expansion
 - Require separate authentication and API client considerations
@@ -650,6 +651,7 @@ The following features represent moderate-priority gaps that enhance functionali
 Based on the gap analysis, here is the recommended mapping of features to version milestones:
 
 #### Version 0.2.0 Priority Features
+
 - Zone-Based Firewall (ZBF) - **Critical**
 - Traffic Flow Analysis - **Critical**
 - Advanced QoS and Traffic Management - **High**
@@ -658,6 +660,7 @@ Based on the gap analysis, here is the recommended mapping of features to versio
 - Topology Retrieval - **Medium**
 
 #### Version 0.3.0 Priority Features
+
 - SD-WAN Management - **Critical**
 - Alert and Notification Management - **High**
 - Enhanced DPI with Historical Trends - **Medium**
@@ -665,6 +668,7 @@ Based on the gap analysis, here is the recommended mapping of features to versio
 - Device Migration Tools - **Low**
 
 #### Version 1.0.0 Priority Features
+
 - VPN Configuration Management - **Critical**
 - UniFi Identity Integration - **High**
 - UniFi Access Integration - **High**
@@ -677,6 +681,7 @@ Based on the gap analysis, here is the recommended mapping of features to versio
 This section provides a comprehensive inventory of UniFi API endpoints categorized by implementation status.
 
 #### Fully Implemented (v0.1.0)
+
 - Device management (`/api/s/{site}/stat/device`, `/api/s/{site}/rest/device`)
 - Client operations (`/api/s/{site}/stat/sta`, `/api/s/{site}/rest/user`)
 - Basic firewall rules (`/api/s/{site}/rest/firewallrule`)
@@ -686,11 +691,13 @@ This section provides a comprehensive inventory of UniFi API endpoints categoriz
 - Site operations (`/api/s/{site}/stat/health`)
 
 #### Partially Implemented
+
 - RADIUS profiles (`/api/s/{site}/rest/radiusprofile`) - GET only
 - Dynamic DNS (`/api/s/{site}/rest/dynamicdns`) - GET only
 - RADIUS accounts (`/api/s/{site}/rest/account`) - Listing only
 
 #### Not Implemented - High Priority
+
 - `/api/s/{site}/rest/firewallzone` - Zone-based firewall zones
 - `/api/s/{site}/rest/firewallzonematrix` - Zone-to-zone policies
 - `/api/s/{site}/stat/trafficflow` - Real-time traffic flows
@@ -702,6 +709,7 @@ This section provides a comprehensive inventory of UniFi API endpoints categoriz
 - VPN server/client management endpoints
 
 #### Not Implemented - Medium Priority
+
 - `/api/s/{site}/stat/topology` - Network topology
 - `/api/s/{site}/stat/spectrumscan` - Spectrum analysis
 - `/api/s/{site}/cmd/devmgr/speedtest` - Speed tests
@@ -711,6 +719,7 @@ This section provides a comprehensive inventory of UniFi API endpoints categoriz
 - Enhanced notification configuration
 
 #### Not Implemented - Low Priority
+
 - `/api/s/{site}/cmd/devmgr/migrate` - Device migration
 - `/api/s/{site}/stat/sdn` - Cloud/SSO status
 - `/api/s/{site}/stat/authorization` - Guest authorization
@@ -720,17 +729,20 @@ This section provides a comprehensive inventory of UniFi API endpoints categoriz
 This gap analysis is based on extensive research from the following sources:
 
 **Official Ubiquiti Documentation:**
+
 - UniFi API Getting Started Guide (help.ui.com)
 - UniFi Network Application documentation
 - UniFi Access and Identity documentation
 - Feature release notes for Network 9.0+
 
 **Community Resources:**
+
 - Art-of-WiFi UniFi API Client and Browser (GitHub)
 - Ubiquiti Community Wiki API documentation
 - Community forums and discussion threads
 
 **Third-Party Analysis:**
+
 - UniFi Network 9.0 feature analysis articles
 - Integration guides and tutorials
 - YouTube technical walkthroughs
@@ -748,10 +760,12 @@ The API client layer requires significant enhancements to support new endpoint c
 #### 4.1.1 Zone-Based Firewall Support
 
 **New Endpoint Handlers:**
+
 - `/api/s/{site}/rest/firewallzone` - Zone management (GET, POST, PUT, DELETE)
 - `/api/s/{site}/rest/firewallzonematrix` - Zone-to-zone policy matrix (GET, POST, PUT)
 
 **Data Models:**
+
 ```python
 class FirewallZone:
     _id: str
@@ -772,6 +786,7 @@ class FirewallZoneMatrix:
 ```
 
 **Zone Membership Assignment:**
+
 - Network-to-zone mapping
 - Device-to-zone assignment
 - Dynamic zone membership based on client type
@@ -779,10 +794,12 @@ class FirewallZoneMatrix:
 #### 4.1.2 Traffic Flow Integration
 
 **New Endpoint Handlers:**
+
 - `/api/s/{site}/stat/trafficflow` - Real-time flow data (GET with advanced filters)
 - `/api/s/{site}/rest/trafficflow` - Flow management operations
 
 **Data Models:**
+
 ```python
 class TrafficFlow:
     flow_id: str
@@ -803,6 +820,7 @@ class TrafficFlow:
 ```
 
 **Real-Time Streaming:**
+
 - WebSocket support for flow updates (10-15 second intervals)
 - Polling fallback mechanism
 - Flow filtering by application, client, time range
@@ -810,10 +828,12 @@ class TrafficFlow:
 #### 4.1.3 QoS and Traffic Management
 
 **New Endpoint Handlers:**
+
 - `/api/s/{site}/rest/trafficroute` - Traffic routing rules (CRUD)
 - `/api/s/{site}/rest/qosprofile` - QoS profile management (CRUD)
 
 **Data Models:**
+
 ```python
 class QoSProfile:
     _id: str
@@ -838,12 +858,14 @@ class TrafficRoute:
 #### 4.1.4 Backup and Restore
 
 **New Endpoint Handlers:**
+
 - `/api/cmd/backup` - Trigger backup creation (POST)
 - `/api/backup/list-backups` - List available backups (GET)
 - `/api/backup/delete-backup` - Delete specific backup (DELETE)
 - `/api/backup/restore` - Restore from backup (POST)
 
 **Data Models:**
+
 ```python
 class BackupMetadata:
     backup_id: str
@@ -860,16 +882,19 @@ class BackupMetadata:
 #### 4.1.5 Site Manager API
 
 **Authentication:**
+
 - OAuth/SSO support for `unifi.ui.com` endpoints
 - Token management and refresh mechanisms
 - Separate authentication context from local application APIs
 
 **New Endpoint Handlers:**
+
 - Site Manager API endpoints at `https://api.ui.com/ea/...`
 - Multi-site aggregated monitoring
 - Internet health metrics
 
 **Data Models:**
+
 ```python
 class SiteHealth:
     site_id: str
@@ -884,9 +909,11 @@ class SiteHealth:
 #### 4.1.6 Topology and Network Mapping
 
 **New Endpoint Handlers:**
+
 - `/api/s/{site}/stat/topology` - Network topology graph data (GET)
 
 **Data Models:**
+
 ```python
 class TopologyNode:
     node_id: str
@@ -908,11 +935,13 @@ class TopologyConnection:
 #### 4.1.7 Alert and Notification Management
 
 **New Endpoint Handlers:**
+
 - Alert configuration endpoints (to be researched - Network 9.0+)
 - Webhook registration and management
 - SMTP/email configuration
 
 **Data Models:**
+
 ```python
 class AlertRule:
     _id: str
@@ -935,11 +964,13 @@ class NotificationChannel:
 #### 4.1.8 VPN Configuration
 
 **New Endpoint Handlers:**
+
 - VPN server configuration endpoints (WireGuard, OpenVPN)
 - VPN peer management
 - Policy-based routing configuration
 
 **Data Models:**
+
 ```python
 class VPNServer:
     _id: str
@@ -983,16 +1014,19 @@ class VPNPeer:
 #### 4.2.2 Caching Strategies
 
 **Real-Time Data (Traffic Flows, Live Stats):**
+
 - Short TTL: 10-15 seconds
 - WebSocket streaming preferred over polling
 - Client-side caching with server push updates
 
 **Configuration Data (ZBF, QoS, VPN):**
+
 - Medium-Long TTL: 5-60 minutes
 - Cache invalidation on write operations
 - Optimistic updates with background refresh
 
 **Static/Reference Data (Topology, Backups):**
+
 - Long TTL: 10-60 minutes
 - Manual refresh triggers available
 - Lazy loading with background prefetch
@@ -1002,6 +1036,7 @@ class VPNPeer:
 #### 4.3.1 Site Manager API Authentication
 
 **OAuth/SSO Flow:**
+
 1. User authenticates via `unifi.ui.com` SSO
 2. Receive OAuth token and refresh token
 3. Store tokens separately from local API credentials
@@ -1009,6 +1044,7 @@ class VPNPeer:
 5. Fallback to manual re-authentication
 
 **Multi-Tenant Architecture:**
+
 - Per-site credential storage (encrypted)
 - Site isolation in data layer
 - Cross-site operations with explicit scope
@@ -1017,6 +1053,7 @@ class VPNPeer:
 #### 4.3.2 Multi-Application Authentication
 
 **Separate Authentication Contexts:**
+
 - UniFi Network API (local controller)
 - Site Manager API (`unifi.ui.com`)
 - UniFi Access API (separate controller)
@@ -1024,6 +1061,7 @@ class VPNPeer:
 - UniFi Protect API (separate controller)
 
 Each application requires:
+
 - Separate credential management
 - Independent session handling
 - Unified credential vault in MCP server
@@ -1033,6 +1071,7 @@ Each application requires:
 #### 4.4.1 New Tool Categories
 
 **Zone-Based Firewall (`src/unifi_mcp_server/tools/firewall_zone/`):**
+
 - `create_zone` - Create new firewall zone
 - `list_zones` - List all zones
 - `update_zone` - Modify zone configuration
@@ -1043,6 +1082,7 @@ Each application requires:
 - `migrate_rules_to_zbf` - Migration tool from traditional rules
 
 **Traffic Flow Management (`src/unifi_mcp_server/tools/traffic_flow/`):**
+
 - `get_flows` - Retrieve current traffic flows (with filters)
 - `get_flow_details` - Get details for specific flow
 - `block_flow` - Quick block source/destination IP
@@ -1050,6 +1090,7 @@ Each application requires:
 - `export_flows` - Export flow data for analysis
 
 **QoS and Traffic Management (`src/unifi_mcp_server/tools/qos/`):**
+
 - `create_qos_profile` - Create QoS profile
 - `list_qos_profiles` - List all profiles
 - `update_qos_profile` - Modify profile
@@ -1057,6 +1098,7 @@ Each application requires:
 - `apply_proav_profile` - Apply ProAV template
 
 **Backup and Restore (`src/unifi_mcp_server/tools/backup/`):**
+
 - `trigger_backup` - Create new backup
 - `list_backups` - List available backups
 - `download_backup` - Download backup file
@@ -1065,10 +1107,12 @@ Each application requires:
 - `get_backup_status` - Check backup operation status
 
 **Network Topology (`src/unifi_mcp_server/tools/topology/`):**
+
 - `get_topology` - Retrieve network topology graph
 - `export_topology` - Export topology data (JSON, GraphML)
 
 **Alert Management (`src/unifi_mcp_server/tools/alerts/`):**
+
 - `create_alert_rule` - Create new alert
 - `list_alert_rules` - List all rules
 - `update_alert_rule` - Modify alert
@@ -1076,6 +1120,7 @@ Each application requires:
 - `test_notification` - Test notification delivery
 
 **VPN Management (`src/unifi_mcp_server/tools/vpn/`):**
+
 - `create_vpn_server` - Configure VPN server
 - `list_vpn_servers` - List VPN servers
 - `create_vpn_peer` - Add VPN client/peer
@@ -1097,23 +1142,27 @@ Each application requires:
 #### 4.5.1 Extended Safety Features
 
 **Zone-Based Firewall:**
+
 - Dry-run mode for zone matrix changes
 - Validation of zone membership conflicts
 - Rollback mechanism for policy changes
 - Warning on potentially disruptive rules
 
 **Traffic Flow:**
+
 - Rate limiting on flow queries
 - Automatic pagination for large result sets
 - Warning before blocking critical flows
 
 **Backup and Restore:**
+
 - Mandatory confirmation for restore operations
 - Backup validation before restore
 - Pre-restore backup creation
 - Partial restore capabilities
 
 **VPN Configuration:**
+
 - Validation of VPN network conflicts
 - Warning on split tunnel security implications
 - Automatic backup before VPN config changes
@@ -1134,12 +1183,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 1: Zone-Based Firewall (P0 - Critical)
 
 **Rationale:**
+
 - Highest priority, as it affects all users of UniFi Network 9.0+ (current stable release)
 - Fundamental shift in UniFi's firewall paradigm from traditional rules to zone-based architecture
 - Traditional firewall rules being deprecated in favor of ZBF
 - Users unable to fully utilize Network 9.0 features without this support
 
 **Implementation Requirements:**
+
 - Deep understanding of zone-based architecture and zone types (Internal, External, Gateway, VPN)
 - New data models for `FirewallZone` and `FirewallZoneMatrix`
 - Zone membership assignment algorithms for devices and networks
@@ -1151,18 +1202,21 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Medium (new architectural paradigm)
 
 **API Endpoints:**
+
 - `/api/s/{site}/rest/firewallzone` (CRUD)
 - `/api/s/{site}/rest/firewallzonematrix` (CRUD)
 
 #### Phase 2: Traffic Flows Integration (P0 - Critical)
 
 **Rationale:**
+
 - Essential for modern security and compliance requirements
 - UniFi Network 9.0 introduced significant enhancements beyond basic DPI
 - Real-time monitoring critical for network operations and troubleshooting
 - Enables quick-block actions from traffic analysis
 
 **Implementation Requirements:**
+
 - Real-time data processing and analytics capabilities
 - WebSocket or polling mechanism for live updates (10-15 second intervals)
 - Flow filtering and custom view operations
@@ -1174,18 +1228,21 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Medium (real-time data streaming)
 
 **API Endpoints:**
+
 - `/api/s/{site}/stat/trafficflow` (GET with advanced filters)
 - `/api/s/{site}/rest/trafficflow` (management operations)
 
 #### Phase 3: Advanced QoS and Traffic Management (P1 - High)
 
 **Rationale:**
+
 - Enhances network performance and user experience
 - ProAV profiles critical for professional audio/video deployments
 - Application-based prioritization increasingly important for business networks
 - DSCP tagging required for WAN optimization
 
 **Implementation Requirements:**
+
 - QoS profile data models for traffic prioritization
 - Traffic routing rule engine for application-based policies
 - DSCP tagging and remarking operations
@@ -1197,18 +1254,21 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Low-Medium
 
 **API Endpoints:**
+
 - `/api/s/{site}/rest/trafficroute` (CRUD)
 - `/api/s/{site}/rest/qosprofile` (CRUD)
 
 #### Phase 4: Backup and Restore Operations (P1 - High)
 
 **Rationale:**
+
 - Critical for disaster recovery and migration scenarios
 - Currently on roadmap but not implemented
 - High user demand for automated backup management
 - Essential for production deployments
 
 **Implementation Requirements:**
+
 - Backup trigger and scheduling mechanisms
 - Backup list management with metadata
 - Retention policies and cloud backup integration
@@ -1220,6 +1280,7 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Low (well-documented API)
 
 **API Endpoints:**
+
 - `/api/cmd/backup` (POST)
 - `/api/backup/list-backups` (GET)
 - `/api/backup/delete-backup` (DELETE)
@@ -1228,12 +1289,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 5: Site Manager API Foundation (P1 - High)
 
 **Rationale:**
+
 - Required for enterprise deployments with multiple sites
 - Multi-site management increasingly common
 - Official Ubiquiti API requires integration for cloud features
 - Foundation for future cross-site operations
 
 **Implementation Requirements:**
+
 - OAuth/SSO authentication for `unifi.ui.com` endpoints
 - Multi-tenant architecture for site isolation
 - Cross-site aggregated monitoring capabilities
@@ -1247,12 +1310,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 6: Enhanced RADIUS and Guest Portal (P2 - Medium)
 
 **Rationale:**
+
 - Currently partially implemented (listing only)
 - Guest portal features important for hospitality and public WiFi use cases
 - RADIUS enhancements needed for enterprise authentication
 - Voucher system requested by multiple users
 
 **Implementation Requirements:**
+
 - Full CRUD operations for RADIUS profiles
 - Voucher generation and management with bandwidth/time limits
 - Guest portal customization API
@@ -1264,6 +1329,7 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Low
 
 **API Endpoints:**
+
 - `/api/s/{site}/rest/radiusprofile` (PUT/POST/DELETE)
 - `/api/s/{site}/rest/account` (full CRUD)
 - `/api/s/{site}/rest/hotspotpackage` (CRUD)
@@ -1272,11 +1338,13 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 7: Topology Retrieval and Network Mapping (P2 - Medium)
 
 **Rationale:**
+
 - Valuable for network visualization and troubleshooting
 - Enhances understanding of network structure and device interconnections
 - Moderate user demand for topology export
 
 **Implementation Requirements:**
+
 - Topology graph data parsing and structuring
 - Device interconnection mapping logic
 - Port-level connection details
@@ -1288,6 +1356,7 @@ This section provides a detailed breakdown of implementation priorities based on
 **Risk Level:** Low
 
 **API Endpoints:**
+
 - `/api/s/{site}/stat/topology` (GET)
 
 ### 5.3 Version 0.3.0 Priorities (Q2 2025)
@@ -1295,12 +1364,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 8: SD-WAN Management (P0 - Critical)
 
 **Rationale:**
+
 - UniFi Network 9.0 introduced major SD-WAN enhancements (SiteMagic)
 - Hub-and-spoke topology critical for enterprise deployments
 - Supports up to 1,000 locations (massive scale)
 - License-free site-to-site VPN valuable for cost-conscious deployments
 
 **Implementation Requirements:**
+
 - SD-WAN topology configuration and visualization
 - Hub-and-spoke architecture management (primary + failover hubs)
 - Mesh mode support for up to 20 interconnected sites
@@ -1315,12 +1386,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 9: Alert and Notification Management (P1 - High)
 
 **Rationale:**
+
 - Critical for proactive network monitoring and incident response
 - Webhook integration important for automation and ITSM integration
 - High user demand for custom alerting beyond default notifications
 - Email configuration needed for self-hosted deployments
 
 **Implementation Requirements:**
+
 - Alert rule configuration with customizable triggers
 - Notification channel management (email, push, webhooks)
 - Alert priority and recipient management
@@ -1335,12 +1408,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 10: Object-Oriented Networking (P1 - High)
 
 **Rationale:**
+
 - Significant efficiency gains for network administrators
 - Eliminates repetitive manual configuration
 - Policy-based automation critical for large deployments
 - Template-based deployment reduces human error
 
 **Implementation Requirements:**
+
 - Device Group data models and operations
 - Network Object definitions (reusable IP ranges, ports, etc.)
 - Policy Engine for automated policy application
@@ -1356,12 +1431,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 11: VPN Configuration Management (P0 - Critical)
 
 **Rationale:**
+
 - WireGuard support increasingly important for modern deployments
 - Site-to-site VPN critical for enterprise multi-site networks
 - Policy-based routing enhances security and compliance
 - QR code generation simplifies mobile client setup
 
 **Implementation Requirements:**
+
 - WireGuard server/client configuration and management
 - OpenVPN server/client management (backward compatibility)
 - VPN peer management with QR code generation
@@ -1376,12 +1453,14 @@ This section provides a detailed breakdown of implementation priorities based on
 #### Phase 12: Multi-Application Integration (P1 - High)
 
 **Rationale:**
+
 - Expands MCP server beyond Network application
 - UniFi ecosystem value in integrated management
 - Identity, Access, and Protect represent high-value targets
 - Cross-application analytics unlock new insights
 
 **Implementation Requirements:**
+
 - Separate authentication contexts for each application
 - UniFi Identity API integration (LDAP/AD, event hooks)
 - UniFi Access API integration (door access, visitor management)
@@ -1414,16 +1493,19 @@ This section provides a detailed breakdown of implementation priorities based on
 The following phases can be developed in parallel to accelerate delivery:
 
 **v0.2.0 Parallel Tracks:**
+
 - Track A: Phase 1 (ZBF) + Phase 4 (Backup)
 - Track B: Phase 2 (Traffic Flows) + Phase 5 (Site Manager API)
 - Track C: Phase 3 (QoS) - depends on Track B
 - Track D: Phase 6 (RADIUS) + Phase 7 (Topology) - independent
 
 **v0.3.0 Parallel Tracks:**
+
 - Track A: Phase 8 (SD-WAN) - requires Site Manager from v0.2.0
 - Track B: Phase 9 (Alerts) + Phase 10 (Object-Oriented) - can run parallel
 
 **v1.0.0 Parallel Tracks:**
+
 - Track A: Phase 11 (VPN) - requires SD-WAN from v0.3.0
 - Track B: Multi-app integration (Identity, Access, Protect) - can run parallel
 
@@ -1459,6 +1541,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.1.1 Version 0.2.0 Documentation
 
 **Zone-Based Firewall Section:**
+
 - Complete endpoint reference for `/api/s/{site}/rest/firewallzone` and `/api/s/{site}/rest/firewallzonematrix`
 - Zone type descriptions (Internal, External, Gateway, VPN)
 - Zone membership assignment patterns
@@ -1466,6 +1549,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Migration guide from traditional firewall rules to ZBF
 
 **Traffic Flows Section:**
+
 - Real-time flow monitoring endpoint documentation
 - Flow filtering parameters and examples
 - Quick-block action workflows
@@ -1473,6 +1557,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - WebSocket streaming implementation guide
 
 **QoS and Traffic Management Section:**
+
 - QoS profile configuration reference
 - Traffic routing rule syntax
 - ProAV profile templates (Dante, Q-SYS, SDVoE)
@@ -1480,6 +1565,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Bandwidth scheduling configuration
 
 **Backup and Restore Section:**
+
 - Backup creation and scheduling
 - Backup list management
 - Restore operation workflows
@@ -1487,6 +1573,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Backup validation and verification
 
 **Site Manager API Section:**
+
 - OAuth/SSO authentication flow
 - Multi-site monitoring endpoints
 - Internet health metrics reference
@@ -1494,6 +1581,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Cross-site operations
 
 **Enhanced RADIUS and Guest Portal Section:**
+
 - Full CRUD operations for RADIUS profiles
 - Voucher generation and management
 - Guest portal customization API
@@ -1501,6 +1589,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - RADIUS-assigned VLAN configuration
 
 **Network Topology Section:**
+
 - Topology graph data structure
 - Device interconnection mapping
 - Port-level connection details
@@ -1509,6 +1598,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.1.2 Version 0.3.0 Documentation
 
 **SD-WAN Management Section:**
+
 - Hub-and-spoke topology configuration
 - Mesh mode setup (up to 20 sites)
 - Zero Touch Provisioning (ZTP) workflows
@@ -1516,6 +1606,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Site-to-site VPN automation
 
 **Alert and Notification Section:**
+
 - Alert rule configuration reference
 - Notification channel types (email, push, webhooks)
 - Alert trigger types and conditions
@@ -1523,6 +1614,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Webhook integration examples
 
 **Object-Oriented Networking Section:**
+
 - Device Group operations
 - Network Object definitions
 - Policy Engine workflows
@@ -1532,6 +1624,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.1.3 Version 1.0.0 Documentation
 
 **VPN Configuration Section:**
+
 - WireGuard server/client setup
 - OpenVPN server/client management
 - VPN peer management with QR codes
@@ -1539,6 +1632,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 - Split tunneling configuration
 
 **Multi-Application Integration Sections:**
+
 - UniFi Identity API reference
 - UniFi Access API reference
 - UniFi Protect API reference
@@ -1550,24 +1644,28 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.2.1 Version 0.2.0 Tutorials
 
 **Zone-Based Firewall Workflows:**
+
 1. "Getting Started with Zone-Based Firewall" - Basic zone setup
 2. "Migrating from Traditional Firewall Rules to ZBF" - Step-by-step migration
 3. "Advanced Zone Matrix Policies" - Complex multi-zone scenarios
 4. "Guest Network Isolation with ZBF" - Guest hotspot integration
 
 **Traffic Flow Monitoring Guides:**
+
 1. "Real-Time Traffic Flow Analysis" - Monitoring active connections
 2. "Identifying and Blocking Suspicious Traffic" - Security workflows
 3. "Application-Level Traffic Analysis" - DPI integration
 4. "Traffic Flow Reporting and Analytics" - Data export and analysis
 
 **QoS Configuration Tutorials:**
+
 1. "Setting Up QoS for VoIP Traffic" - Voice prioritization
 2. "ProAV Profile Configuration for Professional Audio/Video" - Dante, Q-SYS setup
 3. "Application-Based Traffic Shaping" - Custom QoS policies
 4. "DSCP Marking for WAN Optimization" - Enterprise QoS
 
 **Backup and Restore Workflows:**
+
 1. "Automated Backup Configuration" - Scheduling and retention
 2. "Cross-Controller Migration" - Moving to new hardware
 3. "Disaster Recovery Planning" - Backup strategies
@@ -1576,12 +1674,14 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.2.2 Version 0.3.0 Tutorials
 
 **SD-WAN Configuration Guides:**
+
 1. "Setting Up Hub-and-Spoke SD-WAN" - Enterprise deployment
 2. "Mesh Mode for Small Multi-Site Networks" - Up to 20 sites
 3. "Zero Touch Provisioning for Remote Sites" - ZTP workflows
 4. "Failover Hub Configuration" - High availability
 
 **Alert and Notification Tutorials:**
+
 1. "Configuring Device Offline Alerts" - Proactive monitoring
 2. "Webhook Integration with ITSM Systems" - ServiceNow, Jira
 3. "Custom Email Alert Templates" - SMTP configuration
@@ -1590,12 +1690,14 @@ The `API.md` file will be significantly expanded to cover all new features and e
 #### 8.2.3 Version 1.0.0 Tutorials
 
 **VPN Configuration Guides:**
+
 1. "WireGuard VPN Server Setup" - Modern VPN deployment
 2. "Mobile Client Configuration with QR Codes" - Easy onboarding
 3. "Site-to-Site VPN with SD-WAN Integration" - Enterprise connectivity
 4. "Policy-Based Routing through VPN" - Traffic steering
 
 **Multi-Application Integration Guides:**
+
 1. "Integrating UniFi Access with Network" - Door access + WiFi
 2. "UniFi Identity for Unified Authentication" - LDAP/AD integration
 3. "Camera Integration with Network Events" - Protect + Network
@@ -1606,6 +1708,7 @@ The `API.md` file will be significantly expanded to cover all new features and e
 Each MCP tool will have comprehensive documentation including:
 
 **Standard Documentation Template:**
+
 1. **Tool Name and Description** - What the tool does
 2. **Parameters** - Required and optional parameters with types
 3. **Return Values** - Expected response structure
@@ -1615,6 +1718,7 @@ Each MCP tool will have comprehensive documentation including:
 7. **API Endpoints Used** - Underlying UniFi API calls
 
 **Example Tool Documentation (create_firewall_zone):**
+
 ```markdown
 ### create_firewall_zone
 
@@ -1641,16 +1745,20 @@ Basic internal zone:
 ```
 
 **Safety Considerations:**
+
 - Creating zones without proper matrix policies may block traffic unexpectedly
 - Review zone matrix after creating new zones
 
 **Related Tools:**
+
 - list_zones
 - update_zone
 - update_zone_matrix
 
 **API Endpoints:**
+
 - POST `/api/s/{site}/rest/firewallzone`
+
 ```
 
 ### 8.4 Integration Documentation

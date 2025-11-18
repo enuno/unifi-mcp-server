@@ -1,5 +1,7 @@
 """Site Manager API tools for multi-site management."""
 
+from typing import Any
+
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
 from ..models.site_manager import (
@@ -13,7 +15,7 @@ from ..utils import get_logger
 logger = get_logger(__name__)
 
 
-async def list_all_sites_aggregated(settings: Settings) -> list[dict]:
+async def list_all_sites_aggregated(settings: Settings) -> list[dict[str, Any]]:
     """List all sites with aggregated stats from Site Manager API.
 
     Args:
@@ -32,14 +34,14 @@ async def list_all_sites_aggregated(settings: Settings) -> list[dict]:
         sites_data = response.get("data", response.get("sites", []))
 
         # Enhance with aggregated stats if available
-        sites = []
+        sites: list[dict[str, Any]] = []
         for site in sites_data:
             sites.append(site)
 
         return sites
 
 
-async def get_internet_health(settings: Settings, site_id: str | None = None) -> dict:
+async def get_internet_health(settings: Settings, site_id: str | None = None) -> dict[str, Any]:
     """Get internet health metrics across sites.
 
     Args:
@@ -58,10 +60,12 @@ async def get_internet_health(settings: Settings, site_id: str | None = None) ->
         response = await client.get_internet_health(site_id)
         data = response.get("data", response)
 
-        return InternetHealthMetrics(**data).model_dump()
+        return InternetHealthMetrics(**data).model_dump()  # type: ignore[no-any-return]
 
 
-async def get_site_health_summary(settings: Settings, site_id: str | None = None) -> dict:
+async def get_site_health_summary(
+    settings: Settings, site_id: str | None = None
+) -> dict[str, Any] | list[dict[str, Any]]:
     """Get health summary for all sites or a specific site.
 
     Args:
@@ -81,14 +85,14 @@ async def get_site_health_summary(settings: Settings, site_id: str | None = None
         data = response.get("data", response)
 
         if site_id:
-            return SiteHealthSummary(**data).model_dump()
+            return SiteHealthSummary(**data).model_dump()  # type: ignore[no-any-return]
         else:
             # Multiple sites
             summaries = data.get("sites", []) if isinstance(data, dict) else data
             return [SiteHealthSummary(**summary).model_dump() for summary in summaries]
 
 
-async def get_cross_site_statistics(settings: Settings) -> dict:
+async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
     """Get aggregate statistics across multiple sites.
 
     Args:
@@ -118,8 +122,10 @@ async def get_cross_site_statistics(settings: Settings) -> dict:
         total_devices = 0
         devices_online = 0
         total_clients = 0
+        total_bandwidth_up_mbps = 0.0
+        total_bandwidth_down_mbps = 0.0
 
-        site_summaries = []
+        site_summaries: list[SiteHealthSummary] = []
         if isinstance(health_data, list):
             for health in health_data:
                 status = health.get("status", "unknown")
@@ -130,12 +136,12 @@ async def get_cross_site_statistics(settings: Settings) -> dict:
                 elif status == "down":
                     sites_down += 1
 
-                site_summaries.append(SiteHealthSummary(**health).model_dump())
+                site_summaries.append(SiteHealthSummary(**health))
                 total_devices += health.get("devices_total", 0)
                 devices_online += health.get("devices_online", 0)
                 total_clients += health.get("clients_active", 0)
 
-        return CrossSiteStatistics(
+        return CrossSiteStatistics(  # type: ignore[no-any-return]
             total_sites=total_sites,
             sites_healthy=sites_healthy,
             sites_degraded=sites_degraded,
@@ -143,11 +149,13 @@ async def get_cross_site_statistics(settings: Settings) -> dict:
             total_devices=total_devices,
             devices_online=devices_online,
             total_clients=total_clients,
+            total_bandwidth_up_mbps=total_bandwidth_up_mbps,
+            total_bandwidth_down_mbps=total_bandwidth_down_mbps,
             site_summaries=site_summaries,
         ).model_dump()
 
 
-async def list_vantage_points(settings: Settings) -> list[dict]:
+async def list_vantage_points(settings: Settings) -> list[dict[str, Any]]:
     """List all Vantage Points.
 
     Args:

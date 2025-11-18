@@ -1,5 +1,7 @@
 """Hotspot voucher management tools."""
 
+from typing import Any
+
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import Voucher
@@ -33,7 +35,7 @@ async def list_vouchers(
         if not client.is_authenticated:
             await client.authenticate()
 
-        params = {}
+        params: dict[str, Any] = {}
         if limit is not None:
             params["limit"] = limit
         if offset is not None:
@@ -67,7 +69,7 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
         response = await client.get(f"/integration/v1/sites/{site_id}/vouchers/{voucher_id}")
         data = response.get("data", response)
 
-        return Voucher(**data).model_dump()
+        return Voucher(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def create_vouchers(
@@ -110,7 +112,7 @@ async def create_vouchers(
             await client.authenticate()
 
         # Build request payload
-        payload = {
+        payload: dict[str, Any] = {
             "count": count,
             "duration": duration,
         }

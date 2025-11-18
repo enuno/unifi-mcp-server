@@ -6,7 +6,7 @@ import json
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 from io import StringIO
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from ..api.client import UniFiClient
@@ -110,9 +110,20 @@ async def get_flow_statistics(site_id: str, settings: Settings, time_range: str 
         except Exception as e:
             logger.warning(f"Flow statistics endpoint not available: {e}")
             # Return empty statistics
-            return FlowStatistics(site_id=site_id, time_range=time_range).model_dump()
+            return FlowStatistics(  # type: ignore[no-any-return]
+                site_id=site_id,
+                time_range=time_range,
+                total_flows=0,
+                total_bytes_sent=0,
+                total_bytes_received=0,
+                total_bytes=0,
+                total_packets_sent=0,
+                total_packets_received=0,
+                unique_sources=0,
+                unique_destinations=0,
+            ).model_dump()
 
-        return FlowStatistics(**data).model_dump()
+        return FlowStatistics(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Settings) -> dict:
@@ -139,7 +150,7 @@ async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Setting
             logger.warning(f"Traffic flow details endpoint not available: {e}")
             raise
 
-        return TrafficFlow(**data).model_dump()
+        return TrafficFlow(**data).model_dump()  # type: ignore[no-any-return]
 
 
 async def get_top_flows(
@@ -260,7 +271,7 @@ async def get_flow_trends(
             logger.warning("Flow trends endpoint not available")
             return []
 
-        return data
+        return data  # type: ignore[no-any-return]
 
 
 async def filter_traffic_flows(
@@ -290,7 +301,7 @@ async def filter_traffic_flows(
         if not client.is_authenticated:
             await client.authenticate()
 
-        params = {"filter": filter_expression, "time_range": time_range}
+        params: dict[str, Any] = {"filter": filter_expression, "time_range": time_range}
         if limit:
             params["limit"] = limit
 
@@ -362,7 +373,7 @@ async def stream_traffic_flows(
 
                     # Determine update type
                     if flow_id in previous_flows:
-                        update_type = "update"
+                        update_type_str: Literal["new", "update", "closed"] = "update"
                         # Calculate bandwidth rate
                         prev_flow = previous_flows[flow_id]
                         bytes_diff = (flow.bytes_sent + flow.bytes_received) - (
@@ -378,12 +389,12 @@ async def stream_traffic_flows(
                             / interval_seconds,
                         }
                     else:
-                        update_type = "new"
+                        update_type_str = "new"
                         bandwidth_rate = None
 
                     # Create stream update
                     update = FlowStreamUpdate(
-                        update_type=update_type,
+                        update_type=update_type_str,
                         flow=flow,
                         timestamp=current_time,
                         bandwidth_rate=bandwidth_rate,
@@ -399,8 +410,9 @@ async def stream_traffic_flows(
                 for prev_flow_id in list(previous_flows.keys()):
                     if prev_flow_id not in current_flow_ids:
                         closed_flow = previous_flows.pop(prev_flow_id)
+                        closed_update_type: Literal["new", "update", "closed"] = "closed"
                         update = FlowStreamUpdate(
-                            update_type="closed",
+                            update_type=closed_update_type,
                             flow=closed_flow,
                             timestamp=current_time,
                             bandwidth_rate=None,
@@ -448,21 +460,21 @@ async def get_connection_states(
 
             # Determine state based on end_time
             if flow_obj.end_time:
-                state = "closed"
+                state_val: Literal["active", "closed", "timed_out"] = "closed"
                 termination_reason = "normal_closure"
             else:
                 # Check if flow is timed out (no activity in last 5 minutes)
                 last_seen = datetime.fromisoformat(flow_obj.start_time.replace("Z", "+00:00"))
                 if (current_time - last_seen).total_seconds() > 300:
-                    state = "timed_out"
+                    state_val = "timed_out"
                     termination_reason = "timeout"
                 else:
-                    state = "active"
+                    state_val = "active"
                     termination_reason = None
 
             connection_state = ConnectionState(
                 flow_id=flow_obj.flow_id,
-                state=state,
+                state=state_val,
                 last_seen=flow_obj.end_time or flow_obj.start_time,
                 total_duration=flow_obj.duration,
                 termination_reason=termination_reason,
@@ -566,7 +578,7 @@ async def get_client_flow_aggregation(
             top_destinations=top_destinations,
         )
 
-        return aggregation.model_dump()
+        return aggregation.model_dump()  # type: ignore[no-any-return]
 
 
 async def block_flow_source_ip(
@@ -622,10 +634,12 @@ async def block_flow_source_ip(
         if dry_run:
             logger.info(f"[DRY RUN] Would block source IP {source_ip}")
             action_id = str(uuid4())
-            return BlockFlowAction(
+            return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
                 block_type="source_ip",
                 blocked_target=source_ip,
+                rule_id=None,
+                zone_id=None,
                 duration=duration,
                 expires_at=expires_at,
                 created_at=datetime.now(timezone.utc).isoformat(),
@@ -656,11 +670,12 @@ async def block_flow_source_ip(
             details={"flow_id": flow_id, "source_ip": source_ip, "rule_id": rule_id},
         )
 
-        return BlockFlowAction(
+        return BlockFlowAction(  # type: ignore[no-any-return]
             action_id=action_id,
             block_type="source_ip",
             blocked_target=source_ip,
             rule_id=rule_id,
+            zone_id=None,
             duration=duration,
             expires_at=expires_at,
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -720,10 +735,12 @@ async def block_flow_destination_ip(
         if dry_run:
             logger.info(f"[DRY RUN] Would block destination IP {destination_ip}")
             action_id = str(uuid4())
-            return BlockFlowAction(
+            return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
                 block_type="destination_ip",
                 blocked_target=destination_ip,
+                rule_id=None,
+                zone_id=None,
                 duration=duration,
                 expires_at=expires_at,
                 created_at=datetime.now(timezone.utc).isoformat(),
@@ -754,11 +771,12 @@ async def block_flow_destination_ip(
             details={"flow_id": flow_id, "destination_ip": destination_ip, "rule_id": rule_id},
         )
 
-        return BlockFlowAction(
+        return BlockFlowAction(  # type: ignore[no-any-return]
             action_id=action_id,
             block_type="destination_ip",
             blocked_target=destination_ip,
             rule_id=rule_id,
+            zone_id=None,
             duration=duration,
             expires_at=expires_at,
             created_at=datetime.now(timezone.utc).isoformat(),
@@ -809,12 +827,14 @@ async def block_flow_application(
 
         if dry_run:
             logger.info(f"[DRY RUN] Would block application {application_name} ({application_id})")
-            return BlockFlowAction(
+            return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
                 block_type="application",
                 blocked_target=application_id,
+                rule_id=None,
                 zone_id=zone_id if use_zbf else None,
                 duration="permanent",
+                expires_at=None,
                 created_at=created_at,
             ).model_dump()
 
@@ -882,13 +902,14 @@ async def block_flow_application(
             },
         )
 
-        return BlockFlowAction(
+        return BlockFlowAction(  # type: ignore[no-any-return]
             action_id=action_id,
             block_type="application",
             blocked_target=application_id,
             rule_id=rule_id,
             zone_id=result_zone_id,
             duration="permanent",
+            expires_at=None,
             created_at=created_at,
         ).model_dump()
 
@@ -949,7 +970,7 @@ async def export_traffic_flows(
 
             output = StringIO()
             # Get all unique fields
-            all_fields = set()
+            all_fields: set[str] = set()
             for flow in flows:
                 all_fields.update(flow.keys())
 
@@ -991,8 +1012,8 @@ async def get_flow_analytics(
         states = await get_connection_states(site_id, settings, time_range)
 
         # Additional analytics
-        protocols = {}
-        applications = {}
+        protocols: dict[str, int] = {}
+        applications: dict[str, dict[str, int]] = {}
 
         for flow in flows:
             # Protocol distribution
@@ -1008,7 +1029,7 @@ async def get_flow_analytics(
             applications[app]["bytes"] += total_bytes
 
         # State distribution
-        state_distribution = {}
+        state_distribution: dict[str, int] = {}
         for state in states:
             state_type = state.get("state", "unknown")
             state_distribution[state_type] = state_distribution.get(state_type, 0) + 1

@@ -22,6 +22,7 @@ This document defines multi-agent coordination workflows for the UniFi MCP Serve
 ### When to Use Multi-Agent Workflows
 
 Use multi-agent coordination when:
+
 - ✓ Task requires multiple specialized skill sets
 - ✓ Work can be parallelized for efficiency
 - ✓ Quality gates need enforcement across domains
@@ -29,6 +30,7 @@ Use multi-agent coordination when:
 - ✓ Systematic improvements (e.g., coverage, docs)
 
 Use single agent when:
+
 - ✗ Task is straightforward and single-domain
 - ✗ No dependencies on other work streams
 - ✗ Quick fixes or simple commands
@@ -110,6 +112,7 @@ Orchestrator verifies each gate before proceeding
 **Estimated Time:** 3-6 hours
 
 #### Phase 1: Planning (15 min)
+
 - **Owner:** Release Manager
 - **Activities:**
   - Read TODO.md, TESTING_PLAN.md
@@ -118,6 +121,7 @@ Orchestrator verifies each gate before proceeding
   - Update this MULTI_AGENT_PLAN.md
 
 #### Phase 2: Parallel Assessment (15 min)
+
 - **Owner:** Release Manager (coordinates)
 - **Parallel Agents:**
   - Test Coverage Agent: Coverage analysis
@@ -126,6 +130,7 @@ Orchestrator verifies each gate before proceeding
   - Security: Vulnerability scan
 
 #### Phase 3: Sequential Gap Resolution (2-4 hours)
+
 - **Owner:** Release Manager (coordinates)
 - **Sequential Tasks:**
   1. **IF coverage < 80%:**
@@ -140,6 +145,7 @@ Orchestrator verifies each gate before proceeding
      - Target: Fix linting/type errors
 
 #### Phase 4: Final Validation (30 min)
+
 - **Owner:** Release Manager
 - **Activities:**
   - Run full test suite
@@ -149,6 +155,7 @@ Orchestrator verifies each gate before proceeding
   - Verify all quality gates
 
 #### Phase 5: Release Artifacts (30 min)
+
 - **Owner:** Release Manager
 - **Activities:**
   - Bump version numbers
@@ -158,6 +165,7 @@ Orchestrator verifies each gate before proceeding
   - Prepare Docker publish
 
 #### Phase 6: Execution (15 min)
+
 - **Owner:** Release Manager
 - **Activities:**
   - Push tag to GitHub
@@ -167,6 +175,7 @@ Orchestrator verifies each gate before proceeding
   - Communicate release
 
 **Quality Gates:**
+
 - [ ] Test coverage >= 80%
 - [ ] All tests passing
 - [ ] No linting errors
@@ -183,6 +192,7 @@ Orchestrator verifies each gate before proceeding
 **Estimated Time:** 1-3 hours per module
 
 #### Phase 1: Analysis (15 min)
+
 - Run coverage report with JSON output
 - Parse coverage.json for gaps
 - Consult TESTING_PLAN.md priorities
@@ -190,6 +200,7 @@ Orchestrator verifies each gate before proceeding
 - Calculate expected gain
 
 #### Phase 2: Planning (15 min)
+
 - Read source file
 - Review existing tests
 - Identify untested code paths
@@ -197,6 +208,7 @@ Orchestrator verifies each gate before proceeding
 - Prepare mock data
 
 #### Phase 3: Implementation (1-2 hours)
+
 - Write test fixtures
 - Implement test cases
 - Run tests iteratively
@@ -204,6 +216,7 @@ Orchestrator verifies each gate before proceeding
 - Ensure all tests pass
 
 #### Phase 4: Validation (15 min)
+
 - Verify coverage improvement
 - Check for regressions
 - Update TESTING_PLAN.md
@@ -216,35 +229,41 @@ Orchestrator verifies each gate before proceeding
 **Estimated Time:** 1-2 hours per tool
 
 #### Phase 1: Research (15 min)
+
 - Read UniFi API documentation
 - Identify endpoint and parameters
 - Check for similar existing tools
 - Plan tool structure
 
 #### Phase 2: Modeling (20 min)
+
 - Create/update Pydantic models
 - Add validators
 - Test model validation
 
 #### Phase 3: Test-Driven Development (30 min)
+
 - Write test fixtures
 - Write failing tests (TDD)
 - Implement success case tests
 - Implement error case tests
 
 #### Phase 4: Implementation (25 min)
+
 - Implement tool function
 - Add error handling
 - Add confirmation support
 - Register in main.py
 
 #### Phase 5: Validation (10 min)
+
 - Run tests (should pass)
 - Check coverage
 - Run linters
 - Verify registration
 
 **Handoff to Documentation Agent:**
+
 - Tool function with comprehensive docstring
 - Test coverage >= 80%
 - All quality checks pass
@@ -336,6 +355,7 @@ When actively managing a release, update this section:
 ## Best Practices
 
 ### For Orchestrators
+
 1. **Plan before executing** - Create clear task breakdown
 2. **Parallelize when possible** - Use parallel agents for independent work
 3. **Sequence dependencies** - Ensure dependent tasks run in order
@@ -344,6 +364,7 @@ When actively managing a release, update this section:
 6. **Communicate clearly** - Keep user informed of status
 
 ### For Specialist Agents
+
 1. **Focus on your domain** - Stay within your expertise
 2. **Report progress** - Provide regular status updates
 3. **Request help when blocked** - Escalate blockers quickly
@@ -352,6 +373,7 @@ When actively managing a release, update this section:
 6. **Follow protocols** - Use communication templates
 
 ### For Users
+
 1. **Choose appropriate pattern** - Match workflow to task complexity
 2. **Set clear objectives** - Define success criteria upfront
 3. **Review agent plans** - Approve multi-agent coordination plans
@@ -363,18 +385,21 @@ When actively managing a release, update this section:
 Track these metrics for multi-agent workflows:
 
 ### Efficiency Metrics
+
 - **Total workflow time** - Start to finish
 - **Agent utilization** - Parallel vs sequential time
 - **Idle time** - Time agents wait for dependencies
 - **Rework percentage** - Tasks requiring redo
 
 ### Quality Metrics
+
 - **Quality gate pass rate** - Percentage passing on first attempt
 - **Coverage improvement rate** - Coverage gained per hour
 - **Documentation completeness** - Percentage of tools documented
 - **Bug escape rate** - Issues found after release
 
 ### Coordination Metrics
+
 - **Handoff success rate** - Clean handoffs between agents
 - **Communication clarity** - Misunderstandings or clarifications needed
 - **Workflow completion rate** - Workflows completed vs abandoned
@@ -426,6 +451,7 @@ After each major multi-agent workflow:
 ### Common Workflows Quick Start
 
 **Quick Release:**
+
 ```
 1. Ask Release Manager to prepare release
 2. Release Manager coordinates all agents
@@ -435,6 +461,7 @@ After each major multi-agent workflow:
 ```
 
 **Coverage Sprint:**
+
 ```
 1. Ask Test Coverage Agent to analyze gaps
 2. Review priority modules
@@ -443,6 +470,7 @@ After each major multi-agent workflow:
 ```
 
 **Tool Addition:**
+
 ```
 1. Ask Tool Developer Agent to create tool
 2. Provide: Tool name, UniFi endpoint, description
@@ -454,6 +482,7 @@ After each major multi-agent workflow:
 ---
 
 **Document Maintenance:**
+
 - Update this document when coordination patterns evolve
 - Archive completed release plans to history section
 - Keep templates current with project standards

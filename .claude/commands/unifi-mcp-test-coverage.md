@@ -19,6 +19,7 @@ This command runs comprehensive coverage analysis and provides actionable recomm
 **Steps to execute:**
 
 1. Run full test suite with detailed coverage:
+
    ```bash
    pytest --cov=src --cov-report=term-missing --cov-report=html --cov-report=json -v
    ```

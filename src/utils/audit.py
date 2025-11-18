@@ -192,7 +192,7 @@ async def audit_action(
     }
 
     if details:
-        parameters["details"] = details
+        parameters["details"] = details  # type: ignore[assignment]
 
     # Get audit log file from settings if available
     log_file = getattr(settings, "audit_log_file", None)

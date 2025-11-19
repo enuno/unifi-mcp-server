@@ -133,14 +133,23 @@ async def update_firewall_zone(
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build request payload with only provided fields
-        payload: dict[str, Any] = {}
+        # Fetch current zone to get existing networkIds if not provided
+        # API requires networkIds field to always be present
+        current_zone_response = await client.get(
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{firewall_zone_id}")
+        )
+        current_zone = current_zone_response.get("data", current_zone_response)
+        current_network_ids = current_zone.get("networkIds", [])
+
+        # Build request payload - networkIds is required by API
+        payload: dict[str, Any] = {
+            "networkIds": network_ids if network_ids is not None else current_network_ids
+        }
+
         if name is not None:
             payload["name"] = name
         if description is not None:
             payload["description"] = description
-        if network_ids is not None:
-            payload["networks"] = network_ids
 
         if dry_run:
             logger.info(f"[DRY RUN] Would update firewall zone with payload: {payload}")
@@ -428,6 +437,16 @@ async def get_zone_statistics(
 ) -> dict[str, Any]:
     """Get traffic statistics for a firewall zone.
 
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Zone traffic statistics are not available via the API.
+    Monitor traffic via /sites/{siteId}/clients endpoint instead.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
+
     Args:
         site_id: Site identifier
         zone_id: Zone identifier
@@ -435,16 +454,16 @@ async def get_zone_statistics(
 
     Returns:
         Zone traffic statistics including bandwidth usage and connection counts
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    async with UniFiClient(settings) as client:
-        logger.info(f"Fetching statistics for zone {zone_id} on site {site_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        response = await client.get(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/statistics")
-        )
-        data = response.get("data", response)
-
-        return data  # type: ignore[no-any-return]
+    logger.warning(
+        f"get_zone_statistics called for zone {zone_id} but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Zone statistics endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Monitor traffic via /sites/{siteId}/clients endpoint instead. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )

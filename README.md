@@ -21,7 +21,7 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 - **Network Configuration**: Create, update, and delete networks, VLANs, and subnets with DHCP configuration
 - **Client Management**: Query, block, unblock, and reconnect clients
 - **Firewall Rules**: Create, update, and delete firewall rules with traffic filtering
-- **Zone-Based Firewall (ZBF)**: Modern zone-based security with zone management, policy matrix, and application blocking (UniFi Network 9.0+)
+- **Zone-Based Firewall (ZBF)**: Modern zone-based security with zone management (create, read, update, delete zones and network assignments). *Note: Zone policy matrix and application blocking endpoints do not exist in UniFi API v10.0.156 - requires UniFi Console UI configuration. See ZBF_STATUS.md for details.*
 - **WiFi/SSID Management**: Create and manage wireless networks with WPA2/WPA3, guest networks, and VLAN isolation
 - **Port Forwarding**: Configure port forwarding rules for external access
 - **DPI Statistics**: Deep Packet Inspection analytics for bandwidth usage by application and category
@@ -404,10 +404,12 @@ pytest -m integration
 **Current Test Coverage**:
 
 - **Overall**: 37.29% (213 tests passing)
-- **ZBF Tools**: 84.13% (34 tests) - Zone management, policy matrix, application blocking
+- **ZBF Tools**: 84.13% (34 tests) - Zone management working, policy matrix/app blocking endpoints don't exist
 - **Traffic Flow Tools**: 86.62% (16 tests)
 - **New v0.2.0 Models**: 100% (36 tests)
 - **Existing Tools**: 15-95% (varying coverage)
+
+**Note:** ZBF unit tests validate tool logic, but 8 tools cannot function due to missing API endpoints (verified on v10.0.156)
 
 See [TESTING_PLAN.md](TESTING_PLAN.md) for the comprehensive testing roadmap.
 
@@ -544,14 +546,22 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] Redis caching with automatic invalidation
 - [x] Webhook support for real-time events
 
-**Phase 6: Zone-Based Firewall (15 tools)**
+**Phase 6: Zone-Based Firewall (7 working tools, 8 non-functional)**
 
-- [x] Zone management (create, update, delete, list, assign networks) - 7 tools
-- [x] Zone policy matrix (get matrix, update policies, delete policies) - 5 tools
-- [x] Application blocking per zone (DPI-based blocking) - 2 tools
-- [x] Zone statistics and monitoring - 1 tool
+- [x] Zone management (create, update, delete, list, assign networks) - 7 tools ✅ WORKING
+- [x] Zone policy matrix (get matrix, update policies, delete policies) - 5 tools ❌ ENDPOINTS DO NOT EXIST
+- [x] Application blocking per zone (DPI-based blocking) - 2 tools ❌ ENDPOINTS DO NOT EXIST
+- [x] Zone statistics and monitoring - 1 tool ❌ ENDPOINT DOES NOT EXIST
 - [x] Type-safe Pydantic models for ZBF
 - [x] Comprehensive unit tests (84% coverage)
+- [x] Endpoint verification on U7 Express and UDM Pro (v10.0.156)
+
+**ZBF API Limitations (Verified 2025-11-18):**
+- ✅ Zone CRUD operations work (local gateway API only)
+- ❌ Zone policy matrix NOT available via API (configure in UniFi Console)
+- ❌ Application blocking per zone NOT available via API
+- ❌ Zone statistics NOT available via API
+- See `tests/verification/PHASE2_FINDINGS.md` for complete verification report
 
 **Total: 55 MCP tools + 4 MCP resources**
 

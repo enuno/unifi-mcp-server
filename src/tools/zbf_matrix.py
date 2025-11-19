@@ -1,11 +1,31 @@
-"""Zone-Based Firewall matrix management tools."""
+"""Zone-Based Firewall matrix management tools.
+
+⚠️ IMPORTANT: All tools in this file are DEPRECATED as of 2025-11-18.
+
+Endpoint verification on UniFi Express 7 and UDM Pro (API v10.0.156) confirmed
+that the zone policy matrix and application blocking endpoints DO NOT EXIST.
+
+The following endpoints were tested and returned 404:
+- /sites/{siteId}/firewall/policies/zone-matrix
+- /sites/{siteId}/firewall/policies/zones/{zoneId}
+- /sites/{siteId}/firewall/zones/{zoneId}/policies
+- /sites/{siteId}/firewall/zones/{zoneId}/applications/block
+- /sites/{siteId}/firewall/zones/{zoneId}/applications/blocked
+
+Workarounds:
+- Configure zone policies manually in UniFi Console UI
+- Use traditional ACL rules (/sites/{siteId}/acls) for IP-based filtering
+- Use DPI categories for application blocking at network level
+
+See tests/verification/PHASE2_FINDINGS.md for complete verification report.
+"""
 
 from typing import Any
 
-from ..api.client import UniFiClient
+from ..api.client import UniFiClient  # noqa: F401
 from ..config import Settings
-from ..models.zbf_matrix import ApplicationBlockRule, ZonePolicy, ZonePolicyMatrix
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..models.zbf_matrix import ApplicationBlockRule, ZonePolicy, ZonePolicyMatrix  # noqa: F401
+from ..utils import audit_action, get_logger, validate_confirmation  # noqa: F401
 
 logger = get_logger(__name__)
 
@@ -13,42 +33,49 @@ logger = get_logger(__name__)
 async def get_zbf_matrix(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve zone-to-zone policy matrix.
 
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    The zone policy matrix must be configured via the UniFi Console UI.
+    Use traditional ACL rules (/sites/{siteId}/acls) as a workaround.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
+
     Args:
         site_id: Site identifier
         settings: Application settings
 
     Returns:
         Zone policy matrix with all zones and policies
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving ZBF matrix for site {site_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        # Get matrix endpoint - fallback to zones if matrix doesn't exist
-        try:
-            response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones/matrix"))
-            data = response.get("data", response)
-        except Exception:
-            # If matrix endpoint doesn't exist, construct from zones
-            logger.warning("ZBF matrix endpoint not available, constructing from zones")
-            zones_response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones"))
-            zones_data = zones_response.get("data", [])
-            zone_ids = [zone.get("_id") for zone in zones_data if zone.get("_id")]
-
-            data = {
-                "site_id": site_id,
-                "zones": zone_ids,
-                "policies": [],
-                "default_policy": "allow",
-            }
-
-        return ZonePolicyMatrix(**data).model_dump()  # type: ignore[no-any-return]
+    logger.warning(
+        "get_zbf_matrix called but endpoint does not exist in UniFi API v10.0.156. "
+        "Configure zone policies via UniFi Console UI instead."
+    )
+    raise NotImplementedError(
+        "Zone policy matrix endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Configure zone policies manually in UniFi Console. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> list[dict[str, Any]]:
     """Get policies for a specific zone.
+
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Zone policies must be configured via the UniFi Console UI.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
 
     Args:
         site_id: Site identifier
@@ -57,24 +84,19 @@ async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> l
 
     Returns:
         List of policies for the zone
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving policies for zone {zone_id} on site {site_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        try:
-            response = await client.get(
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/policies")
-            )
-            data = response.get("data", [])
-        except Exception:
-            # If endpoint doesn't exist, return empty list
-            logger.warning(f"Zone policies endpoint not available for zone {zone_id}")
-            return []
-
-        return [ZonePolicy(**policy).model_dump() for policy in data]
+    logger.warning(
+        f"get_zone_policies called for zone {zone_id} but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Zone policies endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Configure zone policies manually in UniFi Console. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def update_zbf_policy(
@@ -91,6 +113,15 @@ async def update_zbf_policy(
 ) -> dict[str, Any]:
     """Modify inter-zone firewall policy.
 
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Zone-to-zone policies must be configured via the UniFi Console UI.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
+
     Args:
         site_id: Site identifier
         source_zone_id: Source zone identifier
@@ -105,59 +136,20 @@ async def update_zbf_policy(
 
     Returns:
         Updated policy
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    validate_confirmation(confirm, "update ZBF policy")
-
-    if action not in ("allow", "deny"):
-        raise ValueError("Action must be 'allow' or 'deny'")
-
-    async with UniFiClient(settings) as client:
-        logger.info(f"Updating ZBF policy from zone {source_zone_id} to {destination_zone_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        payload = {
-            "source_zone_id": source_zone_id,
-            "destination_zone_id": destination_zone_id,
-            "action": action,
-            "enabled": enabled,
-        }
-
-        if description:
-            payload["description"] = description
-        if priority is not None:
-            payload["priority"] = priority
-
-        if dry_run:
-            logger.info(f"[DRY RUN] Would update ZBF policy with payload: {payload}")
-            return {"dry_run": True, "payload": payload}
-
-        try:
-            response = await client.put(
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies"),
-                json_data=payload,
-            )
-            data = response.get("data", response)
-        except Exception as e:
-            logger.error(f"Failed to update ZBF policy: {e}")
-            # If endpoint doesn't exist, return dry-run result
-            if "404" in str(e) or "not found" in str(e).lower():
-                logger.warning("ZBF policy endpoint not available, returning dry-run result")
-                return {"dry_run": True, "payload": payload, "note": "Endpoint not available"}
-            raise
-
-        # Audit the action
-        await audit_action(
-            settings,
-            action_type="update_zbf_policy",
-            resource_type="zbf_policy",
-            resource_id=f"{source_zone_id}-{destination_zone_id}",
-            site_id=site_id,
-            details=payload,
-        )
-
-        return ZonePolicy(**data).model_dump()  # type: ignore[no-any-return]
+    logger.warning(
+        f"update_zbf_policy called for {source_zone_id} -> {destination_zone_id} "
+        "but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Zone policy update endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Configure zone policies manually in UniFi Console. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def block_application_by_zone(
@@ -173,6 +165,16 @@ async def block_application_by_zone(
 ) -> dict[str, Any]:
     """Block applications using zone-based rules.
 
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Application blocking per zone is not available via the API.
+    Use DPI categories for application blocking at the network level instead.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
+
     Args:
         site_id: Site identifier
         zone_id: Zone identifier
@@ -186,79 +188,35 @@ async def block_application_by_zone(
 
     Returns:
         Created application block rule
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    validate_confirmation(confirm, "block application by zone")
-
-    if action not in ("block", "allow"):
-        raise ValueError("Action must be 'block' or 'allow'")
-
-    async with UniFiClient(settings) as client:
-        logger.info(f"Blocking application {application_id} in zone {zone_id} on site {site_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        # Get application name from DPI applications
-        application_name = None
-        try:
-            dpi_response = await client.get("/integration/v1/dpi/applications")
-            dpi_data = dpi_response.get("data", [])
-            for app in dpi_data:
-                if app.get("_id") == application_id:
-                    application_name = app.get("name")
-                    break
-        except Exception:
-            logger.warning(f"Could not fetch application name for {application_id}")
-
-        payload = {
-            "zone_id": zone_id,
-            "application_id": application_id,
-            "action": action,
-            "enabled": enabled,
-        }
-
-        if description:
-            payload["description"] = description
-        if application_name:
-            payload["application_name"] = application_name
-
-        if dry_run:
-            logger.info(f"[DRY RUN] Would block application with payload: {payload}")
-            return {"dry_run": True, "payload": payload}
-
-        try:
-            response = await client.post(
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/applications/block"),
-                json_data=payload,
-            )
-            data = response.get("data", response)
-        except Exception as e:
-            logger.error(f"Failed to block application: {e}")
-            # If endpoint doesn't exist, return dry-run result
-            if "404" in str(e) or "not found" in str(e).lower():
-                logger.warning(
-                    "Application blocking endpoint not available, returning dry-run result"
-                )
-                return {"dry_run": True, "payload": payload, "note": "Endpoint not available"}
-            raise
-
-        # Audit the action
-        await audit_action(
-            settings,
-            action_type="block_application_by_zone",
-            resource_type="application_block_rule",
-            resource_id=application_id,
-            site_id=site_id,
-            details={"zone_id": zone_id, "application_id": application_id},
-        )
-
-        return ApplicationBlockRule(**data).model_dump()  # type: ignore[no-any-return]
+    logger.warning(
+        f"block_application_by_zone called for zone {zone_id}, app {application_id} "
+        "but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Application blocking per zone endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Use DPI categories for application blocking at network level. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def list_blocked_applications(
     site_id: str, zone_id: str | None = None, settings: Settings | None = None
 ) -> list[dict[str, Any]]:
     """List applications blocked per zone.
+
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Application blocking per zone is not available via the API.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
 
     Args:
         site_id: Site identifier
@@ -267,31 +225,19 @@ async def list_blocked_applications(
 
     Returns:
         List of blocked applications
+
+    Raises:
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    if settings is None:
-        raise ValueError("Settings is required")
-
-    async with UniFiClient(settings) as client:
-        logger.info(f"Listing blocked applications for site {site_id}")
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        endpoint = settings.get_integration_path(f"sites/{site_id}/firewall/zones/applications/blocked")
-        if zone_id:
-            endpoint = (
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/applications/blocked")
-            )
-
-        try:
-            response = await client.get(endpoint)
-            data = response.get("data", [])
-        except Exception:
-            # If endpoint doesn't exist, return empty list
-            logger.warning("Blocked applications endpoint not available")
-            return []
-
-        return [ApplicationBlockRule(**rule).model_dump() for rule in data]
+    logger.warning(
+        f"list_blocked_applications called for site {site_id} "
+        "but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Blocked applications list endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def get_zone_matrix_policy(
@@ -301,6 +247,15 @@ async def get_zone_matrix_policy(
     settings: Settings,
 ) -> dict[str, Any]:
     """Get a specific zone-to-zone policy.
+
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Zone-to-zone policies must be configured via the UniFi Console UI.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
 
     Args:
         site_id: Site identifier
@@ -312,35 +267,18 @@ async def get_zone_matrix_policy(
         Zone-to-zone policy details
 
     Raises:
-        ValueError: If policy not found
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    async with UniFiClient(settings) as client:
-        logger.info(
-            f"Retrieving policy from zone {source_zone_id} to {destination_zone_id} on site {site_id}"
-        )
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        try:
-            response = await client.get(
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}")
-            )
-            data = response.get("data", response)
-        except Exception:
-            # If endpoint doesn't exist, try getting all policies and filter
-            logger.warning("Specific policy endpoint not available, fetching all policies")
-            all_policies = await get_zone_policies(site_id, source_zone_id, settings)
-
-            for policy in all_policies:
-                if policy.get("destination_zone_id") == destination_zone_id:
-                    return policy
-
-            raise ValueError(
-                f"Policy from zone {source_zone_id} to {destination_zone_id} not found"
-            )
-
-        return ZonePolicy(**data).model_dump()  # type: ignore[no-any-return]
+    logger.warning(
+        f"get_zone_matrix_policy called for {source_zone_id} -> {destination_zone_id} "
+        "but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Zone matrix policy endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Configure zone policies manually in UniFi Console. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )
 
 
 async def delete_zbf_policy(
@@ -352,6 +290,15 @@ async def delete_zbf_policy(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Delete a zone-to-zone policy (revert to default action).
+
+    ⚠️ **DEPRECATED - ENDPOINT DOES NOT EXIST**
+
+    This endpoint has been verified to NOT EXIST in UniFi Network API v10.0.156.
+    Tested on UniFi Express 7 and UDM Pro on 2025-11-18.
+
+    Zone-to-zone policies must be configured via the UniFi Console UI.
+
+    See tests/verification/PHASE2_FINDINGS.md for details.
 
     Args:
         site_id: Site identifier
@@ -365,59 +312,15 @@ async def delete_zbf_policy(
         Deletion confirmation
 
     Raises:
-        ValueError: If confirmation not provided
+        NotImplementedError: This endpoint does not exist in the UniFi API
     """
-    validate_confirmation(confirm, "delete ZBF policy")
-
-    async with UniFiClient(settings) as client:
-        logger.info(
-            f"Deleting ZBF policy from zone {source_zone_id} to {destination_zone_id} on site {site_id}"
-        )
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        if dry_run:
-            logger.info(
-                f"[DRY RUN] Would delete policy from {source_zone_id} to {destination_zone_id}"
-            )
-            return {
-                "dry_run": True,
-                "source_zone_id": source_zone_id,
-                "destination_zone_id": destination_zone_id,
-                "action": "would_delete",
-            }
-
-        try:
-            await client.delete(
-                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}")
-            )
-        except Exception as e:
-            logger.error(f"Failed to delete ZBF policy: {e}")
-            # If endpoint doesn't exist, return dry-run result
-            if "404" in str(e) or "not found" in str(e).lower():
-                logger.warning("ZBF policy delete endpoint not available, returning dry-run result")
-                return {
-                    "dry_run": True,
-                    "source_zone_id": source_zone_id,
-                    "destination_zone_id": destination_zone_id,
-                    "note": "Endpoint not available",
-                }
-            raise
-
-        # Audit the action
-        await audit_action(
-            settings,
-            action_type="delete_zbf_policy",
-            resource_type="zbf_policy",
-            resource_id=f"{source_zone_id}-{destination_zone_id}",
-            site_id=site_id,
-            details={"source_zone_id": source_zone_id, "destination_zone_id": destination_zone_id},
-        )
-
-        return {
-            "status": "success",
-            "source_zone_id": source_zone_id,
-            "destination_zone_id": destination_zone_id,
-            "action": "deleted",
-        }
+    logger.warning(
+        f"delete_zbf_policy called for {source_zone_id} -> {destination_zone_id} "
+        "but endpoint does not exist in UniFi API v10.0.156."
+    )
+    raise NotImplementedError(
+        "Zone policy delete endpoint does not exist in UniFi Network API v10.0.156. "
+        "Verified on U7 Express and UDM Pro (2025-11-18). "
+        "Configure zone policies manually in UniFi Console. "
+        "See tests/verification/PHASE2_FINDINGS.md for details."
+    )

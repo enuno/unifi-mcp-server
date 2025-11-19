@@ -1344,13 +1344,47 @@ fb_block = await mcp.call_tool("block_application_by_zone", {
 })
 ```
 
-**⚠️ Important Notes:**
+**⚠️ Critical Limitations (Verified 2025-11-18):**
 
-- ZBF requires UniFi Network Application 9.0+
-- API endpoints are speculative and may require adjustment
+**API Availability:**
+- ZBF is **NOT available via Cloud API** - requires local gateway API access
+- Requires UniFi Network Application 9.0+
+- Tested on UniFi Express 7 and UDM Pro (v10.0.156)
+
+**Verified Working Endpoints:**
+- ✅ `list_firewall_zones` - Returns all zones with network assignments
+- ✅ `get_zone_details` - Returns zone with networkIds and metadata
+- ⚠️ `create_firewall_zone` - Endpoint exists but untested (mutating operation)
+- ⚠️ `update_firewall_zone` - Endpoint exists but untested (mutating operation)
+- ⚠️ `delete_firewall_zone` - Endpoint exists but untested (mutating operation)
+- ⚠️ Network assignment operations - Endpoints exist but untested
+
+**Non-Functional Tools (Endpoints DO NOT EXIST):**
+- ❌ `get_zone_statistics` - Zone statistics endpoint does not exist
+- ❌ `get_zbf_matrix` - Zone policy matrix endpoint does not exist
+- ❌ `get_zone_policies` - Zone-specific policies endpoint does not exist
+- ❌ `get_zone_matrix_policy` - Individual policy endpoint does not exist
+- ❌ `update_zbf_policy` - Policy update endpoint does not exist
+- ❌ `delete_zbf_policy` - Policy deletion endpoint does not exist
+- ❌ `block_application_by_zone` - Application blocking endpoint does not exist
+- ❌ `list_blocked_applications` - Blocked apps list endpoint does not exist
+
+**Impact:**
+- Zone CRUD operations (create, read, update, delete) work
+- Network assignment to zones works
+- **Zone-to-zone policy matrix is NOT available via API** - must be configured in UniFi Console UI
+- **Application blocking per zone is NOT available via API**
+- **Zone traffic statistics are NOT available via API**
+
+**Workarounds:**
+- Use traditional ACL rules (`/sites/{siteId}/acls`) for IP-based filtering
+- Configure zone policies manually in UniFi Console
+- Use DPI categories for application blocking at network level
+
+**Safety:**
 - Always test with `dry_run=True` first
-- All endpoints require `confirm=True` for safety
-- Statistics may vary based on controller configuration
+- All mutating endpoints require `confirm=True`
+- Verification Details: See `tests/verification/PHASE2_FINDINGS.md`
 
 ### Network Configuration
 

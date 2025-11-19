@@ -110,9 +110,18 @@ class UniFiClient:
         """
         try:
             # Test authentication with a simple API call
-            response = await self._request("GET", "/ea/sites")
+            # For local gateways, use /proxy/network/integration/v1/sites
+            # For cloud API, use /ea/sites
+            if self.settings.api_type.value == "local":
+                test_endpoint = self.settings.get_integration_path("sites")
+            else:
+                test_endpoint = "/ea/sites"
+
+            response = await self._request("GET", test_endpoint)
             self._authenticated = (
-                response.get("meta", {}).get("rc") == "ok" or response.get("data") is not None
+                response.get("meta", {}).get("rc") == "ok" or
+                response.get("data") is not None or
+                response.get("count") is not None  # Local API returns count
             )
             self.logger.info("Successfully authenticated with UniFi API")
         except Exception as e:

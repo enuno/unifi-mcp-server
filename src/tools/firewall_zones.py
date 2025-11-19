@@ -30,10 +30,11 @@ async def list_firewall_zones(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones")
+        endpoint = settings.get_integration_path(f"sites/{site_id}/firewall/zones")
+        response = await client.get(endpoint)
         data = response.get("data", [])
 
-        return [FirewallZone(**zone).model_dump() for zone in data]
+        return [FirewallZone(**zone).model_dump() for zone in data]  # type: ignore[no-any-return]
 
 
 async def create_firewall_zone(
@@ -82,7 +83,7 @@ async def create_firewall_zone(
             return {"dry_run": True, "payload": payload}
 
         response = await client.post(
-            f"/integration/v1/sites/{site_id}/firewall/zones", json_data=payload
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones"), json_data=payload
         )
         data = response.get("data", response)
 
@@ -146,7 +147,7 @@ async def update_firewall_zone(
             return {"dry_run": True, "payload": payload}
 
         response = await client.put(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{firewall_zone_id}",
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{firewall_zone_id}"),
             json_data=payload,
         )
         data = response.get("data", response)
@@ -197,7 +198,7 @@ async def assign_network_to_zone(
         network_name = None
         try:
             network_response = await client.get(
-                f"/integration/v1/sites/{site_id}/networks/{network_id}"
+                settings.get_integration_path(f"sites/{site_id}/networks/{network_id}")
             )
             network_data = network_response.get("data", {})
             network_name = network_data.get("name")
@@ -206,7 +207,7 @@ async def assign_network_to_zone(
 
         # Update zone to include this network
         zone_response = await client.get(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}"
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}")
         )
         zone_data = zone_response.get("data", {})
         current_networks = zone_data.get("networks", [])
@@ -228,7 +229,7 @@ async def assign_network_to_zone(
             return {"dry_run": True, "payload": payload}
 
         await client.put(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}",
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"),
             json_data=payload,
         )
 
@@ -266,7 +267,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}")
+        response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"))
         zone_data = response.get("data", {})
         network_ids = zone_data.get("networks", [])
 
@@ -275,7 +276,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
         for network_id in network_ids:
             try:
                 network_response = await client.get(
-                    f"/integration/v1/sites/{site_id}/networks/{network_id}"
+                    settings.get_integration_path(f"sites/{site_id}/networks/{network_id}")
                 )
                 network_data = network_response.get("data", {})
                 networks.append(
@@ -331,7 +332,7 @@ async def delete_firewall_zone(
             logger.info(f"[DRY RUN] Would delete firewall zone {zone_id}")
             return {"dry_run": True, "zone_id": zone_id, "action": "would_delete"}
 
-        await client.delete(f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}")
+        await client.delete(settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"))
 
         # Audit the action
         await audit_action(
@@ -380,7 +381,7 @@ async def unassign_network_from_zone(
 
         # Get current zone configuration
         zone_response = await client.get(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}"
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}")
         )
         zone_data = zone_response.get("data", {})
         current_networks = zone_data.get("networks", [])
@@ -398,7 +399,7 @@ async def unassign_network_from_zone(
             return {"dry_run": True, "payload": payload}
 
         await client.put(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}",
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"),
             json_data=payload,
         )
 
@@ -442,7 +443,7 @@ async def get_zone_statistics(
             await client.authenticate()
 
         response = await client.get(
-            f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/statistics"
+            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/statistics")
         )
         data = response.get("data", response)
 

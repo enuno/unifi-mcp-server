@@ -28,12 +28,12 @@ async def get_zbf_matrix(site_id: str, settings: Settings) -> dict[str, Any]:
 
         # Get matrix endpoint - fallback to zones if matrix doesn't exist
         try:
-            response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones/matrix")
+            response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones/matrix"))
             data = response.get("data", response)
         except Exception:
             # If matrix endpoint doesn't exist, construct from zones
             logger.warning("ZBF matrix endpoint not available, constructing from zones")
-            zones_response = await client.get(f"/integration/v1/sites/{site_id}/firewall/zones")
+            zones_response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones"))
             zones_data = zones_response.get("data", [])
             zone_ids = [zone.get("_id") for zone in zones_data if zone.get("_id")]
 
@@ -66,7 +66,7 @@ async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> l
 
         try:
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/policies"
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/policies")
             )
             data = response.get("data", [])
         except Exception:
@@ -135,7 +135,7 @@ async def update_zbf_policy(
 
         try:
             response = await client.put(
-                f"/integration/v1/sites/{site_id}/firewall/zones/{source_zone_id}/policies",
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies"),
                 json_data=payload,
             )
             data = response.get("data", response)
@@ -228,7 +228,7 @@ async def block_application_by_zone(
 
         try:
             response = await client.post(
-                f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/applications/block",
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/applications/block"),
                 json_data=payload,
             )
             data = response.get("data", response)
@@ -277,10 +277,10 @@ async def list_blocked_applications(
         if not client.is_authenticated:
             await client.authenticate()
 
-        endpoint = f"/integration/v1/sites/{site_id}/firewall/zones/applications/blocked"
+        endpoint = settings.get_integration_path(f"sites/{site_id}/firewall/zones/applications/blocked")
         if zone_id:
             endpoint = (
-                f"/integration/v1/sites/{site_id}/firewall/zones/{zone_id}/applications/blocked"
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}/applications/blocked")
             )
 
         try:
@@ -324,7 +324,7 @@ async def get_zone_matrix_policy(
 
         try:
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}"
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}")
             )
             data = response.get("data", response)
         except Exception:
@@ -390,7 +390,7 @@ async def delete_zbf_policy(
 
         try:
             await client.delete(
-                f"/integration/v1/sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}"
+                settings.get_integration_path(f"sites/{site_id}/firewall/zones/{source_zone_id}/policies/{destination_zone_id}")
             )
         except Exception as e:
             logger.error(f"Failed to delete ZBF policy: {e}")

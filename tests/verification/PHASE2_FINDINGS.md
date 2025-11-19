@@ -288,3 +288,37 @@ Phase 2 verification revealed significant discrepancies between the implemented 
 The ZBF Phase 1 implementation was based on assumptions about API structure that do not match reality. Significant rework is needed to create a functional ZBF toolset.
 
 **Next Steps:** Update ZBF_STATUS.md, fix critical bugs, and decide whether to remove non-functional tools or mark them as unavailable.
+
+## UDM Pro Verification (2025-11-18)
+
+**Additional Testing:** After initial verification on U7 Express, testing was repeated on UDM Pro to check for device-specific endpoint differences.
+
+**Gateway:** UniFi Dream Machine Pro (UDM Pro)
+**IP:** 10.2.0.1
+**API Key:** P-la_4yXTA1sS6lFZs4VaoRgwoBXtAxi
+
+### Results
+
+**✅ Working Endpoints (3):**
+- `list_firewall_zones` - Returns 6 zones
+- `get_zone_details` - Returns zone with networkIds
+- `list_firewall_policies` - Returns 126 general firewall policies (NOT zone matrix)
+
+**❌ Not Found Endpoints (8):**
+- All zone policy matrix endpoints (zone-matrix, zone-based, zbf)
+- Zone statistics endpoint
+- All zone-specific policy endpoints
+- All application blocking endpoints (blocked-applications, application-blocking, dpi-restrictions)
+
+### Comparison: U7 Express vs UDM Pro
+
+| Endpoint Category | U7 Express | UDM Pro | Notes |
+|-------------------|------------|---------|-------|
+| Zone Management | ✅ 2 working | ✅ 2 working | Identical |
+| Zone Policy Matrix | ❌ All 404 | ❌ All 404 | Identical |
+| Application Blocking | ❌ All 404 | ❌ All 404 | Identical |
+| General Firewall Policies | ✅ Works | ✅ Works | New discovery (traditional rules, not ZBF) |
+
+**Conclusion:** Both U7 Express and UDM Pro have identical ZBF API support. The endpoint availability is not device-specific - the zone policy matrix and application blocking endpoints simply don't exist in the current UniFi Network API implementation.
+
+The `/firewall/policies` endpoint returns traditional firewall rules (source/destination IP-based), NOT the zone-based firewall policy matrix.

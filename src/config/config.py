@@ -200,8 +200,9 @@ class Settings(BaseSettings):
         if self.api_type == APIType.CLOUD:
             return self.cloud_api_url
         else:
-            protocol = "https" if self.local_verify_ssl else "http"
-            return f"{protocol}://{self.local_host}:{self.local_port}"
+            # Always use HTTPS for local gateways (port 443)
+            # SSL verification is controlled separately via verify_ssl property
+            return f"https://{self.local_host}:{self.local_port}"
 
     @property
     def verify_ssl(self) -> bool:
@@ -213,6 +214,32 @@ class Settings(BaseSettings):
         if self.api_type == APIType.CLOUD:
             return True
         return self.local_verify_ssl
+
+    def get_integration_path(self, endpoint: str) -> str:
+        """Get the correct integration API endpoint path based on API type.
+
+        For Cloud API: Returns /integration/v1/... (though ZBF not supported on Cloud)
+        For Local API: Returns /proxy/network/integration/v1/...
+
+        Args:
+            endpoint: The endpoint path starting with /sites/... (e.g., "/sites/default/firewall/zones")
+
+        Returns:
+            Complete endpoint path with correct prefix
+
+        Example:
+            >>> settings.get_integration_path("/sites/abc/firewall/zones")
+            # Cloud: "/integration/v1/sites/abc/firewall/zones"
+            # Local: "/proxy/network/integration/v1/sites/abc/firewall/zones"
+        """
+        # Remove leading slash if present for consistency
+        endpoint = endpoint.lstrip("/")
+
+        if self.api_type == APIType.CLOUD:
+            return f"/integration/v1/{endpoint}"
+        else:
+            # Local gateways require /proxy/network/ prefix
+            return f"/proxy/network/integration/v1/{endpoint}"
 
     def get_headers(self) -> dict[str, str]:
         """Get HTTP headers for API requests.

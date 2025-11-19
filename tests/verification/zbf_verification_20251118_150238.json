@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-11-18T15:02:38.390539",
+  "api_type": "cloud",
+  "base_url": "https://api.ui.com",
+  "endpoints": {
+    "list_firewall_zones": {
+      "endpoint": "/integration/v1/sites/default/firewall/zones",
+      "method": "GET",
+      "description": "List all firewall zones",
+      "status": "error",
+      "http_status": null,
+      "response": null,
+      "error": "resource '/integration/v1/sites/default/firewall/zones' not found",
+      "verified": false
+    },
+    "get_zbf_matrix": {
+      "endpoint": "/integration/v1/sites/default/firewall/policies/zone-matrix",
+      "method": "GET",
+      "description": "Get zone-to-zone policy matrix",
+      "status": "error",
+      "http_status": null,
+      "response": null,
+      "error": "resource '/integration/v1/sites/default/firewall/policies/zone-matrix' not found",
+      "verified": false
+    }
+  },
+  "summary": {
+    "total": 2,
+    "verified": 0,
+    "failed": 2,
+    "not_found": 0
+  }
+}

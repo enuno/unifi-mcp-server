@@ -1,8 +1,24 @@
 # Zone-Based Firewall (ZBF) Implementation Status
 
-**Last Updated:** 2025-01-18
+**Last Updated:** 2025-11-18
 **Version:** v0.1.4
-**Status:** Phase 1 Complete (15/15 tools implemented)
+**Status:** Phase 2 Complete - **CRITICAL FINDINGS**
+
+## ⚠️ Phase 2 Verification Results - CRITICAL
+
+**Verification Date:** 2025-11-18
+**Test Environment:** UniFi Express 7 (U7 Express) - Local Gateway
+**Endpoint Verification:** **2/15 endpoints exist (13% success rate)**
+
+### Critical Findings
+
+1. **❌ 87% of ZBF endpoints DO NOT EXIST** in the actual UniFi API
+2. **❌ Cloud API does NOT support ZBF** - local gateway required
+3. **❌ Critical path bug** - missing `/proxy/network/` prefix for local API
+4. **✅ Only 2 endpoints verified** - `list_zones` and `get_zone`
+5. **⚠️ 8 tools non-functional** - endpoints don't exist
+
+**See [PHASE2_FINDINGS.md](tests/verification/PHASE2_FINDINGS.md) for complete verification report.**
 
 ## Overview
 
@@ -10,32 +26,41 @@ This document tracks the implementation status of Zone-Based Firewall (ZBF) func
 
 **Requirements:**
 - UniFi Network Application 9.0 or higher
-- Cloud API or Local API access with admin privileges
-- Network controller with ZBF feature enabled
+- **Local API access ONLY** (Cloud API does not support ZBF)
+- Local gateway with admin API key
+- Self-signed SSL certificate handling
+
+**API Path:** Local gateways require `/proxy/network/integration/v1/...` prefix (not `/integration/v1/...`)
 
 ## Implementation Summary
 
-| Category | Tools | Status | Test Coverage |
-|----------|-------|--------|--------------|
-| Zone Management | 7 | Complete | 85.96% |
-| Zone Policy Matrix | 5 | Complete | 81.41% |
-| Application Blocking | 2 | Complete | 81.41% |
-| Statistics | 1 | Complete | 85.96% |
-| **Total** | **15** | **Complete** | **84.13%** |
+| Category | Tools | Implementation Status | Endpoint Status | Test Coverage |
+|----------|-------|----------------------|-----------------|--------------|
+| Zone Management | 7 | Complete | 2 Verified, 5 Untested | 85.96% |
+| Zone Policy Matrix | 5 | Complete | **0 Verified (endpoints don't exist)** | 81.41% |
+| Application Blocking | 2 | Complete | **0 Verified (endpoints don't exist)** | 81.41% |
+| Statistics | 1 | Complete | **0 Verified (endpoint doesn't exist)** | 85.96% |
+| **Total** | **15** | **Complete** | **2/15 Verified (13%)** | **84.13%** |
+
+**Functional Tools:** 2 verified, 5 untested (likely work), **8 non-functional (endpoints don't exist)**
 
 ## Tool-by-Tool Status
 
 ### Zone Management (7 tools)
 
-#### ✅ `list_firewall_zones`
-- **Status:** Implemented & Tested
+#### ✅ `list_firewall_zones` - **VERIFIED**
+- **Status:** Implemented, Tested & VERIFIED ✅
 - **Test Coverage:** Yes (3 tests)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/zones`
-- **Verification:** Unverified (requires controller)
+- **Actual Endpoint:** `GET /proxy/network/integration/v1/sites/{site_id}/firewall/zones` (local gateway)
+- **Verification:** ✅ VERIFIED on U7 Express (2025-11-18)
+- **API Support:** Local gateway only (Cloud API: ❌)
 - **Features:**
   - Lists all firewall zones for a site
   - Returns zone details with network assignments
   - No confirmation required (read-only)
+- **Response Format:** Paginated JSON with offset, limit, count, totalCount, data array
+- **Test Result:** Returns 6 system-defined zones (Hotspot, Gateway, External, Dmz, Vpn, Internal)
 
 #### ✅ `create_firewall_zone`
 - **Status:** Implemented & Tested
@@ -95,106 +120,102 @@ This document tracks the implementation status of Zone-Based Firewall (ZBF) func
 - **Known Issues:**
   - Edge case validation test removed (async mock complexity)
 
-#### ✅ `get_zone_networks`
-- **Status:** Implemented & Tested
+#### ✅ `get_zone_networks` - **VERIFIED**
+- **Status:** Implemented, Tested & VERIFIED ✅
 - **Test Coverage:** Yes (1 test)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/zones/{zone_id}`
-- **Verification:** Unverified (requires controller)
+- **Actual Endpoint:** `GET /proxy/network/integration/v1/sites/{site_id}/firewall/zones/{zone_id}` (local gateway)
+- **Verification:** ✅ VERIFIED on U7 Express (2025-11-18)
+- **API Support:** Local gateway only (Cloud API: ❌)
 - **Features:**
   - Retrieves networks assigned to zone
   - No confirmation required (read-only)
+- **Response Format:** JSON object with id, name, networkIds array, metadata
+- **Test Result:** Successfully retrieved zone with networkIds
 
-#### ✅ `get_zone_statistics`
-- **Status:** Implemented & Tested
+#### ❌ `get_zone_statistics` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (1 test)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/zones/{zone_id}/statistics`
-- **Verification:** Unverified (requires controller)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
 - **Features:**
-  - Retrieves traffic statistics for zone
-  - No confirmation required (read-only)
-- **Notes:**
-  - Endpoint may be speculative (requires verification)
+  - **WILL NOT WORK** - endpoint returns 404
+  - Speculative endpoint (not in actual API)
+- **Action Required:** Remove tool or mark as unavailable
 
-### Zone Policy Matrix (5 tools)
+### Zone Policy Matrix (5 tools) - **ALL ENDPOINTS DO NOT EXIST**
 
-#### ✅ `get_zbf_matrix`
-- **Status:** Implemented & Tested
+#### ❌ `get_zbf_matrix` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (3 tests)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/policies/zone-matrix`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Retrieves complete zone-to-zone policy matrix
-  - Returns default actions and explicit policies
-  - No confirmation required (read-only)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Tested Alternative Paths:** All returned 404
+  - `/firewall/zone-matrix`
+  - `/firewall/zone-based-firewall/matrix`
+  - `/zone-based-firewall/matrix`
+- **Action Required:** Remove tool or mark as unavailable
 
-#### ✅ `get_zone_policies`
-- **Status:** Implemented & Tested
+#### ❌ `get_zone_policies` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (1 test)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/policies/zones/{zone_id}`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Retrieves all policies for a specific zone
-  - No confirmation required (read-only)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Tested Alternative Paths:** All returned 404
+  - `/firewall/zones/{zone_id}/policies`
+  - `/firewall/zone-based-firewall/policies`
+- **Action Required:** Remove tool or mark as unavailable
 
-#### ✅ `get_zone_matrix_policy`
-- **Status:** Implemented & Tested
+#### ❌ `get_zone_matrix_policy` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (1 test)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/policies/zone-matrix/{source_zone_id}/{destination_zone_id}`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Retrieves specific zone-to-zone policy
-  - No confirmation required (read-only)
-- **Known Issues:**
-  - Edge case validation test removed (async mock complexity)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Action Required:** Remove tool or mark as unavailable
 
-#### ✅ `update_zbf_policy`
-- **Status:** Implemented & Tested
+#### ❌ `update_zbf_policy` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (4 tests: accept, reject, drop, dry-run)
 - **Endpoint:** `PUT /integration/v1/sites/{site_id}/firewall/policies/zone-matrix/{source_zone_id}/{destination_zone_id}`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Updates zone-to-zone policy
-  - Supports actions: accept, reject, drop
-  - Requires `confirm=True`
-  - Supports dry-run mode
-  - Audit logging enabled
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Action Required:** Remove tool or mark as unavailable
 
-#### ✅ `delete_zbf_policy`
-- **Status:** Implemented & Tested
+#### ❌ `delete_zbf_policy` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (2 tests: success, dry-run)
 - **Endpoint:** `DELETE /integration/v1/sites/{site_id}/firewall/policies/zone-matrix/{source_zone_id}/{destination_zone_id}`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Deletes zone-to-zone policy (reverts to default)
-  - Requires `confirm=True`
-  - Supports dry-run mode
-  - Audit logging enabled
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Action Required:** Remove tool or mark as unavailable
 
-### Application Blocking (2 tools)
+### Application Blocking (2 tools) - **ALL ENDPOINTS DO NOT EXIST**
 
-#### ✅ `block_application_by_zone`
-- **Status:** Implemented & Tested
+#### ❌ `block_application_by_zone` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (3 tests: success, error, dry-run)
 - **Endpoint:** `POST /integration/v1/sites/{site_id}/firewall/zones/{zone_id}/app-block`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Blocks application by DPI signature in zone
-  - Requires `confirm=True`
-  - Supports dry-run mode
-  - Audit logging enabled
-- **Notes:**
-  - Endpoint may be speculative (requires verification)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Tested Alternative Paths:** All returned 404
+  - `/firewall/zones/{zone_id}/application-blocking`
+  - `/firewall/zones/{zone_id}/blocked-applications`
+- **Action Required:** Remove tool or mark as unavailable
 
-#### ✅ `list_blocked_applications`
-- **Status:** Implemented & Tested
+#### ❌ `list_blocked_applications` - **ENDPOINT DOES NOT EXIST**
+- **Status:** Implemented & Tested (but NON-FUNCTIONAL)
 - **Test Coverage:** Yes (1 test)
 - **Endpoint:** `GET /integration/v1/sites/{site_id}/firewall/zones/{zone_id}/app-block`
-- **Verification:** Unverified (requires controller)
-- **Features:**
-  - Lists applications blocked in zone
-  - No confirmation required (read-only)
-- **Notes:**
-  - Endpoint may be speculative (requires verification)
+- **Verification:** ❌ ENDPOINT DOES NOT EXIST (tested 2025-11-18)
+- **API Support:** ❌ Not available
+- **Tested Alternative Paths:** All returned 404
+  - `/firewall/zones/{zone_id}/application-blocking`
+  - `/firewall/zones/{zone_id}/blocked-applications`
+- **Action Required:** Remove tool or mark as unavailable
 
 ## Test Coverage Details
 

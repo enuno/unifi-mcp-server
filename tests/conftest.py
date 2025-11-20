@@ -20,13 +20,27 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
 
 @pytest.fixture(autouse=True)
 def reset_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Reset environment variables before each test."""
+    """Reset environment variables before each test and prevent .env loading."""
     # Clear any existing UNIFI_ environment variables
     import os
+    from pathlib import Path
 
     for key in list(os.environ.keys()):
         if key.startswith("UNIFI_") or key == "LOG_LEVEL":
             monkeypatch.delenv(key, raising=False)
+
+    # Temporarily rename .env file to prevent Pydantic from auto-loading it
+    env_file = Path(__file__).parent.parent / ".env"
+    temp_env_file = Path(__file__).parent.parent / ".env.test_backup"
+
+    if env_file.exists() and not temp_env_file.exists():
+        env_file.rename(temp_env_file)
+        # Schedule restoration after test
+        import atexit
+        def restore_env():
+            if temp_env_file.exists():
+                temp_env_file.rename(env_file)
+        atexit.register(restore_env)
 
 
 @pytest.fixture

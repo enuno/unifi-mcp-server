@@ -166,6 +166,12 @@ credentials.json
 secrets.yaml
 .secrets/
 
+# gemini-cli settings
+.gemini/
+
+# GitHub App credentials
+gha-creds-*.json
+
 # Build artifacts
 *.whl
 *.tar.gz

@@ -123,7 +123,7 @@ docker-compose down
 
 **Included Services:**
 
-- **UniFi MCP Server**: Main MCP server with 55 tools
+- **UniFi MCP Server**: Main MCP server with 77 tools (69 functional, 8 deprecated)
 - **MCP Toolbox**: Web-based analytics dashboard (port 8080)
 - **Redis**: High-performance caching layer
 
@@ -448,7 +448,7 @@ unifi-mcp-server/
 ├── .claude/
 │   └── commands/          # Custom slash commands for development
 ├── src/
-│   ├── main.py            # MCP server entry point (55 tools registered)
+│   ├── main.py            # MCP server entry point (77 tools registered)
 │   ├── cache.py           # Redis caching implementation
 │   ├── config/            # Configuration management
 │   ├── api/               # UniFi API client with rate limiting
@@ -556,6 +556,18 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] Comprehensive unit tests (84% coverage)
 - [x] Endpoint verification on U7 Express and UDM Pro (v10.0.156)
 
+**Phase 7: Traffic Flow Monitoring (15 tools) ✅ COMPLETE**
+
+- [x] Real-time traffic flow monitoring and analysis
+- [x] Flow filtering by IP, protocol, application, time range
+- [x] Connection state tracking (active, closed, timed-out)
+- [x] Client traffic aggregation with top applications/destinations
+- [x] Bandwidth rate calculations for streaming flows
+- [x] Security quick-response capabilities (block suspicious IPs)
+- [x] Type-safe Pydantic models for traffic flows
+- [x] Comprehensive unit tests (86.62% coverage)
+- [x] Advanced analytics and reporting capabilities
+
 **ZBF API Limitations (Verified 2025-11-18):**
 - ✅ Zone CRUD operations work (local gateway API only)
 - ❌ Zone policy matrix NOT available via API (configure in UniFi Console)
@@ -563,7 +575,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - ❌ Zone statistics NOT available via API
 - See `tests/verification/PHASE2_FINDINGS.md` for complete verification report
 
-**Total: 55 MCP tools + 4 MCP resources**
+**Total: 77 MCP tools (69 functional, 8 deprecated) + 4 MCP resources**
 
 ### Version 0.2.0 (Planned)
 

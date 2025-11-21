@@ -11,6 +11,7 @@ alwaysApply: false
 1. Pull latest changes: `git pull origin main`
 2. Create feature branch: `git checkout -b feature/your-feature`
 3. Review existing patterns in similar files
+4. If work involves Claude commands/agents or `.claude`/`docs/claude` assets, load `docs/claude/CLAUDE.md` plus the relevant manuals (01-07) before making changes so Cursor and Claude guidance stay aligned.
 
 ## During Development
 

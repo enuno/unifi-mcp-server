@@ -3,12 +3,21 @@
 from typing import Any
 
 from ..api.client import UniFiClient
-from ..config import Settings
+from ..config import APIType, Settings
 from ..models import FirewallZone
 from ..models.zbf_matrix import ZoneNetworkAssignment
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..utils import ValidationError, audit_action, get_logger, validate_confirmation
 
 logger = get_logger(__name__)
+
+
+def _ensure_local_api(settings: Settings) -> None:
+    """Ensure the UniFi controller is accessed via the local API for ZBF operations."""
+    if settings.api_type != APIType.LOCAL:
+        raise ValidationError(
+            "Zone-Based Firewall endpoints are only available when UNIFI_API_TYPE='local'. "
+            "Please configure a local UniFi gateway connection to use these tools."
+        )
 
 
 async def list_firewall_zones(
@@ -24,13 +33,16 @@ async def list_firewall_zones(
     Returns:
         List of firewall zones
     """
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Listing firewall zones for site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
 
-        endpoint = settings.get_integration_path(f"sites/{site_id}/firewall/zones")
+        resolved_site_id = await client.resolve_site_id(site_id)
+        endpoint = settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones")
         response = await client.get(endpoint)
         data = response.get("data", [])
 
@@ -62,6 +74,8 @@ async def create_firewall_zone(
     """
     validate_confirmation(confirm, "create firewall zone")
 
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Creating firewall zone '{name}' for site {site_id}")
 
@@ -82,8 +96,10 @@ async def create_firewall_zone(
             logger.info(f"[DRY RUN] Would create firewall zone with payload: {payload}")
             return {"dry_run": True, "payload": payload}
 
+        resolved_site_id = await client.resolve_site_id(site_id)
         response = await client.post(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones"), json_data=payload
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones"),
+            json_data=payload,
         )
         data = response.get("data", response)
 
@@ -127,16 +143,20 @@ async def update_firewall_zone(
     """
     validate_confirmation(confirm, "update firewall zone")
 
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Updating firewall zone {firewall_zone_id} for site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
 
+        resolved_site_id = await client.resolve_site_id(site_id)
+
         # Fetch current zone to get existing networkIds if not provided
         # API requires networkIds field to always be present
         current_zone_response = await client.get(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{firewall_zone_id}")
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}")
         )
         current_zone = current_zone_response.get("data", current_zone_response)
         current_network_ids = current_zone.get("networkIds", [])
@@ -156,7 +176,7 @@ async def update_firewall_zone(
             return {"dry_run": True, "payload": payload}
 
         response = await client.put(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{firewall_zone_id}"),
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}"),
             json_data=payload,
         )
         data = response.get("data", response)
@@ -197,17 +217,21 @@ async def assign_network_to_zone(
     """
     validate_confirmation(confirm, "assign network to zone")
 
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Assigning network {network_id} to zone {zone_id} on site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
 
+        resolved_site_id = await client.resolve_site_id(site_id)
+
         # Get network name
         network_name = None
         try:
             network_response = await client.get(
-                settings.get_integration_path(f"sites/{site_id}/networks/{network_id}")
+                settings.get_integration_path(f"sites/{resolved_site_id}/networks/{network_id}")
             )
             network_data = network_response.get("data", {})
             network_name = network_data.get("name")
@@ -216,7 +240,7 @@ async def assign_network_to_zone(
 
         # Update zone to include this network
         zone_response = await client.get(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}")
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}")
         )
         zone_data = zone_response.get("data", {})
         current_networks = zone_data.get("networks", [])
@@ -238,7 +262,7 @@ async def assign_network_to_zone(
             return {"dry_run": True, "payload": payload}
 
         await client.put(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"),
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}"),
             json_data=payload,
         )
 
@@ -270,13 +294,19 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
     Returns:
         List of networks in the zone
     """
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Listing networks in zone {zone_id} on site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"))
+        resolved_site_id = await client.resolve_site_id(site_id)
+
+        response = await client.get(
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}")
+        )
         zone_data = response.get("data", {})
         network_ids = zone_data.get("networks", [])
 
@@ -285,7 +315,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
         for network_id in network_ids:
             try:
                 network_response = await client.get(
-                    settings.get_integration_path(f"sites/{site_id}/networks/{network_id}")
+                    settings.get_integration_path(f"sites/{resolved_site_id}/networks/{network_id}")
                 )
                 network_data = network_response.get("data", {})
                 networks.append(
@@ -331,6 +361,8 @@ async def delete_firewall_zone(
     """
     validate_confirmation(confirm, "delete firewall zone")
 
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Deleting firewall zone {zone_id} from site {site_id}")
 
@@ -341,7 +373,10 @@ async def delete_firewall_zone(
             logger.info(f"[DRY RUN] Would delete firewall zone {zone_id}")
             return {"dry_run": True, "zone_id": zone_id, "action": "would_delete"}
 
-        await client.delete(settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"))
+        resolved_site_id = await client.resolve_site_id(site_id)
+        await client.delete(
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}")
+        )
 
         # Audit the action
         await audit_action(
@@ -382,15 +417,19 @@ async def unassign_network_from_zone(
     """
     validate_confirmation(confirm, "unassign network from zone")
 
+    _ensure_local_api(settings)
+
     async with UniFiClient(settings) as client:
         logger.info(f"Unassigning network {network_id} from zone {zone_id} on site {site_id}")
 
         if not client.is_authenticated:
             await client.authenticate()
 
+        resolved_site_id = await client.resolve_site_id(site_id)
+
         # Get current zone configuration
         zone_response = await client.get(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}")
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}")
         )
         zone_data = zone_response.get("data", {})
         current_networks = zone_data.get("networks", [])
@@ -408,7 +447,7 @@ async def unassign_network_from_zone(
             return {"dry_run": True, "payload": payload}
 
         await client.put(
-            settings.get_integration_path(f"sites/{site_id}/firewall/zones/{zone_id}"),
+            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{zone_id}"),
             json_data=payload,
         )
 

@@ -3,10 +3,11 @@
 import asyncio
 import time
 from typing import Any
+from uuid import UUID
 
 import httpx
 
-from ..config import Settings
+from ..config import APIType, Settings
 from ..utils import (
     APIError,
     AuthenticationError,
@@ -80,6 +81,7 @@ class UniFiClient:
         )
 
         self._authenticated = False
+        self._site_id_cache: dict[str, str] = {}
 
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
@@ -303,3 +305,59 @@ class UniFiClient:
             Response data
         """
         return await self._request("DELETE", endpoint, params=params)
+
+    @staticmethod
+    def _looks_like_uuid(value: str | None) -> bool:
+        """Determine whether a string value appears to be a UUID."""
+        if not value:
+            return False
+
+        try:
+            UUID(value)
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    async def resolve_site_id(self, site_identifier: str | None) -> str:
+        """Resolve a user-provided site identifier to the controller's UUID format.
+
+        Args:
+            site_identifier: Friendly site identifier (e.g., "default" or UUID)
+
+        Returns:
+            Resolved UUID for the site (or the original identifier for cloud API)
+
+        Raises:
+            ResourceNotFoundError: If the site cannot be located
+        """
+        if not site_identifier:
+            site_identifier = self.settings.default_site
+
+        if self.settings.api_type == APIType.CLOUD or self._looks_like_uuid(site_identifier):
+            return site_identifier
+
+        cached = self._site_id_cache.get(site_identifier)
+        if cached:
+            return cached
+
+        sites_endpoint = self.settings.get_integration_path("sites")
+        response = await self.get(sites_endpoint)
+        sites = response.get("data", response.get("sites", []))
+
+        for site in sites:
+            site_id = site.get("id") or site.get("_id")
+            if not site_id:
+                continue
+
+            identifiers = {
+                site_id,
+                site.get("internalReference"),
+                site.get("name"),
+                site.get("shortName"),
+            }
+
+            if site_identifier in {value for value in identifiers if value}:
+                self._site_id_cache[site_identifier] = site_id
+                return site_id
+
+        raise ResourceNotFoundError("site", site_identifier)

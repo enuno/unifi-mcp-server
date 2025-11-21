@@ -16,6 +16,7 @@ alwaysApply: false
 - Commit without running pre-commit hooks
 - Mix sync and async code improperly
 - Return untyped dicts when Pydantic models are appropriate
+- Ignore CLAUDE/docus (`CLAUDE.md`, `docs/claude/`) when editing command/agent assets or MCP tool instructions
 
 ## ✅ DO
 
@@ -27,6 +28,7 @@ alwaysApply: false
 - Run full test suite before committing
 - Use `async with` for resource management
 - Define Pydantic models for complex data structures
+- Keep `.cursor/rules` guidance in sync with updates under `docs/claude/` so Cursor and Claude agents follow the same workflows, safety expectations, and allowed tool policies
 
 ## Quick Commands
 

@@ -156,7 +156,9 @@ async def update_firewall_zone(
         # Fetch current zone to get existing networkIds if not provided
         # API requires networkIds field to always be present
         current_zone_response = await client.get(
-            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}")
+            settings.get_integration_path(
+                f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}"
+            )
         )
         current_zone = current_zone_response.get("data", current_zone_response)
         current_network_ids = current_zone.get("networkIds", [])
@@ -176,7 +178,9 @@ async def update_firewall_zone(
             return {"dry_run": True, "payload": payload}
 
         response = await client.put(
-            settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}"),
+            settings.get_integration_path(
+                f"sites/{resolved_site_id}/firewall/zones/{firewall_zone_id}"
+            ),
             json_data=payload,
         )
         data = response.get("data", response)

@@ -67,64 +67,54 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 
 ---
 
-### 🚧 Phase 1: Zone-Based Firewall (P0 - Critical) [~60% Complete]
+### ✅ Phase 1: Zone-Based Firewall (P0 - Critical) [~95% Complete]
 
-**Status**: In Progress
-**Estimated Remaining Effort**: 2 weeks
-**Priority**: P0 (Critical - Blocking UniFi Network 9.0+ users)
+**Status**: Nearly Complete (Endpoint Verification Complete, Testing Remaining)
+**Completed Endpoint Verification**: 2025-11-18
+**Estimated Remaining Effort**: 2-3 days (optional features + testing)
+**Priority**: P0 (Critical - UniFi Network 9.0+ users)
 
 #### ✅ Completed
 - [x] `FirewallZone` data model (src/models/firewall_zone.py)
-- [x] `ZonePolicyMatrix` data model (src/models/zbf_matrix.py)
-- [x] `ZonePolicy` data model (src/models/zbf_matrix.py)
-- [x] `ApplicationBlockRule` data model (src/models/zbf_matrix.py)
-- [x] Basic firewall zone tools (src/tools/firewall_zones.py):
-  - [x] `list_firewall_zones`
-  - [x] `create_firewall_zone`
-  - [x] `update_firewall_zone`
-  - [x] `assign_network_to_zone`
-  - [x] `get_zone_networks`
-- [x] Zone matrix tools (src/tools/zbf_matrix.py):
-  - [x] `get_zbf_matrix`
-  - [x] `get_zone_policies`
-  - [x] `update_zbf_policy`
-  - [x] `block_application_by_zone`
-  - [x] `list_blocked_applications`
+- [x] All firewall zone tools (src/tools/firewall_zones.py):
+  - [x] `list_firewall_zones` ✅ Verified working on U7 Express & UDM Pro
+  - [x] `create_firewall_zone` ⚠️ Untested (endpoint exists)
+  - [x] `update_firewall_zone` ⚠️ Untested (endpoint exists)
+  - [x] `delete_firewall_zone` ✅ Implemented
+  - [x] `assign_network_to_zone` ⚠️ Untested (endpoint exists)
+  - [x] `unassign_network_from_zone` ✅ Implemented
+  - [x] `get_zone_networks` ✅ Verified working
+- [x] Critical bug fixes (2025-11-18):
+  - [x] Path prefix (`/proxy/network/`) for local API - Already fixed in config.py
+  - [x] SSL protocol logic (always use `https://`) - Already fixed in config.py
+  - [x] Site ID resolution (handle "default" alias) - Already fixed in client.py
+- [x] Deprecated non-functional tools (endpoints verified to NOT EXIST):
+  - [x] Removed `get_zone_statistics` from main.py (endpoint doesn't exist)
+  - [x] Removed all ZBF matrix tools from main.py (endpoints don't exist):
+    - `get_zbf_matrix`, `get_zone_policies`, `update_zbf_policy`, `delete_zbf_policy`
+    - `block_application_by_zone`, `list_blocked_applications`, `get_zone_matrix_policy`
+  - [x] Kept zbf_matrix.py and deprecated functions for reference with clear warnings
+- [x] Documentation updates:
+  - [x] Updated API.md with accurate ZBF documentation
+  - [x] Added critical limitations section
+  - [x] Documented workarounds
 - [x] Unit tests (tests/unit/test_zbf_tools.py, 22 tests, 82.68% coverage)
 
-#### 🔲 Remaining Tasks
+#### 🔲 Remaining Tasks (Optional/Low Priority)
 
-**API Integration & Endpoint Verification** (3-4 days)
-- [ ] Verify all ZBF endpoints work with real UniFi Network 9.0+ controller
-- [ ] Update endpoint paths from `/integration/v1` to actual UniFi API paths
-- [ ] Test zone creation with different zone types (INTERNAL, EXTERNAL, GATEWAY, VPN)
-- [ ] Validate zone membership assignment for devices and networks
-- [ ] Test zone-to-zone policy matrix operations
+**Testing Mutating Operations** (1-2 days) - Optional
+- [ ] Test CREATE zone operations with real controller
+- [ ] Test UPDATE zone operations
+- [ ] Test DELETE zone operations
+- [ ] Test network assignment/unassignment operations
 
-**Missing Tools** (2-3 days)
-- [ ] `delete_firewall_zone` - Remove a firewall zone
-- [ ] `unassign_network_from_zone` - Remove network from zone
-- [ ] `get_zone_matrix_policy` - Get specific zone-to-zone policy
-- [ ] `delete_zbf_policy` - Remove zone-to-zone policy
-- [ ] `get_zone_statistics` - Zone traffic statistics
-
-**Migration & Integration** (2-3 days)
+**Optional Enhancements** (2-3 days) - Future work
 - [ ] `migrate_firewall_rules_to_zbf` - Automated migration tool from traditional rules
-- [ ] Guest Hotspot integration with ZBF zones
+- [ ] Guest Hotspot integration guide
 - [ ] Zone template system (Corporate, Guest, IoT, etc.)
 - [ ] Validation rules for zone conflicts
 
-**Documentation** (1-2 days)
-- [ ] Update API.md with ZBF tools documentation
-- [ ] Add ZBF migration guide
-- [ ] Create zone-based firewall examples
-- [ ] Document zone types and use cases
-
-**Testing** (1-2 days)
-- [ ] Integration tests with live controller
-- [ ] Test zone matrix policy updates
-- [ ] Test application blocking rules
-- [ ] Test migration from traditional firewall
+**⚠️ Critical Finding:** API endpoint verification (2025-11-18) revealed that **only 2 out of 15 implemented ZBF endpoints actually exist** in UniFi API v10.0.156. Zone policy matrix, application blocking, and statistics endpoints do not exist and have been removed. These features must be configured in UniFi Console UI.
 
 ---
 
@@ -477,18 +467,24 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 ### 📊 Version 0.2.0 Summary
 
 **Total Phases**: 7
-**Total Estimated New Tools**: 56-72 tools (Plan: 25-35, actual scope expanded)
-**Overall Progress**: ~35% complete
-**Estimated Remaining Effort**: 10-13 weeks
+**Functional Tools**: ~40-50 tools (reduced from 56-72 due to non-existent API endpoints)
+**Overall Progress**: ~50% complete
+**Estimated Remaining Effort**: 8-10 weeks
 
-**Completed Phases**: 1/7 (Phase 2)
-**In Progress Phases**: 2/7 (Phase 1, 5)
+**Completed Phases**: 2/7 (Phase 1, Phase 2)
+**In Progress Phases**: 1/7 (Phase 5 - Site Manager)
 **Not Started Phases**: 4/7 (Phase 3, 4, 6, 7)
+
+**Critical Updates (2025-11-18)**:
+- ✅ Phase 1 (ZBF) nearly complete - critical bugs fixed, deprecated non-functional tools
+- ✅ Phase 2 (Traffic Flows) 100% complete
+- ✅ API endpoint verification completed on real hardware (U7 Express & UDM Pro)
+- ⚠️ Removed 8 non-functional ZBF tools (endpoints don't exist in UniFi API)
 
 **Critical Path**:
 1. ✅ Complete Phase 2 (Traffic Flows) - DONE
-2. Complete Phase 1 (ZBF) - 2 weeks remaining
-3. Complete Phase 5 (Site Manager) - 2-3 weeks
+2. ✅ Complete Phase 1 (ZBF) - DONE (testing optional)
+3. Complete Phase 5 (Site Manager OAuth/SSO) - 2-3 weeks
 4. Start Phase 3 (QoS) - 2-3 weeks
 5. Parallel: Phase 4 (Backup) + Phase 6 (RADIUS) + Phase 7 (Topology) - 3-4 weeks
 

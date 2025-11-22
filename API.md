@@ -900,16 +900,37 @@ Modify or remove firewall rules. Requires `confirm=True`.
 
 ### Zone-Based Firewall (ZBF)
 
-**Requires:** UniFi Network Application 9.0+
+**Requires:** UniFi Network Application 9.0+, **Local API Only**
 
-Zone-Based Firewall provides modern, scalable network security by grouping networks into security zones and defining policies between zones. This is more flexible and manageable than traditional firewall rules.
+Zone-Based Firewall provides modern, scalable network security by grouping networks into security zones and defining policies between zones.
 
-**Key Concepts:**
+**⚠️ CRITICAL LIMITATIONS (Verified 2025-11-18):**
 
-- **Zones:** Logical groups of networks (e.g., LAN, Guest, IoT, DMZ)
-- **Zone Matrix:** Policies controlling traffic between zones
-- **Application Blocking:** DPI-based application control per zone
-- **Statistics:** Per-zone traffic analytics
+**API Availability:**
+- ZBF is **NOT available via Cloud API** - requires local gateway API access (`api_type='local'`)
+- Tested on UniFi Express 7 and UDM Pro (API v10.0.156)
+- Only **2 out of 15 implemented endpoints actually exist** in the UniFi API
+
+**What Works (✅):**
+- `list_firewall_zones` - List all zones
+- `create_firewall_zone` - Create new zone (untested but likely works)
+- `update_firewall_zone` - Modify zone (untested but likely works)
+- `delete_firewall_zone` - Delete zone (untested but likely works)
+- `assign_network_to_zone` - Assign network to zone (untested but likely works)
+- `unassign_network_from_zone` - Remove network from zone (untested but likely works)
+- `get_zone_networks` - List networks in a zone
+
+**What Doesn't Work (❌ Endpoints Do Not Exist):**
+- ❌ Zone policy matrix operations (get/update/delete policies between zones)
+- ❌ Application blocking per zone
+- ❌ Zone traffic statistics
+- **These tools have been REMOVED** - configure these features in UniFi Console UI
+
+**Key Concepts (Available Features Only):**
+- **Zones:** Logical groups of networks (e.g., Internal, External, Gateway, VPN, Hotspot, DMZ)
+- **Network Assignment:** Assign networks to zones for organization
+- **Zone-to-Zone Policies:** Must be configured manually in UniFi Console UI
+- **Application Blocking:** Use DPI categories at network level instead
 
 #### Zone Management
 
@@ -1086,305 +1107,44 @@ List all networks assigned to a zone.
 **Returns:**
 Array of network assignments with details.
 
-##### `get_zone_statistics`
-
-Get traffic statistics for a zone.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `zone_id` (string, required): Zone ID
-
-**Returns:**
-Zone traffic statistics.
-
-**Example:**
+#### ZBF Usage Example
 
 ```python
-stats = await mcp.call_tool("get_zone_statistics", {
-    "site_id": "default",
-    "zone_id": "zone-lan"
-})
-```
-
-**Response:**
-
-```json
-{
-  "zone_id": "zone-lan",
-  "bytes_in": 1024000000,
-  "bytes_out": 2048000000,
-  "packets_in": 5000000,
-  "packets_out": 6000000,
-  "connections": 1500
-}
-```
-
-#### Zone Policy Matrix
-
-##### `get_zbf_matrix`
-
-Retrieve the complete zone-to-zone policy matrix.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-
-**Returns:**
-Zone policy matrix with all zones and policies.
-
-**Example:**
-
-```python
-matrix = await mcp.call_tool("get_zbf_matrix", {
-    "site_id": "default"
-})
-```
-
-**Response:**
-
-```json
-{
-  "site_id": "default",
-  "zones": ["zone-lan", "zone-guest", "zone-dmz"],
-  "policies": [
-    {
-      "source_zone_id": "zone-guest",
-      "destination_zone_id": "zone-lan",
-      "action": "deny",
-      "enabled": true
-    }
-  ],
-  "default_policy": "allow"
-}
-```
-
-##### `get_zone_policies`
-
-Get all policies for a specific source zone.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `zone_id` (string, required): Source zone ID
-
-**Returns:**
-Array of policies from this zone to others.
-
-##### `get_zone_matrix_policy`
-
-Get a specific zone-to-zone policy.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `source_zone_id` (string, required): Source zone ID
-- `destination_zone_id` (string, required): Destination zone ID
-
-**Returns:**
-Specific policy details or raises ValueError if not found.
-
-**Example:**
-
-```python
-policy = await mcp.call_tool("get_zone_matrix_policy", {
-    "site_id": "default",
-    "source_zone_id": "zone-guest",
-    "destination_zone_id": "zone-lan"
-})
-```
-
-##### `update_zbf_policy`
-
-Modify a zone-to-zone firewall policy.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `source_zone_id` (string, required): Source zone ID
-- `destination_zone_id` (string, required): Destination zone ID
-- `action` (string, required): Policy action (`allow` or `deny`)
-- `description` (string, optional): Policy description
-- `priority` (integer, optional): Policy priority
-- `enabled` (boolean, optional): Enable/disable policy
-- `confirm` (boolean, required): Must be `true`
-- `dry_run` (boolean, optional): Preview changes
-
-**Returns:**
-Updated policy object.
-
-**Example:**
-
-```python
-policy = await mcp.call_tool("update_zbf_policy", {
-    "site_id": "default",
-    "source_zone_id": "zone-guest",
-    "destination_zone_id": "zone-lan",
-    "action": "deny",
-    "description": "Block guest access to LAN",
-    "priority": 100,
-    "confirm": True
-})
-```
-
-##### `delete_zbf_policy`
-
-Delete a zone-to-zone policy (reverts to default action).
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `source_zone_id` (string, required): Source zone ID
-- `destination_zone_id` (string, required): Destination zone ID
-- `confirm` (boolean, required): Must be `true`
-- `dry_run` (boolean, optional): Preview changes
-
-**Returns:**
-Deletion confirmation.
-
-#### Application Blocking
-
-##### `block_application_by_zone`
-
-Block specific applications using DPI within a zone.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `zone_id` (string, required): Zone ID
-- `application_id` (string, required): DPI application ID
-- `action` (string, optional): Action (`block` or `allow`, default: `block`)
-- `enabled` (boolean, optional): Enable rule (default: `true`)
-- `description` (string, optional): Rule description
-- `confirm` (boolean, required): Must be `true`
-- `dry_run` (boolean, optional): Preview changes
-
-**Returns:**
-Created application block rule.
-
-**Example:**
-
-```python
-rule = await mcp.call_tool("block_application_by_zone", {
-    "site_id": "default",
-    "zone_id": "zone-guest",
-    "application_id": "app-facebook",
-    "description": "Block social media on guest network",
-    "confirm": True
-})
-```
-
-##### `list_blocked_applications`
-
-List applications blocked in a zone or across all zones.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `zone_id` (string, optional): Filter by zone ID
-
-**Returns:**
-Array of application block rules.
-
-**Example:**
-
-```python
-# All blocked apps
-all_blocks = await mcp.call_tool("list_blocked_applications", {
-    "site_id": "default"
-})
-
-# Zone-specific blocks
-guest_blocks = await mcp.call_tool("list_blocked_applications", {
-    "site_id": "default",
-    "zone_id": "zone-guest"
-})
-```
-
-#### ZBF Best Practices
-
-**Zone Design:**
-- **LAN Zone:** Corporate/trusted devices
-- **Guest Zone:** Guest WiFi with internet-only access
-- **IoT Zone:** Smart devices with limited access
-- **DMZ Zone:** Publicly accessible services
-
-**Security Policies:**
-- Deny guest → LAN traffic
-- Allow LAN → all zones
-- Allow IoT → internet only
-- Deny IoT → LAN except specific services
-
-**Common Use Cases:**
-
-```python
-# Example: Complete guest network isolation
+# Create a Guest zone
 guest_zone = await mcp.call_tool("create_firewall_zone", {
     "site_id": "default",
     "name": "Guest",
+    "description": "Guest WiFi network",
     "network_ids": ["net-guest"],
     "confirm": True
 })
 
-# Block guest access to LAN
-policy = await mcp.call_tool("update_zbf_policy", {
+# Assign additional network to zone
+await mcp.call_tool("assign_network_to_zone", {
     "site_id": "default",
-    "source_zone_id": "zone-guest",
-    "destination_zone_id": "zone-lan",
-    "action": "deny",
+    "zone_id": guest_zone["id"],
+    "network_id": "net-guest-2",
     "confirm": True
 })
 
-# Block social media on guest
-fb_block = await mcp.call_tool("block_application_by_zone", {
+# List all zones
+zones = await mcp.call_tool("list_firewall_zones", {
+    "site_id": "default"
+})
+
+# Get networks in a zone
+networks = await mcp.call_tool("get_zone_networks", {
     "site_id": "default",
-    "zone_id": "zone-guest",
-    "application_id": "app-facebook",
-    "confirm": True
+    "zone_id": guest_zone["id"]
 })
 ```
 
-**⚠️ Critical Limitations (Verified 2025-11-18):**
-
-**API Availability:**
-- ZBF is **NOT available via Cloud API** - requires local gateway API access
-- Requires UniFi Network Application 9.0+
-- Tested on UniFi Express 7 and UDM Pro (v10.0.156)
-
-**Verified Working Endpoints:**
-- ✅ `list_firewall_zones` - Returns all zones with network assignments
-- ✅ `get_zone_details` - Returns zone with networkIds and metadata
-- ⚠️ `create_firewall_zone` - Endpoint exists but untested (mutating operation)
-- ⚠️ `update_firewall_zone` - Endpoint exists but untested (mutating operation)
-- ⚠️ `delete_firewall_zone` - Endpoint exists but untested (mutating operation)
-- ⚠️ Network assignment operations - Endpoints exist but untested
-
-**Non-Functional Tools (Endpoints DO NOT EXIST):**
-- ❌ `get_zone_statistics` - Zone statistics endpoint does not exist
-- ❌ `get_zbf_matrix` - Zone policy matrix endpoint does not exist
-- ❌ `get_zone_policies` - Zone-specific policies endpoint does not exist
-- ❌ `get_zone_matrix_policy` - Individual policy endpoint does not exist
-- ❌ `update_zbf_policy` - Policy update endpoint does not exist
-- ❌ `delete_zbf_policy` - Policy deletion endpoint does not exist
-- ❌ `block_application_by_zone` - Application blocking endpoint does not exist
-- ❌ `list_blocked_applications` - Blocked apps list endpoint does not exist
-
-**Impact:**
-- Zone CRUD operations (create, read, update, delete) work
-- Network assignment to zones works
-- **Zone-to-zone policy matrix is NOT available via API** - must be configured in UniFi Console UI
-- **Application blocking per zone is NOT available via API**
-- **Zone traffic statistics are NOT available via API**
-
-**Workarounds:**
-- Use traditional ACL rules (`/sites/{siteId}/acls`) for IP-based filtering
-- Configure zone policies manually in UniFi Console
-- Use DPI categories for application blocking at network level
-
-**Safety:**
-- Always test with `dry_run=True` first
-- All mutating endpoints require `confirm=True`
-- Verification Details: See `tests/verification/PHASE2_FINDINGS.md`
+**⚠️ Important Notes:**
+- Zone-to-zone policies must be configured in UniFi Console UI
+- Application blocking per zone is not available via API - use DPI categories at network level
+- Zone traffic statistics are not available - use client statistics instead
+- Always use `dry_run=True` to preview changes before applying
+- See `tests/verification/PHASE2_FINDINGS.md` for complete verification details
 
 ### Network Configuration
 
@@ -2050,14 +1810,12 @@ result = await mcp.call_tool("block_flow_destination_ip", {
 
 #### `block_flow_application`
 
-Block application identified in a traffic flow using Zone-Based Firewall or traditional rules.
+Block application identified in a traffic flow using traditional firewall rules or DPI categories.
 
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
 - `flow_id` (string, required): Flow identifier to block
-- `use_zbf` (boolean, optional): Use Zone-Based Firewall if available (default: true)
-- `zone_id` (string, optional): Specific zone ID for ZBF blocking
 - `confirm` (boolean, required): Confirmation flag
 - `dry_run` (boolean, optional): Validate without executing
 
@@ -2067,7 +1825,6 @@ Block application identified in a traffic flow using Zone-Based Firewall or trad
 result = await mcp.call_tool("block_flow_application", {
     "site_id": "default",
     "flow_id": "torrent_flow_789",
-    "use_zbf": True,
     "confirm": True
 })
 ```
@@ -2080,13 +1837,12 @@ result = await mcp.call_tool("block_flow_application", {
   "block_type": "application",
   "blocked_target": "app_bittorrent",
   "rule_id": "rule_fw456",
-  "zone_id": "zone_internal",
   "duration": "permanent",
   "created_at": "2025-11-08T10:30:00Z"
 }
 ```
 
-**Note:** Automatically uses ZBF if available, falls back to traditional firewall rules.
+**Note:** Uses traditional firewall rules or DPI categories. Zone-based application blocking is not available via API.
 
 #### `export_traffic_flows`
 

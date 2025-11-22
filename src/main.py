@@ -28,7 +28,6 @@ from .tools import traffic_flows as traffic_flows_tools
 from .tools import vouchers as vouchers_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
-from .tools import zbf_matrix as zbf_matrix_tools
 from .utils import get_logger
 
 # Initialize settings
@@ -964,74 +963,20 @@ async def list_countries() -> list[dict]:
 
 
 # Zone-Based Firewall Matrix Tools
-@mcp.tool()
-async def get_zbf_matrix(site_id: str) -> dict:
-    """Retrieve zone-to-zone policy matrix."""
-    return await zbf_matrix_tools.get_zbf_matrix(site_id, settings)
-
-
-@mcp.tool()
-async def get_zone_policies(site_id: str, zone_id: str) -> list[dict]:
-    """Get policies for a specific zone."""
-    return await zbf_matrix_tools.get_zone_policies(site_id, zone_id, settings)
-
-
-@mcp.tool()
-async def update_zbf_policy(
-    site_id: str,
-    source_zone_id: str,
-    destination_zone_id: str,
-    action: str,
-    description: str | None = None,
-    priority: int | None = None,
-    enabled: bool = True,
-    confirm: bool = False,
-    dry_run: bool = False,
-) -> dict:
-    """Modify inter-zone firewall policy (requires confirm=True)."""
-    return await zbf_matrix_tools.update_zbf_policy(
-        site_id,
-        source_zone_id,
-        destination_zone_id,
-        action,
-        settings,
-        description,
-        priority,
-        enabled,
-        confirm,
-        dry_run,
-    )
-
-
-@mcp.tool()
-async def block_application_by_zone(
-    site_id: str,
-    zone_id: str,
-    application_id: str,
-    action: str = "block",
-    enabled: bool = True,
-    description: str | None = None,
-    confirm: bool = False,
-    dry_run: bool = False,
-) -> dict:
-    """Block applications using zone-based rules (requires confirm=True)."""
-    return await zbf_matrix_tools.block_application_by_zone(
-        site_id,
-        zone_id,
-        application_id,
-        settings,
-        action,
-        enabled,
-        description,
-        confirm,
-        dry_run,
-    )
-
-
-@mcp.tool()
-async def list_blocked_applications(site_id: str, zone_id: str | None = None) -> list[dict]:
-    """List applications blocked per zone."""
-    return await zbf_matrix_tools.list_blocked_applications(site_id, zone_id, settings)
+# ⚠️ REMOVED: All zone policy matrix and application blocking tools have been removed
+# because the UniFi API endpoints do not exist (verified on API v10.0.156).
+# See tests/verification/PHASE2_FINDINGS.md for details.
+#
+# Removed tools:
+# - get_zbf_matrix (endpoint /firewall/policies/zone-matrix does not exist)
+# - get_zone_policies (endpoint /firewall/policies/zones/{id} does not exist)
+# - update_zbf_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
+# - block_application_by_zone (endpoint /firewall/zones/{id}/app-block does not exist)
+# - list_blocked_applications (endpoint /firewall/zones/{id}/app-block does not exist)
+# - get_zone_matrix_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
+# - delete_zbf_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
+#
+# Alternative: Configure zone policies manually in UniFi Console UI
 
 
 @mcp.tool()
@@ -1081,36 +1026,15 @@ async def unassign_network_from_zone(
     )
 
 
-@mcp.tool()
-async def get_zone_statistics(site_id: str, zone_id: str) -> dict:
-    """Get traffic statistics for a firewall zone."""
-    return await firewall_zones_tools.get_zone_statistics(site_id, zone_id, settings)
+# ⚠️ REMOVED: get_zone_statistics - endpoint does not exist
+# Zone statistics endpoint (/firewall/zones/{id}/statistics) does not exist in UniFi API v10.0.156.
+# Monitor traffic via /sites/{siteId}/clients endpoint instead.
 
+# ⚠️ REMOVED: get_zone_matrix_policy - endpoint does not exist
+# Zone matrix policy endpoint does not exist in UniFi API v10.0.156.
 
-@mcp.tool()
-async def get_zone_matrix_policy(
-    site_id: str,
-    source_zone_id: str,
-    destination_zone_id: str,
-) -> dict:
-    """Get a specific zone-to-zone policy."""
-    return await zbf_matrix_tools.get_zone_matrix_policy(
-        site_id, source_zone_id, destination_zone_id, settings
-    )
-
-
-@mcp.tool()
-async def delete_zbf_policy(
-    site_id: str,
-    source_zone_id: str,
-    destination_zone_id: str,
-    confirm: bool = False,
-    dry_run: bool = False,
-) -> dict:
-    """Delete a zone-to-zone policy (requires confirm=True)."""
-    return await zbf_matrix_tools.delete_zbf_policy(
-        site_id, source_zone_id, destination_zone_id, settings, confirm, dry_run
-    )
+# ⚠️ REMOVED: delete_zbf_policy - endpoint does not exist
+# Zone policy delete endpoint does not exist in UniFi API v10.0.156.
 
 
 # Traffic Flows Tools
@@ -1227,20 +1151,8 @@ async def list_vantage_points() -> list[dict]:
 
 
 # Additional MCP Resources
-@mcp.resource("sites://{site_id}/firewall/matrix")
-async def get_zbf_matrix_resource(site_id: str) -> str:
-    """Get ZBF policy matrix for a site.
-
-    Args:
-        site_id: Site identifier
-
-    Returns:
-        JSON string of ZBF matrix
-    """
-    matrix = await zbf_matrix_tools.get_zbf_matrix(site_id, settings)
-    import json
-
-    return json.dumps(matrix, indent=2)
+# ⚠️ REMOVED: sites://{site_id}/firewall/matrix resource
+# ZBF matrix endpoint does not exist in UniFi API v10.0.156
 
 
 @mcp.resource("sites://{site_id}/traffic/flows")

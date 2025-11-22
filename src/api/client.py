@@ -121,9 +121,9 @@ class UniFiClient:
 
             response = await self._request("GET", test_endpoint)
             self._authenticated = (
-                response.get("meta", {}).get("rc") == "ok" or
-                response.get("data") is not None or
-                response.get("count") is not None  # Local API returns count
+                response.get("meta", {}).get("rc") == "ok"
+                or response.get("data") is not None
+                or response.get("count") is not None  # Local API returns count
             )
             self.logger.info("Successfully authenticated with UniFi API")
         except Exception as e:

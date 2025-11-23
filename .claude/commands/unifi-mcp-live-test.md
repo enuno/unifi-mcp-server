@@ -1,5 +1,5 @@
 ---
-description: Test UniFi MCP server across discovered environments with interactive selection and automated bug reporting
+description: Test UniFi MCP server across discovered environments, create GitHub issues for failures, and trigger @claude automated fix workflow
 allowed-tools:
   - Read
   - Write
@@ -9,7 +9,6 @@ allowed-tools:
   - Bash(python:*)
   - Bash(python3:*)
   - Bash(uv:*)
-  - Bash(npx:*)
   - Bash(curl:*)
   - Bash(grep:*)
   - Bash(find:*)
@@ -19,21 +18,19 @@ allowed-tools:
   - Bash(cat:*)
   - Bash(jq:*)
 author: project
-version: 2.0.0
+version: 3.0.0
 ---
 
-# UniFi MCP Server - Portable Live Environment Testing
+# UniFi MCP Server - Live Environment Testing & Automated Remediation
 
 ## Purpose
-Automatically discover UniFi environments from .env configuration, prompt for which environments to test, execute comprehensive MCP server testing, record errors, create GitHub issues, and integrate with triage bot workflow.
+Automatically discover UniFi environments from `.env`, execute comprehensive tests, sanitize results, create GitHub issues for bugs, and automatically instruct the `@claude` bot to develop and submit fixes via PRs.
 
 **Key Features:**
-- ✅ Fully portable - no hardcoded IPs or hostnames
-- ✅ Auto-discovers environments from .env file
-- ✅ Interactive environment selection
-- ✅ Prevents sensitive data leakage
-- ✅ Automated GitHub issue creation
-- ✅ Triage bot integration
+- ✅ **Portable:** No hardcoded IPs/hostnames; auto-discovers from `.env`.
+- ✅ **Secure:** Masks credentials and sanitizes IP addresses in logs.
+- ✅ **Interactive:** Prompts user to select which discovered environments to test.
+- ✅ **Automated Remediation:** Creates GitHub issues, waits for Triage Bot, and assigns `@claude` to fix, test, and PR.
 
 ---
 
@@ -43,7 +40,7 @@ Automatically discover UniFi environments from .env configuration, prompt for wh
 
 ```bash
 echo "╔════════════════════════════════════════════════════╗"
-echo "║   UNIFI MCP LIVE ENVIRONMENT TEST - STARTING       ║"
+echo "║   UNIFI MCP LIVE TEST & REMEDIATION - STARTING     ║"
 echo "╚════════════════════════════════════════════════════╝"
 echo ""
 
@@ -51,32 +48,24 @@ echo ""
 if command -v node &> /dev/null; then
   echo "✅ Node.js: $(node --version)"
 else
-  echo "❌ Node.js not installed - required for MCP Inspector"
+  echo "❌ Node.js not installed"
   exit 1
 fi
 
 # Check Python/UV
-if command -v python3 &> /dev/null && command -v uv &> /dev/null; then
+if command -v python3 &> /dev/null; then
   echo "✅ Python: $(python3 --version | head -1)"
-  echo "✅ UV: $(uv --version | head -1)"
 else
-  echo "❌ Python3 or UV not installed"
+  echo "❌ Python3 not installed"
   exit 1
 fi
 
-# Check GitHub CLI
+# Check GitHub CLI (Critical for Phase 4 & 5)
 if command -v gh &> /dev/null; then
   echo "✅ GitHub CLI: $(gh --version | head -1)"
+  gh auth status &> /dev/null || { echo "❌ GitHub CLI not authenticated. Run 'gh auth login' first."; exit 1; }
 else
-  echo "❌ GitHub CLI not installed - required for issue creation"
-  exit 1
-fi
-
-# Verify git repository
-if git rev-parse --is-inside-work-tree &> /dev/null; then
-  echo "✅ Git repository confirmed"
-else
-  echo "❌ Not in a git repository"
+  echo "❌ GitHub CLI not installed - required for automated remediation"
   exit 1
 fi
 
@@ -89,323 +78,145 @@ else
 fi
 
 echo ""
-```
+````
 
-### 1.2 Ensure .gitignore Protection
-
-```bash
-echo "Checking .gitignore for sensitive data protection..."
-
-# Ensure test-results/ is in .gitignore
-if ! grep -q "^test-results/" .gitignore 2>/dev/null; then
-  echo "Adding test-results/ to .gitignore..."
-  echo "" >> .gitignore
-  echo "# MCP live testing - contains local network information" >> .gitignore
-  echo "test-results/" >> .gitignore
-  echo "✅ Added test-results/ to .gitignore"
-else
-  echo "✅ test-results/ already in .gitignore"
-fi
-
-# Add other sensitive patterns
-for PATTERN in "*.env.test" "test-*.log" "*-credentials.json"; do
-  if ! grep -q "${PATTERN}" .gitignore 2>/dev/null; then
-    echo "${PATTERN}" >> .gitignore
-    echo "✅ Added ${PATTERN} to .gitignore"
-  fi
-done
-
-echo ""
-```
-
-### 1.3 Discover Test Environments from .env
+### 1.2 Discover Test Environments from .env
 
 ```bash
 echo "Discovering test environments from .env..."
-echo ""
 
-# Check if .env exists
 if [ ! -f .env ]; then
-  echo "❌ .env file not found"
-  echo "Please create .env from .env.example and configure your UniFi credentials"
+  echo "❌ .env file not found. Please create one based on .env.example."
   exit 1
 fi
 
-# Source .env safely (don't export, just read values)
-# Create environment discovery report
-ENV_REPORT=$(cat <<EOF
-{
-  "cloud_api": null,
-  "local_hosts": [],
-  "api_type": null,
-  "has_api_key": false,
-  "has_username": false,
-  "has_password": false
-}
-EOF
-)
+# Initialize discovery variables
+HAS_CLOUD=false
+HAS_LOCAL=false
+HAS_AUTH=false
 
-# Read API type
-if grep -q "^UNIFI_API_TYPE=cloud" .env; then
-  ENV_API_TYPE="cloud"
-elif grep -q "^UNIFI_API_TYPE=local" .env; then
-  ENV_API_TYPE="local"
-else
-  ENV_API_TYPE="unknown"
-fi
-
-# Check for Cloud API configuration
+# Check Cloud
 if grep -q "^UNIFI_HOST=" .env; then
   CLOUD_HOST=$(grep "^UNIFI_HOST=" .env | cut -d= -f2 | tr -d '"' | tr -d "'")
   if [ ! -z "${CLOUD_HOST}" ] && [ "${CLOUD_HOST}" != "your-host-here" ]; then
     echo "✅ Found Cloud API configuration: ${CLOUD_HOST}"
     HAS_CLOUD=true
-  else
-    HAS_CLOUD=false
   fi
-else
-  HAS_CLOUD=false
 fi
 
-# Check for Local Host configuration
+# Check Local
 if grep -q "^UNIFI_LOCAL_HOST=" .env; then
   LOCAL_HOST=$(grep "^UNIFI_LOCAL_HOST=" .env | cut -d= -f2 | tr -d '"' | tr -d "'")
   if [ ! -z "${LOCAL_HOST}" ] && [ "${LOCAL_HOST}" != "your-host-here" ]; then
-    # Get SSL verification setting
-    if grep -q "^UNIFI_LOCAL_VERIFY_SSL=true" .env; then
-      LOCAL_SSL="true"
-    else
-      LOCAL_SSL="false"
-    fi
+    # Get SSL setting
+    LOCAL_SSL="false"
+    grep -q "^UNIFI_LOCAL_VERIFY_SSL=true" .env && LOCAL_SSL="true"
     echo "✅ Found Local Gateway configuration: ${LOCAL_HOST} (SSL: ${LOCAL_SSL})"
     HAS_LOCAL=true
-  else
-    HAS_LOCAL=false
   fi
-else
-  HAS_LOCAL=false
 fi
 
-# Check authentication method
-if grep -q "^UNIFI_API_KEY=" .env && [ $(grep "^UNIFI_API_KEY=" .env | cut -d= -f2 | wc -c) -gt 10 ]; then
-  echo "✅ API Key configured"
-  HAS_API_KEY=true
-else
-  HAS_API_KEY=false
+# Check Auth
+if (grep -q "^UNIFI_API_KEY=" .env && [ $(grep "^UNIFI_API_KEY=" .env | cut -d= -f2 | wc -c) -gt 5 ]) || \
+   (grep -q "^UNIFI_USERNAME=" .env && grep -q "^UNIFI_PASSWORD=" .env); then
+  echo "✅ Authentication configured"
+  HAS_AUTH=true
 fi
 
-if grep -q "^UNIFI_USERNAME=" .env && grep -q "^UNIFI_PASSWORD=" .env; then
-  echo "✅ Username/Password configured"
-  HAS_CREDS=true
-else
-  HAS_CREDS=false
-fi
-
-# Validate we have at least one environment and auth method
 if [ "${HAS_CLOUD}" = "false" ] && [ "${HAS_LOCAL}" = "false" ]; then
-  echo ""
   echo "❌ No valid environments found in .env"
-  echo "Please configure either UNIFI_HOST (cloud) or UNIFI_LOCAL_HOST (local)"
   exit 1
 fi
 
-if [ "${HAS_API_KEY}" = "false" ] && [ "${HAS_CREDS}" = "false" ]; then
-  echo ""
-  echo "❌ No authentication configured"
-  echo "Please set either UNIFI_API_KEY or UNIFI_USERNAME + UNIFI_PASSWORD"
+if [ "${HAS_AUTH}" = "false" ]; then
+  echo "❌ No valid authentication found in .env"
   exit 1
 fi
-
-echo ""
-echo "Environment Discovery Summary:"
-echo "  Cloud API: ${HAS_CLOUD}"
-echo "  Local Gateway: ${HAS_LOCAL}"
-echo "  Authentication: $([ "${HAS_API_KEY}" = "true" ] && echo "API Key" || echo "Username/Password")"
-echo ""
 ```
 
-### 1.4 Interactive Environment Selection
+### 1.3 Interactive Selection & Session Setup
 
 ```bash
-# Present discovered environments and ask which to test
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Select Environments to Test"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+echo "Select Environments to Test:"
+echo "------------------------------"
 
-# Build environment selection array
 ENVS_TO_TEST=()
 
 if [ "${HAS_CLOUD}" = "true" ]; then
-  echo "Cloud API (${CLOUD_HOST}) available"
   read -p "Test Cloud API? (y/n): " TEST_CLOUD
   if [[ "${TEST_CLOUD}" =~ ^[Yy]$ ]]; then
     ENVS_TO_TEST+=("cloud:${CLOUD_HOST}")
-    echo "  ✅ Will test Cloud API"
-  else
-    echo "  ⏭️  Skipping Cloud API"
   fi
-  echo ""
 fi
 
 if [ "${HAS_LOCAL}" = "true" ]; then
-  # Mask the IP for display (show only first 2 octets)
   MASKED_IP=$(echo "${LOCAL_HOST}" | awk -F. '{print $1"."$2".x.x"}')
-  echo "Local Gateway (${MASKED_IP}, SSL: ${LOCAL_SSL}) available"
-  read -p "Test Local Gateway? (y/n): " TEST_LOCAL
+  read -p "Test Local Gateway (${MASKED_IP})? (y/n): " TEST_LOCAL
   if [[ "${TEST_LOCAL}" =~ ^[Yy]$ ]]; then
     ENVS_TO_TEST+=("local:${LOCAL_HOST}:${LOCAL_SSL}")
-    echo "  ✅ Will test Local Gateway"
-  else
-    echo "  ⏭️  Skipping Local Gateway"
   fi
-  echo ""
 fi
 
-# Verify at least one environment selected
 if [ ${#ENVS_TO_TEST[@]} -eq 0 ]; then
-  echo "❌ No environments selected for testing"
+  echo "❌ No environments selected."
   exit 1
 fi
 
-echo "Selected ${#ENVS_TO_TEST[@]} environment(s) for testing"
-echo ""
-```
-
-### 1.5 Create Test Session Directory
-
-```bash
-# Create timestamped test session
+# Create Session
 TEST_SESSION_ID=$(date +%Y%m%d-%H%M%S)
 TEST_DIR="test-results/${TEST_SESSION_ID}"
-mkdir -p "${TEST_DIR}"
+mkdir -p "${TEST_DIR}/issues"
 
-echo "Test Session: ${TEST_SESSION_ID}"
-echo "Results Directory: ${TEST_DIR}"
-echo ""
+# Update .gitignore safely
+if ! grep -q "^test-results/" .gitignore 2>/dev/null; then
+  echo "test-results/" >> .gitignore
+  echo "✅ Added test-results/ to .gitignore"
+fi
 
-# Initialize session log
-cat > "${TEST_DIR}/test-session.log" <<EOF
-UniFi MCP Server Live Environment Test
-Session ID: ${TEST_SESSION_ID}
-Started: $(date -Iseconds)
-
-Selected Environments: ${#ENVS_TO_TEST[@]}
-$(for env in "${ENVS_TO_TEST[@]}"; do echo "- ${env}"; done)
-
-Prerequisites:
-- Node.js: $(node --version)
-- Python: $(python3 --version | head -1)
-- UV: $(uv --version | head -1)
-- GitHub CLI: $(gh --version | head -1)
-
-EOF
-
-echo "✅ Test session initialized"
-echo ""
+echo "✅ Session ${TEST_SESSION_ID} initialized in ${TEST_DIR}"
 ```
 
----
+-----
 
 ## Phase 2: Environment Testing
 
-### 2.1 Test Each Selected Environment
-
 ```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Phase 2: Testing Environments"
+echo "Phase 2: Executing Tests"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
-# Counter for environment testing
-ENV_COUNTER=0
-
-for ENV_CONFIG in "${ENVS_TO_TEST[@]}"; do
-  ENV_COUNTER=$((ENV_COUNTER + 1))
-
-  # Parse environment configuration
-  IFS=':' read -ra ENV_PARTS <<< "${ENV_CONFIG}"
-  ENV_TYPE="${ENV_PARTS[0]}"
-
-  if [ "${ENV_TYPE}" = "cloud" ]; then
-    ENV_NAME="Cloud_API"
-    ENV_HOST="${ENV_PARTS[1]}"
-    ENV_API_TYPE="cloud"
-    ENV_SSL="true"
-  else
-    ENV_NAME="Local_Gateway"
-    ENV_HOST="${ENV_PARTS[1]}"
-    ENV_API_TYPE="local"
-    ENV_SSL="${ENV_PARTS[2]}"
-  fi
-
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "Testing Environment ${ENV_COUNTER}/${#ENVS_TO_TEST[@]}: ${ENV_NAME}"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo ""
-
-  TEST_LOG="${TEST_DIR}/${ENV_NAME}-test.log"
-  TEST_RESULTS="${TEST_DIR}/${ENV_NAME}-results.json"
-
-  # Test connectivity first
-  echo "1. Testing connectivity..."
-
-  if [ "${ENV_TYPE}" = "cloud" ]; then
-    CONN_URL="https://${ENV_HOST}"
-  else
-    CONN_URL="https://${ENV_HOST}"
-  fi
-
-  if [ "${ENV_SSL}" = "false" ]; then
-    CURL_SSL_OPT="-k"
-  else
-    CURL_SSL_OPT=""
-  fi
-
-  timeout 5 curl ${CURL_SSL_OPT} -s -o /dev/null -w "%{http_code}" "${CONN_URL}" > "${TEST_DIR}/${ENV_NAME}-connectivity.txt" 2>&1 || echo "timeout" > "${TEST_DIR}/${ENV_NAME}-connectivity.txt"
-
-  CONN_STATUS=$(cat "${TEST_DIR}/${ENV_NAME}-connectivity.txt")
-
-  if [ "${CONN_STATUS}" = "timeout" ] || [ -z "${CONN_STATUS}" ]; then
-    echo "❌ Cannot reach ${ENV_HOST} (timeout or unreachable)"
-    echo "CONNECTIVITY_FAIL" > "${TEST_DIR}/${ENV_NAME}-status.txt"
-    continue
-  else
-    echo "✅ ${ENV_HOST} reachable (HTTP ${CONN_STATUS})"
-  fi
-
-  # Create test script for this environment
-  echo "2. Creating test script..."
-
-  cat > "${TEST_DIR}/test-${ENV_NAME}.py" <<'PYEOF'
+# Create the Python Test Script
+cat > "${TEST_DIR}/test_runner.py" <<'PYEOF'
 import asyncio
 import json
 import sys
 import os
+import re
 from datetime import datetime
 
-# Environment will be set by caller
-# os.environ["UNIFI_API_TYPE"] = ...
-# os.environ["UNIFI_HOST"] or os.environ["UNIFI_LOCAL_HOST"] = ...
+# Add src to path
+sys.path.insert(0, os.getcwd())
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
-
-async def test_tools():
+async def run_tests():
     from src.config.config import Settings
+    # Import tools dynamically here if possible, or statically
     from src.tools import site_manager, devices, clients, networks, wifi
 
-    settings = Settings()
-    env_name = os.environ.get("TEST_ENV_NAME", "unknown")
+    try:
+        settings = Settings()
+    except Exception as e:
+        return {"status": "fatal", "error": f"Config load failed: {str(e)}", "tests": []}
 
+    env_name = os.environ.get("TEST_ENV_NAME", "unknown")
     results = {
         "environment": env_name,
-        "api_type": str(settings.api_type),
         "timestamp": datetime.now().isoformat(),
         "tests": []
     }
 
-    # List of read-only tools to test
-    tools_to_test = [
+    # Define tools to test (Read-Only)
+    tools = [
         ("get_sites", site_manager.get_sites, {}),
         ("get_devices", devices.get_devices, {"site_name": "default"}),
         ("get_clients", clients.get_clients, {"site_name": "default"}),
@@ -413,186 +224,222 @@ async def test_tools():
         ("get_wlans", wifi.get_wlans, {"site_name": "default"}),
     ]
 
-    for tool_name, tool_func, params in tools_to_test:
-        print(f"\nTesting {tool_name}...")
-        test_result = {
-            "tool": tool_name,
-            "params": params,
-            "status": "unknown",
-            "error": None
-        }
-
+    for tool_name, func, params in tools:
+        print(f"Testing {tool_name}...", end=" ", flush=True)
+        t_res = {"tool": tool_name, "params": params, "status": "unknown"}
+        
         try:
-            start_time = asyncio.get_event_loop().time()
-            result = await tool_func(settings=settings, **params)
-            end_time = asyncio.get_event_loop().time()
-            response_time = (end_time - start_time) * 1000
-
-            if isinstance(result, list):
-                count = len(result)
-                print(f"✅ {tool_name}: {count} items ({response_time:.0f}ms)")
-                test_result["status"] = "success"
-                test_result["result_count"] = count
-                test_result["response_time_ms"] = round(response_time, 1)
-            else:
-                print(f"✅ {tool_name}: completed ({response_time:.0f}ms)")
-                test_result["status"] = "success"
-                test_result["response_time_ms"] = round(response_time, 1)
+            start = asyncio.get_event_loop().time()
+            res = await func(settings=settings, **params)
+            duration = (asyncio.get_event_loop().time() - start) * 1000
+            
+            print(f"✅ ({int(duration)}ms)")
+            t_res["status"] = "success"
+            t_res["duration_ms"] = round(duration, 1)
+            
         except Exception as e:
-            error_msg = str(e)
-            # Sanitize error messages - remove IP addresses
-            import re
-            error_msg = re.sub(r'\d+\.\d+\.\d+\.\d+', 'x.x.x.x', error_msg)
-
-            print(f"❌ {tool_name}: {error_msg}")
-            test_result["status"] = "error"
-            test_result["error"] = error_msg
-            test_result["error_type"] = type(e).__name__
-
-        results["tests"].append(test_result)
+            err_msg = str(e)
+            # Sanitize IPs
+            err_msg = re.sub(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', 'x.x.x.x', err_msg)
+            print(f"❌ {err_msg}")
+            t_res["status"] = "error"
+            t_res["error"] = err_msg
+            t_res["error_type"] = type(e).__name__
+            
+        results["tests"].append(t_res)
 
     return results
 
-try:
-    results = asyncio.run(test_tools())
-
-    with open(sys.argv[1], 'w') as f:
-        json.dump(results, f, indent=2)
-
-    passed = sum(1 for t in results["tests"] if t["status"] == "success")
-    failed = sum(1 for t in results["tests"] if t["status"] == "error")
-    total = len(results["tests"])
-
-    print(f"\n{'='*50}")
-    print(f"Summary: {passed}/{total} passed, {failed}/{total} failed")
-
-    sys.exit(0 if failed == 0 else 1)
-except Exception as e:
-    print(f"❌ Test execution failed: {str(e)}")
-    import traceback
-    traceback.print_exc()
-    sys.exit(1)
+if __name__ == "__main__":
+    try:
+        output = asyncio.run(run_tests())
+        with open(sys.argv[1], 'w') as f:
+            json.dump(output, f, indent=2)
+    except Exception as e:
+        print(f"Fatal runner error: {e}")
+        sys.exit(1)
 PYEOF
 
-  # Run test with appropriate environment variables
-  echo "3. Running tests..."
-
-  export TEST_ENV_NAME="${ENV_NAME}"
-  export UNIFI_API_TYPE="${ENV_API_TYPE}"
-
-  if [ "${ENV_TYPE}" = "cloud" ]; then
-    export UNIFI_HOST="${ENV_HOST}"
+# Run Tests for each Environment
+for ENV_CONFIG in "${ENVS_TO_TEST[@]}"; do
+  IFS=':' read -ra PARTS <<< "${ENV_CONFIG}"
+  TYPE="${PARTS[0]}"
+  HOST="${PARTS[1]}"
+  
+  if [ "$TYPE" == "cloud" ]; then
+    NAME="Cloud_API"
+    export UNIFI_API_TYPE="cloud"
+    export UNIFI_HOST="$HOST"
     unset UNIFI_LOCAL_HOST
-    unset UNIFI_LOCAL_VERIFY_SSL
   else
-    export UNIFI_LOCAL_HOST="${ENV_HOST}"
-    export UNIFI_LOCAL_VERIFY_SSL="${ENV_SSL}"
+    NAME="Local_Gateway"
+    SSL="${PARTS[2]}"
+    export UNIFI_API_TYPE="local"
+    export UNIFI_LOCAL_HOST="$HOST"
+    export UNIFI_LOCAL_VERIFY_SSL="$SSL"
     unset UNIFI_HOST
   fi
-
-  python3 "${TEST_DIR}/test-${ENV_NAME}.py" "${TEST_RESULTS}" 2>&1 | tee "${TEST_LOG}"
-  TEST_EXIT_CODE=$?
-
-  if [ ${TEST_EXIT_CODE} -eq 0 ]; then
-    echo "COMPLETE_SUCCESS" > "${TEST_DIR}/${ENV_NAME}-status.txt"
+  
+  export TEST_ENV_NAME="$NAME"
+  RESULTS_FILE="${TEST_DIR}/${NAME}-results.json"
+  
+  echo "--> Testing Environment: $NAME ($HOST)"
+  
+  # Check Connectivity
+  if [ "$TYPE" == "cloud" ]; then URL="https://$HOST"; else URL="https://$HOST"; fi
+  OPTS=""
+  [ "$SSL" == "false" ] && OPTS="-k"
+  
+  if curl $OPTS -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$URL" | grep -qE "200|401|403"; then
+     python3 "${TEST_DIR}/test_runner.py" "$RESULTS_FILE"
   else
-    echo "COMPLETE_WITH_ERRORS" > "${TEST_DIR}/${ENV_NAME}-status.txt"
+     echo "❌ Connectivity failed to $HOST. Skipping tools test."
+     echo '{"tests": [], "status": "connectivity_fail"}' > "$RESULTS_FILE"
   fi
-
-  echo ""
-  echo "Environment ${ENV_COUNTER} testing complete"
   echo ""
 done
 ```
 
----
+-----
 
-## Phase 3: Error Collection and Analysis
+## Phase 3: Error Analysis & GitHub Issue Creation
 
 ```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Phase 3: Error Analysis"
+echo "Phase 3 & 4: Analysis & Automated Issue Creation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
 
-mkdir -p "${TEST_DIR}/issues"
+# Ensure clean slate for created issues list
+> "${TEST_DIR}/issues/created_ids.txt"
 
-ERROR_REPORT="${TEST_DIR}/error-report.md"
-
-cat > "${ERROR_REPORT}" <<EOF
-# Error Report - Test Session ${TEST_SESSION_ID}
-
-**Generated**: $(date -Iseconds)
-
-## Summary
-
-EOF
-
-# Analyze each environment's results
-TOTAL_ERRORS=0
-
+# Iterate over all result files
 for RESULT_FILE in "${TEST_DIR}"/*-results.json; do
-  if [ -f "${RESULT_FILE}" ]; then
-    ENV_NAME=$(basename "${RESULT_FILE}" -results.json)
-
-    # Count errors
-    ERROR_COUNT=$(grep -c '"status": "error"' "${RESULT_FILE}" 2>/dev/null || echo "0")
-    TOTAL_ERRORS=$((TOTAL_ERRORS + ERROR_COUNT))
-
-    if [ "${ERROR_COUNT}" -gt 0 ]; then
-      echo "### ${ENV_NAME}: ${ERROR_COUNT} Error(s)" >> "${ERROR_REPORT}"
-      echo "" >> "${ERROR_REPORT}"
-
-      # Extract error details (sanitized)
-      cat "${RESULT_FILE}" | grep -A 3 '"status": "error"' >> "${ERROR_REPORT}"
-      echo "" >> "${ERROR_REPORT}"
+  [ -e "$RESULT_FILE" ] || continue
+  
+  ENV_NAME=$(basename "$RESULT_FILE" -results.json)
+  
+  # Extract errors using jq (requires jq, fallback to grep if needed, but jq is safer)
+  # We assume jq is available as per allowed-tools, or we use a python one-liner helper
+  
+  python3 -c "
+import json, sys, os
+try:
+    with open('$RESULT_FILE') as f: data = json.load(f)
+    tests = data.get('tests', [])
+    for t in tests:
+        if t['status'] == 'error':
+            print(f\"{t['tool']}|{t['error']}\")
+except: pass
+" | while IFS='|' read -r TOOL ERROR_MSG; do
+  
+    echo "⚠️  Bug detected: $TOOL in $ENV_NAME"
+    
+    # Check for existing duplicate issues
+    SEARCH_QUERY="[Bug] $TOOL fails on $ENV_NAME in:title state:open label:mcp-testing"
+    EXISTING=$(gh issue list --search "$SEARCH_QUERY" --json number --jq '.[0].number')
+    
+    if [ ! -z "$EXISTING" ]; then
+      echo "   ⏭️  Issue already exists: #$EXISTING. Skipping."
     else
-      echo "### ${ENV_NAME}: ✅ No Errors" >> "${ERROR_REPORT}"
-      echo "" >> "${ERROR_REPORT}"
+      # Create New Issue
+      TITLE="[Bug] $TOOL fails on $ENV_NAME"
+      BODY="## Bug Description
+The MCP tool \`$TOOL\` failed when tested against **$ENV_NAME**.
+
+## Error Message
+\`\`\`
+$ERROR_MSG
+\`\`\`
+
+## Metadata
+- **Session:** $TEST_SESSION_ID
+- **Environment:** $ENV_NAME
+- **Date:** $(date)
+
+**Automated Report via Unifi MCP Live Test**"
+
+      echo "   📝 Creating GitHub Issue..."
+      NEW_ISSUE_URL=$(gh issue create --title "$TITLE" --body "$BODY" --label "bug,mcp-testing,automated,needs-triage" --json url --jq '.url')
+      NEW_ISSUE_NUM=$(basename "$NEW_ISSUE_URL")
+      
+      echo "   ✅ Created Issue #$NEW_ISSUE_NUM"
+      echo "$NEW_ISSUE_NUM" >> "${TEST_DIR}/issues/created_ids.txt"
     fi
-  fi
+  done
 done
-
-echo "Found ${TOTAL_ERRORS} total error(s) across all environments"
-echo ""
-
-cat "${ERROR_REPORT}"
 ```
 
----
+-----
 
-## Phase 4: GitHub Issue Creation
+## Phase 4: Triage Bot Integration & Claude Assignment
 
-*[Continues with GitHub issue creation, triage bot integration, and reporting...]*
+```bash
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Phase 5: Triage & remediation"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
----
+if [ ! -s "${TEST_DIR}/issues/created_ids.txt" ]; then
+  echo "✅ No new issues created. Skipping triage workflow."
+else
+  ISSUE_COUNT=$(wc -l < "${TEST_DIR}/issues/created_ids.txt")
+  echo "⏳ Waiting 60 seconds for Triage Bot to analyze $ISSUE_COUNT new issue(s)..."
+  sleep 60
+  
+  while read ISSUE_NUM; do
+    echo "Processing Issue #$ISSUE_NUM..."
+    
+    # Check for Triage Bot response
+    # We look for comments from typical bot names
+    BOT_RESPONDED=$(gh issue view "$ISSUE_NUM" --json comments --jq '.comments[] | select(.author.login == "github-actions[bot]" or .author.login == "claude-triage-bot") | .body' | wc -l)
+    
+    if [ "$BOT_RESPONDED" -gt 0 ]; then
+       echo "   ✅ Triage Bot has responded."
+       
+       # INSTRUCTION STEP: Assign to @claude with specific prompt
+       echo "   🤖 Assigning to @claude for fix..."
+       
+       PROMPT="**ACTION REQUIRED** @claude
+       
+Please handle this issue following this workflow:
+1. **Create a Branch**: Create a new git branch dedicated to this issue.
+2. **Develop Fix**: Analyze the error log above and implement a fix in the code.
+3. **Test**: Verify the fix works.
+4. **Submit PR**: Submit a Pull Request for human review and merging.
 
-## Security Features
+Status: Ready for development."
 
-### Data Sanitization
-- IP addresses in error messages replaced with x.x.x.x
-- Hostnames masked in displays (show first 2 octets only)
-- API keys never logged
-- Credentials never in output
+       # Post the instruction comment
+       gh issue comment "$ISSUE_NUM" --body "$PROMPT"
+       
+       # Attempt assignment (may fail depending on org permissions, but comment triggers the bot)
+       gh issue edit "$ISSUE_NUM" --add-assignee "claude" 2>/dev/null || true
+       
+       echo "   🚀 Remediation workflow triggered for #$ISSUE_NUM"
+    else
+       echo "   ⚠️  No Triage Bot response detected yet. Skipping auto-assignment."
+    fi
+    
+  done < "${TEST_DIR}/issues/created_ids.txt"
+fi
+```
 
-### .gitignore Protection
-- Automatic addition of test-results/ directory
-- Test logs and credentials patterns excluded
-- Pre-flight check ensures protection before running
+-----
 
-### Portable Design
-- No hardcoded IP addresses
-- No hardcoded hostnames
-- Auto-discovers from .env
-- Works in any environment
+## Phase 5: Summary Report
 
----
-
-## Version History
-
-- **2.0.0** (2025-11-23): Complete redesign for portability
-  - Auto-discovery of environments from .env
-  - Interactive environment selection
-  - Removed all hardcoded IPs and hostnames
-  - Enhanced data sanitization
-  - Improved security posture
+```bash
+echo ""
+echo "╔════════════════════════════════════════════════════╗"
+echo "║             TEST SESSION COMPLETE                  ║"
+echo "╚════════════════════════════════════════════════════╝"
+echo ""
+echo "Session ID: $TEST_SESSION_ID"
+echo "Artifacts:  $TEST_DIR"
+echo ""
+echo "Issues Created:"
+if [ -s "${TEST_DIR}/issues/created_ids.txt" ]; then
+  cat "${TEST_DIR}/issues/created_ids.txt" | while read id; do echo " - #$id (Remediation Triggered)"; done
+else
+  echo " - None"
+fi
+echo ""

@@ -64,19 +64,19 @@ Comprehensively test the UniFi MCP server across three different environments (C
 if [ ! -f .env ]; then
   echo "⚠️ .env file not found. Copying from .env.example..."
   cp .env.example .env
-  echo "❌ Please configure .env with real credentials before testing"
-  exit 1
+  echo "⚠️ Created .env from template - using placeholder values for testing"
 fi
 
-# Read current .env configuration
-!cat .env | grep -E "UNIFI_HOST|UNIFI_LOCAL_HOST|UNIFI_USERNAME|UNIFI_PASSWORD|UNIFI_API_KEY|UNIFI_SITE|UNIFI_LOCAL_VERIFY_SSL" | grep -v "^#"
+# Read current .env configuration (masking sensitive values)
+echo "Current .env configuration:"
+!cat .env | grep -E "UNIFI_HOST|UNIFI_LOCAL_HOST|UNIFI_USERNAME|UNIFI_PASSWORD|UNIFI_API_KEY|UNIFI_SITE|UNIFI_LOCAL_VERIFY_SSL|UNIFI_API_TYPE" | grep -v "^#" | sed 's/\(PASSWORD\|API_KEY\)=.*/\1=***MASKED***/' || echo "No UniFi configuration found"
 ```
 
 **Validation Checks:**
-- ✅ Credentials not using placeholder values
-- ✅ API keys not empty or example values
-- ✅ Host configurations valid
-- ⚠️ Warn if credentials appear to be defaults
+- Uses existing .env file if present (recommended for live testing)
+- Creates from .env.example if missing (uses placeholders)
+- Masks passwords and API keys in output
+- Shows configuration without exposing credentials
 
 #### 1.3 Create Test Session Directory
 

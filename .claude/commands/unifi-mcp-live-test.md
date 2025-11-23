@@ -78,7 +78,36 @@ echo "Current .env configuration:"
 - Masks passwords and API keys in output
 - Shows configuration without exposing credentials
 
-#### 1.3 Create Test Session Directory
+#### 1.3 Ensure .gitignore Protection
+
+```bash
+# Ensure test-results/ is in .gitignore to prevent leaking local network data
+if ! grep -q "^test-results/" .gitignore 2>/dev/null; then
+  echo "Adding test-results/ to .gitignore to protect local network data..."
+  echo "" >> .gitignore
+  echo "# MCP live testing - contains local network information" >> .gitignore
+  echo "test-results/" >> .gitignore
+  echo "✅ Added test-results/ to .gitignore"
+else
+  echo "✅ test-results/ already in .gitignore"
+fi
+
+# Also ensure other sensitive test artifacts are ignored
+for PATTERN in "*.env.test" "test-*.log" "*-credentials.json"; do
+  if ! grep -q "${PATTERN}" .gitignore 2>/dev/null; then
+    echo "${PATTERN}" >> .gitignore
+    echo "✅ Added ${PATTERN} to .gitignore"
+  fi
+done
+```
+
+**Security Note:**
+- Test results contain local network IP addresses, hostnames, and API responses
+- Never commit test-results/ directory to prevent exposing network topology
+- Add any test artifacts with sensitive data to .gitignore
+- Review .gitignore before committing after running tests
+
+#### 1.4 Create Test Session Directory
 
 ```bash
 # Create timestamped test session directory

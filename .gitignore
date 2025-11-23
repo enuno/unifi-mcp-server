@@ -180,3 +180,6 @@ gha-creds-*.json
 tmp/
 temp/
 *.tmp
+
+# Local live environment test results
+test-results/

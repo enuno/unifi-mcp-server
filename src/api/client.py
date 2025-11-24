@@ -1,6 +1,7 @@
 """UniFi API client with authentication, rate limiting, and error handling."""
 
 import asyncio
+import json
 import time
 from typing import Any
 from uuid import UUID

@@ -222,8 +222,8 @@ async def run_tests():
     tools = [
         ("list_sites", sites.list_sites, {}),
         ("list_wlans", wifi.list_wlans, {"site_id": settings.default_site}),
-        ("list_active_clients", clients.list_active_clients, {}),
-        ("search_devices", devices.search_devices, {"query": ""}),
+        ("list_active_clients", clients.list_active_clients, {"site_id": settings.default_site}),
+        ("search_devices", devices.search_devices, {"site_id": settings.default_site, "query": ""}),
     ]
 
     # Add Cloud-specific tests

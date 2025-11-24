@@ -214,9 +214,19 @@ class UniFiClient:
                     response_data=error_data,
                 )
 
-            # Parse response
-            json_response: dict[str, Any] = response.json()
-            return json_response
+            # Parse response - handle empty responses from local gateway
+            try:
+                if response.text and response.text.strip():
+                    json_response: dict[str, Any] = response.json()
+                else:
+                    # Empty response body - treat as success with empty data
+                    self.logger.debug(f"Empty response body for {endpoint}, returning empty dict")
+                    json_response = {}
+                return json_response
+            except (ValueError, json.JSONDecodeError) as e:
+                # Invalid JSON - log and return empty dict for successful status codes
+                self.logger.warning(f"Invalid JSON in response for {endpoint}: {e}")
+                return {}
 
         except httpx.TimeoutException as e:
             # Retry on timeout

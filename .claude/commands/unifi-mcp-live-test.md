@@ -199,9 +199,9 @@ from datetime import datetime
 sys.path.insert(0, os.getcwd())
 
 async def run_tests():
-    from src.config.config import Settings
-    # Import tools dynamically here if possible, or statically
-    from src.tools import site_manager, devices, clients, networks, wifi
+    from src.config.config import Settings, APIType
+    # Import tools - using correct function names that actually exist
+    from src.tools import sites, devices, clients, wifi
 
     try:
         settings = Settings()
@@ -212,17 +212,27 @@ async def run_tests():
     results = {
         "environment": env_name,
         "timestamp": datetime.now().isoformat(),
+        "api_type": settings.api_type.value,
         "tests": []
     }
 
     # Define tools to test (Read-Only)
+    # Using default site for tests that require site_id
+    # Note: site_manager and some network tools are Cloud API only
     tools = [
-        ("get_sites", site_manager.get_sites, {}),
-        ("get_devices", devices.get_devices, {"site_name": "default"}),
-        ("get_clients", clients.get_clients, {"site_name": "default"}),
-        ("get_networks", networks.get_networks, {"site_name": "default"}),
-        ("get_wlans", wifi.get_wlans, {"site_name": "default"}),
+        ("list_sites", sites.list_sites, {}),
+        ("list_wlans", wifi.list_wlans, {"site_id": settings.default_site}),
+        ("list_active_clients", clients.list_active_clients, {}),
+        ("search_devices", devices.search_devices, {"query": ""}),
     ]
+
+    # Add Cloud-specific tests
+    if settings.api_type == APIType.CLOUD:
+        from src.tools import site_manager, networks
+        tools.extend([
+            ("list_all_sites", site_manager.list_all_sites_aggregated, {}),
+            ("list_vlans", networks.list_vlans, {}),
+        ])
 
     for tool_name, func, params in tools:
         print(f"Testing {tool_name}...", end=" ", flush=True)

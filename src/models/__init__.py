@@ -21,6 +21,7 @@ from .traffic_matching_list import (
     TrafficMatchingListUpdate,
 )
 from .voucher import Voucher
+from .vpn import VPNServer, VPNTunnel
 from .wan import WANConnection
 from .zbf_matrix import ApplicationBlockRule, ZoneNetworkAssignment, ZonePolicy, ZonePolicyMatrix
 
@@ -48,6 +49,8 @@ __all__ = [
     "TrafficMatchingListCreate",
     "TrafficMatchingListUpdate",
     "TrafficMatchingListType",
+    "VPNTunnel",
+    "VPNServer",
     "SiteHealthSummary",
     "InternetHealthMetrics",
     "CrossSiteStatistics",

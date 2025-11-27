@@ -27,6 +27,7 @@ from .tools import sites as sites_tools
 from .tools import traffic_flows as traffic_flows_tools
 from .tools import traffic_matching_lists as tml_tools
 from .tools import vouchers as vouchers_tools
+from .tools import vpn as vpn_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
 from .utils import get_logger
@@ -1177,6 +1178,27 @@ async def delete_traffic_matching_list(
 ) -> dict:
     """Delete a traffic matching list (requires confirm=True)."""
     return await tml_tools.delete_traffic_matching_list(site_id, list_id, settings, confirm, dry_run)
+
+
+# VPN Management Tools
+@mcp.tool()
+async def list_vpn_tunnels(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all site-to-site VPN tunnels (read-only)."""
+    return await vpn_tools.list_vpn_tunnels(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def list_vpn_servers(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all VPN servers (read-only)."""
+    return await vpn_tools.list_vpn_servers(site_id, settings, limit, offset)
 
 
 # Site Manager Tools

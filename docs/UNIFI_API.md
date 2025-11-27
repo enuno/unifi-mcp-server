@@ -804,12 +804,14 @@ Update an existing user defined ACL rule.
 
 Endpoints for managing port and IP address lists used across firewall policy configurations.
 
-### List Traffic Matching Lists
+### List Traffic Matching Lists ✅
 
 Retrieve all traffic matching lists on a site.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/traffic-matching-lists`
+- **MCP Tool:** `list_traffic_matching_lists()`
+- **Implementation:** Batch 1 (92.47% coverage)
 
 **Query Parameters:**
 
@@ -820,12 +822,14 @@ Retrieve all traffic matching lists on a site.
 
 **Response:** `200 OK`
 
-### Create Traffic Matching List
+### Create Traffic Matching List ✅
 
 Create a new traffic matching list on a site.
 
 - **Method:** `POST`
 - **Endpoint:** `/v1/sites/{siteId}/traffic-matching-lists`
+- **MCP Tool:** `create_traffic_matching_list()`
+- **Implementation:** Batch 1 (92.47% coverage)
 - **Response:** `201 Created`
 
 **Request Body:**
@@ -836,12 +840,14 @@ Create a new traffic matching list on a site.
 | `name` | string | Yes |
 | `items` | array | Yes (non-empty) |
 
-### Get Traffic Matching List
+### Get Traffic Matching List ✅
 
 Get an existing traffic matching list on a site.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}`
+- **MCP Tool:** `get_traffic_matching_list()`
+- **Implementation:** Batch 1 (92.47% coverage)
 
 **Response Fields:**
 
@@ -852,17 +858,21 @@ Get an existing traffic matching list on a site.
 | `name` | string |
 | `items` | array |
 
-### Update Traffic Matching List
+### Update Traffic Matching List ✅
 
 - **Method:** `PUT`
 - **Endpoint:** `/v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}`
+- **MCP Tool:** `update_traffic_matching_list()`
+- **Implementation:** Batch 1 (92.47% coverage)
 
 **Response:** `200 OK`
 
-### Delete Traffic Matching List
+### Delete Traffic Matching List ✅
 
 - **Method:** `DELETE`
 - **Endpoint:** `/v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}`
+- **MCP Tool:** `delete_traffic_matching_list()`
+- **Implementation:** Batch 1 (92.47% coverage)
 
 **Response:** `200 OK`
 
@@ -888,39 +898,47 @@ Returns available WAN interface definitions for a given site.
 
 **Response:** `200 OK`
 
-### List Site-To-Site VPN Tunnels
+### List Site-To-Site VPN Tunnels ✅
 
 Retrieve a paginated list of all site-to-site VPN tunnels on a site.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/vpn/site-to-site-tunnels`
+- **MCP Tool:** `list_vpn_tunnels()`
+- **Implementation:** Batch 2 (100% coverage)
 
 **Response:** `200 OK`
 
-### List VPN Servers
+### List VPN Servers ✅
 
 Retrieve a paginated list of all VPN servers on a site.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/vpn/servers`
+- **MCP Tool:** `list_vpn_servers()`
+- **Implementation:** Batch 2 (100% coverage)
 
 **Response:** `200 OK`
 
-### List Radius Profiles
+### List Radius Profiles ✅
 
 Returns available RADIUS authentication profiles.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/radius/profiles`
+- **MCP Tool:** `list_radius_profiles()`
+- **Implementation:** Batch 3 (100% coverage)
 
 **Response:** `200 OK`
 
-### List Device Tags
+### List Device Tags ✅
 
 Returns all device tags defined within a site (used for WiFi Broadcast assignments).
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/sites/{siteId}/device-tags`
+- **MCP Tool:** `list_device_tags()`
+- **Implementation:** Batch 3 (100% coverage)
 
 **Response:** `200 OK`
 
@@ -942,12 +960,14 @@ Lists DPI-recognized applications grouped under categories.
 
 **Response:** `200 OK`
 
-### List Countries
+### List Countries ✅
 
 Returns ISO-standard country codes and names.
 
 - **Method:** `GET`
 - **Endpoint:** `/v1/countries`
+- **MCP Tool:** `list_countries()` (enhanced with pagination)
+- **Implementation:** Batch 3 (100% coverage)
 
 **Response:** `200 OK`
 

@@ -67,11 +67,12 @@ async def list_vlans(
         response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
         networks_data = response.get("data", []) if isinstance(response, dict) else response
 
-        # Filter for networks with VLAN configuration
-        vlans = [n for n in networks_data if n.get("vlan_id") is not None]
+        # Return all networks (not just those with vlan_id set)
+        # Local gateway API may not populate vlan_id for all network types
+        logger.debug(f"Found {len(networks_data)} networks before pagination")
 
         # Apply pagination
-        paginated = vlans[offset : offset + limit]
+        paginated = networks_data[offset : offset + limit]
 
         # Parse into Network models
         networks = [Network(**n).model_dump() for n in paginated]

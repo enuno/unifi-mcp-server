@@ -59,20 +59,20 @@ services:
 
   # MCP Toolbox - Analytics and Monitoring Dashboard
   mcp-toolbox:
-    image: ghcr.io/agnost-io/toolbox:latest
+    image: us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:${TOOLBOX_VERSION:-0.14.0}
     container_name: mcp-toolbox
     restart: unless-stopped
     ports:
       - "${TOOLBOX_PORT:-8080}:8080"
-    environment:
-      # Agnost Configuration for Toolbox
-      AGNOST_ORG_ID: ${AGNOST_ORG_ID:?AGNOST_ORG_ID required for toolbox}
-      AGNOST_ENDPOINT: ${AGNOST_ENDPOINT:-https://api.agnost.ai}
-
-      # Toolbox Configuration
-      TOOLBOX_AUTH_ENABLED: ${TOOLBOX_AUTH_ENABLED:-false}
-      TOOLBOX_USERNAME: ${TOOLBOX_USERNAME:-admin}
-      TOOLBOX_PASSWORD: ${TOOLBOX_PASSWORD:-}
+    command:
+      - "--tools-file"
+      - "/app/tools.yaml"
+      - "--telemetry-otlp"
+      - "https://api.agnost.ai/v1/otel/${AGNOST_ORG_ID}"
+      - "--telemetry-service-name"
+      - "${TOOLBOX_SERVICE_NAME:-unifi-mcp-toolbox}"
+    volumes:
+      - ./tools.yaml:/app/tools.yaml:ro
     networks:
       - mcp-network
     healthcheck:

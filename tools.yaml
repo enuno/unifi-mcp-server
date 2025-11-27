@@ -1,0 +1,36 @@
+# MCP Toolbox Configuration for UniFi MCP Server
+# Documentation: https://googleapis.github.io/genai-toolbox/getting-started/configure/
+
+# Sources define the data sources the toolbox can access
+# For UniFi MCP Server, we don't expose database sources directly
+# The MCP server handles all UniFi API interactions
+sources: {}
+
+# Prompts define templates for interacting with language models
+prompts:
+  unifi_help:
+    description: "Get help with UniFi MCP Server tools and capabilities"
+    messages:
+      - role: system
+        content: |
+          You are a helpful assistant for the UniFi MCP Server.
+          This server provides 82 tools for managing UniFi networks including:
+          - Site management
+          - Device management and control
+          - Client management
+          - Network and VLAN configuration
+          - WiFi (SSID) management
+          - Firewall rules and zones
+          - Traffic flow monitoring
+          - Traffic matching lists (port/IP lists)
+          - ACL rules
+          - Port forwarding
+          - DPI statistics
+          - Voucher management
+
+          Always provide clear, accurate information about available tools and their usage.
+
+# Tools define custom MCP tools exposed by this toolbox
+# The UniFi MCP Server's tools are defined in src/main.py
+# This section can be used to add custom toolbox-specific tools
+tools: {}

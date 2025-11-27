@@ -16,7 +16,7 @@ def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
     monkeypatch.setenv("UNIFI_API_TYPE", "local")
     monkeypatch.setenv("UNIFI_LOCAL_HOST", "127.0.0.1")
-    return Settings()
+    return Settings(_env_file=None)
 
 
 @pytest.fixture

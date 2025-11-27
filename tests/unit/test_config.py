@@ -19,10 +19,10 @@ class TestSettings:
 
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
         assert settings.api_key == "test-api-key"
-        assert settings.api_type == APIType.CLOUD
+        assert settings.api_type == APIType.CLOUD_EA
         assert settings.cloud_api_url == "https://api.ui.com"
         assert settings.default_site == "default"
         assert settings.rate_limit_requests == 100
@@ -31,11 +31,11 @@ class TestSettings:
     def test_cloud_api_configuration(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test cloud API configuration."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
-        monkeypatch.setenv("UNIFI_API_TYPE", "cloud")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
-        assert settings.api_type == APIType.CLOUD
+        assert settings.api_type == APIType.CLOUD_EA
         assert settings.base_url == "https://api.ui.com"
         assert settings.verify_ssl is True
 
@@ -46,7 +46,7 @@ class TestSettings:
         monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
         monkeypatch.setenv("UNIFI_LOCAL_PORT", "8443")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
         assert settings.api_type == APIType.LOCAL
         assert settings.local_host == "192.168.1.1"
@@ -66,7 +66,7 @@ class TestSettings:
         # Explicitly NOT setting UNIFI_LOCAL_HOST - that's what we're testing
 
         with pytest.raises(ValidationError, match="local_host is required"):
-            Settings()
+            Settings(_env_file=None)
 
     def test_invalid_port_fails(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test that invalid port raises error."""
@@ -74,16 +74,16 @@ class TestSettings:
         monkeypatch.setenv("UNIFI_LOCAL_PORT", "99999")
 
         with pytest.raises(ValidationError, match="Port must be between"):
-            Settings()
+            Settings(_env_file=None)
 
     def test_get_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test headers generation."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
         headers = settings.get_headers()
 
-        assert headers["X-API-Key"] == "test-api-key"
+        assert headers["X-API-KEY"] == "test-api-key"
         assert headers["Content-Type"] == "application/json"
         assert headers["Accept"] == "application/json"
 
@@ -94,7 +94,7 @@ class TestSettings:
         monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
         monkeypatch.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
         assert settings.verify_ssl is False
         # base_url still uses https:// even when verify_ssl=False
@@ -104,9 +104,9 @@ class TestSettings:
     def test_api_type_enum_conversion(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test API type enum conversion."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
-        monkeypatch.setenv("UNIFI_API_TYPE", "CLOUD")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
 
-        settings = Settings()
+        settings = Settings(_env_file=None)
 
-        assert settings.api_type == APIType.CLOUD
+        assert settings.api_type == APIType.CLOUD_EA
         assert isinstance(settings.api_type, APIType)

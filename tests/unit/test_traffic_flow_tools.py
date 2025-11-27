@@ -12,8 +12,8 @@ from src.tools import traffic_flows
 def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Create mock settings for testing."""
     monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
-    monkeypatch.setenv("UNIFI_API_TYPE", "cloud")
-    return Settings()
+    monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+    return Settings(_env_file=None)
 
 
 @pytest.fixture

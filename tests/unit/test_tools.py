@@ -16,7 +16,7 @@ from src.utils import ResourceNotFoundError
 def mock_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Create mock settings for testing."""
     monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
-    return Settings()
+    return Settings(_env_file=None)
 
 
 class TestDeviceTools:

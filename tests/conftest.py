@@ -10,37 +10,23 @@ def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     """Create test settings."""
     # Set environment variables for Settings to read
     monkeypatch.setenv("UNIFI_API_KEY", "test-api-key-XXZDILlzznocKT6JG7_s9VlMAW0HD8Ew")
-    monkeypatch.setenv("UNIFI_API_TYPE", "cloud")
-    monkeypatch.setenv("UNIFI_HOST", "api.ui.com")
+    monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+    monkeypatch.setenv("UNIFI_CLOUD_API_URL", "https://api.ui.com")
     monkeypatch.setenv("UNIFI_VERIFY_SSL", "true")
 
-    # Settings will read from environment variables
-    return Settings()
+    # Settings will read from environment variables, explicitly disable .env file
+    return Settings(_env_file=None)
 
 
 @pytest.fixture(autouse=True)
 def reset_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Reset environment variables before each test and prevent .env loading."""
+    """Reset environment variables before each test."""
     # Clear any existing UNIFI_ environment variables
     import os
-    from pathlib import Path
 
     for key in list(os.environ.keys()):
         if key.startswith("UNIFI_") or key == "LOG_LEVEL":
             monkeypatch.delenv(key, raising=False)
-
-    # Temporarily rename .env file to prevent Pydantic from auto-loading it
-    env_file = Path(__file__).parent.parent / ".env"
-    temp_env_file = Path(__file__).parent.parent / ".env.test_backup"
-
-    if env_file.exists() and not temp_env_file.exists():
-        env_file.rename(temp_env_file)
-        # Schedule restoration after test
-        import atexit
-        def restore_env():
-            if temp_env_file.exists():
-                temp_env_file.rename(env_file)
-        atexit.register(restore_env)
 
 
 @pytest.fixture

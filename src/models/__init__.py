@@ -14,6 +14,12 @@ from .site_manager import (
     VantagePoint,
 )
 from .traffic_flow import FlowRisk, FlowStatistics, FlowView, TrafficFlow
+from .traffic_matching_list import (
+    TrafficMatchingList,
+    TrafficMatchingListCreate,
+    TrafficMatchingListType,
+    TrafficMatchingListUpdate,
+)
 from .voucher import Voucher
 from .wan import WANConnection
 from .zbf_matrix import ApplicationBlockRule, ZoneNetworkAssignment, ZonePolicy, ZonePolicyMatrix
@@ -38,6 +44,10 @@ __all__ = [
     "FlowStatistics",
     "FlowRisk",
     "FlowView",
+    "TrafficMatchingList",
+    "TrafficMatchingListCreate",
+    "TrafficMatchingListUpdate",
+    "TrafficMatchingListType",
     "SiteHealthSummary",
     "InternetHealthMetrics",
     "CrossSiteStatistics",

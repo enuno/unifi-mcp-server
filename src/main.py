@@ -25,6 +25,7 @@ from .tools import port_forwarding as port_fwd_tools
 from .tools import site_manager as site_manager_tools
 from .tools import sites as sites_tools
 from .tools import traffic_flows as traffic_flows_tools
+from .tools import traffic_matching_lists as tml_tools
 from .tools import vouchers as vouchers_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
@@ -1117,6 +1118,65 @@ async def filter_traffic_flows(
     return await traffic_flows_tools.filter_traffic_flows(
         site_id, settings, filter_expression, time_range, limit
     )
+
+
+# Traffic Matching Lists Tools
+@mcp.tool()
+async def list_traffic_matching_lists(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all traffic matching lists in a site (read-only)."""
+    return await tml_tools.list_traffic_matching_lists(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def get_traffic_matching_list(site_id: str, list_id: str) -> dict:
+    """Get details for a specific traffic matching list."""
+    return await tml_tools.get_traffic_matching_list(site_id, list_id, settings)
+
+
+@mcp.tool()
+async def create_traffic_matching_list(
+    site_id: str,
+    list_type: str,
+    name: str,
+    items: list[str],
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Create a new traffic matching list (requires confirm=True)."""
+    return await tml_tools.create_traffic_matching_list(
+        site_id, list_type, name, items, settings, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def update_traffic_matching_list(
+    site_id: str,
+    list_id: str,
+    list_type: str | None = None,
+    name: str | None = None,
+    items: list[str] | None = None,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Update an existing traffic matching list (requires confirm=True)."""
+    return await tml_tools.update_traffic_matching_list(
+        site_id, list_id, settings, list_type, name, items, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def delete_traffic_matching_list(
+    site_id: str,
+    list_id: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a traffic matching list (requires confirm=True)."""
+    return await tml_tools.delete_traffic_matching_list(site_id, list_id, settings, confirm, dry_run)
 
 
 # Site Manager Tools

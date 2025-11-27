@@ -10,8 +10,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class APIType(str, Enum):
     """API connection type enumeration."""
 
-    CLOUD = "cloud"
-    LOCAL = "local"
+    CLOUD_V1 = "cloud-v1"  # Official stable v1 API
+    CLOUD_EA = "cloud-ea"  # Early Access API
+    LOCAL = "local"  # Direct gateway access
+
+    # Legacy alias for backward compatibility (defaults to EA)
+    CLOUD = "cloud-ea"
 
 
 class Settings(BaseSettings):
@@ -32,8 +36,8 @@ class Settings(BaseSettings):
     )
 
     api_type: APIType = Field(
-        default=APIType.CLOUD,
-        description="API connection type: 'cloud' or 'local'",
+        default=APIType.CLOUD_EA,
+        description="API connection type: 'cloud-v1' (stable), 'cloud-ea' (early access), or 'local' (gateway)",
         validation_alias="UNIFI_API_TYPE",
     )
 
@@ -197,7 +201,7 @@ class Settings(BaseSettings):
         Returns:
             Base URL for API requests
         """
-        if self.api_type == APIType.CLOUD:
+        if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
             return self.cloud_api_url
         else:
             # Always use HTTPS for local gateways (port 443)
@@ -211,15 +215,16 @@ class Settings(BaseSettings):
         Returns:
             Whether to verify SSL certificates
         """
-        if self.api_type == APIType.CLOUD:
+        if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
             return True
         return self.local_verify_ssl
 
     def get_integration_path(self, endpoint: str) -> str:
         """Get the correct integration API endpoint path based on API type.
 
-        For Cloud API: Returns /integration/v1/... (though ZBF not supported on Cloud)
-        For Local API: Returns /proxy/network/integration/v1/...
+        For Cloud V1 API: Returns /v1/{endpoint}
+        For Cloud EA API: Returns /integration/v1/{endpoint} (ZBF not supported on Cloud)
+        For Local API: Returns /proxy/network/integration/v1/{endpoint}
 
         Args:
             endpoint: The endpoint path starting with /sites/... (e.g., "/sites/default/firewall/zones")
@@ -229,17 +234,53 @@ class Settings(BaseSettings):
 
         Example:
             >>> settings.get_integration_path("/sites/abc/firewall/zones")
-            # Cloud: "/integration/v1/sites/abc/firewall/zones"
+            # Cloud V1: "/v1/sites/abc/firewall/zones"
+            # Cloud EA: "/integration/v1/sites/abc/firewall/zones"
             # Local: "/proxy/network/integration/v1/sites/abc/firewall/zones"
         """
         # Remove leading slash if present for consistency
         endpoint = endpoint.lstrip("/")
 
-        if self.api_type == APIType.CLOUD:
+        if self.api_type == APIType.CLOUD_V1:
+            return f"/v1/{endpoint}"
+        elif self.api_type == APIType.CLOUD_EA:
             return f"/integration/v1/{endpoint}"
         else:
             # Local gateways require /proxy/network/ prefix
             return f"/proxy/network/integration/v1/{endpoint}"
+
+    def get_site_api_path(self, site_id: str, endpoint: str) -> str:
+        """Get the correct standard UniFi API endpoint path based on API type.
+
+        For Cloud V1 API: Returns /v1/{endpoint} (site-less endpoints like /hosts)
+        For Cloud EA API: Returns /ea/sites/{site_id}/{endpoint}
+        For Local API: Returns /proxy/network/api/s/{site_id}/{endpoint}
+
+        Args:
+            site_id: The site ID (may be unused for Cloud V1 top-level endpoints)
+            endpoint: The endpoint path (e.g., "devices", "sta", "rest/networkconf")
+
+        Returns:
+            Complete endpoint path with correct prefix
+
+        Example:
+            >>> settings.get_site_api_path("default", "devices")
+            # Cloud V1: "/v1/hosts" (devices are under hosts endpoint)
+            # Cloud EA: "/ea/sites/default/devices"
+            # Local: "/proxy/network/api/s/default/devices"
+        """
+        # Remove leading slash if present for consistency
+        endpoint = endpoint.lstrip("/")
+
+        if self.api_type == APIType.CLOUD_V1:
+            # V1 API uses top-level endpoints without site_id in path
+            # Note: For v1, endpoints like "devices" are accessed via /v1/hosts
+            return f"/v1/{endpoint}"
+        elif self.api_type == APIType.CLOUD_EA:
+            return f"/ea/sites/{site_id}/{endpoint}"
+        else:
+            # Local gateways use /proxy/network/api/s/ prefix
+            return f"/proxy/network/api/s/{site_id}/{endpoint}"
 
     def get_headers(self) -> dict[str, str]:
         """Get HTTP headers for API requests.
@@ -248,7 +289,7 @@ class Settings(BaseSettings):
             Dictionary of HTTP headers
         """
         return {
-            "X-API-Key": self.api_key,
+            "X-API-KEY": self.api_key,  # UniFi API expects all caps
             "Content-Type": "application/json",
             "Accept": "application/json",
         }

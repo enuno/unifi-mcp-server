@@ -37,7 +37,7 @@ async def get_client_details(site_id: str, client_mac: str, settings: Settings) 
 
         # Try active clients first
         response = await client.get(f"/ea/sites/{site_id}/sta")
-        clients_data = response.get("data", [])
+        clients_data = response.get("data", []) if isinstance(response, dict) else response
 
         for client_data in clients_data:
             if validate_mac_address(client_data.get("mac", "")) == client_mac:
@@ -47,7 +47,7 @@ async def get_client_details(site_id: str, client_mac: str, settings: Settings) 
 
         # If not found in active, try all users
         response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
-        clients_data = response.get("data", [])
+        clients_data = response.get("data", []) if isinstance(response, dict) else response
 
         for client_data in clients_data:
             if validate_mac_address(client_data.get("mac", "")) == client_mac:
@@ -83,7 +83,7 @@ async def get_client_statistics(
 
         # Get from active clients
         response = await client.get(f"/ea/sites/{site_id}/sta")
-        clients_data = response.get("data", [])
+        clients_data = response.get("data", []) if isinstance(response, dict) else response
 
         for client_data in clients_data:
             if validate_mac_address(client_data.get("mac", "")) == client_mac:
@@ -133,7 +133,7 @@ async def list_active_clients(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/sta")
-        clients_data = response.get("data", [])
+        clients_data = response.get("data", []) if isinstance(response, dict) else response
 
         # Apply pagination
         paginated = clients_data[offset : offset + limit]
@@ -173,7 +173,7 @@ async def search_clients(
 
         # Search in all users
         response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
-        clients_data = response.get("data", [])
+        clients_data = response.get("data", []) if isinstance(response, dict) else response
 
         # Search by MAC, IP, hostname, or name
         query_lower = query.lower()

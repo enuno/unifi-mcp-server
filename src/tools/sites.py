@@ -28,7 +28,12 @@ async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
         await client.authenticate()
 
         response = await client.get("/ea/sites")
-        sites_data = response.get("data", [])
+        
+        # Handle both local and cloud API response formats
+        if isinstance(response, list):
+            sites_data = response
+        else:
+            sites_data = response.get("data", [])
 
         for site_data in sites_data:
             if site_data.get("_id") == site_id or site_data.get("name") == site_id:
@@ -55,20 +60,48 @@ async def list_sites(
     limit, offset = validate_limit_offset(limit, offset)
     logger = get_logger(__name__, settings.log_level)
 
-    async with UniFiClient(settings) as client:
-        await client.authenticate()
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
 
-        response = await client.get("/ea/sites")
-        sites_data = response.get("data", [])
+            # Use correct endpoint based on API type
+            if settings.api_type.value == "local":
+                endpoint = settings.get_integration_path("sites")
+            else:
+                endpoint = "/ea/sites"
+            
+            logger.debug(f"Fetching sites from endpoint: {endpoint}")
+            response = await client.get(endpoint)
+            logger.debug(f"Raw response: {response}")
+            
+            # Handle both local and cloud API response formats
+            if isinstance(response, list):
+                sites_data = response
+            else:
+                sites_data = response.get("data", [])
 
-        # Apply pagination
-        paginated = sites_data[offset : offset + limit]
+            logger.debug(f"Extracted {len(sites_data)} sites from response")
 
-        # Parse into Site models
-        sites = [Site(**s).model_dump() for s in paginated]
+            # Apply pagination
+            paginated = sites_data[offset : offset + limit]
+            logger.debug(f"Paginated to {len(paginated)} sites")
 
-        logger.info(f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})")
-        return sites
+            # Parse into Site models
+            sites = []
+            for idx, s in enumerate(paginated):
+                try:
+                    logger.debug(f"Parsing site {idx}: {s}")
+                    site_obj = Site(**s)
+                    sites.append(site_obj.model_dump())
+                except Exception as e:
+                    logger.error(f"Failed to parse site {idx} ({s}): {e}", exc_info=True)
+                    raise
+
+            logger.info(f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})")
+            return sites
+    except Exception as e:
+        logger.error(f"Error listing sites: {e}", exc_info=True)
+        raise
 
 
 async def get_site_statistics(site_id: str, settings: Settings) -> dict[str, Any]:
@@ -92,9 +125,9 @@ async def get_site_statistics(site_id: str, settings: Settings) -> dict[str, Any
         clients_response = await client.get(f"/ea/sites/{site_id}/sta")
         networks_response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
 
-        devices_data = devices_response.get("data", [])
-        clients_data = clients_response.get("data", [])
-        networks_data = networks_response.get("data", [])
+        devices_data = devices_response.get("data", []) if isinstance(devices_response, dict) else devices_response
+        clients_data = clients_response.get("data", []) if isinstance(clients_response, dict) else clients_response
+        networks_data = networks_response.get("data", []) if isinstance(networks_response, dict) else networks_response
 
         # Count device types
         ap_count = sum(1 for d in devices_data if d.get("type") == "uap")

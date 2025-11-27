@@ -39,7 +39,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
 
         # Get all devices and find the specific one
         response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", [])
+        devices_data = response.get("data", []) if isinstance(response, dict) else response
 
         for device_data in devices_data:
             if device_data.get("_id") == device_id:
@@ -69,7 +69,7 @@ async def get_device_statistics(site_id: str, device_id: str, settings: Settings
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", [])
+        devices_data = response.get("data", []) if isinstance(response, dict) else response
 
         for device_data in devices_data:
             if device_data.get("_id") == device_id:
@@ -118,7 +118,7 @@ async def list_devices_by_type(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", [])
+        devices_data = response.get("data", []) if isinstance(response, dict) else response
 
         # Filter by type
         filtered = [
@@ -167,7 +167,7 @@ async def search_devices(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", [])
+        devices_data = response.get("data", []) if isinstance(response, dict) else response
 
         # Search by name, MAC, or IP
         query_lower = query.lower()

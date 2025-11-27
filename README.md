@@ -13,9 +13,42 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 
 *Note: v0.2.0 was published prematurely and should not be used. Please use v0.1.4, which contains the same code with the correct version number. The true v0.2.0 milestone release is planned for Q4 2025 and will include Zone-Based Firewall, Traffic Flow monitoring, and other major features. See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for details.*
 
+## 🌐 API Mode Support
+
+The UniFi MCP Server supports **three distinct API modes** with different capabilities:
+
+### Local Gateway API (Recommended) ✅
+**Full feature support** - Direct access to your UniFi gateway.
+
+- ✅ **All Features Available**: Device management, client control, network configuration, firewall rules, WiFi management
+- ✅ **Real-time Data**: Access to live device/client statistics and detailed information
+- ✅ **Configuration Changes**: Create, update, delete networks, VLANs, firewall rules, SSIDs
+- 📍 **Requirement**: Local network access to your UniFi gateway (e.g., 192.168.1.1)
+- ⚙️ **Configuration**: `UNIFI_API_TYPE=local` + `UNIFI_LOCAL_HOST=<gateway-ip>`
+
+### Cloud Early Access API ⚠️
+**Limited to aggregate statistics** - UniFi cloud API in testing phase.
+
+- ✅ **Site Information**: List sites with aggregate statistics (device counts, client counts, bandwidth)
+- ⚠️ **No Individual Device/Client Access**: Cannot query specific devices or clients
+- ⚠️ **No Configuration Changes**: Cannot modify networks, firewall rules, or settings
+- ⚙️ **Configuration**: `UNIFI_API_TYPE=cloud-ea`
+- 📊 **Rate Limit**: 100 requests/minute
+
+### Cloud V1 API ⚠️
+**Limited to aggregate statistics** - UniFi stable v1 cloud API.
+
+- ✅ **Site Information**: List sites with aggregate statistics (device counts, client counts, bandwidth)
+- ⚠️ **No Individual Device/Client Access**: Cannot query specific devices or clients
+- ⚠️ **No Configuration Changes**: Cannot modify networks, firewall rules, or settings
+- ⚙️ **Configuration**: `UNIFI_API_TYPE=cloud-v1`
+- 📊 **Rate Limit**: 10,000 requests/minute
+
+**💡 Recommendation**: Use **Local Gateway API** (`UNIFI_API_TYPE=local`) for full functionality. Cloud APIs are suitable only for high-level monitoring dashboards.
+
 ## Features
 
-### Core Capabilities
+### Core Capabilities (Local API)
 
 - **Device Management**: List, monitor, restart, locate, and upgrade UniFi devices (APs, switches, gateways)
 - **Network Configuration**: Create, update, and delete networks, VLANs, and subnets with DHCP configuration
@@ -183,21 +216,22 @@ Create a `.env` file in the project root:
 # Required: Your UniFi API Key
 UNIFI_API_KEY=your-api-key-here
 
-# API Type: cloud or local
-UNIFI_API_TYPE=cloud
+# API Mode Selection (choose one):
+# - 'local': Full access via local gateway (RECOMMENDED)
+# - 'cloud-ea': Early Access cloud API (limited to statistics)
+# - 'cloud-v1': Stable v1 cloud API (limited to statistics)
+UNIFI_API_TYPE=local
 
-# For cloud API (default)
-UNIFI_HOST=api.ui.com
-UNIFI_PORT=443
-UNIFI_VERIFY_SSL=true
+# Local Gateway Configuration (for UNIFI_API_TYPE=local)
+UNIFI_LOCAL_HOST=192.168.1.1
+UNIFI_LOCAL_PORT=443
+UNIFI_LOCAL_VERIFY_SSL=false
 
-# For local gateway proxy, use:
-# UNIFI_API_TYPE=local
-# UNIFI_HOST=192.168.1.1
-# UNIFI_VERIFY_SSL=false
+# Cloud API Configuration (for cloud-ea or cloud-v1)
+# UNIFI_CLOUD_API_URL=https://api.ui.com
 
 # Optional settings
-UNIFI_SITE=default
+UNIFI_DEFAULT_SITE=default
 
 # Redis caching (optional - improves performance)
 REDIS_HOST=localhost

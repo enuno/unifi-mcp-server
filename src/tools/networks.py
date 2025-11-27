@@ -29,7 +29,7 @@ async def get_network_details(site_id: str, network_id: str, settings: Settings)
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-        networks_data = response.get("data", [])
+        networks_data = response.get("data", []) if isinstance(response, dict) else response
 
         for network_data in networks_data:
             if network_data.get("_id") == network_id:
@@ -65,7 +65,7 @@ async def list_vlans(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-        networks_data = response.get("data", [])
+        networks_data = response.get("data", []) if isinstance(response, dict) else response
 
         # Filter for networks with VLAN configuration
         vlans = [n for n in networks_data if n.get("vlan_id") is not None]
@@ -101,7 +101,7 @@ async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> 
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-        networks_data = response.get("data", [])
+        networks_data = response.get("data", []) if isinstance(response, dict) else response
 
         for network_data in networks_data:
             if network_data.get("_id") == network_id:
@@ -144,11 +144,11 @@ async def get_network_statistics(site_id: str, settings: Settings) -> dict[str, 
 
         # Get network configurations
         networks_response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
-        networks_data = networks_response.get("data", [])
+        networks_data = networks_response.get("data", []) if isinstance(networks_response, dict) else networks_response
 
         # Get active clients to count usage per network
         clients_response = await client.get(f"/ea/sites/{site_id}/sta")
-        clients_data = clients_response.get("data", [])
+        clients_data = clients_response.get("data", []) if isinstance(clients_response, dict) else clients_response
 
         # Calculate statistics per network
         network_stats = []

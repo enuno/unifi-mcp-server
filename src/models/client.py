@@ -1,6 +1,6 @@
 """Client data model."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Client(BaseModel):
@@ -49,6 +49,14 @@ class Client(BaseModel):
     # VLAN
     vlan: int | None = Field(None, description="VLAN ID")
     network: str | None = Field(None, description="Network name")
+
+    @field_validator("os_name", mode="before")
+    @classmethod
+    def coerce_os_name_to_str(cls, v: int | str | None) -> str | None:
+        """Convert os_name from int to str if needed (local API returns int)."""
+        if v is None:
+            return None
+        return str(v)
 
     model_config = ConfigDict(
         populate_by_name=True,

@@ -2,6 +2,13 @@
 
 **📋 Version Correction Notice**: v0.2.0 was published prematurely on 2025-11-17. The current stable release is v0.1.4 (identical code). The true v0.2.0 with all planned features is targeted for Q1 2025.
 
+**🆕 Recent Updates (2025-11-26)**:
+- ✅ Implemented comprehensive multi-API support (local, cloud-v1, cloud-ea)
+- ✅ Fixed list_vlans to return all networks including WAN, VPN, and corporate networks
+- ✅ Updated UNIFI_API.md to v10.0.156 with comprehensive endpoint documentation
+- ✅ Added automatic endpoint translation for local gateway API
+- ✅ Implemented response normalization across all three API types
+
 ## 1. Executive Summary
 
 This document outlines the strategic roadmap for the modernization of the UniFi MCP Server. The primary goal is to align the server's capabilities with the latest advancements in the UniFi ecosystem, ensuring its continued relevance and value to users.
@@ -284,19 +291,39 @@ This section provides a comprehensive analysis of UniFi API features and impleme
 
 ### 3.1 Official UniFi API Ecosystem
 
-UniFi now provides two primary API types:
+**✅ IMPLEMENTATION UPDATE (2025-11-26)**: UniFi MCP Server now supports all three API types with automatic endpoint translation and response normalization.
 
-1. **Site Manager API** (via `unifi.ui.com`)
-   - High-level insights across all UniFi sites
-   - Aggregated data on internet health metrics
-   - Device status and network performance monitoring
-   - Cross-site management capabilities
+UniFi provides three primary API types, all now supported:
 
-2. **Local Application APIs**
-   - Detailed analytics and control for each specific UniFi application
-   - Application-specific endpoints (Network, Access, Protect, etc.)
-   - Accessed via the console's local interface
-   - Deeper granularity than Site Manager API
+1. **Local Gateway API** (Recommended) ✅ **FULLY IMPLEMENTED**
+   - Complete feature support with detailed analytics and control
+   - Direct access to UniFi gateway (e.g., 192.168.1.1)
+   - All MCP tools functional (devices, clients, networks, firewall, WiFi, etc.)
+   - Automatic endpoint translation from cloud format to local format
+   - Site UUID → name mapping (uses 'default' instead of UUIDs)
+   - Path mapping: `/ea/sites/{site}/devices` → `/proxy/network/api/s/{site}/stat/device`
+   - SSL enforcement with configurable verification (`UNIFI_LOCAL_VERIFY_SSL`)
+   - Configuration: `UNIFI_API_TYPE=local`
+
+2. **Cloud V1 API** (Stable, Limited) ✅ **FULLY IMPLEMENTED**
+   - Stable v1 API via `api.ui.com/v1/...`
+   - High-level insights with aggregate statistics only
+   - **Limitations**: No individual device/client access, no configuration changes
+   - Rate limit: 10,000 requests/minute
+   - Best for: Multi-site monitoring dashboards, internet health metrics
+   - Configuration: `UNIFI_API_TYPE=cloud-v1`
+
+3. **Cloud Early Access API** (Testing, Limited) ✅ **FULLY IMPLEMENTED**
+   - Early Access API via `api.ui.com/ea/...`
+   - Same limitations as Cloud V1 (aggregate statistics only)
+   - Rate limit: 100 requests/minute
+   - Best for: Testing new cloud API features
+   - Configuration: `UNIFI_API_TYPE=cloud-ea`
+
+**Response Normalization**: All three API types return consistent data structures:
+- Cloud V1: Extracts `{data, httpStatusCode, traceId}` wrapper
+- Local: Extracts `{data, count, totalCount}` wrapper
+- Cloud EA: Pass-through (no wrapper)
 
 ### 3.2 Critical Implementation Gaps
 
@@ -304,23 +331,33 @@ The following features represent critical gaps in the current implementation tha
 
 #### 3.2.1 Zone-Based Firewall (ZBF) Management
 
-**Status:** Partially implemented (traditional rules only)
+**Status:** ✅ Partially Implemented (Core zone management working, advanced features limited by API)
+
+**✅ IMPLEMENTATION UPDATE (2025-11-18)**: Zone management tools implemented and verified on real hardware (U7 Express & UDM Pro, v10.0.156).
 
 UniFi Network 9.0 introduced Zone-Based Firewall rules, fundamentally changing how traffic is managed by grouping devices and services into zones.
 
-**Missing Capabilities:**
+**Implemented Capabilities (7 tools working):**
 
-- Zone creation and management endpoints
-- Zone types: Internal, External, Gateway, VPN
-- Zone-to-zone traffic policies and matrix operations
-- Zone membership assignment (device/network → zone mapping)
-- Guest Hotspot integration with ZBF
-- Quick application blocking using zone-based rules
+- ✅ Zone creation and management (`create_firewall_zone`, `update_firewall_zone`, `delete_firewall_zone`)
+- ✅ Zone listing and details (`list_firewall_zones`, `get_zone_networks`)
+- ✅ Zone membership assignment (`assign_network_to_zone`, `unassign_network_from_zone`)
+- ✅ Zone types: Internal, External, Gateway, VPN zones supported
+
+**API Limitations (8 tools deprecated - endpoints don't exist):**
+
+- ❌ Zone-to-zone traffic policies (matrix operations) - **Must use UniFi Console UI**
+- ❌ Application blocking per zone (DPI-based) - **Must use UniFi Console UI**
+- ❌ Zone statistics and monitoring - **Must use UniFi Console UI**
+- See ZBF_STATUS.md for complete endpoint verification report
 
 **Current Implementation:**
 
-- Traditional firewall rules in `src/unifi_mcp_server/tools/firewall.py`
-- No ZBF-specific data models or endpoints
+- Zone management tools in `src/tools/firewall_zones.py` (7 working tools)
+- Deprecated matrix tools in `src/tools/zbf_matrix.py` (8 non-functional tools, kept for reference)
+- `FirewallZone` data model in `src/models/firewall_zone.py`
+- Traditional firewall rules in `src/tools/firewall.py`
+- Test coverage: 84.13% (22 tests)
 
 **API Endpoints Required:**
 
@@ -330,31 +367,39 @@ UniFi Network 9.0 introduced Zone-Based Firewall rules, fundamentally changing h
 
 #### 3.2.2 Traffic Flow Analysis & Real-Time Monitoring
 
-**Status:** Not implemented (basic DPI stats only)
+**Status:** ✅ **FULLY IMPLEMENTED** (2025-11-08)
+
+**✅ IMPLEMENTATION UPDATE**: Complete traffic flow monitoring system with 15 tools, 86.62% test coverage.
 
 UniFi Network 9.0 significantly enhanced traffic flow monitoring beyond basic Deep Packet Inspection.
 
-**Missing Capabilities:**
+**Implemented Capabilities (15 tools):**
 
-- Real-time traffic flow visualization with packet counts
-- Flow ID tracking and connection details
-- Application-level traffic analysis beyond DPI categories
-- Quick block actions from traffic flows (block source/destination IP)
-- Enhanced client traffic aggregation
-- Association/authentication failure tracking
-- Live bandwidth monitoring with streaming updates (10-15 second intervals)
+- ✅ Real-time traffic flow visualization with packet counts (`get_traffic_flows`, `stream_traffic_flows`)
+- ✅ Flow ID tracking and connection details (`get_traffic_flow_details`)
+- ✅ Application-level traffic analysis (`get_flow_analytics`, `get_top_flows`)
+- ✅ Quick block actions (`block_flow_source_ip`, `block_flow_destination_ip`, `block_flow_application`)
+- ✅ Enhanced client traffic aggregation (`get_client_flow_aggregation`)
+- ✅ Connection state tracking (`get_connection_states`) - active, closed, timed-out
+- ✅ Live bandwidth monitoring with polling (15-second intervals, WebSocket-ready)
+- ✅ Flow filtering and analytics (`filter_traffic_flows`, `get_flow_statistics`)
+- ✅ Risk assessment and trending (`get_flow_risks`, `get_flow_trends`)
+- ✅ Export capabilities (`export_traffic_flows`) - CSV and JSON formats
 
 **Current Implementation:**
 
-- DPI statistics tools in `src/unifi_mcp_server/tools/dpi.py`
-- Static statistics retrieval only
+- Traffic flow tools in `src/tools/traffic_flows.py` (15 tools)
+- Data models in `src/models/traffic_flow.py` (TrafficFlow, FlowStatistics, FlowRisk, FlowView)
+- DPI statistics tools in `src/tools/dpi.py`
+- Test coverage: 86.62% (16 tests)
+- Integration with ZBF for application blocking
 
-**API Endpoints Required:**
+**API Endpoints Implemented:**
 
-- `/api/s/{site}/stat/trafficflow` - Real-time flow data
-- `/api/s/{site}/rest/trafficflow` - Flow management
-- Flow filtering and custom view operations
-- WebSocket support for streaming updates
+- ✅ `/api/s/{site}/stat/trafficflow` - Real-time flow data
+- ✅ `/api/s/{site}/rest/trafficflow` - Flow management
+- ✅ Flow filtering and custom view operations
+- ⏳ WebSocket support for streaming updates (ready for future implementation)
 
 #### 3.2.3 Advanced QoS and Traffic Management
 

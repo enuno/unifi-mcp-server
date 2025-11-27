@@ -1,12 +1,20 @@
 # UniFi MCP Server - Multi-Phase Development TODO
 
-**Last Updated**: 2025-11-17
+**Last Updated**: 2025-11-26
 **Current Version**: v0.1.4 (Complete ✅)
 **Next Release**: v0.2.0 (In Progress 🚧 - Planned Q1 2025)
 
 This document provides a comprehensive, phase-by-phase breakdown of development tasks based on the [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md).
 
 **📋 Version Correction Notice**: v0.2.0 was published prematurely on 2025-11-17. v0.1.4 contains the same code with the correct version number. The true v0.2.0 release with all planned features is targeted for Q1 2025.
+
+**🆕 Recent Updates (2025-11-26)**:
+
+- ✅ Implemented comprehensive multi-API support (local, cloud-v1, cloud-ea)
+- ✅ Fixed list_vlans to return all networks including WAN, VPN, and corporate LANs
+- ✅ Updated UNIFI_API.md to v10.0.156 with comprehensive endpoint documentation
+- ✅ Added automatic endpoint translation for local gateway API
+- ✅ Implemented response normalization across all three API types
 
 ---
 
@@ -29,6 +37,7 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 - [x] Device management (list, details, statistics, search by type)
 - [x] Client management (list, details, statistics, search)
 - [x] Network information (details, VLANs, subnets, statistics)
+  - Enhanced 2025-11-26: list_vlans now returns all network types (WAN, VPN, corporate)
 - [x] Site management (list, details, statistics)
 - [x] MCP resources (sites, devices, clients, networks)
 
@@ -55,6 +64,8 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 - [x] Docker multi-arch images (amd64, arm64)
 - [x] Comprehensive documentation (README, API.md, CONTRIBUTING.md)
 - [x] Testing framework (pytest, 179 tests, 34% coverage)
+- [x] Multi-API support (local, cloud-v1, cloud-ea) with automatic endpoint translation
+- [x] Response normalization across all API types
 
 ---
 
@@ -475,11 +486,14 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 **In Progress Phases**: 1/7 (Phase 5 - Site Manager)
 **Not Started Phases**: 4/7 (Phase 3, 4, 6, 7)
 
-**Critical Updates (2025-11-18)**:
+**Critical Updates (2025-11-26)**:
 - ✅ Phase 1 (ZBF) nearly complete - critical bugs fixed, deprecated non-functional tools
 - ✅ Phase 2 (Traffic Flows) 100% complete
 - ✅ API endpoint verification completed on real hardware (U7 Express & UDM Pro)
 - ⚠️ Removed 8 non-functional ZBF tools (endpoints don't exist in UniFi API)
+- ✅ Multi-API support implemented (local, cloud-v1, cloud-ea) with endpoint translation
+- ✅ Fixed list_vlans to return all network types (WAN, VPN, corporate LANs)
+- ✅ Updated UNIFI_API.md to v10.0.156 specification
 
 **Critical Path**:
 1. ✅ Complete Phase 2 (Traffic Flows) - DONE

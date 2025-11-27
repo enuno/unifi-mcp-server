@@ -6,6 +6,8 @@ from .device import Device
 from .dpi import Country, DPIApplication, DPICategory
 from .firewall_zone import FirewallZone
 from .network import Network
+from .radius import RADIUSProfile
+from .reference_data import DeviceTag
 from .site import Site
 from .site_manager import (
     CrossSiteStatistics,
@@ -51,6 +53,8 @@ __all__ = [
     "TrafficMatchingListType",
     "VPNTunnel",
     "VPNServer",
+    "RADIUSProfile",
+    "DeviceTag",
     "SiteHealthSummary",
     "InternetHealthMetrics",
     "CrossSiteStatistics",

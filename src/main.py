@@ -27,6 +27,7 @@ from .tools import sites as sites_tools
 from .tools import traffic_flows as traffic_flows_tools
 from .tools import traffic_matching_lists as tml_tools
 from .tools import vouchers as vouchers_tools
+from .tools import reference_data as ref_tools
 from .tools import vpn as vpn_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
@@ -959,9 +960,12 @@ async def list_dpi_applications(
 
 
 @mcp.tool()
-async def list_countries() -> list[dict]:
-    """List all countries for configuration and localization."""
-    return await dpi_new_tools.list_countries(settings)
+async def list_countries(
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all countries with ISO codes (read-only)."""
+    return await ref_tools.list_countries(settings, limit, offset)
 
 
 # Zone-Based Firewall Matrix Tools
@@ -1199,6 +1203,27 @@ async def list_vpn_servers(
 ) -> list[dict]:
     """List all VPN servers (read-only)."""
     return await vpn_tools.list_vpn_servers(site_id, settings, limit, offset)
+
+
+# RADIUS & Reference Data Tools
+@mcp.tool()
+async def list_radius_profiles(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all RADIUS profiles in a site (read-only)."""
+    return await ref_tools.list_radius_profiles(site_id, settings, limit, offset)
+
+
+@mcp.tool()
+async def list_device_tags(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> list[dict]:
+    """List all device tags in a site (read-only)."""
+    return await ref_tools.list_device_tags(site_id, settings, limit, offset)
 
 
 # Site Manager Tools

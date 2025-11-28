@@ -657,6 +657,12 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - **Documentation**: [API.md](API.md)
 - **UniFi Official**: <https://www.ui.com/>
 
+## 🌟 Star History
+
+If you find this project useful, please consider starring it on GitHub to help others discover it!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=enuno/unifi-mcp-server&type=date&legend=top-left)](https://www.star-history.com/#enuno/unifi-mcp-server&type=date&legend=top-left)
+
 ---
 
 Made with ❤️ for the UniFi and AI communities

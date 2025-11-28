@@ -536,28 +536,27 @@ class TestTrafficFlowTools:
     @pytest.mark.asyncio
     async def test_get_client_flow_aggregation(self, mock_settings: Settings) -> None:
         """Test getting client flow aggregations."""
-        aggregation_data = {
-            "data": [
-                {
-                    "client_mac": "00:11:22:33:44:55",
-                    "client_name": "Laptop-001",
-                    "total_bytes_sent": 5000000,
-                    "total_bytes_received": 10000000,
-                    "total_flows": 150,
-                    "top_applications": [
-                        {"application": "HTTPS", "bytes": 3000000},
-                        {"application": "DNS", "bytes": 50000},
-                    ],
-                },
-                {
-                    "client_mac": "AA:BB:CC:DD:EE:FF",
-                    "client_name": "Phone-001",
-                    "total_bytes_sent": 1000000,
-                    "total_bytes_received": 2000000,
-                    "total_flows": 50,
-                },
-            ]
-        }
+        # Client now returns unwrapped data (no "data" wrapper)
+        aggregation_data = [
+            {
+                "client_mac": "00:11:22:33:44:55",
+                "client_name": "Laptop-001",
+                "total_bytes_sent": 5000000,
+                "total_bytes_received": 10000000,
+                "total_flows": 150,
+                "top_applications": [
+                    {"application": "HTTPS", "bytes": 3000000},
+                    {"application": "DNS", "bytes": 50000},
+                ],
+            },
+            {
+                "client_mac": "AA:BB:CC:DD:EE:FF",
+                "client_name": "Phone-001",
+                "total_bytes_sent": 1000000,
+                "total_bytes_received": 2000000,
+                "total_flows": 50,
+            },
+        ]
 
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -569,7 +568,7 @@ class TestTrafficFlowTools:
             mock_client_class.return_value = mock_instance
 
             result = await traffic_flows.get_client_flow_aggregation(
-                "default", mock_settings, time_range="24h"
+                "default", "00:11:22:33:44:55", mock_settings, time_range="24h"
             )
 
             assert len(result) == 2
@@ -579,15 +578,14 @@ class TestTrafficFlowTools:
     @pytest.mark.asyncio
     async def test_get_client_flow_aggregation_with_limit(self, mock_settings: Settings) -> None:
         """Test getting client flow aggregations with limit."""
-        aggregation_data = {
-            "data": [
-                {
-                    "client_mac": "00:11:22:33:44:55",
-                    "total_bytes_sent": 5000000,
-                    "total_flows": 150,
-                }
-            ]
-        }
+        # Client now returns unwrapped data (no "data" wrapper)
+        aggregation_data = [
+            {
+                "client_mac": "00:11:22:33:44:55",
+                "total_bytes_sent": 5000000,
+                "total_flows": 150,
+            }
+        ]
 
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client_class:
             mock_instance = AsyncMock()
@@ -599,7 +597,7 @@ class TestTrafficFlowTools:
             mock_client_class.return_value = mock_instance
 
             result = await traffic_flows.get_client_flow_aggregation(
-                "default", mock_settings, limit=10
+                "default", "00:11:22:33:44:55", mock_settings, limit=10
             )
 
             assert len(result) == 1
@@ -667,9 +665,7 @@ class TestTrafficFlowTools:
             mock_instance.__aexit__ = AsyncMock()
             mock_client_class.return_value = mock_instance
 
-            with patch("src.tools.traffic_flows.get_traffic_flow_details") as mock_get_details:
-                mock_get_details.return_value = flow_data
-
+            with patch("src.tools.traffic_flows.get_traffic_flow_details", new=AsyncMock(return_value=flow_data)):
                 with pytest.raises(ValueError, match="No source IP found"):
                     await traffic_flows.block_flow_source_ip(
                         "default",
@@ -858,7 +854,7 @@ class TestTrafficFlowTools:
             assert isinstance(result, str)
             # Should only have specified fields in CSV
             lines = result.split("\n")
-            headers = lines[0].split(",")
+            headers = [h.strip() for h in lines[0].split(",")]  # Strip whitespace and \r
             assert "flow_id" in headers
             assert "source_ip" in headers
             assert "protocol" in headers

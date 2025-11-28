@@ -515,3 +515,197 @@ class UniFiClient:
                 return site_id
 
         raise ResourceNotFoundError("site", site_identifier)
+
+    # Backup and Restore Operations
+
+    async def trigger_backup(
+        self,
+        site_id: str,
+        backup_type: str = "network",
+        days: int = -1,
+    ) -> dict[str, Any]:
+        """Trigger a backup operation on the UniFi controller.
+
+        Args:
+            site_id: Site identifier
+            backup_type: Type of backup ("network" for network-only, "system" for full)
+            days: Number of days to retain backup (-1 for indefinite)
+
+        Returns:
+            Backup operation response including download URL
+
+        Note:
+            For local API, use: /proxy/network/api/s/{site}/cmd/backup
+            Response contains a URL in data.url for downloading the backup file
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API, translate to local endpoint format
+        if self.settings.api_type == APIType.LOCAL:
+            # Use site name (e.g., "default") not UUID for local API
+            site_name = self._site_uuid_to_name.get(site_id, site_id)
+            endpoint = f"/proxy/network/api/s/{site_name}/cmd/backup"
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/cmd/backup"
+
+        payload = {
+            "cmd": "backup",
+            "days": str(days),
+        }
+
+        return await self.post(endpoint, json_data=payload)
+
+    async def list_backups(self, site_id: str) -> list[dict[str, Any]]:
+        """List all available backups for a site.
+
+        Args:
+            site_id: Site identifier
+
+        Returns:
+            List of backup metadata dictionaries
+
+        Note:
+            For local API, use: /proxy/network/api/backup/list-backups
+            For cloud API, endpoint may differ
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API
+        if self.settings.api_type == APIType.LOCAL:
+            site_name = self._site_uuid_to_name.get(site_id, site_id)
+            endpoint = f"/proxy/network/api/backup/list-backups?site={site_name}"
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/backups"
+
+        response = await self.get(endpoint)
+
+        # Handle different response formats
+        if isinstance(response, list):
+            return response
+        return response.get("data", response.get("backups", []))
+
+    async def download_backup(
+        self,
+        site_id: str,
+        backup_filename: str,
+    ) -> bytes:
+        """Download a backup file.
+
+        Args:
+            site_id: Site identifier
+            backup_filename: Backup filename to download
+
+        Returns:
+            Backup file content as bytes
+
+        Note:
+            This method downloads the actual backup file content.
+            For local API: /proxy/network/data/backup/{filename}
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API
+        if self.settings.api_type == APIType.LOCAL:
+            endpoint = f"/proxy/network/data/backup/{backup_filename}"
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/backups/{backup_filename}/download"
+
+        # Use direct HTTP client for binary download
+        full_url = f"{self.settings.base_url}{endpoint}"
+
+        response = await self.client.get(full_url)
+        response.raise_for_status()
+
+        return response.content
+
+    async def delete_backup(
+        self,
+        site_id: str,
+        backup_filename: str,
+    ) -> dict[str, Any]:
+        """Delete a specific backup file.
+
+        Args:
+            site_id: Site identifier
+            backup_filename: Backup filename to delete
+
+        Returns:
+            Deletion confirmation response
+
+        Note:
+            For local API: DELETE /proxy/network/api/backup/delete-backup/{filename}
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API
+        if self.settings.api_type == APIType.LOCAL:
+            endpoint = f"/proxy/network/api/backup/delete-backup/{backup_filename}"
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/backups/{backup_filename}"
+
+        return await self.delete(endpoint)
+
+    async def restore_backup(
+        self,
+        site_id: str,
+        backup_filename: str,
+    ) -> dict[str, Any]:
+        """Restore the controller from a backup file.
+
+        Args:
+            site_id: Site identifier
+            backup_filename: Backup filename to restore from
+
+        Returns:
+            Restore operation response
+
+        Warning:
+            This is a destructive operation that will restore the controller
+            to the state captured in the backup. Use with extreme caution.
+
+        Note:
+            For local API: POST /proxy/network/api/backup/restore
+            Controller may restart during restore process
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API
+        if self.settings.api_type == APIType.LOCAL:
+            endpoint = "/proxy/network/api/backup/restore"
+            payload = {"filename": backup_filename}
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/backups/{backup_filename}/restore"
+            payload = {"backup_id": backup_filename}
+
+        return await self.post(endpoint, json_data=payload)
+
+    async def get_backup_status(
+        self,
+        site_id: str,
+        operation_id: str,
+    ) -> dict[str, Any]:
+        """Get the status of an ongoing backup operation.
+
+        Args:
+            site_id: Site identifier
+            operation_id: Backup operation ID
+
+        Returns:
+            Operation status including progress and any errors
+        """
+        site_id = await self.resolve_site_id(site_id)
+
+        # For local API
+        if self.settings.api_type == APIType.LOCAL:
+            site_name = self._site_uuid_to_name.get(site_id, site_id)
+            endpoint = f"/proxy/network/api/s/{site_name}/stat/backup/{operation_id}"
+        else:
+            # Cloud API
+            endpoint = f"/ea/sites/{site_id}/operations/{operation_id}"
+
+        return await self.get(endpoint)

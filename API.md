@@ -2248,6 +2248,203 @@ UNIFI_RATE_LIMIT=100  # EA: 100, v1 Stable: 10000
 
 ## Examples
 
+### Backup and Restore Operations
+
+#### `trigger_backup`
+
+Create a backup of the UniFi controller configuration.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_type` (string, required): Type of backup - "network" or "system"
+  - `"network"`: Network settings and device configurations only (~5-10 MB)
+  - `"system"`: Complete OS, application, and device configurations (~50-100 MB)
+- `retention_days` (integer, optional): Days to retain backup (default: 30, -1 for indefinite)
+- `confirm` (boolean, required): Must be `true` to execute
+- `dry_run` (boolean, optional): Validate without creating backup
+
+**Returns:**
+```json
+{
+  "backup_id": "backup_20250129_153045",
+  "filename": "backup_2025-01-29_15-30-45.unf",
+  "download_url": "/data/backup/backup_2025-01-29_15-30-45.unf",
+  "backup_type": "network",
+  "created_at": "2025-01-29T15:30:45Z",
+  "retention_days": 30,
+  "status": "completed"
+}
+```
+
+**Example:**
+```python
+backup = await mcp.call_tool("trigger_backup", {
+    "site_id": "default",
+    "backup_type": "network",
+    "retention_days": 30,
+    "confirm": True
+})
+print(f"Backup created: {backup['filename']}")
+```
+
+#### `list_backups`
+
+List all available backups for a site.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+```json
+[
+  {
+    "backup_id": "backup_20250129_120000",
+    "filename": "backup_2025-01-29_12-00-00.unf",
+    "backup_type": "NETWORK",
+    "created_at": "2025-01-29T12:00:00Z",
+    "size_bytes": 5242880,
+    "version": "10.0.160",
+    "is_valid": true,
+    "cloud_synced": true
+  }
+]
+```
+
+#### `get_backup_details`
+
+Get detailed information about a specific backup.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_filename` (string, required): Backup filename
+
+**Returns:** Detailed backup metadata dictionary
+
+#### `download_backup`
+
+Download a backup file to local storage.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_filename` (string, required): Backup filename
+- `output_path` (string, required): Local filesystem path to save
+- `verify_checksum` (boolean, optional): Calculate SHA-256 checksum (default: true)
+
+**Returns:**
+```json
+{
+  "backup_filename": "backup_2025-01-29.unf",
+  "local_path": "/backups/unifi_backup.unf",
+  "size_bytes": 5242880,
+  "checksum": "a3f2b1...c4d5",
+  "download_time": "2025-01-29T15:45:00Z"
+}
+```
+
+**Example:**
+```python
+result = await mcp.call_tool("download_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2025-01-29.unf",
+    "output_path": "/backups/unifi_backup.unf",
+    "verify_checksum": True
+})
+print(f"Downloaded: {result['size_bytes']} bytes")
+print(f"Checksum: {result['checksum']}")
+```
+
+#### `delete_backup`
+
+Delete a backup file from the controller (requires confirmation).
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_filename` (string, required): Backup filename
+- `confirm` (boolean, required): Must be `true` to execute
+- `dry_run` (boolean, optional): Validate without deleting
+
+**Warning:** This permanently deletes the backup file.
+
+#### `restore_backup`
+
+Restore the UniFi controller from a backup file (DESTRUCTIVE operation).
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_filename` (string, required): Backup filename to restore from
+- `create_pre_restore_backup` (boolean, optional): Create safety backup first (default: true, **recommended**)
+- `confirm` (boolean, required): Must be `true` to execute
+- `dry_run` (boolean, optional): Validate without restoring
+
+**Returns:**
+```json
+{
+  "backup_filename": "backup_2025-01-29.unf",
+  "status": "restore_initiated",
+  "pre_restore_backup_id": "backup_20250129_160000_preRestore",
+  "can_rollback": true,
+  "restore_time": "2025-01-29T16:00:00Z",
+  "warning": "Controller may restart. Devices may temporarily disconnect."
+}
+```
+
+**Example:**
+```python
+# ALWAYS use confirm=True and create_pre_restore_backup=True
+result = await mcp.call_tool("restore_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2025-01-29.unf",
+    "create_pre_restore_backup": True,  # Safety backup
+    "confirm": True
+})
+print(f"Restore initiated")
+print(f"Pre-restore backup: {result['pre_restore_backup_id']}")
+```
+
+**Critical Warnings:**
+- Controller will restart during restore process
+- All current configuration will be overwritten
+- Devices may temporarily disconnect
+- **ALWAYS** create pre-restore backup for rollback capability
+
+#### `validate_backup`
+
+Validate a backup file before restore.
+
+**Parameters:**
+- `site_id` (string, required): Site identifier
+- `backup_filename` (string, required): Backup filename
+
+**Returns:**
+```json
+{
+  "backup_id": "backup_20250129_120000",
+  "backup_filename": "backup_2025-01-29.unf",
+  "is_valid": true,
+  "checksum_valid": true,
+  "format_valid": true,
+  "version_compatible": true,
+  "backup_version": "10.0.160",
+  "warnings": [],
+  "errors": [],
+  "size_bytes": 5242880,
+  "validated_at": "2025-01-29T16:30:00Z"
+}
+```
+
+**Example:**
+```python
+validation = await mcp.call_tool("validate_backup", {
+    "site_id": "default",
+    "backup_filename": "backup_2025-01-29.unf"
+})
+
+if validation["is_valid"]:
+    print("✅ Backup is valid and ready to restore")
+else:
+    print(f"❌ Validation errors: {validation['errors']}")
+```
+
 ### Complete Example: Network Setup
 
 ```python
@@ -2320,7 +2517,7 @@ Planned features for future releases:
 - [x] DPI (Deep Packet Inspection) statistics (✅ Phase 5)
 - [x] Webhook support for events (✅ Phase 5)
 - [x] Redis caching for performance (✅ Phase 5)
-- [ ] Backup and restore operations
+- [x] Backup and restore operations (✅ v0.2.0 - Phase 4)
 - [ ] Bulk operations for devices
 - [ ] Advanced firewall rule management
 - [ ] VPN configuration

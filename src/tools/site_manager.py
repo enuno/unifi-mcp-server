@@ -82,12 +82,13 @@ async def get_site_health_summary(
         logger.info(f"Retrieving site health summary (site_id={site_id})")
 
         response = await client.get_site_health(site_id)
-        data = response.get("data", response)
+        # Client now auto-unwraps the "data" field, so response is the actual data
+        data = response
 
         if site_id:
             return SiteHealthSummary(**data).model_dump()  # type: ignore[no-any-return]
         else:
-            # Multiple sites
+            # Multiple sites - response is already a list or dict with sites
             summaries = data.get("sites", []) if isinstance(data, dict) else data
             return [SiteHealthSummary(**summary).model_dump() for summary in summaries]
 
@@ -171,6 +172,7 @@ async def list_vantage_points(settings: Settings) -> list[dict[str, Any]]:
         logger.info("Retrieving Vantage Points")
 
         response = await client.list_vantage_points()
-        data = response.get("data", response.get("vantage_points", []))
+        # Client now auto-unwraps the "data" field, so response is the actual data
+        data = response.get("vantage_points", []) if isinstance(response, dict) else response
 
         return [VantagePoint(**vp).model_dump() for vp in data]

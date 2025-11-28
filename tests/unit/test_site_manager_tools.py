@@ -188,16 +188,15 @@ class TestGetSiteHealthSummary:
     @pytest.mark.asyncio
     async def test_get_site_health_specific_site(self, mock_settings: Settings) -> None:
         """Test getting health summary for a specific site."""
+        # Client now returns unwrapped data (no "data" wrapper)
         mock_health_data = {
-            "data": {
-                "site_id": "site-123",
-                "site_name": "Test Site",
-                "status": "healthy",
-                "devices_total": 10,
-                "devices_online": 9,
-                "clients_active": 25,
-                "last_updated": "2025-11-26T12:00:00Z",
-            }
+            "site_id": "site-123",
+            "site_name": "Test Site",
+            "status": "healthy",
+            "devices_total": 10,
+            "devices_online": 9,
+            "clients_active": 25,
+            "last_updated": "2025-11-26T12:00:00Z",
         }
 
         with patch("src.tools.site_manager.SiteManagerClient") as MockClient:
@@ -218,15 +217,15 @@ class TestGetSiteHealthSummary:
     @pytest.mark.asyncio
     async def test_get_site_health_all_sites(self, mock_settings: Settings) -> None:
         """Test getting health summary for all sites."""
+        # Client now returns unwrapped data (no "data" wrapper)
         mock_health_data = {
-            "data": {
-                "sites": [
-                    {
-                        "site_id": "site-1",
-                        "site_name": "Site One",
-                        "status": "healthy",
-                        "devices_total": 10,
-                        "last_updated": "2025-11-26T12:00:00Z",
+            "sites": [
+                {
+                    "site_id": "site-1",
+                    "site_name": "Site One",
+                    "status": "healthy",
+                    "devices_total": 10,
+                    "last_updated": "2025-11-26T12:00:00Z",
                         "devices_online": 9,
                         "clients_active": 25,
                     },
@@ -240,7 +239,6 @@ class TestGetSiteHealthSummary:
                         "clients_active": 12,
                     },
                 ]
-            }
         }
 
         with patch("src.tools.site_manager.SiteManagerClient") as MockClient:
@@ -437,26 +435,25 @@ class TestListVantagePoints:
     @pytest.mark.asyncio
     async def test_list_vantage_points_success(self, mock_settings: Settings) -> None:
         """Test listing vantage points."""
-        mock_vp_data = {
-            "data": [
-                {
-                    "id": "vp-1",
-                    "name": "Vantage Point 1",
-                    "location": "US-West",
-                    "type": "speedtest",
-                    "vantage_point_id": "vp-1",
-                    "status": "active",
-                },
-                {
-                    "id": "vp-2",
-                    "name": "Vantage Point 2",
-                    "location": "US-East",
-                    "type": "ping",
-                    "vantage_point_id": "vp-2",
-                    "status": "active",
-                },
-            ]
-        }
+        # Client now returns unwrapped data (no "data" wrapper)
+        mock_vp_data = [
+            {
+                "id": "vp-1",
+                "name": "Vantage Point 1",
+                "location": "US-West",
+                "type": "speedtest",
+                "vantage_point_id": "vp-1",
+                "status": "active",
+            },
+            {
+                "id": "vp-2",
+                "name": "Vantage Point 2",
+                "location": "US-East",
+                "type": "ping",
+                "vantage_point_id": "vp-2",
+                "status": "active",
+            },
+        ]
 
         with patch("src.tools.site_manager.SiteManagerClient") as MockClient:
             mock_client = AsyncMock()
@@ -468,9 +465,9 @@ class TestListVantagePoints:
             result = await list_vantage_points(mock_settings)
 
             assert len(result) == 2
-            assert result[0]["id"] == "vp-1"
+            assert result[0]["vantage_point_id"] == "vp-1"
             assert result[0]["name"] == "Vantage Point 1"
-            assert result[1]["id"] == "vp-2"
+            assert result[1]["vantage_point_id"] == "vp-2"
             mock_client.list_vantage_points.assert_called_once()
 
     @pytest.mark.asyncio
@@ -501,12 +498,13 @@ class TestListVantagePoints:
             result = await list_vantage_points(mock_settings)
 
             assert len(result) == 1
-            assert result[0]["id"] == "vp-1"
+            assert result[0]["vantage_point_id"] == "vp-1"
 
     @pytest.mark.asyncio
     async def test_list_vantage_points_empty(self, mock_settings: Settings) -> None:
         """Test listing vantage points with empty response."""
-        mock_vp_data = {"data": []}
+        # Client now returns unwrapped data (no "data" wrapper)
+        mock_vp_data = []
 
         with patch("src.tools.site_manager.SiteManagerClient") as MockClient:
             mock_client = AsyncMock()

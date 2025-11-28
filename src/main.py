@@ -11,6 +11,7 @@ from .resources import ClientsResource, DevicesResource, NetworksResource, Sites
 from .resources import site_manager as site_manager_resource
 from .tools import acls as acls_tools
 from .tools import application as application_tools
+from .tools import backups as backups_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import device_control as device_control_tools
@@ -320,6 +321,158 @@ async def delete_firewall_rule(
 ) -> dict:
     """Delete a firewall rule (requires confirm=True)."""
     return await firewall_tools.delete_firewall_rule(site_id, rule_id, settings, confirm, dry_run)
+
+
+# Backup and Restore Tools (Phase 4)
+@mcp.tool()
+async def trigger_backup(
+    site_id: str,
+    backup_type: str,
+    retention_days: int = 30,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Trigger a backup operation on the UniFi controller (requires confirm=True).
+
+    Args:
+        site_id: Site identifier
+        backup_type: Type of backup ("network" or "system")
+        retention_days: Number of days to retain the backup (default: 30, -1 for indefinite)
+        confirm: Confirmation flag (must be True to execute)
+        dry_run: If True, validate but don't create the backup
+
+    Returns:
+        Backup operation result including download URL and metadata
+    """
+    return await backups_tools.trigger_backup(
+        site_id, backup_type, settings, retention_days, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def list_backups(site_id: str) -> list[dict]:
+    """List all available backups for a site.
+
+    Args:
+        site_id: Site identifier
+
+    Returns:
+        List of backup metadata dictionaries
+    """
+    return await backups_tools.list_backups(site_id, settings)
+
+
+@mcp.tool()
+async def get_backup_details(site_id: str, backup_filename: str) -> dict:
+    """Get detailed information about a specific backup.
+
+    Args:
+        site_id: Site identifier
+        backup_filename: Backup filename (e.g., "backup_2025-01-29.unf")
+
+    Returns:
+        Detailed backup metadata dictionary
+    """
+    return await backups_tools.get_backup_details(site_id, backup_filename, settings)
+
+
+@mcp.tool()
+async def download_backup(
+    site_id: str,
+    backup_filename: str,
+    output_path: str,
+    verify_checksum: bool = True,
+) -> dict:
+    """Download a backup file to local storage.
+
+    Args:
+        site_id: Site identifier
+        backup_filename: Backup filename to download
+        output_path: Local filesystem path to save the backup
+        verify_checksum: Whether to calculate and verify file checksum
+
+    Returns:
+        Download result with file path and metadata
+    """
+    return await backups_tools.download_backup(
+        site_id, backup_filename, output_path, settings, verify_checksum
+    )
+
+
+@mcp.tool()
+async def delete_backup(
+    site_id: str,
+    backup_filename: str,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Delete a backup file from the controller (requires confirm=True).
+
+    Args:
+        site_id: Site identifier
+        backup_filename: Backup filename to delete
+        confirm: Confirmation flag (must be True to execute)
+        dry_run: If True, validate but don't delete the backup
+
+    Returns:
+        Deletion result
+
+    Warning:
+        This operation permanently deletes the backup file.
+    """
+    return await backups_tools.delete_backup(
+        site_id, backup_filename, settings, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def restore_backup(
+    site_id: str,
+    backup_filename: str,
+    create_pre_restore_backup: bool = True,
+    confirm: bool = False,
+    dry_run: bool = False,
+) -> dict:
+    """Restore the UniFi controller from a backup file (requires confirm=True).
+
+    This is a DESTRUCTIVE operation that will restore the controller to the state
+    captured in the backup. The controller may restart during the restore process.
+
+    Args:
+        site_id: Site identifier
+        backup_filename: Backup filename to restore from
+        create_pre_restore_backup: Create automatic backup before restore (recommended)
+        confirm: Confirmation flag (must be True to execute)
+        dry_run: If True, validate but don't restore
+
+    Returns:
+        Restore operation result including pre-restore backup info
+
+    Warning:
+        This operation will restore all configuration from the backup and may
+        cause controller restart. ALWAYS use create_pre_restore_backup=True
+        for safety.
+    """
+    return await backups_tools.restore_backup(
+        site_id, backup_filename, settings, create_pre_restore_backup, confirm, dry_run
+    )
+
+
+@mcp.tool()
+async def validate_backup(site_id: str, backup_filename: str) -> dict:
+    """Validate a backup file before restore.
+
+    Performs integrity checks on a backup file to ensure it's valid and compatible
+    with the current controller version.
+
+    Args:
+        site_id: Site identifier
+        backup_filename: Backup filename to validate
+
+    Returns:
+        Validation result with details and warnings
+    """
+    return await backups_tools.validate_backup(site_id, backup_filename, settings)
 
 
 # Network Configuration Tools (Phase 4)

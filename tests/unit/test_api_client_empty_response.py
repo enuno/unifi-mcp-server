@@ -59,7 +59,7 @@ async def test_whitespace_only_response_returns_empty_dict(settings: Settings):
 
 @pytest.mark.asyncio
 async def test_valid_json_response_still_works(settings: Settings):
-    """Test that valid JSON responses still work correctly."""
+    """Test that valid JSON responses still work correctly with automatic data unwrapping."""
     client = UniFiClient(settings)
 
     mock_response = Mock(spec=Response)
@@ -72,4 +72,5 @@ async def test_valid_json_response_still_works(settings: Settings):
     client.client.request = AsyncMock(return_value=mock_response)
 
     result = await client._request("GET", "/ea/sites")
-    assert result == {"data": [{"id": "123"}]}
+    # Client now auto-unwraps the "data" field
+    assert result == [{"id": "123"}]

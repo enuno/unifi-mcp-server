@@ -1,6 +1,16 @@
 """Data models for UniFi MCP Server."""
 
 from .acl import ACLRule
+from .backup import (
+    BackupMetadata,
+    BackupOperation,
+    BackupSchedule,
+    BackupStatus,
+    BackupType,
+    BackupValidationResult,
+    RestoreOperation,
+    RestoreStatus,
+)
 from .client import Client
 from .device import Device
 from .dpi import Country, DPIApplication, DPICategory
@@ -59,4 +69,12 @@ __all__ = [
     "InternetHealthMetrics",
     "CrossSiteStatistics",
     "VantagePoint",
+    "BackupMetadata",
+    "BackupOperation",
+    "BackupSchedule",
+    "BackupStatus",
+    "BackupType",
+    "BackupValidationResult",
+    "RestoreOperation",
+    "RestoreStatus",
 ]

@@ -102,7 +102,7 @@ class TestUniFiClient:
 
     @pytest.mark.asyncio
     async def test_successful_get_request(self, mock_settings: Settings) -> None:
-        """Test successful GET request."""
+        """Test successful GET request with automatic data unwrapping."""
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_response = MagicMock()
             mock_response.status_code = 200
@@ -116,7 +116,8 @@ class TestUniFiClient:
             client = UniFiClient(mock_settings)
             result = await client.get("/test", params={"limit": 10})
 
-            assert result == {"data": ["item1", "item2"]}
+            # Client now auto-unwraps the "data" field
+            assert result == ["item1", "item2"]
 
             await client.close()
 

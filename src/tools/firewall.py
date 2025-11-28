@@ -39,7 +39,8 @@ async def list_firewall_rules(
         await client.authenticate()
 
         response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-        rules_data: list[dict[str, Any]] = response.get("data", [])
+        # Client now auto-unwraps the "data" field, so response is the actual data
+        rules_data: list[dict[str, Any]] = response if isinstance(response, list) else response.get("data", [])
 
         # Apply pagination
         paginated = rules_data[offset : offset + limit]
@@ -147,7 +148,8 @@ async def create_firewall_rule(
             response = await client.post(
                 f"/ea/sites/{site_id}/rest/firewallrule", json_data=rule_data
             )
-            created_rule: dict[str, Any] = response.get("data", [{}])[0]
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            created_rule: dict[str, Any] = response[0] if isinstance(response, list) else response.get("data", [{}])[0]
 
             logger.info(f"Created firewall rule '{name}' in site '{site_id}'")
             log_audit(
@@ -252,7 +254,8 @@ async def update_firewall_rule(
 
             # Get existing rule
             response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-            rules_data: list[dict[str, Any]] = response.get("data", [])
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            rules_data: list[dict[str, Any]] = response if isinstance(response, list) else response.get("data", [])
 
             existing_rule = None
             for rule in rules_data:
@@ -284,7 +287,8 @@ async def update_firewall_rule(
             response = await client.put(
                 f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}", json_data=update_data
             )
-            updated_rule: dict[str, Any] = response.get("data", [{}])[0]
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            updated_rule: dict[str, Any] = response[0] if isinstance(response, list) else response.get("data", [{}])[0]
 
             logger.info(f"Updated firewall rule '{rule_id}' in site '{site_id}'")
             log_audit(
@@ -353,7 +357,8 @@ async def delete_firewall_rule(
 
             # Verify rule exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/firewallrule")
-            rules_data: list[dict[str, Any]] = response.get("data", [])
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            rules_data: list[dict[str, Any]] = response if isinstance(response, list) else response.get("data", [])
 
             rule_exists = any(rule.get("_id") == rule_id for rule in rules_data)
             if not rule_exists:

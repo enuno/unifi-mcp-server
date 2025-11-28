@@ -61,7 +61,8 @@ async def block_client(
 
             # Verify client exists (check both active and all users)
             response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
-            clients_data: list[dict[str, Any]] = response.get("data", [])
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            clients_data: list[dict[str, Any]] = response if isinstance(response, list) else response.get("data", [])
 
             client_exists = any(
                 validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
@@ -218,7 +219,8 @@ async def reconnect_client(
 
             # Verify client is currently connected
             response = await client.get(f"/ea/sites/{site_id}/sta")
-            clients_data: list[dict[str, Any]] = response.get("data", [])
+            # Client now auto-unwraps the "data" field, so response is the actual data
+            clients_data: list[dict[str, Any]] = response if isinstance(response, list) else response.get("data", [])
 
             client_exists = any(
                 validate_mac_address(c.get("mac", "")) == client_mac for c in clients_data
@@ -390,6 +392,12 @@ async def limit_bandwidth(
     client_mac = validate_mac_address(client_mac)
     validate_confirmation(confirm, "client management operation")
     logger = get_logger(__name__, settings.log_level)
+
+    # Validate bandwidth limits
+    if upload_limit_kbps is not None and upload_limit_kbps <= 0:
+        raise ValueError("Upload limit must be positive")
+    if download_limit_kbps is not None and download_limit_kbps <= 0:
+        raise ValueError("Download limit must be positive")
 
     parameters = {
         "site_id": site_id,

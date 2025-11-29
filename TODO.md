@@ -190,59 +190,161 @@ This document provides a comprehensive, phase-by-phase breakdown of development 
 
 ---
 
-### 🔲 Phase 3: Advanced QoS and Traffic Management (P1 - High)
+### 🚀 Phase 3: Advanced QoS and Traffic Management (P1 - High)
 
-**Status**: Not Started
-**Estimated Effort**: 2-3 weeks
+**Status**: READY TO IMPLEMENT - Detailed Plan Complete (2025-11-28)
+**Estimated Effort**: 27-35 hours (2-3 weeks)
 **Priority**: P1 (High - Important for business networks)
-**Dependencies**: Traffic Flow analysis (Phase 2)
+**Dependencies**: Traffic Flow analysis (Phase 2) ✅ Complete
+**Test Coverage Target**: 80%+ (higher than general 70% target)
+**Detailed Plan**: See `/Users/elvis/.claude/plans/dreamy-mapping-capybara.md`
 
-#### 📋 Tasks
+#### 📋 Research Foundation (COMPLETE ✅)
 
-**Data Models** (2 days)
-- [ ] `QoSProfile` model - QoS configurations
-  - Priority levels (0-7)
-  - DSCP marking
-  - Bandwidth limits (up/down)
-  - Scheduling support
-- [ ] `TrafficRoute` model - Traffic routing rules
-  - Match criteria (application, source, destination)
-  - QoS profile assignment
-  - Action types (PRIORITIZE, LIMIT, BLOCK)
-- [ ] `ProAVProfile` model - Professional audio/video profiles
-  - Pre-configured templates (Dante, Q-SYS, SDVoE)
+**QoS Research Documents Analyzed**:
+- ✅ `docs/research/QoS/UniFi-QoS-Design-MCP-Implementation.md` (345 lines)
+- ✅ `docs/research/QoS/QoS-Design-and-Implementation-Best-Practices.md` (701 lines)
 
-**API Client Integration** (3-4 days)
-- [ ] `/api/s/{site}/rest/qosprofile` - QoS profile management (CRUD)
-- [ ] `/api/s/{site}/rest/trafficroute` - Traffic routing rules (CRUD)
-- [ ] ProAV profile endpoints
-- [ ] DSCP tagging operations
+**Key Insights Documented**:
+- Smart Queue Management (SQM): Only effective for WAN <300 Mbps at 80-95% line rate
+- DSCP Standards: EF 46 (VoIP), AF41 34 (video), CS3 24 (signaling), CS0 0 (best effort)
+- Hardware Offload Impact: QoS rules disable offload (25-45% throughput reduction on >1Gbps)
+- Trust Boundaries: Gateway must preserve DSCP markings end-to-end
+- Over-prioritization Warning: Limit high-priority classes to 2-3 maximum
 
-**MCP Tools** (5-7 days)
-- [ ] `create_qos_profile` - Create QoS profile
-- [ ] `list_qos_profiles` - List all profiles
-- [ ] `get_qos_profile` - Get profile details
-- [ ] `update_qos_profile` - Modify profile
-- [ ] `delete_qos_profile` - Remove profile
-- [ ] `create_traffic_route` - Create traffic routing rule
-- [ ] `list_traffic_routes` - List routing rules
-- [ ] `update_traffic_route` - Modify routing rule
-- [ ] `delete_traffic_route` - Remove routing rule
-- [ ] `apply_proav_profile` - Apply ProAV template
-- [ ] `list_proav_profiles` - List available ProAV profiles
-- [ ] `get_qos_statistics` - QoS effectiveness monitoring
+#### 📋 Implementation Steps
 
-**Documentation** (1-2 days)
-- [ ] Update API.md with QoS tools
-- [ ] ProAV profile documentation
-- [ ] QoS configuration guide
-- [ ] DSCP tagging examples
+**Step 1: Data Models** (2-3 hours)
+- [x] `QoSProfile` model ✅ Created (src/models/qos_profile.py, 276 lines)
+  - QoSPriority enum (0-7 priority levels)
+  - DSCPValue enum (46 standard DSCP values)
+  - QoSAction enum (prioritize, limit, block, mark, shape)
+  - ProAVProtocol enum (7 protocols)
+  - 20+ fields with comprehensive validation
+- [ ] `TrafficRoute` model - Policy-based routing
+  - RouteAction enum (allow, deny, mark, shape)
+  - MatchCriteria model (source/dest IP/port, protocol, VLAN)
+  - RouteSchedule model (time-based routing)
+- [ ] `SmartQueueConfig` model - SQM configuration
+  - QueueAlgorithm enum (fq_codel, cake)
+  - WAN-specific settings (download/upload limits, overhead bytes)
+  - Bufferbloat test integration metadata
 
-**Testing** (2-3 days)
-- [ ] Unit tests for QoS models and tools
-- [ ] Integration tests with controller
-- [ ] QoS policy application tests
-- [ ] ProAV profile tests
+**Step 2: Reference & ProAV Templates** (1-2 hours)
+- [x] 7 ProAV Templates ✅ Complete in qos_profile.py
+  - Dante: EF 46, UDP 319-320/4440-4455, PTP domain 0, multicast 239.255.0.0/16
+  - Q-SYS: EF 46, UDP 1700-1705, multicast 239.255.254.0/24
+  - SDVoE: AF41 34, 1+ Gbps, PTP domain 127
+  - AVB: EF 46, IEEE 802.1 TSN, multicast 224.0.1.129/32
+  - RAVENNA/AES67: EF 46, UDP 5004-5005, multicast 239.69.0.0/16
+  - NDI: AF41 34, 125 Mbps, multicast 239.255.42.0/24
+  - SMPTE 2110: AF41 34, 3+ Gbps, PTP domain 127
+- [ ] 6 Reference Profiles (implement in code)
+  - Voice-First: EF 46, VoIP optimized (<10ms latency)
+  - Video-Conferencing: AF41 34, HD video (<100ms latency)
+  - Cloud-Gaming: AF41 34, low-latency gaming
+  - Streaming-Media: AF31 26, Netflix/YouTube/Plex
+  - Bulk-Backup: CS1 8, rate-limited background transfers
+  - Guest-Best-Effort: CS0 0, minimal guarantees
+
+**Step 3: MCP Tools** (8-10 hours)
+
+**QoS Profile Management (5 tools, 3-4 hours)**:
+- [ ] `list_qos_profiles(site_id, settings, limit, offset)` - List all profiles
+- [ ] `get_qos_profile(site_id, profile_id, settings)` - Get single profile
+- [ ] `create_qos_profile(site_id, name, priority_level, settings, **kwargs)` - Create with validation
+- [ ] `update_qos_profile(site_id, profile_id, settings, **update_params)` - Update existing
+- [ ] `delete_qos_profile(site_id, profile_id, settings, confirm)` - Delete with confirmation
+
+**ProAV Profile Management (3 tools, 2-3 hours)**:
+- [ ] `list_proav_templates(settings)` - List available templates (Dante, Q-SYS, etc.)
+- [ ] `create_proav_profile(site_id, protocol, settings, **customizations)` - Create from template
+- [ ] `validate_proav_profile(profile_data, settings)` - Validate ProAV requirements
+
+**Smart Queue Management (3 tools, 2-3 hours)**:
+- [ ] `get_smart_queue_config(site_id, settings)` - Get SQM configuration
+- [ ] `configure_smart_queue(site_id, wan_id, download_kbps, upload_kbps, settings, confirm)` - Configure SQM
+- [ ] `disable_smart_queue(site_id, wan_id, settings, confirm)` - Disable SQM
+
+**Traffic Route Management (4 tools, 2-3 hours)**:
+- [ ] `list_traffic_routes(site_id, settings, limit, offset)` - List routing policies
+- [ ] `create_traffic_route(site_id, name, match_criteria, action, settings, confirm)` - Create route
+- [ ] `update_traffic_route(site_id, route_id, settings, **update_params)` - Update route
+- [ ] `delete_traffic_route(site_id, route_id, settings, confirm)` - Delete route
+
+**Step 4: Testing** (10-12 hours)
+- [ ] QoS profile tests (15-18 tests, 3-4 hours)
+  - All priority levels 0-7, invalid priority, invalid DSCP
+  - Bandwidth validation, schedule validation, dry-run mode
+  - Pagination, confirmation requirements
+- [ ] ProAV profile tests (12-15 tests, 3-4 hours)
+  - All 7 protocol templates, customizations, multicast validation
+  - PTP domain validation, bandwidth minimums, port lists
+- [ ] Smart Queue tests (8-10 tests, 2-3 hours)
+  - SQM configuration, line rate warnings, >300 Mbps effectiveness warnings
+  - Enable/disable with confirmation, dry-run mode
+- [ ] Traffic Route tests (10-12 tests, 2-3 hours)
+  - Match criteria validation, IP/CIDR format, port ranges
+  - Schedule-based routes, route priority ordering
+
+**Step 5: Documentation** (2-3 hours)
+- [ ] API.md QoS section (~300-400 lines)
+  - Overview, best practices, reference profiles
+  - ProAV protocol catalog with specifications
+  - DSCP marking reference table
+  - Performance considerations (hardware offload impact)
+- [ ] README.md updates (add QoS features)
+- [ ] DSCP reference table
+
+**Step 6: Integration** (1 hour)
+- [ ] Register 12-15 tools in src/main.py
+- [ ] Verify tool discovery in MCP inspector
+- [ ] Test end-to-end flow
+
+**Step 7: Validation** (2-3 hours)
+- [ ] Run full test suite (verify no regressions)
+- [ ] Achieve 80%+ coverage for QoS modules
+- [ ] Test on real UniFi hardware (endpoint verification)
+- [ ] Document any API discrepancies
+
+**Step 8: Commit** (1 hour)
+- [ ] Update CHANGELOG.md
+- [ ] Update DEVELOPMENT_PLAN.md
+- [ ] Commit and push Phase 3
+
+#### 🎯 Success Criteria
+
+**Functional Requirements**:
+- ✅ All 12-15 QoS tools implemented and tested
+- ✅ 6 reference profiles available
+- ✅ 7 ProAV protocol templates functional
+- ✅ Smart Queue configuration with validation
+- ✅ Traffic route management operational
+- ✅ Dry-run mode for all mutating operations
+- ✅ Mandatory confirmation for destructive operations
+
+**Quality Requirements**:
+- ✅ 80%+ test coverage for all QoS modules
+- ✅ 40-50 comprehensive tests passing
+- ✅ No regressions in existing tests
+- ✅ All pre-commit hooks passing
+- ✅ MyPy type checking clean
+- ✅ Security scans passing
+
+**Documentation Requirements**:
+- ✅ Complete API.md section with examples
+- ✅ Best practices documented
+- ✅ ProAV protocol catalog complete
+- ✅ Performance considerations documented
+- ✅ DSCP reference table included
+
+#### 🔧 API Endpoints (To Verify on Real Hardware)
+- `GET /api/s/{site}/rest/qosprofile` - List profiles
+- `POST /api/s/{site}/rest/qosprofile` - Create profile
+- `PUT /api/s/{site}/rest/qosprofile/{id}` - Update profile
+- `DELETE /api/s/{site}/rest/qosprofile/{id}` - Delete profile
+- `GET /api/s/{site}/rest/routing` - Traffic routing rules
+- `GET /api/s/{site}/rest/wanconf` - Smart Queue (WAN config)
 
 **Estimated Tools**: 12-15 new MCP tools
 

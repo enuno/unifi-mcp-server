@@ -52,15 +52,18 @@ This release will focus on delivering the most critical features for modern UniF
   - **Estimated Tools:** 4-6 new MCP tools
 
 - **Advanced QoS and Traffic Management (High - P1):**
-  - Application-based traffic prioritization with pre-configured ProAV profiles
-  - ProAV profiles for professional audio/video (Dante, Q-SYS, SDVoE)
-  - Category-based traffic shaping
-  - DSCP tagging and remarking operations
-  - Advanced bandwidth control with scheduling
-  - Queue-based priority assignment (0-7 priority levels)
-  - Per-application bandwidth limits
-  - **API Endpoints:** `/api/s/{site}/rest/trafficroute`, `/api/s/{site}/rest/qosprofile`
-  - **Estimated Tools:** 3-5 new MCP tools
+  - **Status:** 🚀 READY TO IMPLEMENT - Detailed plan complete (2025-11-28)
+  - QoS profile management with 0-7 priority levels and DSCP marking (0-63)
+  - 6 reference traffic profiles: Voice-First, Video-Conferencing, Cloud-Gaming, Streaming-Media, Bulk-Backup, Guest-Best-Effort
+  - 7 ProAV protocol templates: Dante, Q-SYS, SDVoE, AVB, RAVENNA/AES67, NDI, SMPTE 2110
+  - Smart Queue Management (SQM) with fq_codel for WAN <300 Mbps
+  - Traffic routing rules with match criteria and time-based scheduling
+  - Bandwidth limits, guarantees, and DSCP preservation
+  - **Best Practices Documented:** Hardware offload impact, trust boundaries, performance considerations
+  - **API Endpoints:** `/api/s/{site}/rest/qosprofile`, `/api/s/{site}/rest/routing`, `/api/s/{site}/rest/wanconf`
+  - **Estimated Tools:** 12-15 new MCP tools (5 QoS profile, 3 ProAV, 3 Smart Queue, 4 Traffic Route)
+  - **Test Coverage Target:** 80%+ (40-50 comprehensive tests)
+  - **Estimated Effort:** 27-35 hours (2-3 weeks)
 
 - **Backup and Restore Operations (High - P1):**
   - System config backups (complete OS, application, device configurations)

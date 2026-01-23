@@ -29,10 +29,22 @@ class Settings(BaseSettings):
     )
 
     # API Configuration
-    api_key: str = Field(
-        ...,
-        description="UniFi API key (X-API-Key header)",
+    api_key: str | None = Field(
+        default=None,
+        description="UniFi API key (X-API-Key header) - required for Cloud APIs",
         validation_alias="UNIFI_API_KEY",
+    )
+
+    username: str | None = Field(
+        default=None,
+        description="UniFi username - required for Local API",
+        validation_alias="UNIFI_USERNAME",
+    )
+
+    password: str | None = Field(
+        default=None,
+        description="UniFi password - required for Local API",
+        validation_alias="UNIFI_PASSWORD",
     )
 
     api_type: APIType = Field(
@@ -190,8 +202,14 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If local API is selected but host is not provided
         """
-        if self.api_type == APIType.LOCAL and not self.local_host:
-            raise ValueError("local_host is required when api_type is 'local'")
+        if self.api_type == APIType.LOCAL:
+            if not self.local_host:
+                raise ValueError("local_host is required when api_type is 'local'")
+            if not self.username or not self.password:
+                raise ValueError("username and password are required for local API authentication")
+        elif self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
+            if not self.api_key:
+                raise ValueError("api_key is required for Cloud API authentication")
         return self
 
     @property
@@ -314,8 +332,13 @@ class Settings(BaseSettings):
         Returns:
             Dictionary of HTTP headers
         """
-        return {
-            "X-API-KEY": self.api_key,  # UniFi API expects all caps
+        headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+        # Only include API key for Cloud APIs
+        if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA) and self.api_key:
+            headers["X-API-KEY"] = self.api_key  # UniFi API expects all caps
+
+        return headers

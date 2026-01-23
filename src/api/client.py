@@ -87,6 +87,8 @@ class UniFiClient:
         self._site_id_cache: dict[str, str] = {}
         # Cache for site UUID -> internalReference mapping (needed for local API)
         self._site_uuid_to_name: dict[str, str] = {}
+        # Session cookie storage for local API authentication
+        self._session_cookie: str | None = None
 
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
@@ -187,42 +189,103 @@ class UniFiClient:
     async def authenticate(self) -> None:
         """Authenticate with the UniFi API.
 
+        For Cloud APIs: Validates API key by making a test request
+        For Local API: Performs login with username/password to get session cookie
+
         Raises:
             AuthenticationError: If authentication fails
         """
         try:
-            # Test authentication with a simple API call
-            # Use appropriate endpoint based on API type
-            if self.settings.api_type == APIType.CLOUD_V1:
-                test_endpoint = "/v1/hosts"  # V1 stable API
+            if self.settings.api_type == APIType.LOCAL:
+                # Local gateway requires username/password login
+                await self._authenticate_local()
             else:
-                test_endpoint = "/ea/sites"  # EA API or local (will be auto-translated)
+                # Cloud API uses API key authentication
+                await self._authenticate_cloud()
 
-            response = await self._request("GET", test_endpoint)
-            
-            # Handle both dict and list responses
-            # Local API (after normalization) returns list directly
-            # Cloud API returns dict with "meta", "data", etc.
-            if isinstance(response, list):
-                # List response means we got data successfully (local API)
-                self._authenticated = True
-                # Build site UUID -> name mapping for local API
-                if self.settings.api_type == APIType.LOCAL:
-                    self._build_site_uuid_map(response)
-            elif isinstance(response, dict):
-                # Dict response - check for success indicators
-                self._authenticated = (
-                    response.get("meta", {}).get("rc") == "ok"
-                    or response.get("data") is not None
-                    or response.get("count") is not None
-                )
-            else:
-                self._authenticated = False
-                
-            self.logger.info(f"Successfully authenticated with UniFi API (response type: {type(response).__name__})")
+            self.logger.info(f"Successfully authenticated with UniFi API ({self.settings.api_type.value} mode)")
         except Exception as e:
             self.logger.error(f"Authentication failed: {e}")
             raise AuthenticationError(f"Failed to authenticate with UniFi API: {e}") from e
+
+    async def _authenticate_local(self) -> None:
+        """Authenticate with local UniFi gateway using username/password.
+
+        Raises:
+            AuthenticationError: If login fails
+        """
+        login_url = f"{self.settings.base_url}/api/auth/login"
+
+        login_payload = {
+            "username": self.settings.username,
+            "password": self.settings.password,
+            "remember": True,  # Request persistent session
+        }
+
+        self.logger.debug(f"Attempting local gateway login at {login_url}")
+
+        try:
+            response = await self.client.post(
+                login_url,
+                json=login_payload,
+            )
+
+            if response.status_code != 200:
+                raise AuthenticationError(
+                    f"Local gateway login failed with status {response.status_code}: {response.text}"
+                )
+
+            # Extract session cookie from response
+            # UniFi gateways typically use 'unifises' or 'TOKEN' cookie
+            cookies = response.cookies
+            if not cookies:
+                raise AuthenticationError("No session cookie received from local gateway")
+
+            # Store cookies for subsequent requests
+            # The httpx client will automatically maintain cookies
+            self._authenticated = True
+
+            # Now fetch sites to build UUID mapping
+            test_endpoint = "/ea/sites"
+            response_data = await self._request("GET", test_endpoint)
+
+            # Build site UUID -> name mapping for local API
+            if isinstance(response_data, list):
+                self._build_site_uuid_map(response_data)
+
+            self.logger.debug(f"Local gateway login successful, session established")
+
+        except httpx.HTTPError as e:
+            raise AuthenticationError(f"HTTP error during local gateway login: {e}") from e
+
+    async def _authenticate_cloud(self) -> None:
+        """Authenticate with Cloud API by validating API key.
+
+        Raises:
+            AuthenticationError: If API key is invalid
+        """
+        # Test authentication with a simple API call
+        # Use appropriate endpoint based on API type
+        if self.settings.api_type == APIType.CLOUD_V1:
+            test_endpoint = "/v1/hosts"  # V1 stable API
+        else:
+            test_endpoint = "/ea/sites"  # EA API
+
+        response = await self._request("GET", test_endpoint)
+
+        # Handle both dict and list responses
+        if isinstance(response, list):
+            # List response means we got data successfully
+            self._authenticated = True
+        elif isinstance(response, dict):
+            # Dict response - check for success indicators
+            self._authenticated = (
+                response.get("meta", {}).get("rc") == "ok"
+                or response.get("data") is not None
+                or response.get("count") is not None
+            )
+        else:
+            self._authenticated = False
     
     def _build_site_uuid_map(self, sites: list[dict[str, Any]]) -> None:
         """Build a mapping of site UUIDs to internal reference names.

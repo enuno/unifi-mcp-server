@@ -300,7 +300,7 @@ UniFi provides three primary API types, all now supported:
 
 1. **Local Gateway API** (Recommended) ✅ **FULLY IMPLEMENTED**
    - Complete feature support with detailed analytics and control
-   - Direct access to UniFi gateway (e.g., 192.168.1.1)
+   - Direct access to UniFi gateway (e.g., 192.168.2.1)
    - All MCP tools functional (devices, clients, networks, firewall, WiFi, etc.)
    - Automatic endpoint translation from cloud format to local format
    - Site UUID → name mapping (uses 'default' instead of UUIDs)

@@ -17,7 +17,7 @@ def mock_settings():
     settings = MagicMock(spec=Settings)
     settings.api_key = "test-api-key"
     settings.api_type = "local"
-    settings.local_host = "192.168.1.1"
+    settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
     settings.log_level = "INFO"
@@ -31,7 +31,7 @@ def sample_traffic_flows():
         {
             "flow_id": "flow-001",
             "site_id": "default",
-            "source_ip": "192.168.1.100",
+            "source_ip": "192.168.2.100",
             "source_port": 54321,
             "destination_ip": "8.8.8.8",
             "destination_port": 443,
@@ -51,7 +51,7 @@ def sample_traffic_flows():
         {
             "flow_id": "flow-002",
             "site_id": "default",
-            "source_ip": "192.168.1.101",
+            "source_ip": "192.168.2.101",
             "source_port": 54322,
             "destination_ip": "1.1.1.1",
             "destination_port": 53,
@@ -134,7 +134,7 @@ class TestGetTrafficFlowsBasic:
 
             assert len(result) == 2
             assert result[0]["flow_id"] == "flow-001"
-            assert result[0]["source_ip"] == "192.168.1.100"
+            assert result[0]["source_ip"] == "192.168.2.100"
             assert result[0]["protocol"] == "tcp"
 
     @pytest.mark.asyncio
@@ -161,7 +161,7 @@ class TestGetTrafficFlowsBasic:
         """Filter traffic flows by source IP."""
         from src.tools.traffic_flows import get_traffic_flows
 
-        filtered_flows = [f for f in sample_traffic_flows if f["source_ip"] == "192.168.1.100"]
+        filtered_flows = [f for f in sample_traffic_flows if f["source_ip"] == "192.168.2.100"]
 
         with patch("src.tools.traffic_flows.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -170,10 +170,10 @@ class TestGetTrafficFlowsBasic:
             mock_instance.authenticate = AsyncMock()
             mock_instance.get = AsyncMock(return_value={"data": filtered_flows})
 
-            result = await get_traffic_flows("default", mock_settings, source_ip="192.168.1.100")
+            result = await get_traffic_flows("default", mock_settings, source_ip="192.168.2.100")
 
             assert len(result) == 1
-            assert result[0]["source_ip"] == "192.168.1.100"
+            assert result[0]["source_ip"] == "192.168.2.100"
             # Verify source_ip was passed in params
             call_args = mock_instance.get.call_args
             assert "source_ip" in call_args[1].get("params", {})
@@ -323,7 +323,7 @@ class TestGetTrafficFlowDetails:
             result = await get_traffic_flow_details("default", "flow-001", mock_settings)
 
             assert result["flow_id"] == "flow-001"
-            assert result["source_ip"] == "192.168.1.100"
+            assert result["source_ip"] == "192.168.2.100"
             assert result["application_name"] == "HTTPS"
 
 
@@ -677,7 +677,7 @@ class TestGetConnectionStates:
         active_flow = {
             "flow_id": "flow-active",
             "site_id": "default",
-            "source_ip": "192.168.1.100",
+            "source_ip": "192.168.2.100",
             "destination_ip": "8.8.8.8",
             "protocol": "tcp",
             "bytes_sent": 1000,
@@ -708,7 +708,7 @@ class TestGetConnectionStates:
         closed_flow = {
             "flow_id": "flow-closed",
             "site_id": "default",
-            "source_ip": "192.168.1.100",
+            "source_ip": "192.168.2.100",
             "destination_ip": "8.8.8.8",
             "protocol": "tcp",
             "bytes_sent": 1000,
@@ -804,7 +804,7 @@ class TestBlockFlowSourceIP:
             )
 
             assert result["block_type"] == "source_ip"
-            assert result["blocked_target"] == "192.168.1.100"
+            assert result["blocked_target"] == "192.168.2.100"
             assert result["rule_id"] is None
 
     @pytest.mark.asyncio
@@ -1132,7 +1132,7 @@ class TestBlockFlowSourceIPExecution:
             mock_instance.authenticate = AsyncMock()
             mock_instance.get = AsyncMock(return_value={"data": flow})
 
-            mock_firewall.return_value = {"_id": "rule-123", "name": "Block_192.168.1.100"}
+            mock_firewall.return_value = {"_id": "rule-123", "name": "Block_192.168.2.100"}
 
             result = await block_flow_source_ip(
                 "default",
@@ -1143,7 +1143,7 @@ class TestBlockFlowSourceIPExecution:
             )
 
             assert result["block_type"] == "source_ip"
-            assert result["blocked_target"] == "192.168.1.100"
+            assert result["blocked_target"] == "192.168.2.100"
             assert result["rule_id"] == "rule-123"
             mock_firewall.assert_called_once()
 
@@ -1303,7 +1303,7 @@ class TestBlockFlowErrors:
         flow_without_app = {
             "flow_id": "flow-noapp",
             "site_id": "default",
-            "source_ip": "192.168.1.100",
+            "source_ip": "192.168.2.100",
             "destination_ip": "8.8.8.8",
             "protocol": "tcp",
             "bytes_sent": 0,

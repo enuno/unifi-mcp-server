@@ -16,9 +16,9 @@ def mock_settings():
     settings.log_level = "INFO"
     settings.api_type = MagicMock()
     settings.api_type.value = "local"
-    settings.base_url = "https://192.168.1.1"
+    settings.base_url = "https://192.168.2.1"
     settings.api_key = "test-key"
-    settings.local_host = "192.168.1.1"
+    settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
     return settings
@@ -38,14 +38,14 @@ async def test_list_port_forwards_success(mock_settings):
                 "_id": "pf1",
                 "name": "HTTP",
                 "dst_port": "80",
-                "fwd": "192.168.1.100",
+                "fwd": "192.168.2.100",
                 "fwd_port": "80",
             },
             {
                 "_id": "pf2",
                 "name": "SSH",
                 "dst_port": "22",
-                "fwd": "192.168.1.100",
+                "fwd": "192.168.2.100",
                 "fwd_port": "22",
             },
         ]
@@ -114,7 +114,7 @@ async def test_create_port_forward_tcp_success(mock_settings):
                 "_id": "new_pf1",
                 "name": "Web Server",
                 "dst_port": "80",
-                "fwd": "192.168.1.100",
+                "fwd": "192.168.2.100",
                 "fwd_port": "80",
                 "proto": "tcp",
             }
@@ -132,7 +132,7 @@ async def test_create_port_forward_tcp_success(mock_settings):
             site_id="default",
             name="Web Server",
             dst_port=80,
-            fwd_ip="192.168.1.100",
+            fwd_ip="192.168.2.100",
             fwd_port=80,
             settings=mock_settings,
             protocol="tcp",
@@ -187,7 +187,7 @@ async def test_create_port_forward_dry_run(mock_settings):
         site_id="default",
         name="Test Rule",
         dst_port=443,
-        fwd_ip="192.168.1.10",
+        fwd_ip="192.168.2.10",
         fwd_port=443,
         settings=mock_settings,
         confirm=True,
@@ -207,7 +207,7 @@ async def test_create_port_forward_no_confirm(mock_settings):
             site_id="default",
             name="Test",
             dst_port=80,
-            fwd_ip="192.168.1.1",
+            fwd_ip="192.168.2.1",
             fwd_port=80,
             settings=mock_settings,
             confirm=False,
@@ -224,7 +224,7 @@ async def test_create_port_forward_invalid_protocol(mock_settings):
             site_id="default",
             name="Test",
             dst_port=80,
-            fwd_ip="192.168.1.1",
+            fwd_ip="192.168.2.1",
             fwd_port=80,
             settings=mock_settings,
             protocol="invalid",
@@ -242,7 +242,7 @@ async def test_create_port_forward_invalid_port(mock_settings):
             site_id="default",
             name="Test",
             dst_port=99999,
-            fwd_ip="192.168.1.1",
+            fwd_ip="192.168.2.1",
             fwd_port=80,
             settings=mock_settings,
             confirm=True,
@@ -284,7 +284,7 @@ async def test_create_port_forward_with_source_restriction(mock_settings):
             site_id="default",
             name="Restricted",
             dst_port=22,
-            fwd_ip="192.168.1.1",
+            fwd_ip="192.168.2.1",
             fwd_port=22,
             settings=mock_settings,
             src="10.0.0.0/24",
@@ -312,7 +312,7 @@ async def test_create_port_forward_with_logging(mock_settings):
             site_id="default",
             name="Logged",
             dst_port=80,
-            fwd_ip="192.168.1.1",
+            fwd_ip="192.168.2.1",
             fwd_port=80,
             settings=mock_settings,
             log=True,

@@ -220,7 +220,7 @@ Total: 8 tests, 8 passed (100%), 0 failed, 0 errors, 0 skipped
 Duration: 4.52s
 ```
 
-**Environment: unifi-home (192.168.1.1)**
+**Environment: unifi-home (192.168.2.1)**
 ```
 Total: 8 tests, 8 passed (100%), 0 failed, 0 errors, 0 skipped
 Duration: 2.18s
@@ -237,7 +237,7 @@ UNIFI_LAB_PORT=443
 UNIFI_LAB_VERIFY_SSL=false
 
 UNIFI_HOME_API_KEY=9csiHHSfPIxp1Y7mINjMi2Af28QjOdV1
-UNIFI_HOME_HOST=192.168.1.1
+UNIFI_HOME_HOST=192.168.2.1
 UNIFI_HOME_PORT=443
 UNIFI_HOME_VERIFY_SSL=false
 ```
@@ -431,7 +431,7 @@ Total Test Suite Duration: 6.97s
 UNIFI_LAB_API_KEY=P-la_4yXTA1sS6lFZs4VaoRgwoBXtAxi
 UNIFI_LAB_HOST=10.2.0.1
 UNIFI_HOME_API_KEY=9csiHHSfPIxp1Y7mINjMi2Af28QjOdV1
-UNIFI_HOME_HOST=192.168.1.1
+UNIFI_HOME_HOST=192.168.2.1
 
 # Cloud APIs
 UNIFI_CLOUD_V1_API_KEY=HiNIXnBKuPwqB1c7g2QvwEpdX_2iyeOo

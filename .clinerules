@@ -482,7 +482,7 @@ UNIFI_API_KEY=<required>              # UniFi API key from unifi.ui.com
 ### UniFi API Configuration
 ```
 UNIFI_API_TYPE=cloud                  # or "local" for gateway proxy
-UNIFI_HOST=api.ui.com                 # or local gateway IP (e.g., 192.168.1.1)
+UNIFI_HOST=api.ui.com                 # or local gateway IP (e.g., 192.168.2.1)
 UNIFI_PORT=443                        # API port
 UNIFI_VERIFY_SSL=true                 # SSL verification (false for self-signed)
 UNIFI_SITE=default                    # Default site identifier

@@ -391,7 +391,7 @@ class TestFirewallPolicy:
             "destination": {
                 "zone_id": "zone-int",
                 "matching_target": "IP",
-                "ips": ["192.168.1.100"],
+                "ips": ["192.168.2.100"],
                 "port_matching_type": "SPECIFIC",
                 "port": "22",
             },

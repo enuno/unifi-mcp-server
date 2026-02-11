@@ -226,7 +226,7 @@ Documentation is considered complete when:
 ### Example Guidelines
 
 - Use placeholder values for sensitive data:
-  - `UNIFI_HOST`: "<https://192.168.1.1>"
+  - `UNIFI_HOST`: "<https://192.168.2.1>"
   - `UNIFI_USERNAME`: "admin"
   - `UNIFI_PASSWORD`: "your-password"
   - `UNIFI_SITE`: "default"

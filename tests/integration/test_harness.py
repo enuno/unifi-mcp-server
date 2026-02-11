@@ -148,7 +148,7 @@ class TestHarness:
                     name="unifi-home",
                     api_type="local",
                     api_key=home_key,
-                    local_host=os.getenv("UNIFI_HOME_HOST", "192.168.1.1"),
+                    local_host=os.getenv("UNIFI_HOME_HOST", "192.168.2.1"),
                     local_port=int(os.getenv("UNIFI_HOME_PORT", "443")),
                     verify_ssl=os.getenv("UNIFI_HOME_VERIFY_SSL", "false").lower() == "true",
                 )

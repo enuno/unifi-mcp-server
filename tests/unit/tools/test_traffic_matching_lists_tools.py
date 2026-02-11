@@ -21,9 +21,9 @@ def mock_settings():
     settings.log_level = "INFO"
     settings.api_type = MagicMock()
     settings.api_type.value = "local"
-    settings.base_url = "https://192.168.1.1"
+    settings.base_url = "https://192.168.2.1"
     settings.api_key = "test-key"
-    settings.local_host = "192.168.1.1"
+    settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
     settings.request_timeout = 30.0
@@ -217,7 +217,7 @@ async def test_create_traffic_matching_list_dry_run(mock_settings):
             "default",
             "IPV4_ADDRESSES",
             "Test IPs",
-            ["192.168.1.1", "192.168.1.2"],
+            ["192.168.2.1", "192.168.1.2"],
             mock_settings,
             confirm=True,
             dry_run=True,

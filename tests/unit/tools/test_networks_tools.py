@@ -49,12 +49,12 @@ def make_network(
         "vlan_id": vlan_id,
         "ip_subnet": subnet,
         "dhcpd_enabled": dhcp_enabled,
-        "dhcpd_start": "192.168.1.100",
+        "dhcpd_start": "192.168.2.100",
         "dhcpd_stop": "192.168.1.200",
         "dhcpd_leasetime": 86400,
         "dhcpd_dns_1": "8.8.8.8",
         "dhcpd_dns_2": "8.8.4.4",
-        "dhcpd_gateway": "192.168.1.1",
+        "dhcpd_gateway": "192.168.2.1",
         "domain_name": "local",
         "purpose": "corporate",
     }
@@ -194,7 +194,7 @@ class TestGetSubnetInfo:
             assert result["network_id"] == network_id
             assert result["ip_subnet"] == "192.168.1.0/24"
             assert result["dhcpd_enabled"] is True
-            assert result["dhcpd_start"] == "192.168.1.100"
+            assert result["dhcpd_start"] == "192.168.2.100"
             assert result["dhcpd_stop"] == "192.168.1.200"
             assert result["dhcpd_dns_1"] == "8.8.8.8"
 

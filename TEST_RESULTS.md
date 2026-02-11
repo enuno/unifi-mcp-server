@@ -21,7 +21,7 @@
 | Environment | API Type | Site | API Key | Status |
 |------------|----------|------|---------|--------|
 | unifi-lab | local | 10.2.0.1 | P-la_4... | ✅ Active |
-| unifi-home | local | 192.168.1.1 | 9csi... | ✅ Active |
+| unifi-home | local | 192.168.2.1 | 9csi... | ✅ Active |
 | unifi-cloud-v1-lab | cloud-v1 | 63be0605... | HiNI... | ✅ Active |
 | unifi-cloud-ea-lab | cloud-ea | 63be0605... | HiNI... | ✅ Active |
 | unifi-cloud-v1-home | cloud-v1 | 68f9483d... | HiNI... | ✅ Active |
@@ -50,7 +50,7 @@ unifi-lab (10.2.0.1):
   ✓ test_get_device_connections_all     PASS  (349ms)  - All connections
   ✓ test_get_port_mappings              PASS  (751ms)  - Port mappings
 
-unifi-home (192.168.1.1):
+unifi-home (192.168.2.1):
   ✓ test_get_network_topology          PASS  (293ms)  - Network topology
   ✓ test_export_topology_json           PASS  (149ms)  - JSON export
   ✓ test_export_topology_graphml        PASS  (136ms)  - GraphML export

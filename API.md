@@ -413,7 +413,7 @@ result = await mcp.call_tool("get_device_details", {
   "model": "U6-LR",
   "type": "uap",
   "mac": "aa:bb:cc:dd:ee:ff",
-  "ip": "192.168.1.100",
+  "ip": "192.168.2.100",
   "state": 1,
   "uptime": 86400,
   "version": "6.5.55.14277"
@@ -528,7 +528,7 @@ result = await mcp.call_tool("get_client_details", {
 {
   "mac": "aa:bb:cc:dd:ee:01",
   "hostname": "laptop-001",
-  "ip": "192.168.1.100",
+  "ip": "192.168.2.100",
   "is_wired": false,
   "signal": -45,
   "tx_bytes": 1024000,
@@ -701,12 +701,12 @@ result = await mcp.call_tool("get_subnet_info", {
   "ip_subnet": "192.168.1.0/24",
   "vlan_id": 1,
   "dhcpd_enabled": true,
-  "dhcpd_start": "192.168.1.100",
+  "dhcpd_start": "192.168.2.100",
   "dhcpd_stop": "192.168.1.254",
   "dhcpd_leasetime": 86400,
   "dhcpd_dns_1": "8.8.8.8",
   "dhcpd_dns_2": "8.8.4.4",
-  "dhcpd_gateway": "192.168.1.1",
+  "dhcpd_gateway": "192.168.2.1",
   "domain_name": "local"
 }
 ```
@@ -1378,7 +1378,7 @@ result = await mcp.call_tool("list_port_forwards", {
     "_id": "507f1f77bcf86cd799439011",
     "name": "Web Server",
     "dst_port": "80",
-    "fwd": "192.168.1.100",
+    "fwd": "192.168.2.100",
     "fwd_port": "8080",
     "proto": "tcp",
     "enabled": true,
@@ -1413,7 +1413,7 @@ result = await mcp.call_tool("create_port_forward", {
     "site_id": "default",
     "name": "Web Server",
     "dst_port": 8080,
-    "fwd_ip": "192.168.1.100",
+    "fwd_ip": "192.168.2.100",
     "fwd_port": 80,
     "protocol": "tcp",
     "confirm": True
@@ -1604,7 +1604,7 @@ result = await mcp.call_tool("get_traffic_flows", {
   {
     "flow_id": "flow_123abc",
     "site_id": "default",
-    "source_ip": "192.168.1.100",
+    "source_ip": "192.168.2.100",
     "source_port": 50000,
     "destination_ip": "8.8.8.8",
     "destination_port": 443,
@@ -1651,7 +1651,7 @@ stream = await mcp.call_tool("stream_traffic_flows", {
   "update_type": "new",
   "flow": {
     "flow_id": "flow_123abc",
-    "source_ip": "192.168.1.100",
+    "source_ip": "192.168.2.100",
     "destination_ip": "8.8.8.8",
     "bytes_sent": 1024000,
     "bytes_received": 2048000
@@ -1728,7 +1728,7 @@ result = await mcp.call_tool("get_client_flow_aggregation", {
 ```json
 {
   "client_mac": "aa:bb:cc:dd:ee:ff",
-  "client_ip": "192.168.1.100",
+  "client_ip": "192.168.2.100",
   "site_id": "default",
   "total_flows": 1523,
   "total_bytes": 15360000000,
@@ -1777,7 +1777,7 @@ result = await mcp.call_tool("block_flow_source_ip", {
 {
   "action_id": "action_abc123",
   "block_type": "source_ip",
-  "blocked_target": "192.168.1.100",
+  "blocked_target": "192.168.2.100",
   "rule_id": "rule_fw123",
   "duration": "temporary",
   "expires_at": "2025-11-09T10:30:00Z",
@@ -1873,8 +1873,8 @@ result = await mcp.call_tool("export_traffic_flows", {
 
 ```csv
 source_ip,destination_ip,bytes_sent,application_name
-192.168.1.100,8.8.8.8,1024000,HTTPS
-192.168.1.101,1.1.1.1,512000,DNS
+192.168.2.100,8.8.8.8,1024000,HTTPS
+192.168.2.101,1.1.1.1,512000,DNS
 ...
 ```
 
@@ -2092,7 +2092,7 @@ topology = await mcp.call_tool("get_network_topology", {
       "node_type": "device",
       "name": "UDM Pro",
       "mac": "aa:bb:cc:dd:ee:01",
-      "ip": "192.168.1.1",
+      "ip": "192.168.2.1",
       "model": "UDM-Pro",
       "type_detail": "ugw",
       "uplink_depth": 0,

@@ -54,8 +54,8 @@ class TestValidateMacAddress:
 
 class TestValidateIpAddress:
     def test_valid_ip(self):
-        result = validate_ip_address("192.168.1.1")
-        assert result == "192.168.1.1"
+        result = validate_ip_address("192.168.2.1")
+        assert result == "192.168.2.1"
 
     def test_valid_ip_zeros(self):
         result = validate_ip_address("0.0.0.0")
@@ -71,7 +71,7 @@ class TestValidateIpAddress:
 
     def test_invalid_too_many_octets(self):
         with pytest.raises(ValidationError, match="Invalid IP address"):
-            validate_ip_address("192.168.1.1.1")
+            validate_ip_address("192.168.2.1.1")
 
     def test_invalid_octet_too_high(self):
         with pytest.raises(ValidationError, match="Invalid IP address"):

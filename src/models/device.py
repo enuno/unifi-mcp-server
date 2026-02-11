@@ -45,7 +45,7 @@ class Device(BaseModel):
                 "model": "U6-LR",
                 "type": "uap",
                 "mac": "aa:bb:cc:dd:ee:ff",
-                "ip": "192.168.1.10",
+                "ip": "192.168.2.10",
                 "state": 1,
                 "uptime": 86400,
             }

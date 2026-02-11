@@ -12,9 +12,9 @@ def mock_settings():
     settings = MagicMock(spec="Settings")
     settings.log_level = "INFO"
     settings.api_type = APIType.LOCAL
-    settings.base_url = "https://192.168.1.1"
+    settings.base_url = "https://192.168.2.1"
     settings.api_key = "test-key"
-    settings.local_host = "192.168.1.1"
+    settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
     settings.get_integration_path = MagicMock(side_effect=lambda x: f"/integration/v1/{x}")

@@ -17,7 +17,7 @@ class TestGetV2ApiPath:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture
@@ -92,7 +92,7 @@ class TestGetV2ApiPathIntegration:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         monkeypatch.setenv("UNIFI_LOCAL_PORT", "443")
         return Settings()
 
@@ -102,7 +102,7 @@ class TestGetV2ApiPathIntegration:
         v2_path = local_settings.get_v2_api_path("default")
         full_url = f"{base_url}{v2_path}"
 
-        assert full_url == "https://192.168.1.1:443/proxy/network/v2/api/site/default"
+        assert full_url == "https://192.168.2.1:443/proxy/network/v2/api/site/default"
 
     def test_v2_path_format_matches_expected_pattern(self, local_settings: Settings) -> None:
         """Verify v2 API path follows the documented pattern."""

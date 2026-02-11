@@ -26,7 +26,7 @@ def mock_local_settings():
     settings.log_level = "INFO"
     settings.api_type = MagicMock()
     settings.api_type.value = "local"
-    settings.base_url = "https://192.168.1.1:443"
+    settings.base_url = "https://192.168.2.1:443"
     settings.api_key = "test-key"
     settings.get_integration_path = MagicMock(return_value="/proxy/network/integration/v1/sites")
     return settings

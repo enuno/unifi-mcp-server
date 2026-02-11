@@ -136,7 +136,7 @@ async def test_[function_name]_validates_inputs():
             "_id": "client-id-456",
             "mac": "11:22:33:44:55:66",
             "hostname": "test-client",
-            "ip": "192.168.1.100",
+            "ip": "192.168.2.100",
             "network_id": "network-123"
         }
     ]

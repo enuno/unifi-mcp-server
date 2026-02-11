@@ -39,7 +39,7 @@ class TestSettingsValidateApiType:
     def test_validate_api_type_local(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "LOCAL")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         settings = Settings()
         assert settings.api_type == APIType.LOCAL
 
@@ -100,9 +100,9 @@ class TestSettingsLocalConfiguration:
     def test_local_with_host_succeeds(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         settings = Settings()
-        assert settings.local_host == "192.168.1.1"
+        assert settings.local_host == "192.168.2.1"
 
     def test_cloud_without_host_succeeds(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
@@ -130,10 +130,10 @@ class TestSettingsBaseUrl:
     def test_base_url_local(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         monkeypatch.setenv("UNIFI_LOCAL_PORT", "443")
         settings = Settings()
-        assert settings.base_url == "https://192.168.1.1:443"
+        assert settings.base_url == "https://192.168.2.1:443"
 
     def test_base_url_local_custom_port(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
@@ -156,7 +156,7 @@ class TestSettingsVerifySsl:
     def test_verify_ssl_local_default_true(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         monkeypatch.delenv("UNIFI_LOCAL_VERIFY_SSL", raising=False)
         monkeypatch.setenv("UNIFI_LOCAL_VERIFY_SSL", "true")
         settings = Settings()
@@ -165,7 +165,7 @@ class TestSettingsVerifySsl:
     def test_verify_ssl_local_disabled(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         monkeypatch.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
         settings = Settings()
         assert settings.verify_ssl is False
@@ -191,7 +191,7 @@ class TestSettingsGetIntegrationPath:
     def test_get_integration_path_local(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         settings = Settings()
         result = settings.get_integration_path("/sites/abc/firewall/zones")
         assert result == "/proxy/network/integration/v1/sites/abc/firewall/zones"
@@ -224,7 +224,7 @@ class TestSettingsGetSiteApiPath:
     def test_get_site_api_path_local(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         settings = Settings()
         result = settings.get_site_api_path("default", "devices")
         assert result == "/proxy/network/api/s/default/devices"
@@ -232,7 +232,7 @@ class TestSettingsGetSiteApiPath:
     def test_get_site_api_path_strips_leading_slash(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         settings = Settings()
         result = settings.get_site_api_path("default", "/sta")
         assert result == "/proxy/network/api/s/default/sta"

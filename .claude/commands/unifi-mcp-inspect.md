@@ -115,7 +115,7 @@ Environment Check:
 ✓ Node.js installed (v20.10.0)
 ✓ .env file found
 ✓ UniFi credentials configured
-✓ UniFi Host: https://192.168.1.1
+✓ UniFi Host: https://192.168.2.1
 
 Starting Inspector:
 $ npx @modelcontextprotocol/inspector uv run src/main.py

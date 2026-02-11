@@ -892,7 +892,7 @@ async def test_search_across_sites_all(mock_settings):
                 "name": "Office 1",
                 "devices": [{"name": "Test-Device", "mac": "aa:bb:cc:dd:ee:01", "type": "uap"}],
                 "clients": [
-                    {"name": "Test-Laptop", "mac": "11:22:33:44:55:01", "ip": "192.168.1.10"}
+                    {"name": "Test-Laptop", "mac": "11:22:33:44:55:01", "ip": "192.168.2.10"}
                 ],
                 "networks": [{"name": "Test-VLAN", "vlan": 10}],
             }

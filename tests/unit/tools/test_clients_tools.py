@@ -38,7 +38,7 @@ def create_mock_client(get_responses=None):
 
 def make_client(
     mac="00:11:22:33:44:55",
-    ip="192.168.1.100",
+    ip="192.168.2.100",
     hostname="test-client",
     name=None,
     is_wired=False,
@@ -284,7 +284,7 @@ class TestSearchClients:
     async def test_search_clients_by_ip(self, mock_settings):
         response = {
             "data": [
-                make_client(ip="192.168.1.100"),
+                make_client(ip="192.168.2.100"),
                 make_client(ip="192.168.2.200"),
             ]
         }

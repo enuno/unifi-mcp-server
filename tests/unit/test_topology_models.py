@@ -16,7 +16,7 @@ class TestTopologyNode:
             node_type="device",
             name="AP-Office",
             mac="aa:bb:cc:dd:ee:ff",
-            ip="192.168.1.10",
+            ip="192.168.2.10",
             model="U6-LR",
             type_detail="uap",
             uplink_device_id="gateway_001",
@@ -32,7 +32,7 @@ class TestTopologyNode:
         assert node.node_type == "device"
         assert node.name == "AP-Office"
         assert node.mac == "aa:bb:cc:dd:ee:ff"
-        assert node.ip == "192.168.1.10"
+        assert node.ip == "192.168.2.10"
         assert node.model == "U6-LR"
         assert node.type_detail == "uap"
         assert node.uplink_device_id == "gateway_001"
@@ -50,7 +50,7 @@ class TestTopologyNode:
             node_type="client",
             name="iPhone",
             mac="11:22:33:44:55:66",
-            ip="192.168.1.100",
+            ip="192.168.2.100",
             uplink_device_id="device_001",
             state=1,
         )

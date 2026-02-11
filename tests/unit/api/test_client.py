@@ -41,7 +41,7 @@ def mock_settings_local():
     settings = MagicMock()
     settings.log_level = "INFO"
     settings.api_type = APIType.LOCAL
-    settings.base_url = "https://192.168.1.1"
+    settings.base_url = "https://192.168.2.1"
     settings.api_key = "test-api-key"
     settings.request_timeout = 30.0
     settings.verify_ssl = False

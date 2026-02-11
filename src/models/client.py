@@ -63,7 +63,7 @@ class Client(BaseModel):
         json_schema_extra={
             "example": {
                 "mac": "aa:bb:cc:dd:ee:01",
-                "ip": "192.168.1.100",
+                "ip": "192.168.2.100",
                 "hostname": "laptop-001",
                 "is_wired": False,
                 "signal": -45,

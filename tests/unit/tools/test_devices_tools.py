@@ -51,7 +51,7 @@ def make_device(
         "type": device_type,
         "model": model,
         "mac": "00:11:22:33:44:55",
-        "ip": "192.168.1.100",
+        "ip": "192.168.2.100",
         "state": state,
         "uptime": 86400,
         "cpu": 15.5,

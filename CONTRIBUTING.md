@@ -109,7 +109,7 @@ UNIFI_VERIFY_SSL=true
 
 # OR for local gateway proxy
 # UNIFI_API_TYPE=local
-# UNIFI_HOST=192.168.1.1
+# UNIFI_HOST=192.168.2.1
 # UNIFI_VERIFY_SSL=false
 ```
 

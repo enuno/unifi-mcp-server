@@ -15,9 +15,9 @@ def mock_settings():
     settings.log_level = "INFO"
     settings.api_type = MagicMock()
     settings.api_type.value = "local"
-    settings.base_url = "https://192.168.1.1"
+    settings.base_url = "https://192.168.2.1"
     settings.api_key = "test-key"
-    settings.local_host = "192.168.1.1"
+    settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
     return settings
@@ -294,9 +294,9 @@ async def test_list_radius_profiles_with_full_config(mock_settings):
             {
                 "_id": "radius_full",
                 "name": "Full RADIUS Config",
-                "auth_server": "192.168.1.100",
+                "auth_server": "192.168.2.100",
                 "auth_port": 1812,
-                "acct_server": "192.168.1.100",
+                "acct_server": "192.168.2.100",
                 "acct_port": 1813,
                 "enabled": True,
                 "vlan_enabled": False,
@@ -315,7 +315,7 @@ async def test_list_radius_profiles_with_full_config(mock_settings):
 
     assert len(result) == 1
     assert result[0]["name"] == "Full RADIUS Config"
-    assert result[0]["auth_server"] == "192.168.1.100"
+    assert result[0]["auth_server"] == "192.168.2.100"
     assert result[0]["auth_port"] == 1812
-    assert result[0]["acct_server"] == "192.168.1.100"
+    assert result[0]["acct_server"] == "192.168.2.100"
     assert result[0]["acct_port"] == 1813

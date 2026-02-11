@@ -401,7 +401,7 @@ settings.unifi_port = 443
 ```python
 # Base URL: https://{gateway-ip}/proxy/network/integration/v1/
 settings.unifi_api_type = "local"
-settings.unifi_host = "192.168.1.1"
+settings.unifi_host = "192.168.2.1"
 settings.unifi_port = 443
 ```
 

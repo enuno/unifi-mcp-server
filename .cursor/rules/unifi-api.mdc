@@ -48,7 +48,7 @@ settings.cloud_api_url = "https://api.ui.com"
 ```python
 # Base URL: https://{gateway-ip}/proxy/network/integration/v1/
 settings.api_type = "local"
-settings.local_host = "192.168.1.1"
+settings.local_host = "192.168.2.1"
 settings.local_port = 443
 ```
 

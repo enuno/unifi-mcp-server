@@ -22,7 +22,7 @@ class TestListFirewallPolicies:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture
@@ -230,7 +230,7 @@ class TestGetFirewallPolicy:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture
@@ -423,7 +423,7 @@ class TestUpdateFirewallPolicy:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture
@@ -632,7 +632,7 @@ class TestDeleteFirewallPolicy:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture
@@ -887,7 +887,7 @@ class TestCreateFirewallPolicy:
         """Create settings for local API access."""
         monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "local")
-        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.1.1")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
         return Settings()
 
     @pytest.fixture

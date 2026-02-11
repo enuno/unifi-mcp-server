@@ -67,7 +67,7 @@ The server supports three UniFi API access modes:
 
 1. **Local Gateway API** (Recommended): Full feature support
    - `UNIFI_API_TYPE=local`
-   - `UNIFI_LOCAL_HOST=192.168.1.1`
+   - `UNIFI_LOCAL_HOST=192.168.2.1`
 
 2. **Cloud V1 API**: Stable, aggregate statistics only
    - `UNIFI_API_TYPE=cloud-v1`

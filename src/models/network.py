@@ -55,7 +55,7 @@ class Network(BaseModel):
                 "vlan_id": 1,
                 "ip_subnet": "192.168.1.0/24",
                 "dhcpd_enabled": True,
-                "dhcpd_start": "192.168.1.100",
+                "dhcpd_start": "192.168.2.100",
                 "dhcpd_stop": "192.168.1.254",
             }
         },

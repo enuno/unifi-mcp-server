@@ -115,7 +115,7 @@ When using an AI assistant with the UniFi MCP Server, you can use natural langua
 ```
 "Create a new VLAN 20 for the security cameras with 192.168.20.0/24 subnet"
 "Set up a static route to reach the remote office subnet via the VPN gateway"
-"Configure port forwarding for SSH (port 22) to my home server at 192.168.1.100"
+"Configure port forwarding for SSH (port 22) to my home server at 192.168.2.100"
 "Create a DHCP reservation for the printer at 192.168.1.50"
 "Show me all networks and their current IP address assignments"
 "Set up inter-VLAN routing between the main LAN and the security camera network"
@@ -1696,7 +1696,7 @@ Create a new DNS policy on a site.
   "type": "A_RECORD",
   "enabled": true,
   "domain": "example.com",
-  "ipv4Address": "192.168.1.10",
+  "ipv4Address": "192.168.2.10",
   "ttlSeconds": 14400
 }
 ```
@@ -1726,7 +1726,7 @@ Retrieve specific DNS policy.
   "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
   "enabled": true,
   "domain": "example.com",
-  "ipv4Address": "192.168.1.10",
+  "ipv4Address": "192.168.2.10",
   "ttlSeconds": 14400
 }
 ```
@@ -3240,7 +3240,7 @@ Useful for locating resources in multi-site deployments. Supports search by name
         "mac": "aa:bb:cc:dd:ee:01",
         "type": "uap",
         "model": "U6-Pro",
-        "ip": "192.168.1.10",
+        "ip": "192.168.2.10",
         "status": "online"
       }
     },

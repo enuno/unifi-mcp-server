@@ -57,7 +57,7 @@ The UniFi MCP Server supports **three distinct API modes** with different capabi
 - ✅ **All Features Available**: Device management, client control, network configuration, firewall rules, WiFi management
 - ✅ **Real-time Data**: Access to live device/client statistics and detailed information
 - ✅ **Configuration Changes**: Create, update, delete networks, VLANs, firewall rules, SSIDs
-- 📍 **Requirement**: Local network access to your UniFi gateway (e.g., 192.168.1.1)
+- 📍 **Requirement**: Local network access to your UniFi gateway (e.g., 192.168.2.1)
 - ⚙️ **Configuration**: `UNIFI_API_TYPE=local` + `UNIFI_LOCAL_HOST=<gateway-ip>`
 
 ### Cloud Early Access API ⚠️
@@ -291,7 +291,7 @@ docker run -i -d \
   --name unifi-mcp \
   -e UNIFI_API_KEY=your-api-key \
   -e UNIFI_API_TYPE=local \
-  -e UNIFI_HOST=192.168.1.1 \
+  -e UNIFI_HOST=192.168.2.1 \
   ghcr.io/enuno/unifi-mcp-server:latest
 
 # Check container status
@@ -521,7 +521,7 @@ UNIFI_API_KEY=your-api-key-here
 UNIFI_API_TYPE=local
 
 # Local Gateway Configuration (for UNIFI_API_TYPE=local)
-UNIFI_LOCAL_HOST=192.168.1.1
+UNIFI_LOCAL_HOST=192.168.2.1
 UNIFI_LOCAL_PORT=443
 UNIFI_LOCAL_VERIFY_SSL=false
 
@@ -581,7 +581,7 @@ After installing via `pip install unifi-mcp-server`:
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
     }
   }
@@ -615,7 +615,7 @@ For cloud API access, use:
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
     }
   }
@@ -662,7 +662,7 @@ After installing via `pip install unifi-mcp-server`:
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1",
+        "UNIFI_LOCAL_HOST": "192.168.2.1",
         "UNIFI_LOCAL_VERIFY_SSL": "false"
       },
       "disabled": false
@@ -682,7 +682,7 @@ After installing via `pip install unifi-mcp-server`:
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       },
       "disabled": false
     }
@@ -702,7 +702,7 @@ After installing via `pip install unifi-mcp-server`:
         "--name", "unifi-mcp-server",
         "-e", "UNIFI_API_KEY=your_unifi_api_key_here",
         "-e", "UNIFI_API_TYPE=local",
-        "-e", "UNIFI_LOCAL_HOST=192.168.1.1",
+        "-e", "UNIFI_LOCAL_HOST=192.168.2.1",
         "-e", "UNIFI_LOCAL_VERIFY_SSL=false",
         "ghcr.io/enuno/unifi-mcp-server:latest"
       ],
@@ -736,7 +736,7 @@ After installing from PyPI (`pip install unifi-mcp-server`):
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
     }
   }
@@ -754,7 +754,7 @@ After installing from PyPI (`pip install unifi-mcp-server`):
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
     }
   }
@@ -772,7 +772,7 @@ After installing from PyPI (`pip install unifi-mcp-server`):
       "env": {
         "UNIFI_API_KEY": "your-api-key-here",
         "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.1.1"
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
     }
   }
@@ -784,7 +784,7 @@ After installing from PyPI (`pip install unifi-mcp-server`):
 - `UNIFI_API_KEY` (required): Your UniFi API key from unifi.ui.com
 - `UNIFI_API_TYPE` (required): `local`, `cloud-v1`, or `cloud-ea`
 - **For Local Gateway API**:
-  - `UNIFI_LOCAL_HOST`: Gateway IP (e.g., 192.168.1.1)
+  - `UNIFI_LOCAL_HOST`: Gateway IP (e.g., 192.168.2.1)
   - `UNIFI_LOCAL_PORT`: Gateway port (default: 443)
   - `UNIFI_LOCAL_VERIFY_SSL`: SSL verification (default: false)
 - **For Cloud APIs**:

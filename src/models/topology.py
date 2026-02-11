@@ -39,7 +39,7 @@ class TopologyNode(BaseModel):
                 "node_type": "device",
                 "name": "AP-Office",
                 "mac": "aa:bb:cc:dd:ee:ff",
-                "ip": "192.168.1.10",
+                "ip": "192.168.2.10",
                 "model": "U6-LR",
                 "type_detail": "uap",
                 "uplink_device_id": "507f1f77bcf86cd799439012",

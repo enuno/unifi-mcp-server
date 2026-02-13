@@ -346,7 +346,10 @@ class TestSearchClients:
     async def test_search_clients_with_pagination(self, mock_settings):
         active_response = {"data": []}
         alluser_response = {
-            "data": [make_client(mac=f"00:00:00:00:00:{i:02x}", hostname=f"client-{i}") for i in range(10)]
+            "data": [
+                make_client(mac=f"00:00:00:00:00:{i:02x}", hostname=f"client-{i}")
+                for i in range(10)
+            ]
         }
 
         with patch("src.tools.clients.UniFiClient") as mock_client_class:
@@ -390,9 +393,7 @@ class TestSearchClients:
         }
         # Historical client with None IP
         alluser_response = {
-            "data": [
-                {"mac": "aa:bb:cc:dd:ee:ff", "hostname": "old-client", "ip": None}
-            ]
+            "data": [{"mac": "aa:bb:cc:dd:ee:ff", "hostname": "old-client", "ip": None}]
         }
 
         with patch("src.tools.clients.UniFiClient") as mock_client_class:
@@ -410,15 +411,11 @@ class TestSearchClients:
         mac = "00:11:22:33:44:55"
         # Historical data with old IP
         alluser_response = {
-            "data": [
-                make_client(mac=mac, ip="192.168.2.50", hostname="old-hostname")
-            ]
+            "data": [make_client(mac=mac, ip="192.168.2.50", hostname="old-hostname")]
         }
         # Active data with current IP (should override historical)
         active_response = {
-            "data": [
-                make_client(mac=mac, ip="192.168.2.100", hostname="current-hostname")
-            ]
+            "data": [make_client(mac=mac, ip="192.168.2.100", hostname="current-hostname")]
         }
 
         with patch("src.tools.clients.UniFiClient") as mock_client_class:
@@ -436,11 +433,7 @@ class TestSearchClients:
         """Test searching historical clients by MAC when not active."""
         mac = "aa:bb:cc:dd:ee:ff"
         active_response = {"data": []}
-        alluser_response = {
-            "data": [
-                make_client(mac=mac, ip=None, hostname="offline-device")
-            ]
-        }
+        alluser_response = {"data": [make_client(mac=mac, ip=None, hostname="offline-device")]}
 
         with patch("src.tools.clients.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client([active_response, alluser_response])

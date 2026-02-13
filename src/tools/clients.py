@@ -1,5 +1,6 @@
 """Client management MCP tools."""
 
+import asyncio
 from typing import Any
 
 from ..api import UniFiClient
@@ -174,19 +175,36 @@ async def search_clients(
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        # Search in all users
-        response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
-        clients_data = response.get("data", []) if isinstance(response, dict) else response
+        # Concurrently query active and historical clients for better performance
+        active_response, alluser_response = await asyncio.gather(
+            client.get(f"/ea/sites/{site_id}/sta"),
+            client.get(f"/ea/sites/{site_id}/stat/alluser"),
+        )
 
-        # Search by MAC, IP, hostname, or name
+        # Helper to extract data from API response
+        def _extract_data(response: dict | list) -> list:
+            """Extract data array from API response."""
+            return response.get("data", []) if isinstance(response, dict) else response or []
+
+        active_data = _extract_data(active_response)
+        alluser_data = _extract_data(alluser_response)
+
+        # Merge results: deduplicate by MAC, with active clients taking priority
+        # Use dictionary comprehensions with walrus operator for concise, Pythonic code
+        clients_by_mac = {mac: c for c in alluser_data if (mac := c.get("mac"))}
+        clients_by_mac.update({mac: c for c in active_data if (mac := c.get("mac"))})
+
+        clients_data = list(clients_by_mac.values())
+
+        # Search by MAC, IP, hostname, or name (with None-safe handling)
         query_lower = query.lower()
         filtered = [
             c
             for c in clients_data
-            if query_lower in c.get("mac", "").lower()
-            or query_lower in c.get("ip", "").lower()
-            or query_lower in c.get("hostname", "").lower()
-            or query_lower in c.get("name", "").lower()
+            if query_lower in (c.get("mac") or "").lower()
+            or query_lower in (c.get("ip") or "").lower()
+            or query_lower in (c.get("hostname") or "").lower()
+            or query_lower in (c.get("name") or "").lower()
         ]
 
         # Apply pagination

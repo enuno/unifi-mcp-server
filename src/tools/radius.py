@@ -732,6 +732,8 @@ async def create_hotspot_package(
             f"/integration/v1/sites/{site_id}/hotspot/packages", json_data=payload
         )
         data = response if isinstance(response, list) else response.get("data", response)
+        if isinstance(data, list):
+            data = data[0] if data else {}
 
         # Audit the action
         await audit_action(

@@ -997,3 +997,181 @@ async def test_get_device_port_overrides_invalid_site_id(mock_settings):
     """Test getting overrides with invalid site ID."""
     with pytest.raises(ValidationError):
         await get_device_port_overrides("", "dev1", mock_settings)
+
+
+# =============================================================================
+# Additional Coverage Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_with_all_merge_fields(mock_settings):
+    """Test update with all optional merge fields to cover all branches."""
+    existing = {
+        "data": [{"_id": "pp1", "name": "Original", "forward": "all"}]
+    }
+    updated = {
+        "data": [
+            {
+                "_id": "pp1",
+                "name": "Updated",
+                "forward": "customize",
+                "native_networkconf_id": "net1",
+                "excluded_networkconf_ids": ["net2"],
+                "tagged_networkconf_ids": ["net3"],
+                "poe_mode": "auto",
+                "speed": 1000,
+                "full_duplex": True,
+                "autoneg": True,
+                "dot1x_ctrl": "force_authorized",
+                "lldpmed_enabled": True,
+            }
+        ]
+    }
+    client = _make_client(get_return=existing, put_return=updated)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            forward="customize",
+            native_networkconf_id="net1",
+            excluded_networkconf_ids=["net2"],
+            tagged_networkconf_ids=["net3"],
+            poe_mode="auto",
+            speed=1000,
+            full_duplex=True,
+            autoneg=True,
+            dot1x_ctrl="force_authorized",
+            lldpmed_enabled=True,
+            confirm=True,
+        )
+
+    put_data = client.put.call_args[1]["json_data"]
+    assert put_data["name"] == "Updated"
+    assert put_data["forward"] == "customize"
+    assert put_data["native_networkconf_id"] == "net1"
+    assert put_data["excluded_networkconf_ids"] == ["net2"]
+    assert put_data["tagged_networkconf_ids"] == ["net3"]
+    assert put_data["poe_mode"] == "auto"
+    assert put_data["speed"] == 1000
+    assert put_data["full_duplex"] is True
+    assert put_data["autoneg"] is True
+    assert put_data["dot1x_ctrl"] == "force_authorized"
+    assert put_data["lldpmed_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_list_response(mock_settings):
+    """Test update when API returns a list directly."""
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    updated = [{"_id": "pp1", "name": "Updated", "forward": "native"}]
+    client = _make_client(get_return=existing, put_return=updated)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            forward="native",
+            confirm=True,
+        )
+
+    assert result["_id"] == "pp1"
+    assert result["name"] == "Updated"
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_generic_error(mock_settings):
+    """Test update port profile error handling path."""
+    client = _make_client()
+    client.authenticate = AsyncMock(side_effect=RuntimeError("Connection failed"))
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        with pytest.raises(RuntimeError, match="Connection failed"):
+            await update_port_profile(
+                site_id="default",
+                profile_id="pp1",
+                settings=mock_settings,
+                name="Test",
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_generic_error(mock_settings):
+    """Test create port profile error handling path."""
+    client = _make_client()
+    client.authenticate = AsyncMock(side_effect=RuntimeError("Connection failed"))
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        with pytest.raises(RuntimeError, match="Connection failed"):
+            await create_port_profile(
+                site_id="default",
+                name="Test",
+                forward="all",
+                settings=mock_settings,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_delete_port_profile_generic_error(mock_settings):
+    """Test delete port profile error handling path."""
+    client = _make_client()
+    client.authenticate = AsyncMock(side_effect=RuntimeError("Connection failed"))
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        with pytest.raises(RuntimeError, match="Connection failed"):
+            await delete_port_profile(
+                site_id="default",
+                profile_id="pp1",
+                settings=mock_settings,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_generic_error(mock_settings):
+    """Test set port overrides error handling path."""
+    client = _make_client()
+    client.authenticate = AsyncMock(side_effect=RuntimeError("Connection failed"))
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        with pytest.raises(RuntimeError, match="Connection failed"):
+            await set_device_port_overrides(
+                site_id="default",
+                device_id="dev1",
+                port_overrides=[{"port_idx": 1, "portconf_id": "pp1"}],
+                settings=mock_settings,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_list_response(mock_settings):
+    """Test set overrides when API returns a list directly."""
+    existing_device = {
+        "data": [{"_id": "dev1", "name": "Switch", "port_overrides": []}]
+    }
+    updated_device = [
+        {
+            "_id": "dev1",
+            "port_overrides": [{"port_idx": 1, "portconf_id": "pp1"}],
+        }
+    ]
+    client = _make_client(get_return=existing_device, put_return=updated_device)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 1, "portconf_id": "pp1"}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["device_id"] == "dev1"

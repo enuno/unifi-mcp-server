@@ -323,3 +323,82 @@ class TestValidateLimitOffset:
     def test_zero_offset_valid(self):
         limit, offset = validate_limit_offset(offset=0)
         assert offset == 0
+
+
+class TestDuplicateResourceError:
+    """Tests for DuplicateResourceError exception."""
+
+    def test_basic_creation(self):
+        from src.utils.exceptions import DuplicateResourceError
+
+        err = DuplicateResourceError("port_profile", "IoT Profile", "abc123")
+        assert err.resource_type == "port_profile"
+        assert err.resource_name == "IoT Profile"
+        assert err.existing_id == "abc123"
+        assert "IoT Profile" in str(err)
+        assert "already exists" in str(err)
+        assert "abc123" in str(err)
+
+    def test_details_dict(self):
+        from src.utils.exceptions import DuplicateResourceError
+
+        err = DuplicateResourceError("network", "Guest LAN", "net456")
+        assert err.details["resource_type"] == "network"
+        assert err.details["name"] == "Guest LAN"
+        assert err.details["existing_id"] == "net456"
+
+    def test_is_unifi_exception(self):
+        from src.utils.exceptions import DuplicateResourceError, UniFiMCPException
+
+        err = DuplicateResourceError("port_profile", "Test", "id1")
+        assert isinstance(err, UniFiMCPException)
+
+
+class TestConfirmationRequiredError:
+    """Tests for ConfirmationRequiredError exception."""
+
+    def test_basic_creation(self):
+        from src.utils.exceptions import ConfirmationRequiredError
+
+        err = ConfirmationRequiredError("delete_network")
+        assert err.operation == "delete_network"
+        assert "delete_network" in str(err)
+        assert "requires confirmation" in str(err)
+
+    def test_details_dict(self):
+        from src.utils.exceptions import ConfirmationRequiredError
+
+        err = ConfirmationRequiredError("restart_device")
+        assert err.details["operation"] == "restart_device"
+
+    def test_is_unifi_exception(self):
+        from src.utils.exceptions import ConfirmationRequiredError, UniFiMCPException
+
+        err = ConfirmationRequiredError("test")
+        assert isinstance(err, UniFiMCPException)
+
+
+class TestRateLimitError:
+    """Tests for RateLimitError exception."""
+
+    def test_basic_creation(self):
+        from src.utils.exceptions import RateLimitError
+
+        err = RateLimitError()
+        assert err.status_code == 429
+        assert err.retry_after is None
+        assert "Rate limit" in str(err)
+
+    def test_with_retry_after(self):
+        from src.utils.exceptions import RateLimitError
+
+        err = RateLimitError(retry_after=60)
+        assert err.retry_after == 60
+        assert err.status_code == 429
+
+    def test_custom_message(self):
+        from src.utils.exceptions import RateLimitError
+
+        err = RateLimitError(message="Too many requests", retry_after=30)
+        assert "Too many requests" in str(err)
+        assert err.retry_after == 30

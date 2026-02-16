@@ -103,10 +103,12 @@ class DuplicateResourceError(UniFiMCPException):
             existing_id: ID of the existing resource
         """
         message = (
-            f"{resource_type} with name '{resource_name}' already exists "
-            f"(id: {existing_id})"
+            f"{resource_type} with name '{resource_name}' already exists " f"(id: {existing_id})"
         )
-        super().__init__(message, {"resource_type": resource_type, "name": resource_name, "existing_id": existing_id})
+        super().__init__(
+            message,
+            {"resource_type": resource_type, "name": resource_name, "existing_id": existing_id},
+        )
         self.resource_type = resource_type
         self.resource_name = resource_name
         self.existing_id = existing_id

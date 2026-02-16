@@ -104,9 +104,7 @@ async def test_list_port_profiles_list_response(mock_settings):
 @pytest.mark.asyncio
 async def test_list_port_profiles_pagination(mock_settings):
     """Test port profiles listing with pagination."""
-    mock_response = {
-        "data": [{"_id": f"pp{i}", "name": f"Profile {i}"} for i in range(10)]
-    }
+    mock_response = {"data": [{"_id": f"pp{i}", "name": f"Profile {i}"} for i in range(10)]}
     client = _make_client(get_return=mock_response)
 
     with patch.object(port_profiles_module, "UniFiClient", return_value=client):
@@ -178,11 +176,7 @@ async def test_get_port_profile_empty_id(mock_settings):
 @pytest.mark.asyncio
 async def test_create_port_profile_success(mock_settings):
     """Test successful port profile creation."""
-    created = {
-        "data": [
-            {"_id": "new_pp", "name": "IoT Profile", "forward": "native"}
-        ]
-    }
+    created = {"data": [{"_id": "new_pp", "name": "IoT Profile", "forward": "native"}]}
     client = _make_client(get_return={"data": []}, post_return=created)
 
     with patch.object(port_profiles_module, "UniFiClient", return_value=client):
@@ -331,12 +325,8 @@ async def test_create_port_profile_list_response(mock_settings):
 @pytest.mark.asyncio
 async def test_update_port_profile_success(mock_settings):
     """Test successful port profile update."""
-    existing = {
-        "data": [{"_id": "pp1", "name": "Old Name", "forward": "all"}]
-    }
-    updated = {
-        "data": [{"_id": "pp1", "name": "New Name", "forward": "native"}]
-    }
+    existing = {"data": [{"_id": "pp1", "name": "Old Name", "forward": "all"}]}
+    updated = {"data": [{"_id": "pp1", "name": "New Name", "forward": "native"}]}
     client = _make_client(get_return=existing, put_return=updated)
 
     with patch.object(port_profiles_module, "UniFiClient", return_value=client):
@@ -860,9 +850,7 @@ async def test_set_device_port_overrides_empty_device_id(mock_settings):
 @pytest.mark.asyncio
 async def test_set_device_port_overrides_merge_no_existing(mock_settings):
     """Test merge mode when device has no existing overrides."""
-    existing_device = {
-        "data": [{"_id": "dev1", "name": "Switch"}]
-    }
+    existing_device = {"data": [{"_id": "dev1", "name": "Switch"}]}
     updated_device = {
         "data": [
             {
@@ -1007,9 +995,7 @@ async def test_get_device_port_overrides_invalid_site_id(mock_settings):
 @pytest.mark.asyncio
 async def test_update_port_profile_with_all_merge_fields(mock_settings):
     """Test update with all optional merge fields to cover all branches."""
-    existing = {
-        "data": [{"_id": "pp1", "name": "Original", "forward": "all"}]
-    }
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
     updated = {
         "data": [
             {
@@ -1031,7 +1017,7 @@ async def test_update_port_profile_with_all_merge_fields(mock_settings):
     client = _make_client(get_return=existing, put_return=updated)
 
     with patch.object(port_profiles_module, "UniFiClient", return_value=client):
-        result = await update_port_profile(
+        await update_port_profile(
             site_id="default",
             profile_id="pp1",
             settings=mock_settings,
@@ -1154,9 +1140,7 @@ async def test_set_device_port_overrides_generic_error(mock_settings):
 @pytest.mark.asyncio
 async def test_set_device_port_overrides_list_response(mock_settings):
     """Test set overrides when API returns a list directly."""
-    existing_device = {
-        "data": [{"_id": "dev1", "name": "Switch", "port_overrides": []}]
-    }
+    existing_device = {"data": [{"_id": "dev1", "name": "Switch", "port_overrides": []}]}
     updated_device = [
         {
             "_id": "dev1",

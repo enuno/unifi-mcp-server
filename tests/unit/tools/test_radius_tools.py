@@ -245,9 +245,7 @@ async def test_delete_radius_profile_success(mock_settings):
 
         assert result["success"] is True
         assert "deleted successfully" in result["message"]
-        mock_client.delete.assert_called_once_with(
-            "/ea/sites/default/rest/radiusprofile/profile-1"
-        )
+        mock_client.delete.assert_called_once_with("/ea/sites/default/rest/radiusprofile/profile-1")
 
 
 # =============================================================================
@@ -755,7 +753,7 @@ async def test_create_radius_profile_with_acct_server(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await create_radius_profile(
+        await create_radius_profile(
             site_id="default",
             name="Full RADIUS",
             auth_server="radius.test.com",
@@ -898,7 +896,7 @@ async def test_update_radius_profile_with_all_fields(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await update_radius_profile(
+        await update_radius_profile(
             site_id="default",
             profile_id="profile-1",
             settings=mock_settings,
@@ -1071,7 +1069,7 @@ async def test_create_radius_account_without_vlan(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await create_radius_account(
+        await create_radius_account(
             site_id="default",
             username="newuser",
             password="newpass",
@@ -1110,7 +1108,7 @@ async def test_create_radius_account_with_note(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await create_radius_account(
+        await create_radius_account(
             site_id="default",
             username="newuser",
             password="newpass",

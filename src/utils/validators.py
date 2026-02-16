@@ -137,7 +137,9 @@ def coerce_bool(value: bool | str | None) -> bool:
     return bool(value)
 
 
-def validate_confirmation(confirm: bool | str | None, operation: str, dry_run: bool | str = False) -> None:
+def validate_confirmation(
+    confirm: bool | str | None, operation: str, dry_run: bool | str = False
+) -> None:
     """Validate that confirmation is provided for mutating operations.
 
     Skips validation when dry_run is True, allowing users to preview

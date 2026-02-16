@@ -147,9 +147,7 @@ async def create_port_profile(
     # Validate forward mode
     valid_forwards = ["all", "native", "customize", "disabled"]
     if forward not in valid_forwards:
-        raise ValidationError(
-            f"Invalid forward mode '{forward}'. Must be one of: {valid_forwards}"
-        )
+        raise ValidationError(f"Invalid forward mode '{forward}'. Must be one of: {valid_forwards}")
 
     # Build profile data
     profile_data: dict[str, Any] = {
@@ -201,9 +199,7 @@ async def create_port_profile(
                     )
 
             if dry_run:
-                logger.info(
-                    f"DRY RUN: Would create port profile '{name}' in site '{site_id}'"
-                )
+                logger.info(f"DRY RUN: Would create port profile '{name}' in site '{site_id}'")
                 log_audit(
                     operation="create_port_profile",
                     parameters=parameters,
@@ -312,9 +308,7 @@ async def update_port_profile(
     }
 
     if dry_run:
-        logger.info(
-            f"DRY RUN: Would update port profile '{profile_id}' in site '{site_id}'"
-        )
+        logger.info(f"DRY RUN: Would update port profile '{profile_id}' in site '{site_id}'")
         log_audit(
             operation="update_port_profile",
             parameters=parameters,
@@ -427,9 +421,7 @@ async def delete_port_profile(
     parameters = {"site_id": site_id, "profile_id": profile_id}
 
     if dry_run:
-        logger.info(
-            f"DRY RUN: Would delete port profile '{profile_id}' from site '{site_id}'"
-        )
+        logger.info(f"DRY RUN: Would delete port profile '{profile_id}' from site '{site_id}'")
         log_audit(
             operation="delete_port_profile",
             parameters=parameters,
@@ -513,9 +505,7 @@ async def get_device_port_overrides(
             raise ResourceNotFoundError("device", device_id)
 
         device = devices[0]
-        logger.info(
-            f"Retrieved port overrides for device '{device_id}' in site '{site_id}'"
-        )
+        logger.info(f"Retrieved port overrides for device '{device_id}' in site '{site_id}'")
 
         overrides = [
             PortOverride.model_validate(o).model_dump(exclude_none=True)
@@ -607,9 +597,7 @@ async def set_device_port_overrides(
 
             if merge:
                 # Merge by port_idx: new overrides take precedence
-                existing = {
-                    o["port_idx"]: o for o in device.get("port_overrides", [])
-                }
+                existing = {o["port_idx"]: o for o in device.get("port_overrides", [])}
                 for override in port_overrides:
                     existing[override["port_idx"]] = override
                 final_overrides = list(existing.values())
@@ -664,9 +652,7 @@ async def set_device_port_overrides(
     except (ResourceNotFoundError, ValidationError):
         raise
     except Exception as e:
-        logger.error(
-            f"Failed to set port overrides on device '{device_id}': {e}"
-        )
+        logger.error(f"Failed to set port overrides on device '{device_id}': {e}")
         log_audit(
             operation="set_device_port_overrides",
             parameters=parameters,

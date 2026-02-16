@@ -501,7 +501,9 @@ async def restore_backup(
         rollback if needed.
     """
     site_id = validate_site_id(site_id)
-    validate_confirmation(confirm, "RESTORE operation - this will OVERWRITE current configuration", dry_run)
+    validate_confirmation(
+        confirm, "RESTORE operation - this will OVERWRITE current configuration", dry_run
+    )
     logger = get_logger(__name__, settings.log_level)
 
     parameters = {

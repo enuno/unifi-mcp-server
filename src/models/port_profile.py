@@ -13,9 +13,7 @@ class PortProfile(BaseModel):
         "all",
         description="Forwarding mode (all, native, customize, disabled)",
     )
-    native_networkconf_id: str | None = Field(
-        None, description="Native network configuration ID"
-    )
+    native_networkconf_id: str | None = Field(None, description="Native network configuration ID")
     excluded_networkconf_ids: list[str] = Field(
         default_factory=list, description="Excluded network configuration IDs"
     )

@@ -148,9 +148,7 @@ async def create_radius_profile(
             logger.info(f"[DRY RUN] Would create RADIUS profile with payload: {payload_safe}")
             return {"dry_run": True, "payload": payload_safe}
 
-        response = await client.post(
-            f"/ea/sites/{site_id}/rest/radiusprofile", json_data=payload
-        )
+        response = await client.post(f"/ea/sites/{site_id}/rest/radiusprofile", json_data=payload)
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -411,7 +409,9 @@ async def create_radius_account(
             payload["vlan"] = vlan_id
             # Auto-set tunnel attributes for VLAN assignment if not explicitly provided
             payload["tunnel_type"] = tunnel_type if tunnel_type is not None else 13
-            payload["tunnel_medium_type"] = tunnel_medium_type if tunnel_medium_type is not None else 6
+            payload["tunnel_medium_type"] = (
+                tunnel_medium_type if tunnel_medium_type is not None else 6
+            )
         else:
             if tunnel_type is not None:
                 payload["tunnel_type"] = tunnel_type
@@ -427,9 +427,7 @@ async def create_radius_account(
             payload_safe["x_password"] = "***REDACTED***"
             return {"dry_run": True, "payload": payload_safe}
 
-        response = await client.post(
-            f"/ea/sites/{site_id}/rest/account", json_data=payload
-        )
+        response = await client.post(f"/ea/sites/{site_id}/rest/account", json_data=payload)
         data = response if isinstance(response, list) else response.get("data", response)
 
         # Handle list response (auto-unwrapped)

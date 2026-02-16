@@ -1187,9 +1187,7 @@ async def test_create_firewall_rule_error_handling(mock_settings):
 async def test_update_firewall_rule_with_all_fields(mock_settings):
     """Test update with all optional fields (src/dst address, protocol, port, enabled)."""
     existing_rules = {
-        "data": [
-            {"_id": "rule1", "name": "Old", "action": "accept", "ruleset": "WAN_IN"}
-        ]
+        "data": [{"_id": "rule1", "name": "Old", "action": "accept", "ruleset": "WAN_IN"}]
     }
     updated = {
         "data": [

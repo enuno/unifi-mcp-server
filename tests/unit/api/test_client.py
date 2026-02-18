@@ -507,6 +507,116 @@ class TestUniFiClientResponseParsing:
         await client.close()
 
 
+class TestUniFiClientBackupMethods:
+    """Tests for backup-related client methods."""
+
+    @pytest.mark.asyncio
+    async def test_get_restore_status_returns_completed(self, mock_settings):
+        """get_restore_status returns a completed-status dict."""
+        client = UniFiClient(mock_settings)
+        result = await client.get_restore_status(operation_id="op-123")
+        assert result["status"] == "completed"
+        assert result["operation_id"] == "op-123"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_local(self, mock_settings_local):
+        """configure_backup_schedule calls PUT on the local endpoint."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.text = '{"data": {"schedule_id": "sched-1"}}'
+            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-1"}})
+
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = mock_response
+                result = await client.configure_backup_schedule(
+                    site_id="default",
+                    backup_type="network",
+                    frequency="daily",
+                    time_of_day="02:00",
+                    enabled=True,
+                    retention_days=30,
+                    max_backups=10,
+                )
+
+        assert mock_req.called
+        call_kwargs = mock_req.call_args
+        assert "/proxy/network/api/s/default/rest/backup/schedule" in call_kwargs[1]["url"]
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_cloud(self, mock_settings):
+        """configure_backup_schedule calls PUT on the cloud endpoint."""
+        client = UniFiClient(mock_settings)
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.text = '{"data": {"schedule_id": "sched-2"}}'
+            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-2"}})
+
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = mock_response
+                result = await client.configure_backup_schedule(
+                    site_id="site-uuid",
+                    backup_type="network",
+                    frequency="weekly",
+                    time_of_day="03:00",
+                    enabled=True,
+                    retention_days=14,
+                    max_backups=5,
+                    day_of_week="monday",
+                )
+
+        assert mock_req.called
+        call_kwargs = mock_req.call_args
+        assert "/ea/sites/site-uuid/backup/schedule" in call_kwargs[1]["url"]
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_local_returns_dict(self, mock_settings_local):
+        """get_backup_schedule returns a dict for a configured schedule."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.text = '{"data": {"schedule_id": "sched-1", "enabled": true}}'
+            mock_response.json = MagicMock(
+                return_value={"data": {"schedule_id": "sched-1", "enabled": True}}
+            )
+
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = mock_response
+                result = await client.get_backup_schedule(site_id="default")
+
+        assert isinstance(result, dict)
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_empty_list_returns_empty_dict(self, mock_settings):
+        """get_backup_schedule returns empty dict when API returns empty list."""
+        client = UniFiClient(mock_settings)
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.text = "[]"
+            mock_response.json = MagicMock(return_value=[])
+
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = mock_response
+                result = await client.get_backup_schedule(site_id="site-uuid")
+
+        assert result == {}
+        await client.close()
+
+
 class TestUniFiClientHelpers:
     def test_looks_like_uuid_valid(self):
         assert UniFiClient._looks_like_uuid("550e8400-e29b-41d4-a716-446655440000") is True

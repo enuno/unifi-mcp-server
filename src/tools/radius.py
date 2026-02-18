@@ -451,6 +451,131 @@ async def create_radius_account(
         return RADIUSAccount(**data).model_dump()  # type: ignore[no-any-return]
 
 
+async def get_radius_account(
+    site_id: str,
+    account_id: str,
+    settings: Settings,
+) -> dict:
+    """Get details for a specific RADIUS account.
+
+    Args:
+        site_id: Site identifier
+        account_id: RADIUS account ID
+        settings: Application settings
+
+    Returns:
+        RADIUS account details with password redacted
+    """
+    async with UniFiClient(settings) as client:
+        logger.info(f"Getting RADIUS account {account_id} for site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        response = await client.get(f"/ea/sites/{site_id}/rest/account/{account_id}")
+        data = response if isinstance(response, list) else response.get("data", response)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        if not data:
+            return {}
+
+        if "x_password" in data:
+            data["x_password"] = "***REDACTED***"
+
+        return RADIUSAccount(**data).model_dump()  # type: ignore[no-any-return]
+
+
+async def update_radius_account(
+    site_id: str,
+    account_id: str,
+    settings: Settings,
+    username: str | None = None,
+    password: str | None = None,
+    vlan_id: int | None = None,
+    tunnel_type: int | None = None,
+    tunnel_medium_type: int | None = None,
+    enabled: bool | None = None,
+    note: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing RADIUS account.
+
+    Args:
+        site_id: Site identifier
+        account_id: RADIUS account ID
+        settings: Application settings
+        username: New username (maps to 'name' in API)
+        password: New password (maps to 'x_password' in API)
+        vlan_id: Assigned VLAN ID (maps to 'vlan' in API)
+        tunnel_type: RADIUS tunnel type (13=VLAN)
+        tunnel_medium_type: RADIUS tunnel medium type (6=802)
+        enabled: Account enabled status
+        note: Admin notes
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Updated RADIUS account with password redacted
+    """
+    validate_confirmation(confirm, "update RADIUS account", dry_run)
+
+    payload: dict[str, Any] = {}
+
+    if username is not None:
+        payload["name"] = username
+    if password is not None:
+        payload["x_password"] = password
+    if vlan_id is not None:
+        payload["vlan"] = vlan_id
+    if tunnel_type is not None:
+        payload["tunnel_type"] = tunnel_type
+    if tunnel_medium_type is not None:
+        payload["tunnel_medium_type"] = tunnel_medium_type
+    if enabled is not None:
+        payload["enabled"] = enabled
+    if note is not None:
+        payload["note"] = note
+
+    if not payload and not dry_run:
+        raise ValueError("At least one field must be provided to update.")
+
+    async with UniFiClient(settings) as client:
+        logger.info(f"Updating RADIUS account {account_id} for site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        if dry_run:
+            payload_safe = payload.copy()
+            if "x_password" in payload_safe:
+                payload_safe["x_password"] = "***REDACTED***"
+            logger.info(f"[DRY RUN] Would update RADIUS account with payload: {payload_safe}")
+            return {"dry_run": True, "account_id": account_id, "payload": payload_safe}
+
+        response = await client.put(
+            f"/ea/sites/{site_id}/rest/account/{account_id}", json_data=payload
+        )
+        data = response if isinstance(response, list) else response.get("data", response)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        await audit_action(
+            settings,
+            action_type="update_radius_account",
+            resource_type="radius_account",
+            resource_id=account_id,
+            site_id=site_id,
+            details={k: ("***REDACTED***" if k == "x_password" else v) for k, v in payload.items()},
+        )
+
+        if "x_password" in data:
+            data["x_password"] = "***REDACTED***"
+
+        return RADIUSAccount(**data).model_dump()  # type: ignore[no-any-return]
+
+
 async def delete_radius_account(
     site_id: str,
     account_id: str,
@@ -741,6 +866,132 @@ async def create_hotspot_package(
             resource_id=data.get("_id", "unknown"),
             site_id=site_id,
             details={"name": name, "duration_minutes": duration_minutes},
+        )
+
+        return HotspotPackage(**data).model_dump()  # type: ignore[no-any-return]
+
+
+async def get_hotspot_package(
+    site_id: str,
+    package_id: str,
+    settings: Settings,
+) -> dict:
+    """Get details for a specific hotspot package.
+
+    Args:
+        site_id: Site identifier
+        package_id: Hotspot package ID
+        settings: Application settings
+
+    Returns:
+        Hotspot package details
+    """
+    async with UniFiClient(settings) as client:
+        logger.info(f"Getting hotspot package {package_id} for site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        response = await client.get(
+            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}"
+        )
+        data = response if isinstance(response, list) else response.get("data", response)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        if not data:
+            return {}
+
+        return HotspotPackage(**data).model_dump()  # type: ignore[no-any-return]
+
+
+async def update_hotspot_package(
+    site_id: str,
+    package_id: str,
+    settings: Settings,
+    name: str | None = None,
+    duration_minutes: int | None = None,
+    download_limit_kbps: int | None = None,
+    upload_limit_kbps: int | None = None,
+    download_quota_mb: int | None = None,
+    upload_quota_mb: int | None = None,
+    price: float | None = None,
+    currency: str | None = None,
+    enabled: bool | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing hotspot package.
+
+    Args:
+        site_id: Site identifier
+        package_id: Hotspot package ID
+        settings: Application settings
+        name: Package name
+        duration_minutes: Duration in minutes
+        download_limit_kbps: Download speed limit in kbps
+        upload_limit_kbps: Upload speed limit in kbps
+        download_quota_mb: Download quota in MB
+        upload_quota_mb: Upload quota in MB
+        price: Package price
+        currency: Currency code
+        enabled: Package enabled status
+        confirm: Confirmation flag (required)
+        dry_run: If True, validate but don't execute
+
+    Returns:
+        Updated hotspot package
+    """
+    validate_confirmation(confirm, "update hotspot package", dry_run)
+
+    payload: dict[str, Any] = {}
+
+    if name is not None:
+        payload["name"] = name
+    if duration_minutes is not None:
+        payload["duration_minutes"] = duration_minutes
+    if download_limit_kbps is not None:
+        payload["download_limit_kbps"] = download_limit_kbps
+    if upload_limit_kbps is not None:
+        payload["upload_limit_kbps"] = upload_limit_kbps
+    if download_quota_mb is not None:
+        payload["download_quota_mb"] = download_quota_mb
+    if upload_quota_mb is not None:
+        payload["upload_quota_mb"] = upload_quota_mb
+    if price is not None:
+        payload["price"] = price
+    if currency is not None:
+        payload["currency"] = currency
+    if enabled is not None:
+        payload["enabled"] = enabled
+
+    if not payload and not dry_run:
+        raise ValueError("At least one field must be provided to update.")
+
+    async with UniFiClient(settings) as client:
+        logger.info(f"Updating hotspot package {package_id} for site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        if dry_run:
+            logger.info(f"[DRY RUN] Would update hotspot package with payload: {payload}")
+            return {"dry_run": True, "package_id": package_id, "payload": payload}
+
+        response = await client.put(
+            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}", json_data=payload
+        )
+        data = response if isinstance(response, list) else response.get("data", response)
+        if isinstance(data, list):
+            data = data[0] if data else {}
+
+        await audit_action(
+            settings,
+            action_type="update_hotspot_package",
+            resource_type="hotspot_package",
+            resource_id=package_id,
+            site_id=site_id,
+            details=payload,
         )
 
         return HotspotPackage(**data).model_dump()  # type: ignore[no-any-return]

@@ -13,10 +13,14 @@ from src.tools.radius import (
     delete_radius_account,
     delete_radius_profile,
     get_guest_portal_config,
+    get_hotspot_package,
+    get_radius_account,
     get_radius_profile,
     list_hotspot_packages,
     list_radius_accounts,
     list_radius_profiles,
+    update_hotspot_package,
+    update_radius_account,
     update_radius_profile,
 )
 from src.utils.exceptions import ValidationError
@@ -1395,3 +1399,561 @@ async def test_delete_hotspot_package_no_confirm(mock_settings):
             settings=mock_settings,
             confirm=False,
         )
+
+
+# =============================================================================
+# RADIUS Account - get and update (new P2 operations)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_radius_account_success(mock_settings):
+    """Test successful retrieval of a single RADIUS account."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "acct-1",
+                "name": "alice",
+                "x_password": "secret",
+                "enabled": True,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+        )
+
+        assert result["name"] == "alice"
+        assert result["password"] == "***REDACTED***"
+        mock_client.get.assert_called_once_with("/ea/sites/default/rest/account/acct-1")
+
+
+@pytest.mark.asyncio
+async def test_get_radius_account_list_response(mock_settings):
+    """Test get radius account when API returns a list directly."""
+    mock_response = [
+        {
+            "_id": "acct-2",
+            "name": "bob",
+            "x_password": "hunter2",
+            "enabled": True,
+            "site_id": "default",
+        }
+    ]
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_radius_account(
+            site_id="default",
+            account_id="acct-2",
+            settings=mock_settings,
+        )
+
+        assert result["name"] == "bob"
+        assert result["password"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_get_radius_account_empty_response(mock_settings):
+    """Test get radius account when API returns empty list."""
+    mock_response = {"data": []}
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_radius_account(
+            site_id="default",
+            account_id="nonexistent",
+            settings=mock_settings,
+        )
+
+        assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_username_only(mock_settings):
+    """Test update radius account with username change only."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "acct-1",
+                "name": "bob",
+                "x_password": "secret",
+                "enabled": True,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="bob",
+            confirm=True,
+        )
+
+        assert result["name"] == "bob"
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert call_kwargs == {"name": "bob"}
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_vlan(mock_settings):
+    """Test update radius account sets correct API field names for VLAN."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "acct-1",
+                "name": "alice",
+                "x_password": "secret",
+                "enabled": True,
+                "vlan": 10,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            vlan_id=10,
+            confirm=True,
+        )
+
+        assert result["vlan_id"] == 10
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert call_kwargs == {"vlan": 10}
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_no_confirm(mock_settings):
+    """Test update radius account requires confirmation."""
+    with pytest.raises(ValidationError, match="requires confirmation"):
+        await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="newname",
+            confirm=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_dry_run(mock_settings):
+    """Test update radius account dry run does not call API."""
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="dryuser",
+            password="s3cr3t",
+            confirm=True,
+            dry_run=True,
+        )
+
+        assert result["dry_run"] is True
+        assert result["account_id"] == "acct-1"
+        assert result["payload"]["name"] == "dryuser"
+        assert result["payload"]["x_password"] == "***REDACTED***"
+        mock_client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_all_fields(mock_settings):
+    """Test update radius account with all optional fields."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "acct-1",
+                "name": "alice",
+                "x_password": "newpass",
+                "enabled": False,
+                "vlan": 20,
+                "tunnel_type": 13,
+                "tunnel_medium_type": 6,
+                "note": "updated",
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="alice",
+            password="newpass",
+            vlan_id=20,
+            tunnel_type=13,
+            tunnel_medium_type=6,
+            enabled=False,
+            note="updated",
+            confirm=True,
+        )
+
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert "name" in call_kwargs
+        assert "x_password" in call_kwargs
+        assert call_kwargs["vlan"] == 20
+        assert call_kwargs["enabled"] is False
+        assert call_kwargs["note"] == "updated"
+        assert result["password"] == "***REDACTED***"
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_no_fields_raises(mock_settings):
+    """Test update radius account with no fields raises ValueError before opening connection."""
+    with pytest.raises(ValueError, match="At least one field"):
+        await update_radius_account(
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+# =============================================================================
+# Hotspot Package - get and update (new P2 operations)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_get_hotspot_package_success(mock_settings):
+    """Test successful retrieval of a single hotspot package."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "package-1",
+                "name": "1 Hour",
+                "duration_minutes": 60,
+                "enabled": True,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+        )
+
+        assert result["name"] == "1 Hour"
+        assert result["duration_minutes"] == 60
+        mock_client.get.assert_called_once_with(
+            "/integration/v1/sites/default/hotspot/packages/package-1"
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_hotspot_package_list_response(mock_settings):
+    """Test get hotspot package when API returns a list directly."""
+    mock_response = [
+        {
+            "_id": "package-2",
+            "name": "Day Pass",
+            "duration_minutes": 1440,
+            "enabled": True,
+            "site_id": "default",
+        }
+    ]
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_hotspot_package(
+            site_id="default",
+            package_id="package-2",
+            settings=mock_settings,
+        )
+
+        assert result["name"] == "Day Pass"
+        assert result["duration_minutes"] == 1440
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_name_only(mock_settings):
+    """Test update hotspot package with name change only."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "package-1",
+                "name": "Renamed Package",
+                "duration_minutes": 60,
+                "enabled": True,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            name="Renamed Package",
+            confirm=True,
+        )
+
+        assert result["name"] == "Renamed Package"
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert call_kwargs == {"name": "Renamed Package"}
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_bandwidth_limits(mock_settings):
+    """Test update hotspot package with bandwidth limits."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "package-1",
+                "name": "Limited",
+                "duration_minutes": 60,
+                "download_limit_kbps": 1024,
+                "upload_limit_kbps": 512,
+                "enabled": True,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            download_limit_kbps=1024,
+            upload_limit_kbps=512,
+            confirm=True,
+        )
+
+        assert result["download_limit_kbps"] == 1024
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert call_kwargs == {"download_limit_kbps": 1024, "upload_limit_kbps": 512}
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_no_confirm(mock_settings):
+    """Test update hotspot package requires confirmation."""
+    with pytest.raises(ValidationError, match="requires confirmation"):
+        await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            name="New Name",
+            confirm=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_dry_run(mock_settings):
+    """Test update hotspot package dry run does not call API."""
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            name="Preview Name",
+            duration_minutes=30,
+            confirm=True,
+            dry_run=True,
+        )
+
+        assert result["dry_run"] is True
+        assert result["package_id"] == "package-1"
+        assert result["payload"]["name"] == "Preview Name"
+        assert result["payload"]["duration_minutes"] == 30
+        mock_client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_no_fields_raises(mock_settings):
+    """Test update hotspot package with no fields raises ValueError before opening connection."""
+    with pytest.raises(ValueError, match="At least one field"):
+        await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_all_fields(mock_settings):
+    """Test update hotspot package with all optional fields."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "package-1",
+                "name": "Full Package",
+                "duration_minutes": 120,
+                "download_limit_kbps": 2048,
+                "upload_limit_kbps": 1024,
+                "download_quota_mb": 500,
+                "upload_quota_mb": 200,
+                "price": 4.99,
+                "currency": "EUR",
+                "enabled": False,
+                "site_id": "default",
+            }
+        ]
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            name="Full Package",
+            duration_minutes=120,
+            download_limit_kbps=2048,
+            upload_limit_kbps=1024,
+            download_quota_mb=500,
+            upload_quota_mb=200,
+            price=4.99,
+            currency="EUR",
+            enabled=False,
+            confirm=True,
+        )
+
+        call_kwargs = mock_client.put.call_args[1]["json_data"]
+        assert call_kwargs["name"] == "Full Package"
+        assert call_kwargs["duration_minutes"] == 120
+        assert call_kwargs["download_quota_mb"] == 500
+        assert call_kwargs["upload_quota_mb"] == 200
+        assert call_kwargs["price"] == 4.99
+        assert call_kwargs["currency"] == "EUR"
+        assert call_kwargs["enabled"] is False
+        assert result["download_limit_kbps"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_get_hotspot_package_empty_response(mock_settings):
+    """Test get hotspot package when API returns empty list."""
+    mock_response = {"data": []}
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_hotspot_package(
+            site_id="default",
+            package_id="nonexistent",
+            settings=mock_settings,
+        )
+
+        assert result == {}

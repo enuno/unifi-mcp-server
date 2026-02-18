@@ -1213,6 +1213,12 @@ async def list_radius_accounts(site_id: str) -> list[dict]:
 
 
 @mcp.tool()
+async def get_radius_account(site_id: str, account_id: str) -> dict:
+    """Get details for a specific RADIUS account."""
+    return await radius_tools.get_radius_account(site_id, account_id, settings)
+
+
+@mcp.tool()
 async def create_radius_account(
     site_id: str,
     username: str,
@@ -1235,6 +1241,40 @@ async def create_radius_account(
         username=username,
         password=password,
         settings=settings,
+        vlan_id=vlan_id,
+        tunnel_type=tunnel_type,
+        tunnel_medium_type=tunnel_medium_type,
+        enabled=enabled,
+        note=note,
+        confirm=confirm,
+        dry_run=dry_run,
+    )
+
+
+@mcp.tool()
+async def update_radius_account(
+    site_id: str,
+    account_id: str,
+    username: str | None = None,
+    password: str | None = None,
+    vlan_id: int | None = None,
+    tunnel_type: int | None = None,
+    tunnel_medium_type: int | None = None,
+    enabled: bool | None = None,
+    note: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing RADIUS account (requires confirm=True).
+
+    At least one updatable field must be provided. For VLAN assignment, set vlan_id.
+    """
+    return await radius_tools.update_radius_account(
+        site_id=site_id,
+        account_id=account_id,
+        settings=settings,
+        username=username,
+        password=password,
         vlan_id=vlan_id,
         tunnel_type=tunnel_type,
         tunnel_medium_type=tunnel_medium_type,
@@ -1299,6 +1339,12 @@ async def list_hotspot_packages(site_id: str) -> list[dict]:
 
 
 @mcp.tool()
+async def get_hotspot_package(site_id: str, package_id: str) -> dict:
+    """Get details for a specific hotspot package."""
+    return await radius_tools.get_hotspot_package(site_id, package_id, settings)
+
+
+@mcp.tool()
 async def create_hotspot_package(
     site_id: str,
     name: str,
@@ -1326,6 +1372,44 @@ async def create_hotspot_package(
         currency,
         confirm,
         dry_run,
+    )
+
+
+@mcp.tool()
+async def update_hotspot_package(
+    site_id: str,
+    package_id: str,
+    name: str | None = None,
+    duration_minutes: int | None = None,
+    download_limit_kbps: int | None = None,
+    upload_limit_kbps: int | None = None,
+    download_quota_mb: int | None = None,
+    upload_quota_mb: int | None = None,
+    price: float | None = None,
+    currency: str | None = None,
+    enabled: bool | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing hotspot package (requires confirm=True).
+
+    At least one updatable field must be provided.
+    """
+    return await radius_tools.update_hotspot_package(
+        site_id=site_id,
+        package_id=package_id,
+        settings=settings,
+        name=name,
+        duration_minutes=duration_minutes,
+        download_limit_kbps=download_limit_kbps,
+        upload_limit_kbps=upload_limit_kbps,
+        download_quota_mb=download_quota_mb,
+        upload_quota_mb=upload_quota_mb,
+        price=price,
+        currency=currency,
+        enabled=enabled,
+        confirm=confirm,
+        dry_run=dry_run,
     )
 
 

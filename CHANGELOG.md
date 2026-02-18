@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-02-18
+
+### Fixed
+
+- **QoS Tools**: Fixed runtime `TypeError` in 6 `audit_action` calls in `qos.py` that incorrectly used `action=` keyword argument instead of the required `action_type=`. Affected `create_qos_profile`, `update_qos_profile`, `configure_smart_queue`, `disable_smart_queue`, `create_traffic_route`, `update_traffic_route`. Would have crashed at runtime whenever audit logging was enabled.
+- **Site Manager**: Removed duplicate `@require_site_manager` decorator on `get_sdwan_config_status` (was applied twice — redundant and confusing).
+- **Topology Tests**: Fixed 6 `RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited` warnings in the topology test suite. Root cause: 6 tests called `client.settings.get_integration_path()` through an auto-created `AsyncMock` (because `mock_instance.settings` was not set). Fixed by adding `mock_instance.settings = mock_settings` to each affected test.
+- **Backup Client**: Added 3 missing methods to `UniFiClient` that `backups.py` calls at runtime:
+  - `get_restore_status(operation_id)` — returns `not_supported` stub (endpoint not in UniFi API)
+  - `configure_backup_schedule(...)` — `PUT /proxy/network/api/s/{site}/rest/backup/schedule`
+  - `get_backup_schedule(site_id)` — `GET /proxy/network/api/s/{site}/rest/backup/schedule`
+  Previously these silently fell back to an `AttributeError` handler in `backups.py`.
+
+### Tests
+
+- Added `TestUniFiClientBackupMethods` with 5 tests covering the new backup client methods.
+- Test count: 1,133 passing (up from 1,128).
+- Zero `RuntimeWarning` coroutine warnings (down from 6).
+
 ## [0.2.2] - 2026-02-16
 
 ### 🎉 Feature Release - Port Profile Management & Security Hardening

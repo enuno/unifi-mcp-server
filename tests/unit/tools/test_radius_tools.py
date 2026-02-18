@@ -1967,7 +1967,13 @@ async def test_get_hotspot_package_empty_response(mock_settings):
 @pytest.mark.asyncio
 async def test_get_radius_account_already_authenticated(mock_settings):
     """Cover is_authenticated=True branch and dict (non-list) data response."""
-    mock_response = {"_id": "acct-1", "name": "alice", "x_password": "secret", "enabled": True, "site_id": "default"}
+    mock_response = {
+        "_id": "acct-1",
+        "name": "alice",
+        "x_password": "secret",
+        "enabled": True,
+        "site_id": "default",
+    }
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -1978,7 +1984,9 @@ async def test_get_radius_account_already_authenticated(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await get_radius_account(site_id="default", account_id="acct-1", settings=mock_settings)
+        result = await get_radius_account(
+            site_id="default", account_id="acct-1", settings=mock_settings
+        )
 
         mock_client.authenticate.assert_not_called()
         assert result["name"] == "alice"
@@ -1996,8 +2004,11 @@ async def test_update_radius_account_dry_run_no_password(mock_settings):
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
-            site_id="default", account_id="acct-1", settings=mock_settings,
-            username="nopass", dry_run=True,
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="nopass",
+            dry_run=True,
         )
 
         assert result["dry_run"] is True
@@ -2008,7 +2019,13 @@ async def test_update_radius_account_dry_run_no_password(mock_settings):
 @pytest.mark.asyncio
 async def test_update_radius_account_already_auth_dict_response(mock_settings):
     """Cover is_authenticated=True and dict (non-list) PUT response."""
-    mock_response = {"_id": "acct-1", "name": "alice", "x_password": "secret", "enabled": True, "site_id": "default"}
+    mock_response = {
+        "_id": "acct-1",
+        "name": "alice",
+        "x_password": "secret",
+        "enabled": True,
+        "site_id": "default",
+    }
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -2020,8 +2037,11 @@ async def test_update_radius_account_already_auth_dict_response(mock_settings):
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
-            site_id="default", account_id="acct-1", settings=mock_settings,
-            username="alice", confirm=True,
+            site_id="default",
+            account_id="acct-1",
+            settings=mock_settings,
+            username="alice",
+            confirm=True,
         )
 
         mock_client.authenticate.assert_not_called()
@@ -2032,8 +2052,12 @@ async def test_update_radius_account_already_auth_dict_response(mock_settings):
 async def test_get_hotspot_package_already_authenticated(mock_settings):
     """Cover is_authenticated=True branch and dict (non-list) data response."""
     mock_response = {
-        "_id": "pkg-1", "name": "Basic", "duration_minutes": 60,
-        "download_limit_kbps": 5000, "upload_limit_kbps": 2000, "site_id": "default",
+        "_id": "pkg-1",
+        "name": "Basic",
+        "duration_minutes": 60,
+        "download_limit_kbps": 5000,
+        "upload_limit_kbps": 2000,
+        "site_id": "default",
     }
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
@@ -2045,7 +2069,9 @@ async def test_get_hotspot_package_already_authenticated(mock_settings):
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
 
-        result = await get_hotspot_package(site_id="default", package_id="pkg-1", settings=mock_settings)
+        result = await get_hotspot_package(
+            site_id="default", package_id="pkg-1", settings=mock_settings
+        )
 
         mock_client.authenticate.assert_not_called()
         assert result["name"] == "Basic"
@@ -2055,8 +2081,12 @@ async def test_get_hotspot_package_already_authenticated(mock_settings):
 async def test_update_hotspot_package_already_auth_dict_response(mock_settings):
     """Cover is_authenticated=True and dict PUT response in update_hotspot_package."""
     mock_response = {
-        "_id": "pkg-1", "name": "Updated", "duration_minutes": 120,
-        "download_limit_kbps": 10000, "upload_limit_kbps": 5000, "site_id": "default",
+        "_id": "pkg-1",
+        "name": "Updated",
+        "duration_minutes": 120,
+        "download_limit_kbps": 10000,
+        "upload_limit_kbps": 5000,
+        "site_id": "default",
     }
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
@@ -2069,8 +2099,11 @@ async def test_update_hotspot_package_already_auth_dict_response(mock_settings):
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(
-            site_id="default", package_id="pkg-1", settings=mock_settings,
-            name="Updated", confirm=True,
+            site_id="default",
+            package_id="pkg-1",
+            settings=mock_settings,
+            name="Updated",
+            confirm=True,
         )
 
         mock_client.authenticate.assert_not_called()

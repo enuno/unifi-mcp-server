@@ -533,7 +533,7 @@ class TestUniFiClientBackupMethods:
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
-                result = await client.configure_backup_schedule(
+                await client.configure_backup_schedule(
                     site_id="default",
                     backup_type="network",
                     frequency="daily",
@@ -561,7 +561,7 @@ class TestUniFiClientBackupMethods:
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
-                result = await client.configure_backup_schedule(
+                await client.configure_backup_schedule(
                     site_id="site-uuid",
                     backup_type="network",
                     frequency="weekly",

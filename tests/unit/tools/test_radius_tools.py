@@ -1957,3 +1957,121 @@ async def test_get_hotspot_package_empty_response(mock_settings):
         )
 
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage: already-authenticated, dict responses, missing fields
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_radius_account_already_authenticated(mock_settings):
+    """Cover is_authenticated=True branch and dict (non-list) data response."""
+    mock_response = {"_id": "acct-1", "name": "alice", "x_password": "secret", "enabled": True, "site_id": "default"}
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_radius_account(site_id="default", account_id="acct-1", settings=mock_settings)
+
+        mock_client.authenticate.assert_not_called()
+        assert result["name"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_dry_run_no_password(mock_settings):
+    """Cover False branch of 'if x_password in payload_safe' in dry_run."""
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default", account_id="acct-1", settings=mock_settings,
+            username="nopass", dry_run=True,
+        )
+
+        assert result["dry_run"] is True
+        assert "x_password" not in result["payload"]
+        mock_client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_radius_account_already_auth_dict_response(mock_settings):
+    """Cover is_authenticated=True and dict (non-list) PUT response."""
+    mock_response = {"_id": "acct-1", "name": "alice", "x_password": "secret", "enabled": True, "site_id": "default"}
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_radius_account(
+            site_id="default", account_id="acct-1", settings=mock_settings,
+            username="alice", confirm=True,
+        )
+
+        mock_client.authenticate.assert_not_called()
+        assert result["name"] == "alice"
+
+
+@pytest.mark.asyncio
+async def test_get_hotspot_package_already_authenticated(mock_settings):
+    """Cover is_authenticated=True branch and dict (non-list) data response."""
+    mock_response = {
+        "_id": "pkg-1", "name": "Basic", "duration_minutes": 60,
+        "download_limit_kbps": 5000, "upload_limit_kbps": 2000, "site_id": "default",
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await get_hotspot_package(site_id="default", package_id="pkg-1", settings=mock_settings)
+
+        mock_client.authenticate.assert_not_called()
+        assert result["name"] == "Basic"
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_already_auth_dict_response(mock_settings):
+    """Cover is_authenticated=True and dict PUT response in update_hotspot_package."""
+    mock_response = {
+        "_id": "pkg-1", "name": "Updated", "duration_minutes": 120,
+        "download_limit_kbps": 10000, "upload_limit_kbps": 5000, "site_id": "default",
+    }
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.authenticate = AsyncMock()
+        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await update_hotspot_package(
+            site_id="default", package_id="pkg-1", settings=mock_settings,
+            name="Updated", confirm=True,
+        )
+
+        mock_client.authenticate.assert_not_called()
+        assert result["name"] == "Updated"

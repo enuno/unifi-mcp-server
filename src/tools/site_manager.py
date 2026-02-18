@@ -586,7 +586,6 @@ async def get_sdwan_config(settings: Settings, config_id: str) -> dict[str, Any]
 
 
 @require_site_manager
-@require_site_manager
 async def get_sdwan_config_status(settings: Settings, config_id: str) -> dict[str, Any]:
     """Get SD-WAN configuration deployment status.
 

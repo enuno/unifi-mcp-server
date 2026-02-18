@@ -202,7 +202,7 @@ async def create_qos_profile(
 
         await audit_action(
             settings,
-            action="create_qos_profile",
+            action_type="create_qos_profile",
             resource_type="qos_profile",
             resource_id=result.get("id", "unknown"),
             details={
@@ -309,7 +309,7 @@ async def update_qos_profile(
 
         await audit_action(
             settings,
-            action="update_qos_profile",
+            action_type="update_qos_profile",
             resource_type="qos_profile",
             resource_id=profile_id,
             details=update_data,
@@ -718,7 +718,7 @@ async def configure_smart_queue(
 
         await audit_action(
             settings,
-            action="configure_smart_queue",
+            action_type="configure_smart_queue",
             resource_type="wan_config",
             resource_id=wan_id,
             details=sqm_config,
@@ -770,7 +770,7 @@ async def disable_smart_queue(
 
         await audit_action(
             settings,
-            action="disable_smart_queue",
+            action_type="disable_smart_queue",
             resource_type="wan_config",
             resource_id=wan_id,
             details={"sqm_enabled": False},
@@ -934,7 +934,7 @@ async def create_traffic_route(
 
         await audit_action(
             settings,
-            action="create_traffic_route",
+            action_type="create_traffic_route",
             resource_type="traffic_route",
             resource_id=result.get("id", "unknown"),
             details={"name": name, "action": action},
@@ -1015,7 +1015,7 @@ async def update_traffic_route(
 
         await audit_action(
             settings,
-            action="update_traffic_route",
+            action_type="update_traffic_route",
             resource_type="traffic_route",
             resource_id=route_id,
             details=update_data,

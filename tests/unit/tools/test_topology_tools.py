@@ -142,6 +142,7 @@ class TestGetNetworkTopology:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
             mock_instance.get = AsyncMock(return_value=[])
             mock_settings.get_integration_path.side_effect = lambda x: f"/integration/v1/{x}"
 
@@ -312,6 +313,7 @@ class TestExportTopology:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
 
             def mock_get_side_effect(url):
                 if "devices" in url:
@@ -347,6 +349,7 @@ class TestExportTopology:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
 
             def mock_get_side_effect(url):
                 if "devices" in url:
@@ -375,6 +378,7 @@ class TestExportTopology:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
 
             def mock_get_side_effect(url):
                 if "devices" in url:
@@ -418,6 +422,7 @@ class TestGetTopologyStatistics:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
 
             def mock_get_side_effect(url):
                 if "devices" in url:
@@ -451,6 +456,7 @@ class TestGetTopologyStatistics:
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
             mock_instance.get = AsyncMock(return_value=[])
             mock_settings.get_integration_path.side_effect = lambda x: f"/integration/v1/{x}"
 

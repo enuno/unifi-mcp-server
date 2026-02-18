@@ -511,12 +511,13 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
-    async def test_get_restore_status_returns_completed(self, mock_settings):
-        """get_restore_status returns a completed-status dict."""
+    async def test_get_restore_status_returns_not_supported(self, mock_settings):
+        """get_restore_status returns a not_supported status (endpoint not in UniFi API)."""
         client = UniFiClient(mock_settings)
         result = await client.get_restore_status(operation_id="op-123")
-        assert result["status"] == "completed"
+        assert result["status"] == "not_supported"
         assert result["operation_id"] == "op-123"
+        assert "message" in result
         await client.close()
 
     @pytest.mark.asyncio

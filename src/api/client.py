@@ -747,8 +747,13 @@ class UniFiClient:
             Operation status including progress, step, and any errors
         """
         # UniFi does not expose a dedicated restore-status endpoint; return a
-        # sensible default so callers can proceed without an AttributeError.
-        return {"status": "completed", "progress": 100, "operation_id": operation_id}
+        # response that honestly reflects this limitation rather than
+        # falsely claiming the restore is complete.
+        return {
+            "status": "not_supported",
+            "message": "Restore status tracking is not available via the UniFi API.",
+            "operation_id": operation_id,
+        }
 
     async def configure_backup_schedule(
         self,

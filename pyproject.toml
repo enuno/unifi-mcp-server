@@ -1,6 +1,6 @@
 [project]
 name = "unifi-mcp-server"
-version = "0.2.2"
+version = "0.2.4"
 description = "A Model Context Protocol (MCP) server for UniFi Network API"
 authors = [
     {name = "enuno", email = "noreply@github.com"}
@@ -28,7 +28,7 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "PyYAML>=6.0",
     "python-dotenv>=1.0.0",
-    "agnost>=0.1.12",
+    "agnost>=0.1.12,!=0.1.13",
     "mcp[cli]>=1.26.0",
     "cryptography>=46.0.5",
     "urllib3>=2.3.0",

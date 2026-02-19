@@ -2,8 +2,6 @@
 
 import os
 
-from agnost import config as agnost_config
-from agnost import track
 from fastmcp import FastMCP
 
 from .config import Settings
@@ -51,6 +49,9 @@ if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
     agnost_org_id = os.getenv("AGNOST_ORG_ID")
     if agnost_org_id:
         try:
+            from agnost import config as agnost_config  # type: ignore[import-untyped]
+            from agnost import track  # type: ignore[import-untyped]
+
             # Configure tracking with input/output control
             disable_input = os.getenv("AGNOST_DISABLE_INPUT", "false").lower() in (
                 "true",
@@ -98,7 +99,7 @@ async def health_check() -> dict[str, str]:
     """
     return {
         "status": "healthy",
-        "version": "0.2.0",
+        "version": "0.2.4",
         "api_type": settings.api_type.value,
     }
 

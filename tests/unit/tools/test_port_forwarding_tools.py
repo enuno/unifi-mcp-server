@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import src.tools.port_forwarding as pf_module
-from src.tools.port_forwarding import create_port_forward, delete_port_forward, list_port_forwards
+from src.tools.port_forwarding import (
+    create_port_forward,
+    update_port_forward,
+    delete_port_forward,
+    list_port_forwards,
+)
 from src.utils.exceptions import ResourceNotFoundError, ValidationError
 
 
@@ -322,6 +327,227 @@ async def test_create_port_forward_with_logging(mock_settings):
     call_args = mock_client.post.call_args
     json_data = call_args[1]["json_data"]
     assert json_data["log"] is True
+
+
+# =============================================================================
+# update_port_forward Tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_name_success(mock_settings):
+    """Test updating port forward name."""
+    existing_rule = {
+        "_id": "pf1",
+        "name": "Old Name",
+        "dst_port": "80",
+        "fwd": "192.168.2.100",
+        "fwd_port": "80",
+        "proto": "tcp_udp",
+        "src": "any",
+        "enabled": True,
+        "log": False,
+    }
+    updated_rule = {**existing_rule, "name": "New Name"}
+    mock_get_response = {"data": [existing_rule]}
+    mock_put_response = {"data": [updated_rule]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client.put = AsyncMock(return_value=mock_put_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(pf_module, "UniFiClient", return_value=mock_client):
+        result = await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            name="New Name",
+            confirm=True,
+        )
+
+    assert result["name"] == "New Name"
+    put_args = mock_client.put.call_args[1]["json_data"]
+    assert put_args["name"] == "New Name"
+    assert put_args["dst_port"] == "80"  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_multiple_fields(mock_settings):
+    """Test updating multiple port forward fields at once."""
+    existing_rule = {
+        "_id": "pf1",
+        "name": "Web",
+        "dst_port": "80",
+        "fwd": "192.168.2.100",
+        "fwd_port": "80",
+        "proto": "tcp",
+        "src": "any",
+        "enabled": True,
+        "log": False,
+    }
+    mock_get_response = {"data": [existing_rule]}
+    mock_put_response = [
+        {**existing_rule, "dst_port": "8080", "fwd": "192.168.2.200", "fwd_port": "8080"}
+    ]
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client.put = AsyncMock(return_value=mock_put_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(pf_module, "UniFiClient", return_value=mock_client):
+        result = await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            dst_port=8080,
+            fwd_ip="192.168.2.200",
+            fwd_port=8080,
+            confirm=True,
+        )
+
+    put_args = mock_client.put.call_args[1]["json_data"]
+    assert put_args["dst_port"] == "8080"
+    assert put_args["fwd"] == "192.168.2.200"
+    assert put_args["fwd_port"] == "8080"
+    assert put_args["proto"] == "tcp"  # unchanged
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_dry_run(mock_settings):
+    """Test port forward update dry run."""
+    result = await update_port_forward(
+        site_id="default",
+        rule_id="pf1",
+        settings=mock_settings,
+        name="New Name",
+        confirm=True,
+        dry_run=True,
+    )
+
+    assert result["dry_run"] is True
+    assert result["would_update"]["rule_id"] == "pf1"
+    assert result["would_update"]["name"] == "New Name"
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_not_found(mock_settings):
+    """Test updating a non-existent port forward."""
+    mock_get_response = {"data": []}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(pf_module, "UniFiClient", return_value=mock_client):
+        with pytest.raises(ResourceNotFoundError):
+            await update_port_forward(
+                site_id="default",
+                rule_id="nonexistent",
+                settings=mock_settings,
+                name="New Name",
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_no_confirm(mock_settings):
+    """Test port forward update fails without confirmation."""
+    with pytest.raises(ValidationError) as excinfo:
+        await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            name="New Name",
+            confirm=False,
+        )
+
+    assert "requires confirmation" in str(excinfo.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_invalid_protocol(mock_settings):
+    """Test update fails with invalid protocol."""
+    with pytest.raises(ValidationError) as excinfo:
+        await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            protocol="invalid",
+            confirm=True,
+        )
+
+    assert "Invalid protocol" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_invalid_port(mock_settings):
+    """Test update fails with invalid port."""
+    with pytest.raises(ValidationError):
+        await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            dst_port=99999,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_invalid_ip(mock_settings):
+    """Test update fails with invalid IP address."""
+    with pytest.raises(ValidationError):
+        await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            fwd_ip="not-an-ip",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_enable_disable(mock_settings):
+    """Test enabling and disabling a port forward rule."""
+    existing_rule = {
+        "_id": "pf1",
+        "name": "Web",
+        "dst_port": "80",
+        "fwd": "192.168.2.100",
+        "fwd_port": "80",
+        "proto": "tcp_udp",
+        "src": "any",
+        "enabled": True,
+        "log": False,
+    }
+    mock_get_response = {"data": [existing_rule]}
+    mock_put_response = {"data": [{**existing_rule, "enabled": False}]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_get_response)
+    mock_client.put = AsyncMock(return_value=mock_put_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(pf_module, "UniFiClient", return_value=mock_client):
+        await update_port_forward(
+            site_id="default",
+            rule_id="pf1",
+            settings=mock_settings,
+            enabled=False,
+            confirm=True,
+        )
+
+    put_args = mock_client.put.call_args[1]["json_data"]
+    assert put_args["enabled"] is False
 
 
 # =============================================================================

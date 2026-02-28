@@ -935,6 +935,39 @@ async def create_port_forward(
 
 
 @mcp.tool()
+async def update_port_forward(
+    site_id: str,
+    rule_id: str,
+    name: str | None = None,
+    dst_port: int | None = None,
+    fwd_ip: str | None = None,
+    fwd_port: int | None = None,
+    protocol: str | None = None,
+    src: str | None = None,
+    enabled: bool | None = None,
+    log: bool | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing port forwarding rule (requires confirm=True)."""
+    return await port_fwd_tools.update_port_forward(
+        site_id,
+        rule_id,
+        settings,
+        name,
+        dst_port,
+        fwd_ip,
+        fwd_port,
+        protocol,
+        src,
+        enabled,
+        log,
+        confirm,
+        dry_run,
+    )
+
+
+@mcp.tool()
 async def delete_port_forward(
     site_id: str, rule_id: str, confirm: bool | str = False, dry_run: bool | str = False
 ) -> dict:

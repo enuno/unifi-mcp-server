@@ -5,7 +5,13 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models import Network
-from ..utils import ResourceNotFoundError, get_logger, validate_limit_offset, validate_site_id
+from ..utils import (
+    ResourceNotFoundError,
+    get_logger,
+    sanitize_log_message,
+    validate_limit_offset,
+    validate_site_id,
+)
 
 
 async def get_network_details(site_id: str, network_id: str, settings: Settings) -> dict[str, Any]:
@@ -34,7 +40,7 @@ async def get_network_details(site_id: str, network_id: str, settings: Settings)
         for network_data in networks_data:
             if network_data.get("_id") == network_id:
                 network = Network(**network_data)
-                logger.info(f"Retrieved network details for {network_id}")
+                logger.info(sanitize_log_message(f"Retrieved network details for {network_id}"))
                 return network.model_dump()  # type: ignore[no-any-return]
 
         raise ResourceNotFoundError("network", network_id)
@@ -69,7 +75,7 @@ async def list_vlans(
 
         # Return all networks (not just those with vlan_id set)
         # Local gateway API may not populate vlan_id for all network types
-        logger.debug(f"Found {len(networks_data)} networks before pagination")
+        logger.debug(sanitize_log_message(f"Found {len(networks_data)} networks before pagination"))
 
         # Apply pagination
         paginated = networks_data[offset : offset + limit]
@@ -77,7 +83,7 @@ async def list_vlans(
         # Parse into Network models
         networks = [Network(**n).model_dump() for n in paginated]
 
-        logger.info(f"Retrieved {len(networks)} VLANs for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(networks)} VLANs for site '{site_id}'"))
         return networks
 
 
@@ -123,7 +129,7 @@ async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> 
                     "dhcpd_gateway": network_data.get("dhcpd_gateway"),
                     "domain_name": network_data.get("domain_name"),
                 }
-                logger.info(f"Retrieved subnet info for network {network_id}")
+                logger.info(sanitize_log_message(f"Retrieved subnet info for network {network_id}"))
                 return subnet_info
 
         raise ResourceNotFoundError("network", network_id)
@@ -186,5 +192,5 @@ async def get_network_statistics(site_id: str, settings: Settings) -> dict[str, 
                 }
             )
 
-        logger.info(f"Retrieved network statistics for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved network statistics for site '{site_id}'"))
         return {"site_id": site_id, "networks": network_stats}

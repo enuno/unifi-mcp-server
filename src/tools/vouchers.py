@@ -5,7 +5,7 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import Voucher
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
 
 logger = get_logger(__name__)
 
@@ -30,7 +30,7 @@ async def list_vouchers(
         List of vouchers
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing vouchers for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing vouchers for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -61,7 +61,7 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
         Voucher details
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting voucher {voucher_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting voucher {voucher_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -106,7 +106,7 @@ async def create_vouchers(
     validate_confirmation(confirm, "create vouchers", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating {count} vouchers for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating {count} vouchers for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -129,7 +129,7 @@ async def create_vouchers(
             payload["note"] = note
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create vouchers with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create {count} vouchers for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         response = await client.post(f"/integration/v1/sites/{site_id}/vouchers", json_data=payload)
@@ -174,13 +174,13 @@ async def delete_voucher(
     validate_confirmation(confirm, "delete voucher", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting voucher {voucher_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting voucher {voucher_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete voucher {voucher_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete voucher {voucher_id}"))
             return {"dry_run": True, "voucher_id": voucher_id}
 
         await client.delete(f"/integration/v1/sites/{site_id}/vouchers/{voucher_id}")
@@ -220,13 +220,13 @@ async def bulk_delete_vouchers(
     validate_confirmation(confirm, "bulk delete vouchers", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Bulk deleting vouchers for site {site_id} with filter: {filter_expr}")
+        logger.info(sanitize_log_message(f"Bulk deleting vouchers for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would bulk delete vouchers with filter: {filter_expr}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would bulk delete vouchers for site {site_id}"))
             return {"dry_run": True, "filter": filter_expr}
 
         params = {"filter": filter_expr}

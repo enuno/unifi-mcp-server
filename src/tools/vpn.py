@@ -5,7 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.vpn import VPNServer, VPNTunnel
-from ..utils import get_logger, validate_limit_offset, validate_site_id
+from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
 
 
 async def list_vpn_tunnels(
@@ -38,7 +38,7 @@ async def list_vpn_tunnels(
         # Apply pagination
         paginated = tunnels_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} VPN tunnels for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} VPN tunnels for site '{site_id}'"))
         return [VPNTunnel(**tunnel).model_dump() for tunnel in paginated]
 
 
@@ -72,5 +72,5 @@ async def list_vpn_servers(
         # Apply pagination
         paginated = servers_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} VPN servers for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} VPN servers for site '{site_id}'"))
         return [VPNServer(**server).model_dump() for server in paginated]

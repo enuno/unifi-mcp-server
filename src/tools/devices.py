@@ -9,6 +9,7 @@ from ..utils import (
     ResourceNotFoundError,
     audit_action,
     get_logger,
+    sanitize_log_message,
     validate_confirmation,
     validate_device_id,
     validate_limit_offset,
@@ -44,7 +45,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         for device_data in devices_data:
             if device_data.get("_id") == device_id:
                 device = Device(**device_data)
-                logger.info(f"Retrieved device details for {device_id}")
+                logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
                 return device.model_dump()  # type: ignore[no-any-return]
 
         raise ResourceNotFoundError("device", device_id)
@@ -85,7 +86,7 @@ async def get_device_statistics(site_id: str, device_id: str, settings: Settings
                     "state": device_data.get("state"),
                     "uplink_depth": device_data.get("uplink_depth"),
                 }
-                logger.info(f"Retrieved statistics for device {device_id}")
+                logger.info(sanitize_log_message(f"Retrieved statistics for device {device_id}"))
                 return stats
 
         raise ResourceNotFoundError("device", device_id)
@@ -135,7 +136,9 @@ async def list_devices_by_type(
         devices = [Device(**d).model_dump() for d in paginated]
 
         logger.info(
-            f"Retrieved {len(devices)} devices of type '{device_type}' " f"for site '{site_id}'"
+            sanitize_log_message(
+                f"Retrieved {len(devices)} devices of type '{device_type}' for site '{site_id}'"
+            )
         )
         return devices
 
@@ -186,7 +189,7 @@ async def search_devices(
         # Parse into Device models
         devices = [Device(**d).model_dump() for d in paginated]
 
-        logger.info(f"Found {len(devices)} devices matching '{query}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"Found {len(devices)} devices matching '{query}' in site '{site_id}'"))
         return devices
 
 
@@ -228,7 +231,7 @@ async def list_pending_devices(
         # Parse into Device models
         devices = [Device(**d).model_dump() for d in devices_data]
 
-        logger.info(f"Retrieved {len(devices)} pending devices for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(devices)} pending devices for site '{site_id}'"))
         return devices
 
 
@@ -266,7 +269,7 @@ async def adopt_device(
             payload["name"] = name
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would adopt device {device_id} with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would adopt device {device_id}"))
             return {"dry_run": True, "device_id": device_id, "payload": payload}
 
         response = await client.post(
@@ -284,7 +287,7 @@ async def adopt_device(
             details={"name": name} if name else {},
         )
 
-        logger.info(f"Successfully adopted device {device_id}")
+        logger.info(sanitize_log_message(f"Successfully adopted device {device_id}"))
         return Device(**data).model_dump()  # type: ignore[no-any-return]
 
 
@@ -325,7 +328,9 @@ async def execute_port_action(
 
         if dry_run:
             logger.info(
-                f"[DRY RUN] Would execute port action '{action}' on device {device_id} port {port_idx}"
+                sanitize_log_message(
+                    f"[DRY RUN] Would execute port action '{action}' on device {device_id} port {port_idx}"
+                )
             )
             return {
                 "dry_run": True,
@@ -350,5 +355,5 @@ async def execute_port_action(
             details={"action": action},
         )
 
-        logger.info(f"Successfully executed port action '{action}' on port {port_idx}")
+        logger.info(sanitize_log_message(f"Successfully executed port action '{action}' on port {port_idx}"))
         return {"success": True, "action": action, "port_idx": port_idx, "result": data}

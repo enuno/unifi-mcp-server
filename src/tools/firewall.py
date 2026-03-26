@@ -8,6 +8,7 @@ from ..utils import (
     ResourceNotFoundError,
     get_logger,
     log_audit,
+    sanitize_log_message,
     validate_confirmation,
     validate_limit_offset,
     validate_site_id,
@@ -47,7 +48,7 @@ async def list_firewall_rules(
         # Apply pagination
         paginated = rules_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} firewall rules for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} firewall rules for site '{site_id}'"))
         return paginated
 
 
@@ -172,7 +173,7 @@ async def create_firewall_rule(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would create firewall rule '{name}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would create firewall rule '{name}' in site '{site_id}'"))
         log_audit(
             operation="create_firewall_rule",
             parameters=parameters,
@@ -196,7 +197,7 @@ async def create_firewall_rule(
                 data_list = response.get("data", [{}])
                 created_rule = data_list[0] if isinstance(data_list, list) else {}
 
-            logger.info(f"Created firewall rule '{name}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Created firewall rule '{name}' in site '{site_id}'"))
             log_audit(
                 operation="create_firewall_rule",
                 parameters=parameters,
@@ -207,7 +208,7 @@ async def create_firewall_rule(
             return created_rule
 
     except Exception as e:
-        logger.error(f"Failed to create firewall rule '{name}': {e}")
+        logger.error(sanitize_log_message(f"Failed to create firewall rule '{name}': {e}"))
         log_audit(
             operation="create_firewall_rule",
             parameters=parameters,
@@ -283,7 +284,7 @@ async def update_firewall_rule(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would update firewall rule '{rule_id}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would update firewall rule '{rule_id}' in site '{site_id}'"))
         log_audit(
             operation="update_firewall_rule",
             parameters=parameters,
@@ -341,7 +342,7 @@ async def update_firewall_rule(
                 data_list = response.get("data", [{}])
                 updated_rule = data_list[0] if isinstance(data_list, list) else {}
 
-            logger.info(f"Updated firewall rule '{rule_id}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Updated firewall rule '{rule_id}' in site '{site_id}'"))
             log_audit(
                 operation="update_firewall_rule",
                 parameters=parameters,
@@ -352,7 +353,7 @@ async def update_firewall_rule(
             return updated_rule
 
     except Exception as e:
-        logger.error(f"Failed to update firewall rule '{rule_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to update firewall rule '{rule_id}': {e}"))
         log_audit(
             operation="update_firewall_rule",
             parameters=parameters,
@@ -392,7 +393,7 @@ async def delete_firewall_rule(
     parameters = {"site_id": site_id, "rule_id": rule_id}
 
     if dry_run:
-        logger.info(f"DRY RUN: Would delete firewall rule '{rule_id}' from site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would delete firewall rule '{rule_id}' from site '{site_id}'"))
         log_audit(
             operation="delete_firewall_rule",
             parameters=parameters,
@@ -419,7 +420,7 @@ async def delete_firewall_rule(
 
             response = await client.delete(f"/ea/sites/{site_id}/rest/firewallrule/{rule_id}")
 
-            logger.info(f"Deleted firewall rule '{rule_id}' from site '{site_id}'")
+            logger.info(sanitize_log_message(f"Deleted firewall rule '{rule_id}' from site '{site_id}'"))
             log_audit(
                 operation="delete_firewall_rule",
                 parameters=parameters,
@@ -430,7 +431,7 @@ async def delete_firewall_rule(
             return {"success": True, "deleted_rule_id": rule_id}
 
     except Exception as e:
-        logger.error(f"Failed to delete firewall rule '{rule_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to delete firewall rule '{rule_id}': {e}"))
         log_audit(
             operation="delete_firewall_rule",
             parameters=parameters,

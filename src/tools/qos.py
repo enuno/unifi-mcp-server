@@ -16,7 +16,13 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models.qos_profile import TrafficRoute
-from ..utils import ValidationError, audit_action, get_logger, validate_confirmation
+from ..utils import (
+    ValidationError,
+    audit_action,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+)
 
 logger = get_logger(__name__)
 
@@ -44,7 +50,7 @@ async def list_traffic_routes(
         List of traffic routing policies
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing traffic routes for site {site_id} (limit={limit}, offset={offset})")
+        logger.info(sanitize_log_message(f"Listing traffic routes for site {site_id} (limit={limit}, offset={offset})"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -148,11 +154,11 @@ async def create_traffic_route(
         route_data["bandwidth_limit_kbps"] = bandwidth_limit_kbps
 
     if dry_run:
-        logger.info(f"[DRY RUN] Would create traffic route: {route_data}")
+        logger.info(sanitize_log_message(f"[DRY RUN] Would create traffic route '{name}' for site {site_id}"))
         return {"dry_run": True, "route": route_data}
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating traffic route '{name}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating traffic route '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -227,11 +233,11 @@ async def update_traffic_route(
         raise ValidationError("No update fields provided")
 
     if dry_run:
-        logger.info(f"[DRY RUN] Would update traffic route {route_id}: {update_data}")
+        logger.info(sanitize_log_message(f"[DRY RUN] Would update traffic route {route_id} for site {site_id}"))
         return {"dry_run": True, "route_id": route_id, "updates": update_data}
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating traffic route {route_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating traffic route {route_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -278,7 +284,7 @@ async def delete_traffic_route(
     validate_confirmation(confirm, "delete traffic route")
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting traffic route {route_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting traffic route {route_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()

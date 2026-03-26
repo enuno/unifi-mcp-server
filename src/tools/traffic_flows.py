@@ -20,7 +20,7 @@ from ..models.traffic_flow import (
     FlowStreamUpdate,
     TrafficFlow,
 )
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
 
 logger = get_logger(__name__)
 
@@ -53,7 +53,7 @@ async def get_traffic_flows(
         List of traffic flows
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving traffic flows for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving traffic flows for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -78,7 +78,7 @@ async def get_traffic_flows(
             )
             data = response.get("data", [])
         except Exception as e:
-            logger.warning(f"Traffic flows endpoint not available: {e}")
+            logger.warning(sanitize_log_message(f"Traffic flows endpoint not available: {e}"))
             return []
 
         return [TrafficFlow(**flow).model_dump() for flow in data]
@@ -96,7 +96,7 @@ async def get_flow_statistics(site_id: str, settings: Settings, time_range: str 
         Flow statistics
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving flow statistics for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving flow statistics for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -108,7 +108,7 @@ async def get_flow_statistics(site_id: str, settings: Settings, time_range: str 
             )
             data = response.get("data", response)
         except Exception as e:
-            logger.warning(f"Flow statistics endpoint not available: {e}")
+            logger.warning(sanitize_log_message(f"Flow statistics endpoint not available: {e}"))
             # Return empty statistics
             return FlowStatistics(  # type: ignore[no-any-return]
                 site_id=site_id,
@@ -125,7 +125,7 @@ async def get_flow_statistics(site_id: str, settings: Settings, time_range: str 
 
         # Handle empty response (no traffic data)
         if not data or data == {}:
-            logger.info(f"No flow statistics available for site {site_id}")
+            logger.info(sanitize_log_message(f"No flow statistics available for site {site_id}"))
             return FlowStatistics(  # type: ignore[no-any-return]
                 site_id=site_id,
                 time_range=time_range,
@@ -154,7 +154,7 @@ async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Setting
         Traffic flow details
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving traffic flow {flow_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving traffic flow {flow_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -163,7 +163,7 @@ async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Setting
             response = await client.get(f"/integration/v1/sites/{site_id}/traffic/flows/{flow_id}")
             data = response.get("data", response)
         except Exception as e:
-            logger.warning(f"Traffic flow details endpoint not available: {e}")
+            logger.warning(sanitize_log_message(f"Traffic flow details endpoint not available: {e}"))
             raise
 
         return TrafficFlow(**data).model_dump()  # type: ignore[no-any-return]
@@ -189,7 +189,7 @@ async def get_top_flows(
         List of top flows
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving top flows for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving top flows for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -233,7 +233,7 @@ async def get_flow_risks(
         List of flows with risk assessments
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving flow risks for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving flow risks for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -272,7 +272,7 @@ async def get_flow_trends(
         List of trend data points
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving flow trends for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving flow trends for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -357,7 +357,7 @@ async def stream_traffic_flows(
         Flow stream updates with bandwidth rates
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Starting traffic flow stream for site {site_id}")
+        logger.info(sanitize_log_message(f"Starting traffic flow stream for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -367,7 +367,7 @@ async def stream_traffic_flows(
 
         # Try WebSocket first (if available in future)
         # For now, use polling fallback
-        logger.info(f"Using polling fallback with {interval_seconds}s interval")
+        logger.info(sanitize_log_message(f"Using polling fallback with {interval_seconds}s interval"))
 
         while True:
             try:
@@ -439,7 +439,7 @@ async def stream_traffic_flows(
                 await asyncio.sleep(interval_seconds)
 
             except Exception as e:
-                logger.error(f"Error in flow streaming: {e}")
+                logger.error(sanitize_log_message(f"Error in flow streaming: {e}"))
                 await asyncio.sleep(interval_seconds)
 
 
@@ -459,7 +459,7 @@ async def get_connection_states(
         List of connection states
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving connection states for site {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving connection states for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -519,7 +519,7 @@ async def get_client_flow_aggregation(
         Client flow aggregation data
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Retrieving flow aggregation for client {client_mac}")
+        logger.info(sanitize_log_message(f"Retrieving flow aggregation for client {client_mac}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -623,7 +623,7 @@ async def block_flow_source_ip(
     validate_confirmation(confirm, "block flow source IP", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Blocking source IP from flow {flow_id}")
+        logger.info(sanitize_log_message(f"Blocking source IP from flow {flow_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -648,7 +648,7 @@ async def block_flow_source_ip(
         rule_name = f"Block_{source_ip}_{flow_id[:8]}"
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would block source IP {source_ip}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would block source IP {source_ip}"))
             action_id = str(uuid4())
             return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
@@ -724,7 +724,7 @@ async def block_flow_destination_ip(
     validate_confirmation(confirm, "block flow destination IP", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Blocking destination IP from flow {flow_id}")
+        logger.info(sanitize_log_message(f"Blocking destination IP from flow {flow_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -749,7 +749,7 @@ async def block_flow_destination_ip(
         rule_name = f"Block_{destination_ip}_{flow_id[:8]}"
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would block destination IP {destination_ip}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would block destination IP {destination_ip}"))
             action_id = str(uuid4())
             return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
@@ -825,7 +825,7 @@ async def block_flow_application(
     validate_confirmation(confirm, "block flow application", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Blocking application from flow {flow_id}")
+        logger.info(sanitize_log_message(f"Blocking application from flow {flow_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -842,7 +842,7 @@ async def block_flow_application(
         created_at = datetime.now(timezone.utc).isoformat()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would block application {application_name} ({application_id})")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would block application {application_name} ({application_id})"))
             return BlockFlowAction(  # type: ignore[no-any-return]
                 action_id=action_id,
                 block_type="application",
@@ -880,9 +880,9 @@ async def block_flow_application(
                         confirm=True,
                     )
                     result_zone_id = zone_id
-                    logger.info(f"Blocked application using ZBF in zone {zone_id}")
+                    logger.info(sanitize_log_message(f"Blocked application using ZBF in zone {zone_id}"))
             except Exception as e:
-                logger.warning(f"ZBF blocking failed, falling back to traditional firewall: {e}")
+                logger.warning(sanitize_log_message(f"ZBF blocking failed, falling back to traditional firewall: {e}"))
                 use_zbf = False
 
         # Fallback to traditional firewall rule
@@ -954,7 +954,7 @@ async def export_traffic_flows(
         Exported data as string
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Exporting traffic flows in {export_format} format")
+        logger.info(sanitize_log_message(f"Exporting traffic flows in {export_format} format"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -1017,7 +1017,7 @@ async def get_flow_analytics(
         Comprehensive analytics data
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Generating flow analytics for site {site_id}")
+        logger.info(sanitize_log_message(f"Generating flow analytics for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()

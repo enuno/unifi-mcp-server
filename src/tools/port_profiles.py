@@ -11,6 +11,7 @@ from ..utils import (
     ValidationError,
     get_logger,
     log_audit,
+    sanitize_log_message,
     validate_confirmation,
     validate_limit_offset,
     validate_mac_address,
@@ -53,7 +54,7 @@ async def list_port_profiles(
             for p in paginated
         ]
 
-        logger.info(f"Retrieved {len(profiles)} port profiles for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(profiles)} port profiles for site '{site_id}'"))
         return profiles
 
 
@@ -93,7 +94,7 @@ async def get_port_profile(
             raise ResourceNotFoundError("port_profile", profile_id)
 
         profile = PortProfile.model_validate(raw_profiles[0])
-        logger.info(f"Retrieved port profile '{profile_id}' for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved port profile '{profile_id}' for site '{site_id}'"))
         return profile.model_dump(by_alias=True, exclude_none=True)
 
 
@@ -199,7 +200,7 @@ async def create_port_profile(
                     )
 
             if dry_run:
-                logger.info(f"DRY RUN: Would create port profile '{name}' in site '{site_id}'")
+                logger.info(sanitize_log_message(f"DRY RUN: Would create port profile '{name}' in site '{site_id}'"))
                 log_audit(
                     operation="create_port_profile",
                     parameters=parameters,
@@ -217,7 +218,7 @@ async def create_port_profile(
             else:
                 created = response.get("data", [{}])[0]
 
-            logger.info(f"Created port profile '{name}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Created port profile '{name}' in site '{site_id}'"))
             log_audit(
                 operation="create_port_profile",
                 parameters=parameters,
@@ -230,7 +231,7 @@ async def create_port_profile(
     except (DuplicateResourceError, ValidationError):
         raise
     except Exception as e:
-        logger.error(f"Failed to create port profile '{name}': {e}")
+        logger.error(sanitize_log_message(f"Failed to create port profile '{name}': {e}"))
         log_audit(
             operation="create_port_profile",
             parameters=parameters,
@@ -308,7 +309,7 @@ async def update_port_profile(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would update port profile '{profile_id}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would update port profile '{profile_id}' in site '{site_id}'"))
         log_audit(
             operation="update_port_profile",
             parameters=parameters,
@@ -366,7 +367,7 @@ async def update_port_profile(
             else:
                 updated = response.get("data", [{}])[0]
 
-            logger.info(f"Updated port profile '{profile_id}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Updated port profile '{profile_id}' in site '{site_id}'"))
             log_audit(
                 operation="update_port_profile",
                 parameters=parameters,
@@ -379,7 +380,7 @@ async def update_port_profile(
     except (ResourceNotFoundError, ValidationError):
         raise
     except Exception as e:
-        logger.error(f"Failed to update port profile '{profile_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to update port profile '{profile_id}': {e}"))
         log_audit(
             operation="update_port_profile",
             parameters=parameters,
@@ -421,7 +422,7 @@ async def delete_port_profile(
     parameters = {"site_id": site_id, "profile_id": profile_id}
 
     if dry_run:
-        logger.info(f"DRY RUN: Would delete port profile '{profile_id}' from site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would delete port profile '{profile_id}' from site '{site_id}'"))
         log_audit(
             operation="delete_port_profile",
             parameters=parameters,
@@ -446,7 +447,7 @@ async def delete_port_profile(
 
             await client.delete(f"/ea/sites/{site_id}/rest/portconf/{profile_id}")
 
-            logger.info(f"Deleted port profile '{profile_id}' from site '{site_id}'")
+            logger.info(sanitize_log_message(f"Deleted port profile '{profile_id}' from site '{site_id}'"))
             log_audit(
                 operation="delete_port_profile",
                 parameters=parameters,
@@ -459,7 +460,7 @@ async def delete_port_profile(
     except ResourceNotFoundError:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete port profile '{profile_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to delete port profile '{profile_id}': {e}"))
         log_audit(
             operation="delete_port_profile",
             parameters=parameters,
@@ -511,7 +512,7 @@ async def get_device_port_overrides(
         if not device:
             raise ResourceNotFoundError("device", device_id)
 
-        logger.info(f"Retrieved port overrides for device '{device_id}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved port overrides for device '{device_id}' in site '{site_id}'"))
 
         overrides = [
             PortOverride.model_validate(o).model_dump(exclude_none=True)
@@ -664,7 +665,7 @@ async def set_device_port_overrides(
     except (ResourceNotFoundError, ValidationError):
         raise
     except Exception as e:
-        logger.error(f"Failed to set port overrides on device '{device_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to set port overrides on device '{device_id}': {e}"))
         log_audit(
             operation="set_device_port_overrides",
             parameters=parameters,
@@ -709,5 +710,5 @@ async def get_device_by_mac(
             masked = f"{mac[:8]}:xx:xx:xx" if len(mac) >= 8 else "**:**:**:**:**:**"
             raise ResourceNotFoundError("device", masked)
 
-        logger.info(f"Retrieved device by MAC in site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved device by MAC in site '{site_id}'"))
         return devices[0]

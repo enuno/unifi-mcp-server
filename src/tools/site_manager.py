@@ -20,7 +20,7 @@ from ..models.site_manager import (
     VantagePoint,
     VersionControl,
 )
-from ..utils import get_logger
+from ..utils import get_logger, sanitize_log_message
 
 logger = get_logger(__name__)
 
@@ -85,7 +85,7 @@ async def get_internet_health(settings: Settings, site_id: str | None = None) ->
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving internet health metrics (site_id={site_id})")
+        logger.info(sanitize_log_message(f"Retrieving internet health metrics (site_id={site_id})"))
 
         response = await client.get_internet_health(site_id)
         data = response.get("data", response)
@@ -108,7 +108,7 @@ async def get_site_health_summary(
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving site health summary (site_id={site_id})")
+        logger.info(sanitize_log_message(f"Retrieving site health summary (site_id={site_id})"))
 
         response = await client.get_site_health(site_id)
         # Client now auto-unwraps the "data" field, so response is the actual data
@@ -223,7 +223,7 @@ async def get_site_inventory(
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving site inventory (site_id={site_id})")
+        logger.info(sanitize_log_message(f"Retrieving site inventory (site_id={site_id})"))
 
         if site_id:
             # Get inventory for specific site
@@ -399,7 +399,7 @@ async def search_across_sites(
         raise ValueError(f"search_type must be one of {valid_types}, got '{search_type}'")
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Searching across sites: query='{query}', type={search_type}")
+        logger.info(sanitize_log_message(f"Searching across sites: query='{query}', type={search_type}"))
 
         # Get all sites first
         sites_response = await client.list_sites()
@@ -432,7 +432,7 @@ async def search_across_sites(
                                 }
                             )
                 except Exception as e:
-                    logger.debug(f"Error searching devices in site {site_id}: {e}")
+                    logger.debug(sanitize_log_message(f"Error searching devices in site {site_id}: {e}"))
 
             # Search clients
             if search_type in ["client", "all"]:
@@ -456,7 +456,7 @@ async def search_across_sites(
                                 }
                             )
                 except Exception as e:
-                    logger.debug(f"Error searching clients in site {site_id}: {e}")
+                    logger.debug(sanitize_log_message(f"Error searching clients in site {site_id}: {e}"))
 
             # Search networks
             if search_type in ["network", "all"]:
@@ -474,7 +474,7 @@ async def search_across_sites(
                                 }
                             )
                 except Exception as e:
-                    logger.debug(f"Error searching networks in site {site_id}: {e}")
+                    logger.debug(sanitize_log_message(f"Error searching networks in site {site_id}: {e}"))
 
         search_result = CrossSiteSearchResult(
             total_results=len(results),
@@ -499,7 +499,7 @@ async def get_isp_metrics(settings: Settings, site_id: str) -> dict[str, Any]:
         ISP metrics data including bandwidth, latency, jitter, and packet loss
     """
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving ISP metrics for site: {site_id}")
+        logger.info(sanitize_log_message(f"Retrieving ISP metrics for site: {site_id}"))
 
         response = await client.get_isp_metrics(site_id)
         data = response.get("data", response)
@@ -527,7 +527,7 @@ async def query_isp_metrics(
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Querying ISP metrics (site_id={site_id}, start={start_time}, end={end_time})")
+        logger.info(sanitize_log_message(f"Querying ISP metrics (site_id={site_id}, start={start_time}, end={end_time})"))
 
         response = await client.query_isp_metrics(site_id, start_time, end_time)
         data = response.get("data", response)
@@ -577,7 +577,7 @@ async def get_sdwan_config(settings: Settings, config_id: str) -> dict[str, Any]
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving SD-WAN configuration: {config_id}")
+        logger.info(sanitize_log_message(f"Retrieving SD-WAN configuration: {config_id}"))
 
         response = await client.get_sdwan_config(config_id)
         data = response.get("data", response)
@@ -598,7 +598,7 @@ async def get_sdwan_config_status(settings: Settings, config_id: str) -> dict[st
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving SD-WAN configuration status: {config_id}")
+        logger.info(sanitize_log_message(f"Retrieving SD-WAN configuration status: {config_id}"))
 
         response = await client.get_sdwan_config_status(config_id)
         data = response.get("data", response)
@@ -623,7 +623,7 @@ async def list_hosts(
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving hosts list (limit={limit}, offset={offset})")
+        logger.info(sanitize_log_message(f"Retrieving hosts list (limit={limit}, offset={offset})"))
 
         response = await client.list_hosts(limit, offset)
         data = response.get("data", response.get("hosts", []))
@@ -647,7 +647,7 @@ async def get_host(settings: Settings, host_id: str) -> dict[str, Any]:
     """
 
     async with SiteManagerClient(settings) as client:
-        logger.info(f"Retrieving host details: {host_id}")
+        logger.info(sanitize_log_message(f"Retrieving host details: {host_id}"))
 
         response = await client.get_host(host_id)
         data = response.get("data", response)

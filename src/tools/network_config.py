@@ -9,6 +9,7 @@ from ..utils import (
     ValidationError,
     get_logger,
     log_audit,
+    sanitize_log_message,
     validate_confirmation,
     validate_site_id,
 )
@@ -113,7 +114,7 @@ async def create_network(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would create network '{name}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would create network '{name}' in site '{site_id}'"))
         log_audit(
             operation="create_network",
             parameters=parameters,
@@ -135,7 +136,7 @@ async def create_network(
             else:
                 created_network = response.get("data", [{}])[0]
 
-            logger.info(f"Created network '{name}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Created network '{name}' in site '{site_id}'"))
             log_audit(
                 operation="create_network",
                 parameters=parameters,
@@ -146,7 +147,7 @@ async def create_network(
             return created_network
 
     except Exception as e:
-        logger.error(f"Failed to create network '{name}': {e}")
+        logger.error(sanitize_log_message(f"Failed to create network '{name}': {e}"))
         log_audit(
             operation="create_network",
             parameters=parameters,
@@ -230,7 +231,7 @@ async def update_network(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would update network '{network_id}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would update network '{network_id}' in site '{site_id}'"))
         log_audit(
             operation="update_network",
             parameters=parameters,
@@ -297,7 +298,7 @@ async def update_network(
             else:
                 updated_network = response.get("data", [{}])[0]
 
-            logger.info(f"Updated network '{network_id}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Updated network '{network_id}' in site '{site_id}'"))
             log_audit(
                 operation="update_network",
                 parameters=parameters,
@@ -308,7 +309,7 @@ async def update_network(
             return updated_network
 
     except Exception as e:
-        logger.error(f"Failed to update network '{network_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to update network '{network_id}': {e}"))
         log_audit(
             operation="update_network",
             parameters=parameters,
@@ -348,7 +349,7 @@ async def delete_network(
     parameters = {"site_id": site_id, "network_id": network_id}
 
     if dry_run:
-        logger.info(f"DRY RUN: Would delete network '{network_id}' from site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would delete network '{network_id}' from site '{site_id}'"))
         log_audit(
             operation="delete_network",
             parameters=parameters,
@@ -375,7 +376,7 @@ async def delete_network(
 
             response = await client.delete(f"/ea/sites/{site_id}/rest/networkconf/{network_id}")
 
-            logger.info(f"Deleted network '{network_id}' from site '{site_id}'")
+            logger.info(sanitize_log_message(f"Deleted network '{network_id}' from site '{site_id}'"))
             log_audit(
                 operation="delete_network",
                 parameters=parameters,
@@ -386,7 +387,7 @@ async def delete_network(
             return {"success": True, "deleted_network_id": network_id}
 
     except Exception as e:
-        logger.error(f"Failed to delete network '{network_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to delete network '{network_id}': {e}"))
         log_audit(
             operation="delete_network",
             parameters=parameters,

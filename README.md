@@ -49,7 +49,7 @@ pip install unifi-mcp-server
 - 🔐 **RADIUS & Guest Portal** - 802.1X authentication (6 tools)
 - 🗺️ **Network Topology** - Complete topology mapping and visualization (5 tools)
 
-See [CHANGELOG.md](CHANGELOG.md) for complete release notes and [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for detailed verification.
+See [CHANGELOG.md](CHANGELOG.md) for complete release notes and [VERIFICATION_REPORT.md](docs/archive/VERIFICATION_REPORT.md) for detailed verification.
 
 ## 🌐 API Mode Support
 
@@ -943,7 +943,7 @@ pytest -m integration
 - vouchers.py: 96.36%
 - firewall.py: 96.11%
 
-See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for complete coverage details and [TESTING_PLAN.md](TESTING_PLAN.md) for testing strategy.
+See [VERIFICATION_REPORT.md](docs/archive/VERIFICATION_REPORT.md) for complete coverage details and [TESTING_PLAN.md](docs/archive/TESTING_PLAN.md) for testing strategy.
 
 ### Code Quality
 
@@ -1013,9 +1013,8 @@ unifi-mcp-server/
 ├── pyproject.toml         # Project configuration
 ├── README.md              # This file
 ├── API.md                 # Complete API documentation
-├── ZBF_STATUS.md          # Zone-Based Firewall implementation status
-├── TESTING_PLAN.md        # Testing strategy and roadmap
 ├── DEVELOPMENT_PLAN.md    # Development roadmap
+├── docs/archive/          # Archived planning & session docs
 ├── CONTRIBUTING.md        # Contribution guidelines
 ├── SECURITY.md            # Security policy and best practices
 ├── AGENTS.md              # AI agent guidelines
@@ -1121,7 +1120,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - ❌ Legacy zone matrix endpoints NOT available via API (use v2 API instead)
 - ❌ Application blocking per zone NOT available via API
 - ❌ Zone statistics NOT available via API
-- See ZBF_STATUS.md for complete details and examples
+- See docs/archive/ZBF_STATUS.md for complete details and examples
 
 **Phase 1: QoS Enhancements (11 tools) ✅**
 
@@ -1189,7 +1188,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] 18/18 CI/CD checks passing
 - [x] Zero security vulnerabilities
 - [x] 30+ AI assistant example prompts
-- [x] Comprehensive documentation (VERIFICATION_REPORT.md, API.md)
+- [x] Comprehensive documentation (docs/archive/VERIFICATION_REPORT.md, API.md)
 
 **Total: 74 MCP tools + Comprehensive documentation and verification**
 
@@ -1239,7 +1238,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 - **Docker Registry**: <https://ghcr.io/enuno/unifi-mcp-server>
 - **npm Package**: <https://www.npmjs.com/package/unifi-mcp-server>
 - **MCP Registry**: Search for `io.github.enuno/unifi-mcp-server` at <https://registry.modelcontextprotocol.io>
-- **Documentation**: [API.md](API.md) | [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md)
+- **Documentation**: [API.md](API.md) | [VERIFICATION_REPORT.md](docs/archive/VERIFICATION_REPORT.md)
 - **UniFi Official**: <https://www.ui.com/>
 
 ## 🌟 Star History

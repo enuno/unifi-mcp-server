@@ -129,7 +129,7 @@ The server supports three UniFi API access modes:
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
 - [SECURITY.md](SECURITY.md) - Security policy and best practices
 - [AGENTS.md](AGENTS.md) - Detailed AI agent guidelines
-- [TESTING_PLAN.md](TESTING_PLAN.md) - Testing strategy
+- [TESTING_PLAN.md](docs/archive/TESTING_PLAN.md) - Testing strategy
 - [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) - Complete roadmap
 
 ---

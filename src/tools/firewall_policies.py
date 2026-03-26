@@ -5,7 +5,7 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..models.firewall_policy import FirewallPolicy, FirewallPolicyCreate
-from ..utils import ResourceNotFoundError, get_logger, log_audit
+from ..utils import ResourceNotFoundError, get_logger, log_audit, sanitize_log_message
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -47,7 +47,7 @@ async def list_firewall_policies(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing firewall policies for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing firewall policies for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -98,7 +98,7 @@ async def get_firewall_policy(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting firewall policy {policy_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting firewall policy {policy_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -197,7 +197,7 @@ async def create_firewall_policy(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would create firewall policy '{name}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would create firewall policy '{name}' in site '{site_id}'"))
         log_audit(
             operation="create_firewall_policy",
             parameters=parameters,
@@ -219,7 +219,7 @@ async def create_firewall_policy(
 
     try:
         async with UniFiClient(settings) as client:
-            logger.info(f"Creating firewall policy '{name}' for site {site_id}")
+            logger.info(sanitize_log_message(f"Creating firewall policy '{name}' for site {site_id}"))
 
             if not client.is_authenticated:
                 await client.authenticate()
@@ -234,7 +234,7 @@ async def create_firewall_policy(
             else:
                 data = response
 
-            logger.info(f"Created firewall policy '{name}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Created firewall policy '{name}' in site '{site_id}'"))
             log_audit(
                 operation="create_firewall_policy",
                 parameters=parameters,
@@ -245,7 +245,7 @@ async def create_firewall_policy(
             return FirewallPolicy(**data).model_dump()
 
     except Exception as e:
-        logger.error(f"Failed to create firewall policy '{name}': {e}")
+        logger.error(sanitize_log_message(f"Failed to create firewall policy '{name}': {e}"))
         log_audit(
             operation="create_firewall_policy",
             parameters=parameters,
@@ -308,7 +308,7 @@ async def update_firewall_policy(
         update_data["enabled"] = enabled
 
     if dry_run:
-        logger.info(f"DRY RUN: Would update firewall policy {policy_id}")
+        logger.info(sanitize_log_message(f"DRY RUN: Would update firewall policy {policy_id}"))
         return {
             "status": "dry_run",
             "policy_id": policy_id,
@@ -316,7 +316,7 @@ async def update_firewall_policy(
         }
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating firewall policy {policy_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating firewall policy {policy_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -333,7 +333,7 @@ async def update_firewall_policy(
         else:
             data = response
 
-        logger.info(f"Updated firewall policy {policy_id}")
+        logger.info(sanitize_log_message(f"Updated firewall policy {policy_id}"))
         log_audit(
             operation="update_firewall_policy",
             parameters={"policy_id": policy_id, "site_id": site_id, **update_data},
@@ -376,7 +376,7 @@ async def delete_firewall_policy(
         raise ValueError("This operation deletes a firewall policy. Pass confirm=True to proceed.")
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting firewall policy {policy_id} from site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting firewall policy {policy_id} from site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -405,7 +405,7 @@ async def delete_firewall_policy(
             )
 
         if dry_run:
-            logger.info(f"DRY RUN: Would delete firewall policy {policy_id}")
+            logger.info(sanitize_log_message(f"DRY RUN: Would delete firewall policy {policy_id}"))
             return {
                 "status": "dry_run",
                 "policy_id": policy_id,
@@ -422,7 +422,7 @@ async def delete_firewall_policy(
             site_id=site_id,
         )
 
-        logger.info(f"Deleted firewall policy {policy_id} from site {site_id}")
+        logger.info(sanitize_log_message(f"Deleted firewall policy {policy_id} from site {site_id}"))
 
         return {
             "status": "success",

@@ -9,6 +9,7 @@ from ..utils import (
     ValidationError,
     get_logger,
     log_audit,
+    sanitize_log_message,
     validate_confirmation,
     validate_limit_offset,
     validate_site_id,
@@ -48,7 +49,7 @@ async def list_wlans(
         # Apply pagination
         paginated = wlans_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} WLANs for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} WLANs for site '{site_id}'"))
         return paginated
 
 
@@ -192,7 +193,7 @@ async def create_wlan(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would create WLAN '{name}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would create WLAN '{name}' in site '{site_id}'"))
         log_audit(
             operation="create_wlan",
             parameters=parameters,
@@ -211,7 +212,7 @@ async def create_wlan(
             response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json_data=wlan_data)
             created_wlan: dict[str, Any] = response.get("data", [{}])[0]
 
-            logger.info(f"Created WLAN '{name}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Created WLAN '{name}' in site '{site_id}'"))
             log_audit(
                 operation="create_wlan",
                 parameters=parameters,
@@ -222,7 +223,7 @@ async def create_wlan(
             return created_wlan
 
     except Exception as e:
-        logger.error(f"Failed to create WLAN '{name}': {e}")
+        logger.error(sanitize_log_message(f"Failed to create WLAN '{name}': {e}"))
         log_audit(
             operation="create_wlan",
             parameters=parameters,
@@ -318,7 +319,7 @@ async def update_wlan(
     }
 
     if dry_run:
-        logger.info(f"DRY RUN: Would update WLAN '{wlan_id}' in site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would update WLAN '{wlan_id}' in site '{site_id}'"))
         log_audit(
             operation="update_wlan",
             parameters=parameters,
@@ -373,7 +374,7 @@ async def update_wlan(
             )
             updated_wlan: dict[str, Any] = response.get("data", [{}])[0]
 
-            logger.info(f"Updated WLAN '{wlan_id}' in site '{site_id}'")
+            logger.info(sanitize_log_message(f"Updated WLAN '{wlan_id}' in site '{site_id}'"))
             log_audit(
                 operation="update_wlan",
                 parameters=parameters,
@@ -384,7 +385,7 @@ async def update_wlan(
             return updated_wlan
 
     except Exception as e:
-        logger.error(f"Failed to update WLAN '{wlan_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to update WLAN '{wlan_id}': {e}"))
         log_audit(
             operation="update_wlan",
             parameters=parameters,
@@ -424,7 +425,7 @@ async def delete_wlan(
     parameters = {"site_id": site_id, "wlan_id": wlan_id}
 
     if dry_run:
-        logger.info(f"DRY RUN: Would delete WLAN '{wlan_id}' from site '{site_id}'")
+        logger.info(sanitize_log_message(f"DRY RUN: Would delete WLAN '{wlan_id}' from site '{site_id}'"))
         log_audit(
             operation="delete_wlan",
             parameters=parameters,
@@ -448,7 +449,7 @@ async def delete_wlan(
 
             response = await client.delete(f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}")
 
-            logger.info(f"Deleted WLAN '{wlan_id}' from site '{site_id}'")
+            logger.info(sanitize_log_message(f"Deleted WLAN '{wlan_id}' from site '{site_id}'"))
             log_audit(
                 operation="delete_wlan",
                 parameters=parameters,
@@ -459,7 +460,7 @@ async def delete_wlan(
             return {"success": True, "deleted_wlan_id": wlan_id}
 
     except Exception as e:
-        logger.error(f"Failed to delete WLAN '{wlan_id}': {e}")
+        logger.error(sanitize_log_message(f"Failed to delete WLAN '{wlan_id}': {e}"))
         log_audit(
             operation="delete_wlan",
             parameters=parameters,
@@ -531,7 +532,7 @@ async def get_wlan_statistics(
                 }
             )
 
-        logger.info(f"Retrieved WLAN statistics for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved WLAN statistics for site '{site_id}'"))
 
         if wlan_id:
             return wlan_stats[0] if wlan_stats else {}

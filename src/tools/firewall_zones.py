@@ -5,7 +5,13 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..models.zbf_matrix import ZoneNetworkAssignment
-from ..utils import ValidationError, audit_action, get_logger, validate_confirmation
+from ..utils import (
+    ValidationError,
+    audit_action,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+)
 
 logger = get_logger(__name__)
 
@@ -35,7 +41,7 @@ async def list_firewall_zones(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing firewall zones for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing firewall zones for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -78,7 +84,7 @@ async def create_firewall_zone(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating firewall zone '{name}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating firewall zone '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -94,7 +100,7 @@ async def create_firewall_zone(
             payload["description"] = description
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create firewall zone with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create firewall zone '{name}' for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         resolved_site_id = await client.resolve_site_id(site_id)
@@ -148,7 +154,7 @@ async def update_firewall_zone(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating firewall zone {firewall_zone_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating firewall zone {firewall_zone_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -176,7 +182,7 @@ async def update_firewall_zone(
             payload["description"] = description
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would update firewall zone with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would update firewall zone {firewall_zone_id} for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         response = await client.put(
@@ -227,7 +233,7 @@ async def assign_network_to_zone(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Assigning network {network_id} to zone {zone_id} on site {site_id}")
+        logger.info(sanitize_log_message(f"Assigning network {network_id} to zone {zone_id} on site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -243,7 +249,7 @@ async def assign_network_to_zone(
             network_data = network_response.get("data", {})
             network_name = network_data.get("name")
         except Exception:
-            logger.warning(f"Could not fetch network name for {network_id}")
+            logger.warning(sanitize_log_message(f"Could not fetch network name for {network_id}"))
 
         # Update zone to include this network
         zone_response = await client.get(
@@ -253,7 +259,7 @@ async def assign_network_to_zone(
         current_networks = zone_data.get("networks", [])
 
         if network_id in current_networks:
-            logger.info(f"Network {network_id} already assigned to zone {zone_id}")
+            logger.info(sanitize_log_message(f"Network {network_id} already assigned to zone {zone_id}"))
             return ZoneNetworkAssignment(  # type: ignore[no-any-return]
                 zone_id=zone_id,
                 network_id=network_id,
@@ -265,7 +271,7 @@ async def assign_network_to_zone(
         payload = {"networks": updated_networks}
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would assign network {network_id} to zone {zone_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would assign network {network_id} to zone {zone_id}"))
             return {"dry_run": True, "payload": payload}
 
         await client.put(
@@ -304,7 +310,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing networks in zone {zone_id} on site {site_id}")
+        logger.info(sanitize_log_message(f"Listing networks in zone {zone_id} on site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -371,13 +377,13 @@ async def delete_firewall_zone(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting firewall zone {zone_id} from site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting firewall zone {zone_id} from site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete firewall zone {zone_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete firewall zone {zone_id}"))
             return {"dry_run": True, "zone_id": zone_id, "action": "would_delete"}
 
         resolved_site_id = await client.resolve_site_id(site_id)
@@ -427,7 +433,7 @@ async def unassign_network_from_zone(
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Unassigning network {network_id} from zone {zone_id} on site {site_id}")
+        logger.info(sanitize_log_message(f"Unassigning network {network_id} from zone {zone_id} on site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -450,7 +456,7 @@ async def unassign_network_from_zone(
         payload = {"networks": updated_networks}
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would remove network {network_id} from zone {zone_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would remove network {network_id} from zone {zone_id}"))
             return {"dry_run": True, "payload": payload}
 
         await client.put(

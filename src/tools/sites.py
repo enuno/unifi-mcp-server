@@ -5,7 +5,13 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models import Site
-from ..utils import ResourceNotFoundError, get_logger, validate_limit_offset, validate_site_id
+from ..utils import (
+    ResourceNotFoundError,
+    get_logger,
+    sanitize_log_message,
+    validate_limit_offset,
+    validate_site_id,
+)
 
 
 async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
@@ -42,7 +48,7 @@ async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
                 or site_data.get("internalReference") == site_id
             ):
                 site = Site(**site_data)
-                logger.info(f"Retrieved site details for {site_id}")
+                logger.info(sanitize_log_message(f"Retrieved site details for {site_id}"))
                 return site.model_dump()  # type: ignore[no-any-return]
 
         raise ResourceNotFoundError("site", site_id)
@@ -74,9 +80,9 @@ async def list_sites(
             else:
                 endpoint = "/ea/sites"
 
-            logger.debug(f"Fetching sites from endpoint: {endpoint}")
+            logger.debug(sanitize_log_message(f"Fetching sites from endpoint: {endpoint}"))
             response = await client.get(endpoint)
-            logger.debug(f"Raw response: {response}")
+            logger.debug(sanitize_log_message(f"Raw response received ({len(response) if isinstance(response, list) else len(response.get('data', []))} items)"))
 
             # Handle both local and cloud API response formats
             if isinstance(response, list):
@@ -84,27 +90,27 @@ async def list_sites(
             else:
                 sites_data = response.get("data", [])
 
-            logger.debug(f"Extracted {len(sites_data)} sites from response")
+            logger.debug(sanitize_log_message(f"Extracted {len(sites_data)} sites from response"))
 
             # Apply pagination
             paginated = sites_data[offset : offset + limit]
-            logger.debug(f"Paginated to {len(paginated)} sites")
+            logger.debug(sanitize_log_message(f"Paginated to {len(paginated)} sites"))
 
             # Parse into Site models
             sites = []
             for idx, s in enumerate(paginated):
                 try:
-                    logger.debug(f"Parsing site {idx}: {s}")
+                    logger.debug(sanitize_log_message(f"Parsing site {idx}"))
                     site_obj = Site(**s)
                     sites.append(site_obj.model_dump())
                 except Exception as e:
-                    logger.error(f"Failed to parse site {idx} ({s}): {e}", exc_info=True)
+                    logger.error(sanitize_log_message(f"Failed to parse site {idx}: {e}"), exc_info=True)
                     raise
 
-            logger.info(f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})")
+            logger.info(sanitize_log_message(f"Retrieved {len(sites)} sites (offset={offset}, limit={limit})"))
             return sites
     except Exception as e:
-        logger.error(f"Error listing sites: {e}", exc_info=True)
+        logger.error(sanitize_log_message(f"Error listing sites: {e}"), exc_info=True)
         raise
 
 
@@ -187,5 +193,5 @@ async def get_site_statistics(site_id: str, settings: Settings) -> dict[str, Any
             },
         }
 
-        logger.info(f"Retrieved statistics for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved statistics for site '{site_id}'"))
         return statistics

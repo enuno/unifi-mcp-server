@@ -5,7 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.reference_data import Country, DeviceTag
-from ..utils import get_logger, validate_limit_offset, validate_site_id
+from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
 
 
 async def list_radius_profiles(
@@ -38,7 +38,7 @@ async def list_radius_profiles(
         # Apply pagination
         paginated = profiles_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} RADIUS profiles for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} RADIUS profiles for site '{site_id}'"))
         return paginated
 
 
@@ -72,7 +72,7 @@ async def list_device_tags(
         # Apply pagination
         paginated = tags_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} device tags for site '{site_id}'")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} device tags for site '{site_id}'"))
         return [DeviceTag(**tag).model_dump() for tag in paginated]
 
 
@@ -103,5 +103,5 @@ async def list_countries(
         # Apply pagination
         paginated = countries_data[offset : offset + limit]
 
-        logger.info(f"Retrieved {len(paginated)} countries")
+        logger.info(sanitize_log_message(f"Retrieved {len(paginated)} countries"))
         return [Country(**country).model_dump() for country in paginated]

@@ -5,7 +5,7 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models.radius import GuestPortalConfig, HotspotPackage, RADIUSAccount, RADIUSProfile
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
 
 logger = get_logger(__name__)
 
@@ -29,7 +29,7 @@ async def list_radius_profiles(
         List of RADIUS profiles
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing RADIUS profiles for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing RADIUS profiles for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -56,7 +56,7 @@ async def get_radius_profile(
         RADIUS profile details
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting RADIUS profile {profile_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting RADIUS profile {profile_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -107,7 +107,7 @@ async def create_radius_profile(
     validate_confirmation(confirm, "create RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating RADIUS profile '{name}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating RADIUS profile '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -145,7 +145,7 @@ async def create_radius_profile(
                 payload_safe["acct_server"] = acct_server
             if acct_secret:
                 payload_safe["acct_secret"] = "***REDACTED***"
-            logger.info(f"[DRY RUN] Would create RADIUS profile with payload: {payload_safe}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create RADIUS profile '{name}' for site {site_id}"))
             return {"dry_run": True, "payload": payload_safe}
 
         response = await client.post(f"/ea/sites/{site_id}/rest/radiusprofile", json_data=payload)
@@ -206,7 +206,7 @@ async def update_radius_profile(
     validate_confirmation(confirm, "update RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating RADIUS profile {profile_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating RADIUS profile {profile_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -254,7 +254,7 @@ async def update_radius_profile(
                 payload_safe["vlan_enabled"] = vlan_enabled
             if enabled is not None:
                 payload_safe["enabled"] = enabled
-            logger.info(f"[DRY RUN] Would update RADIUS profile with payload: {payload_safe}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would update RADIUS profile {profile_id} for site {site_id}"))
             return {"dry_run": True, "profile_id": profile_id, "payload": payload_safe}
 
         response = await client.put(
@@ -299,13 +299,13 @@ async def delete_radius_profile(
     validate_confirmation(confirm, "delete RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting RADIUS profile {profile_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting RADIUS profile {profile_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete RADIUS profile {profile_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete RADIUS profile {profile_id}"))
             return {"dry_run": True, "profile_id": profile_id}
 
         await client.delete(f"/ea/sites/{site_id}/rest/radiusprofile/{profile_id}")
@@ -342,7 +342,7 @@ async def list_radius_accounts(
         List of RADIUS accounts
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing RADIUS accounts for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing RADIUS accounts for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -394,7 +394,7 @@ async def create_radius_account(
     validate_confirmation(confirm, "create RADIUS account", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating RADIUS account '{username}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating RADIUS account for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -422,7 +422,7 @@ async def create_radius_account(
             payload["note"] = note
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create RADIUS account with username: {username}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create RADIUS account for site {site_id}"))
             payload_safe = payload.copy()
             payload_safe["x_password"] = "***REDACTED***"
             return {"dry_run": True, "payload": payload_safe}
@@ -467,7 +467,7 @@ async def get_radius_account(
         RADIUS account details with password redacted
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting RADIUS account {account_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting RADIUS account {account_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -542,7 +542,7 @@ async def update_radius_account(
         raise ValueError("At least one field must be provided to update.")
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating RADIUS account {account_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating RADIUS account {account_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -551,7 +551,7 @@ async def update_radius_account(
             payload_safe = payload.copy()
             if "x_password" in payload_safe:
                 payload_safe["x_password"] = "***REDACTED***"
-            logger.info(f"[DRY RUN] Would update RADIUS account with payload: {payload_safe}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would update RADIUS account {account_id} for site {site_id}"))
             return {"dry_run": True, "account_id": account_id, "payload": payload_safe}
 
         response = await client.put(
@@ -598,13 +598,13 @@ async def delete_radius_account(
     validate_confirmation(confirm, "delete RADIUS account", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting RADIUS account {account_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting RADIUS account {account_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete RADIUS account {account_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete RADIUS account {account_id}"))
             return {"dry_run": True, "account_id": account_id}
 
         await client.delete(f"/ea/sites/{site_id}/rest/account/{account_id}")
@@ -641,7 +641,7 @@ async def get_guest_portal_config(
         Guest portal configuration
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting guest portal config for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting guest portal config for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -690,7 +690,7 @@ async def configure_guest_portal(
     validate_confirmation(confirm, "configure guest portal", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Configuring guest portal for site {site_id}")
+        logger.info(sanitize_log_message(f"Configuring guest portal for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -734,7 +734,7 @@ async def configure_guest_portal(
                 payload_safe["terms_of_service_enabled"] = terms_of_service_enabled
             if terms_of_service_text is not None:
                 payload_safe["terms_of_service_text"] = terms_of_service_text
-            logger.info(f"[DRY RUN] Would configure guest portal with payload: {payload_safe}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would configure guest portal for site {site_id}"))
             return {"dry_run": True, "payload": payload_safe}
 
         response = await client.put(
@@ -776,7 +776,7 @@ async def list_hotspot_packages(
         List of hotspot packages
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing hotspot packages for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing hotspot packages for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -823,7 +823,7 @@ async def create_hotspot_package(
     validate_confirmation(confirm, "create hotspot package", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating hotspot package '{name}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating hotspot package '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -848,7 +848,7 @@ async def create_hotspot_package(
             payload["price"] = price
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create hotspot package with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create hotspot package '{name}' for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         response = await client.post(
@@ -887,7 +887,7 @@ async def get_hotspot_package(
         Hotspot package details
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting hotspot package {package_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting hotspot package {package_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -969,13 +969,13 @@ async def update_hotspot_package(
         raise ValueError("At least one field must be provided to update.")
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating hotspot package {package_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating hotspot package {package_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would update hotspot package with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would update hotspot package {package_id} for site {site_id}"))
             return {"dry_run": True, "package_id": package_id, "payload": payload}
 
         response = await client.put(
@@ -1019,13 +1019,13 @@ async def delete_hotspot_package(
     validate_confirmation(confirm, "delete hotspot package", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting hotspot package {package_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting hotspot package {package_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete hotspot package {package_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete hotspot package {package_id}"))
             return {"dry_run": True, "package_id": package_id}
 
         await client.delete(f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}")

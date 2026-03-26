@@ -5,7 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.vpn import SiteToSiteVPN
-from ..utils import ResourceNotFoundError, get_logger, validate_site_id
+from ..utils import ResourceNotFoundError, get_logger, sanitize_log_message, validate_site_id
 
 
 async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[str, Any]]:
@@ -18,7 +18,7 @@ async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[
         response = await client.get(f"/proxy/network/api/s/{site_id}/rest/networkconf")
         networks = response if isinstance(response, list) else response.get("data", [])
         vpns = [n for n in networks if n.get("purpose") == "site-vpn"]
-        logger.info(f"Retrieved {len(vpns)} site-to-site VPNs")
+        logger.info(sanitize_log_message(f"Retrieved {len(vpns)} site-to-site VPNs"))
         return [SiteToSiteVPN(**v).model_dump() for v in vpns]
 
 
@@ -34,7 +34,7 @@ async def get_site_to_site_vpn(site_id: str, vpn_id: str, settings: Settings) ->
 
         for n in networks:
             if n.get("_id") == vpn_id and n.get("purpose") == "site-vpn":
-                logger.info(f"Retrieved VPN {vpn_id}")
+                logger.info(sanitize_log_message(f"Retrieved VPN {vpn_id}"))
                 return SiteToSiteVPN(**n).model_dump()
 
         raise ResourceNotFoundError("vpn", vpn_id)
@@ -91,5 +91,5 @@ async def update_site_to_site_vpn(
         # Merge and update
         payload = {**current, **updates}
         await client.put(f"/proxy/network/api/s/{site_id}/rest/networkconf/{vpn_id}", payload)
-        logger.info(f"Updated VPN {vpn_id}")
+        logger.info(sanitize_log_message(f"Updated VPN {vpn_id}"))
         return {"success": True, "vpn_id": vpn_id, "updates": updates}

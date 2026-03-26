@@ -5,7 +5,7 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import ACLRule
-from ..utils import audit_action, get_logger, validate_confirmation
+from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
 
 logger = get_logger(__name__)
 
@@ -30,7 +30,7 @@ async def list_acl_rules(
         List of ACL rules
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing ACL rules for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing ACL rules for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -61,7 +61,7 @@ async def get_acl_rule(site_id: str, acl_rule_id: str, settings: Settings) -> di
         ACL rule details
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Getting ACL rule {acl_rule_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Getting ACL rule {acl_rule_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -120,7 +120,7 @@ async def create_acl_rule(
     validate_confirmation(confirm, "create ACL rule", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Creating ACL rule '{name}' for site {site_id}")
+        logger.info(sanitize_log_message(f"Creating ACL rule '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -155,7 +155,7 @@ async def create_acl_rule(
             payload["dstPort"] = dst_port
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would create ACL rule with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would create ACL rule '{name}' for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         response = await client.post(f"/integration/v1/sites/{site_id}/acls", json_data=payload)
@@ -224,7 +224,7 @@ async def update_acl_rule(
     validate_confirmation(confirm, "update ACL rule", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Updating ACL rule {acl_rule_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Updating ACL rule {acl_rule_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
@@ -261,7 +261,7 @@ async def update_acl_rule(
             payload["dstPort"] = dst_port
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would update ACL rule with payload: {payload}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would update ACL rule {acl_rule_id} for site {site_id}"))
             return {"dry_run": True, "payload": payload}
 
         response = await client.put(
@@ -304,13 +304,13 @@ async def delete_acl_rule(
     validate_confirmation(confirm, "delete ACL rule", dry_run)
 
     async with UniFiClient(settings) as client:
-        logger.info(f"Deleting ACL rule {acl_rule_id} for site {site_id}")
+        logger.info(sanitize_log_message(f"Deleting ACL rule {acl_rule_id} for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
         if dry_run:
-            logger.info(f"[DRY RUN] Would delete ACL rule {acl_rule_id}")
+            logger.info(sanitize_log_message(f"[DRY RUN] Would delete ACL rule {acl_rule_id}"))
             return {"dry_run": True, "acl_rule_id": acl_rule_id}
 
         await client.delete(f"/integration/v1/sites/{site_id}/acls/{acl_rule_id}")

@@ -3,7 +3,7 @@
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import WANConnection
-from ..utils import get_logger
+from ..utils import get_logger, sanitize_log_message
 
 logger = get_logger(__name__)
 
@@ -19,7 +19,7 @@ async def list_wan_connections(site_id: str, settings: Settings) -> list[dict]:
         List of WAN connections
     """
     async with UniFiClient(settings) as client:
-        logger.info(f"Listing WAN connections for site {site_id}")
+        logger.info(sanitize_log_message(f"Listing WAN connections for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()

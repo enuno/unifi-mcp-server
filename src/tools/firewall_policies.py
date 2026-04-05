@@ -1,6 +1,7 @@
 """Firewall policies management tools for UniFi v2 API."""
 
-from typing import Any
+import asyncio
+from typing import Any, Literal
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
@@ -34,13 +35,15 @@ async def list_firewall_policies(
     Only available with local gateway API (api_type="local").
 
     The UniFi v2 API returns all policies in a single response (no server-side
-    pagination). Use limit and offset to page through results client-side.
+    pagination). When limit/offset are omitted, all matching policies are returned.
+    Use limit and offset to page through results client-side.
 
     Args:
         site_id: Site identifier (default: "default")
         settings: Application settings
-        limit: Maximum number of policies to return
-        offset: Number of policies to skip
+        limit: Maximum number of policies to return. When omitted, all matching
+            policies are returned.
+        offset: Number of policies to skip (only applied when limit is provided)
         source_zone_id: Filter to policies with this source zone ID
         destination_zone_id: Filter to policies with this destination zone ID
 
@@ -56,7 +59,6 @@ async def list_firewall_policies(
         and UNIFI_LOCAL_HOST to use this tool.
     """
     _ensure_local_api(settings)
-    limit, offset = validate_limit_offset(limit, offset)
 
     async with UniFiClient(settings) as client:
         logger.info(f"Listing firewall policies for site {site_id}")
@@ -83,7 +85,11 @@ async def list_firewall_policies(
                 if p.get("destination", {}).get("zone_id") == destination_zone_id
             ]
 
-        return all_policies[offset : offset + limit]
+        # Only paginate when the caller explicitly requests it
+        if limit is not None or offset is not None:
+            limit, offset = validate_limit_offset(limit, offset)
+            return all_policies[offset : offset + limit]
+        return all_policies
 
 
 async def get_firewall_policy(
@@ -286,17 +292,17 @@ async def update_firewall_policy(
     site_id: str = "default",
     settings: Settings = None,
     name: str | None = None,
-    action: str | None = None,
+    action: Literal["ALLOW", "BLOCK"] | None = None,
     enabled: bool | None = None,
     description: str | None = None,
-    protocol: str | None = None,
-    ip_version: str | None = None,
+    protocol: Literal["all", "tcp", "udp", "tcp_udp", "icmpv6"] | None = None,
+    ip_version: Literal["IPV4", "IPV6", "BOTH"] | None = None,
     source_zone_id: str | None = None,
     destination_zone_id: str | None = None,
-    source_matching_target: str | None = None,
-    destination_matching_target: str | None = None,
+    source_matching_target: Literal["ANY", "IP", "NETWORK", "REGION", "CLIENT"] | None = None,
+    destination_matching_target: Literal["ANY", "IP", "NETWORK", "REGION"] | None = None,
     logging: bool | None = None,
-    connection_state_type: str | None = None,
+    connection_state_type: Literal["ALL", "RESPOND_ONLY", "CUSTOM"] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -330,7 +336,7 @@ async def update_firewall_policy(
 
     Raises:
         NotImplementedError: When using cloud API (v2 endpoints require local access)
-        ValueError: If confirmation not provided or invalid field values
+        ValueError: If confirmation not provided or an enum-like parameter has an invalid value
         ResourceNotFoundError: If policy not found
     """
     _ensure_local_api(settings)
@@ -341,8 +347,47 @@ async def update_firewall_policy(
             "Use dry_run=True to preview changes first."
         )
 
-    if action is not None and action.upper() not in ["ALLOW", "BLOCK"]:
+    # Runtime guards — Literal types enforce at the MCP schema / static-analysis layer,
+    # but Python does not check Literal annotations at runtime. These guards catch direct
+    # Python calls and any path that bypasses the MCP layer.
+    if action is not None and action.upper() not in {"ALLOW", "BLOCK"}:
         raise ValueError(f"Invalid action '{action}'. Must be ALLOW or BLOCK.")
+    if protocol is not None and protocol.lower() not in {"all", "tcp", "udp", "tcp_udp", "icmpv6"}:
+        raise ValueError(
+            f"Invalid protocol '{protocol}'. Must be one of: all, icmpv6, tcp, tcp_udp, udp."
+        )
+    if ip_version is not None and ip_version.upper() not in {"IPV4", "IPV6", "BOTH"}:
+        raise ValueError(f"Invalid ip_version '{ip_version}'. Must be one of: BOTH, IPV4, IPV6.")
+    if connection_state_type is not None and connection_state_type.upper() not in {
+        "ALL",
+        "RESPOND_ONLY",
+        "CUSTOM",
+    }:
+        raise ValueError(
+            f"Invalid connection_state_type '{connection_state_type}'. "
+            "Must be one of: ALL, CUSTOM, RESPOND_ONLY."
+        )
+    if source_matching_target is not None and source_matching_target.upper() not in {
+        "ANY",
+        "IP",
+        "NETWORK",
+        "REGION",
+        "CLIENT",
+    }:
+        raise ValueError(
+            f"Invalid source_matching_target '{source_matching_target}'. "
+            "Must be one of: ANY, CLIENT, IP, NETWORK, REGION."
+        )
+    if destination_matching_target is not None and destination_matching_target.upper() not in {
+        "ANY",
+        "IP",
+        "NETWORK",
+        "REGION",
+    }:
+        raise ValueError(
+            f"Invalid destination_matching_target '{destination_matching_target}'. "
+            "Must be one of: ANY, IP, NETWORK, REGION."
+        )
 
     async with UniFiClient(settings) as client:
         logger.info(f"Updating firewall policy {policy_id} for site {site_id}")
@@ -583,16 +628,19 @@ async def get_zone_policy_matrix(
         # Resolve the site UUID required by the integration v1 zones endpoint
         resolved_site_id = await client.resolve_site_id(site_id)
 
-        # Fetch zones (integration v1) and policies (v2) sequentially —
-        # both use the same authenticated client
+        # Fetch zones (integration v1) and policies (v2) concurrently —
+        # the two requests are independent so we can run them in parallel.
         zones_endpoint = settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones")
-        zones_response = await client.get(zones_endpoint)
+        policies_endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies"
+
+        zones_response, policies_response = await asyncio.gather(
+            client.get(zones_endpoint),
+            client.get(policies_endpoint),
+        )
+
         zones_data = (
             zones_response.get("data", []) if isinstance(zones_response, dict) else zones_response
         )
-
-        policies_endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies"
-        policies_response = await client.get(policies_endpoint)
         policies_data = (
             policies_response
             if isinstance(policies_response, list)

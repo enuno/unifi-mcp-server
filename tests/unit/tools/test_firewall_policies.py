@@ -221,6 +221,94 @@ class TestListFirewallPolicies:
 
             mock_client.authenticate.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_limit(
+        self, local_settings: Settings, sample_policy_response: list[dict]
+    ) -> None:
+        """Test that limit slices the result set."""
+        from src.tools.firewall_policies import list_firewall_policies
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.get.return_value = sample_policy_response
+
+            result = await list_firewall_policies("default", local_settings, limit=1)
+
+            assert len(result) == 1
+            assert result[0]["name"] == "Block IOT to Internal"
+
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_offset(
+        self, local_settings: Settings, sample_policy_response: list[dict]
+    ) -> None:
+        """Test that offset skips entries."""
+        from src.tools.firewall_policies import list_firewall_policies
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.get.return_value = sample_policy_response
+
+            result = await list_firewall_policies("default", local_settings, offset=1)
+
+            assert len(result) == 1
+            assert result[0]["name"] == "Allow All Traffic"
+
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_limit_and_offset(
+        self, local_settings: Settings, sample_policy_response: list[dict]
+    ) -> None:
+        """Test limit and offset together."""
+        from src.tools.firewall_policies import list_firewall_policies
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.get.return_value = sample_policy_response
+
+            result = await list_firewall_policies("default", local_settings, limit=1, offset=1)
+
+            assert len(result) == 1
+            assert result[0]["name"] == "Allow All Traffic"
+
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_offset_beyond_end(
+        self, local_settings: Settings, sample_policy_response: list[dict]
+    ) -> None:
+        """Test offset beyond list length returns empty list."""
+        from src.tools.firewall_policies import list_firewall_policies
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.get.return_value = sample_policy_response
+
+            result = await list_firewall_policies("default", local_settings, offset=100)
+
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_no_pagination_returns_all(
+        self, local_settings: Settings, sample_policy_response: list[dict]
+    ) -> None:
+        """Test that omitting limit/offset returns all results."""
+        from src.tools.firewall_policies import list_firewall_policies
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.get.return_value = sample_policy_response
+
+            result = await list_firewall_policies("default", local_settings)
+
+            assert len(result) == 2
+
 
 class TestGetFirewallPolicy:
     """Tests for get_firewall_policy function."""

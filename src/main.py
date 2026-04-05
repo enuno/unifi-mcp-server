@@ -469,6 +469,12 @@ async def delete_firewall_policy(
     )
 
 
+@mcp.tool()
+async def get_zone_policy_matrix(site_id: str = "default") -> dict:
+    """Get a snapshot of the full zone-based firewall matrix — all policies grouped by source/destination zone pair."""
+    return await firewall_policies_tools.get_zone_policy_matrix(site_id, settings)
+
+
 # Backup and Restore Tools (Phase 4)
 @mcp.tool()
 async def trigger_backup(

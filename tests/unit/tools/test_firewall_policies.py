@@ -1374,3 +1374,221 @@ class TestCreateFirewallPolicy:
             )
 
             mock_client.authenticate.assert_called_once()
+
+
+class TestGetZonePolicyMatrix:
+    """Tests for get_zone_policy_matrix function."""
+
+    @pytest.fixture
+    def local_settings(self, monkeypatch: pytest.MonkeyPatch) -> Settings:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "local")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+        return Settings()
+
+    @pytest.fixture
+    def cloud_settings(self, monkeypatch: pytest.MonkeyPatch) -> Settings:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        monkeypatch.delenv("UNIFI_LOCAL_HOST", raising=False)
+        return Settings()
+
+    @pytest.fixture
+    def sample_zones_response(self) -> dict:
+        return {
+            "totalCount": 3,
+            "count": 3,
+            "data": [
+                {"id": "uuid-iot", "name": "IoT", "networkIds": ["net-1"]},
+                {"id": "uuid-lan", "name": "LAN", "networkIds": ["net-2"]},
+                {"id": "uuid-ext", "name": "External", "networkIds": []},
+            ],
+        }
+
+    @pytest.fixture
+    def sample_policies(self) -> list[dict]:
+        return [
+            {
+                "_id": "policy-1",
+                "name": "Block IoT to LAN",
+                "action": "BLOCK",
+                "enabled": True,
+                "predefined": False,
+                "source": {"zone_id": "oid-iot", "matching_target": "ANY"},
+                "destination": {"zone_id": "oid-lan", "matching_target": "ANY"},
+            },
+            {
+                "_id": "policy-2",
+                "name": "Allow LAN to IoT",
+                "action": "ALLOW",
+                "enabled": True,
+                "predefined": False,
+                "source": {"zone_id": "oid-lan", "matching_target": "ANY"},
+                "destination": {"zone_id": "oid-iot", "matching_target": "ANY"},
+            },
+            {
+                "_id": "policy-3",
+                "name": "Block IoT to LAN (predefined)",
+                "action": "BLOCK",
+                "enabled": True,
+                "predefined": True,
+                "source": {"zone_id": "oid-iot", "matching_target": "ANY"},
+                "destination": {"zone_id": "oid-lan", "matching_target": "ANY"},
+            },
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_success(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+        sample_policies: list[dict],
+    ) -> None:
+        """Test matrix returns zones, matrix, and summary."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, sample_policies]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            assert "matrix" in result
+            assert "zones" in result
+            assert "summary" in result
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_groups_by_zone_pair(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+        sample_policies: list[dict],
+    ) -> None:
+        """Test policies are grouped by source/destination zone pair."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, sample_policies]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            matrix = result["matrix"]
+            assert len(matrix) == 2
+            iot_to_lan = next(
+                (
+                    p
+                    for p in matrix
+                    if p["source_zone_id"] == "oid-iot" and p["destination_zone_id"] == "oid-lan"
+                ),
+                None,
+            )
+            assert iot_to_lan is not None
+            assert iot_to_lan["policy_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_summary_counts(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+        sample_policies: list[dict],
+    ) -> None:
+        """Test summary counts are correct."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, sample_policies]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            summary = result["summary"]
+            assert summary["total_policies"] == 3
+            assert summary["zone_pairs_with_policies"] == 2
+            assert summary["total_zones"] == 3
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_policy_fields(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+        sample_policies: list[dict],
+    ) -> None:
+        """Test that policy summaries include required fields."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, sample_policies]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            policy_summary = result["matrix"][0]["policies"][0]
+            for field in ["id", "name", "action", "enabled", "predefined"]:
+                assert field in policy_summary
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_empty_policies(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+    ) -> None:
+        """Test empty policies returns empty matrix."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, []]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            assert result["matrix"] == []
+            assert result["summary"]["total_policies"] == 0
+            assert result["summary"]["zone_pairs_with_policies"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_zones_included(
+        self,
+        local_settings: Settings,
+        sample_zones_response: dict,
+        sample_policies: list[dict],
+    ) -> None:
+        """Test zones list is included with name and id."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
+            mock_client.get.side_effect = [sample_zones_response, sample_policies]
+
+            result = await get_zone_policy_matrix("default", local_settings)
+
+            zones = result["zones"]
+            assert len(zones) == 3
+            assert zones[0]["name"] == "IoT"
+            assert "id" in zones[0]
+
+    @pytest.mark.asyncio
+    async def test_get_zone_policy_matrix_cloud_api_raises(self, cloud_settings: Settings) -> None:
+        """Test cloud API raises NotImplementedError."""
+        from src.tools.firewall_policies import get_zone_policy_matrix
+
+        with pytest.raises(NotImplementedError):
+            await get_zone_policy_matrix("default", cloud_settings)

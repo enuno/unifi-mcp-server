@@ -537,3 +537,120 @@ async def delete_firewall_policy(
             "policy_id": policy_id,
             "action": "deleted",
         }
+
+
+async def get_zone_policy_matrix(
+    site_id: str,
+    settings: Settings,
+) -> dict[str, Any]:
+    """Get a snapshot of the zone-based firewall policy matrix.
+
+    Fetches all firewall zones and all policies, then groups policies by
+    source/destination zone pair to give a full picture of the current
+    security posture.
+
+    Only available with local gateway API (api_type="local").
+
+    Note:
+        The v2 policies API uses MongoDB ObjectIDs for zone_id fields, while
+        the integration v1 zones API uses UUIDs. These two ID spaces cannot be
+        automatically joined — both are returned so you have both the zone names
+        (from v1) and the policy groupings (by v2 ObjectID). Use list_firewall_zones
+        alongside this result to identify which zone name corresponds to which zone_id.
+
+    Args:
+        site_id: Site identifier (default: "default")
+        settings: Application settings
+
+    Returns:
+        Dictionary with:
+        - zones: list of zone objects from the integration API (with names)
+        - matrix: list of zone-pair entries, each with source_zone_id,
+          destination_zone_id, policy_count, and policies list
+        - summary: counts of total zones, policies, and covered zone pairs
+
+    Raises:
+        NotImplementedError: When using cloud API
+    """
+    _ensure_local_api(settings)
+
+    async with UniFiClient(settings) as client:
+        logger.info(f"Building zone policy matrix for site {site_id}")
+
+        if not client.is_authenticated:
+            await client.authenticate()
+
+        # Resolve the site UUID required by the integration v1 zones endpoint
+        resolved_site_id = await client.resolve_site_id(site_id)
+
+        # Fetch zones (integration v1) and policies (v2) sequentially —
+        # both use the same authenticated client
+        zones_endpoint = settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones")
+        zones_response = await client.get(zones_endpoint)
+        zones_data = (
+            zones_response.get("data", []) if isinstance(zones_response, dict) else zones_response
+        )
+
+        policies_endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies"
+        policies_response = await client.get(policies_endpoint)
+        policies_data = (
+            policies_response
+            if isinstance(policies_response, list)
+            else policies_response.get("data", [])
+        )
+
+        # Build zone summaries
+        zones = [
+            {
+                "id": z.get("id"),
+                "name": z.get("name"),
+                "network_count": len(z.get("networkIds", [])),
+            }
+            for z in zones_data
+        ]
+
+        # Group policies by (source_zone_id, destination_zone_id)
+        pairs: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for policy in policies_data:
+            src = policy.get("source", {}).get("zone_id")
+            dst = policy.get("destination", {}).get("zone_id")
+            if not src or not dst:
+                continue
+            key = (src, dst)
+            if key not in pairs:
+                pairs[key] = []
+            pairs[key].append(
+                {
+                    "id": policy.get("_id"),
+                    "name": policy.get("name"),
+                    "action": policy.get("action"),
+                    "enabled": policy.get("enabled"),
+                    "predefined": policy.get("predefined", False),
+                }
+            )
+
+        matrix = [
+            {
+                "source_zone_id": src,
+                "destination_zone_id": dst,
+                "policy_count": len(policies),
+                "policies": policies,
+            }
+            for (src, dst), policies in sorted(pairs.items())
+        ]
+
+        return {
+            "zones": zones,
+            "matrix": matrix,
+            "summary": {
+                "total_zones": len(zones),
+                "total_policies": len(policies_data),
+                "zone_pairs_with_policies": len(matrix),
+            },
+            "note": (
+                "zone_ids in the matrix use v2 MongoDB ObjectIDs; "
+                "zone ids in the zones list use integration v1 UUIDs — "
+                "they cannot be automatically joined. "
+                "Use policy names and zone names to correlate manually."
+            ),
+        }

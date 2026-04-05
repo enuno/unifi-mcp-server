@@ -366,7 +366,7 @@ class TestAssignNetworkToZone:
     async def test_assign_network_to_zone_success(self, mock_settings, sample_firewall_zones):
         from src.tools.firewall_zones import assign_network_to_zone
 
-        zone_data = {"data": {"networks": ["net-001"]}}
+        zone_data = {"data": {"networkIds": ["net-001"]}}
         network_data = {"data": {"name": "NewNetwork"}}
 
         with (
@@ -397,13 +397,15 @@ class TestAssignNetworkToZone:
 
             assert result["zone_id"] == "zone-001"
             assert result["network_id"] == "net-new"
-            mock_instance.put.assert_called_once()
+            _, kwargs = mock_instance.put.call_args
+            assert "networkIds" in kwargs["json_data"]
+            assert "net-new" in kwargs["json_data"]["networkIds"]
 
     @pytest.mark.asyncio
     async def test_assign_network_to_zone_already_assigned(self, mock_settings):
         from src.tools.firewall_zones import assign_network_to_zone
 
-        zone_data = {"data": {"networks": ["net-001", "net-002"]}}
+        zone_data = {"data": {"networkIds": ["net-001", "net-002"]}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -428,7 +430,7 @@ class TestAssignNetworkToZone:
     async def test_assign_network_to_zone_dry_run(self, mock_settings):
         from src.tools.firewall_zones import assign_network_to_zone
 
-        zone_data = {"data": {"networks": []}}
+        zone_data = {"data": {"networkIds": []}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -448,6 +450,7 @@ class TestAssignNetworkToZone:
             )
 
             assert result["dry_run"] is True
+            assert "networkIds" in result["payload"]
             mock_instance.put.assert_not_called()
 
 
@@ -456,7 +459,7 @@ class TestUnassignNetworkFromZone:
     async def test_unassign_network_from_zone_success(self, mock_settings):
         from src.tools.firewall_zones import unassign_network_from_zone
 
-        zone_data = {"data": {"networks": ["net-001", "net-002"]}}
+        zone_data = {"data": {"networkIds": ["net-001", "net-002"]}}
 
         with (
             patch("src.tools.firewall_zones.UniFiClient") as mock_client,
@@ -480,13 +483,15 @@ class TestUnassignNetworkFromZone:
 
             assert result["status"] == "success"
             assert result["action"] == "unassigned"
-            mock_instance.put.assert_called_once()
+            _, kwargs = mock_instance.put.call_args
+            assert "networkIds" in kwargs["json_data"]
+            assert "net-001" not in kwargs["json_data"]["networkIds"]
 
     @pytest.mark.asyncio
     async def test_unassign_network_not_in_zone_error(self, mock_settings):
         from src.tools.firewall_zones import unassign_network_from_zone
 
-        zone_data = {"data": {"networks": ["net-001"]}}
+        zone_data = {"data": {"networkIds": ["net-001"]}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -509,7 +514,7 @@ class TestUnassignNetworkFromZone:
     async def test_unassign_network_from_zone_dry_run(self, mock_settings):
         from src.tools.firewall_zones import unassign_network_from_zone
 
-        zone_data = {"data": {"networks": ["net-001", "net-002"]}}
+        zone_data = {"data": {"networkIds": ["net-001", "net-002"]}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -529,6 +534,7 @@ class TestUnassignNetworkFromZone:
             )
 
             assert result["dry_run"] is True
+            assert "networkIds" in result["payload"]
             mock_instance.put.assert_not_called()
 
 
@@ -537,7 +543,7 @@ class TestGetZoneNetworks:
     async def test_get_zone_networks_success(self, mock_settings):
         from src.tools.firewall_zones import get_zone_networks
 
-        zone_data = {"data": {"networks": ["net-001", "net-002"]}}
+        zone_data = {"data": {"networkIds": ["net-001", "net-002"]}}
         network1_data = {"data": {"name": "Network1"}}
         network2_data = {"data": {"name": "Network2"}}
 
@@ -573,7 +579,7 @@ class TestGetZoneNetworks:
     async def test_get_zone_networks_empty(self, mock_settings):
         from src.tools.firewall_zones import get_zone_networks
 
-        zone_data = {"data": {"networks": []}}
+        zone_data = {"data": {"networkIds": []}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()
@@ -591,7 +597,7 @@ class TestGetZoneNetworks:
     async def test_get_zone_networks_fetch_error_handled(self, mock_settings):
         from src.tools.firewall_zones import get_zone_networks
 
-        zone_data = {"data": {"networks": ["net-001"]}}
+        zone_data = {"data": {"networkIds": ["net-001"]}}
 
         with patch("src.tools.firewall_zones.UniFiClient") as mock_client:
             mock_instance = AsyncMock()

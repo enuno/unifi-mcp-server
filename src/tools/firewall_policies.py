@@ -1,6 +1,7 @@
 """Firewall policies management tools for UniFi v2 API."""
 
-from typing import Any
+import asyncio
+from typing import Any, Literal
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
@@ -353,13 +354,15 @@ async def list_firewall_policies(
     Only available with local gateway API (api_type="local").
 
     The UniFi v2 API returns all policies in a single response (no server-side
-    pagination). Use limit and offset to page through results client-side.
+    pagination). When limit/offset are omitted, all matching policies are returned.
+    Use limit and offset to page through results client-side.
 
     Args:
         site_id: Site identifier (default: "default")
         settings: Application settings
-        limit: Maximum number of policies to return
-        offset: Number of policies to skip
+        limit: Maximum number of policies to return. When omitted, all matching
+            policies are returned.
+        offset: Number of policies to skip (only applied when limit is provided)
         source_zone_id: Filter to policies with this source zone ID
         destination_zone_id: Filter to policies with this destination zone ID
 
@@ -375,7 +378,6 @@ async def list_firewall_policies(
         and UNIFI_LOCAL_HOST to use this tool.
     """
     _ensure_local_api(settings)
-    limit, offset = validate_limit_offset(limit, offset)
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing firewall policies for site {site_id}"))
@@ -403,7 +405,11 @@ async def list_firewall_policies(
                 if p.get("destination", {}).get("zone_id") == destination_zone_id
             ]
 
-        return all_policies[offset : offset + limit]
+        # Only paginate when the caller explicitly requests it
+        if limit is not None or offset is not None:
+            limit, offset = validate_limit_offset(limit, offset)
+            return all_policies[offset : offset + limit]
+        return all_policies
 
 
 async def get_firewall_policy(
@@ -726,7 +732,7 @@ async def update_firewall_policy(
     site_id: str = "default",
     settings: Settings = None,
     name: str | None = None,
-    action: str | None = None,
+    action: Literal["ALLOW", "BLOCK"] | None = None,
     enabled: bool | None = None,
     logging: bool | None = None,
     ip_version: str | None = None,
@@ -827,6 +833,21 @@ async def update_firewall_policy(
             raise ValueError(
                 f"Invalid ip_version '{ip_version}'. Must be one of: {list(_VALID_IP_VERSIONS)}"
             )
+
+
+    if protocol is not None and protocol.lower() not in {"all", "tcp", "udp", "tcp_udp", "icmpv6"}:
+        raise ValueError(
+            f"Invalid protocol '{protocol}'. Must be one of: all, icmpv6, tcp, tcp_udp, udp."
+        )
+    if connection_state_type is not None and connection_state_type.upper() not in {
+        "ALL",
+        "RESPOND_ONLY",
+        "CUSTOM",
+    }:
+        raise ValueError(
+            f"Invalid connection_state_type '{connection_state_type}'. "
+            "Must be one of: ALL, CUSTOM, RESPOND_ONLY."
+        )
 
     # Collect top-level overrides so we can both preview them and merge them.
     overrides: dict[str, Any] = {}
@@ -1124,16 +1145,19 @@ async def get_zone_policy_matrix(
         # Resolve the site UUID required by the integration v1 zones endpoint
         resolved_site_id = await client.resolve_site_id(site_id)
 
-        # Fetch zones (integration v1) and policies (v2) sequentially —
-        # both use the same authenticated client
+        # Fetch zones (integration v1) and policies (v2) concurrently —
+        # the two requests are independent so we can run them in parallel.
         zones_endpoint = settings.get_integration_path(f"sites/{resolved_site_id}/firewall/zones")
-        zones_response = await client.get(zones_endpoint)
+        policies_endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies"
+
+        zones_response, policies_response = await asyncio.gather(
+            client.get(zones_endpoint),
+            client.get(policies_endpoint),
+        )
+
         zones_data = (
             zones_response.get("data", []) if isinstance(zones_response, dict) else zones_response
         )
-
-        policies_endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies"
-        policies_response = await client.get(policies_endpoint)
         policies_data = (
             policies_response
             if isinstance(policies_response, list)

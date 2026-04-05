@@ -633,4 +633,3 @@ class TestGetZoneNetworks:
             assert len(result) == 1
             assert result[0]["network_id"] == "net-001"
             assert result[0]["network_name"] is None
-

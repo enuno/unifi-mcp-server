@@ -17,6 +17,7 @@ from .tools import devices as devices_tools
 from .tools import dpi as dpi_tools
 from .tools import dpi_tools as dpi_new_tools
 from .tools import firewall as firewall_tools
+from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
@@ -379,6 +380,93 @@ async def delete_firewall_rule(
 ) -> dict:
     """Delete a firewall rule (requires confirm=True)."""
     return await firewall_tools.delete_firewall_rule(site_id, rule_id, settings, confirm, dry_run)
+
+
+# Firewall Policy Tools (v2 API — zone-based policies)
+@mcp.tool()
+async def list_firewall_policies(
+    site_id: str,
+    limit: int | None = None,
+    offset: int | None = None,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
+) -> list[dict]:
+    """List firewall policies for a site. Optionally filter by source/destination zone ID and paginate with limit/offset."""
+    return await firewall_policies_tools.list_firewall_policies(
+        site_id, settings, limit, offset, source_zone_id, destination_zone_id
+    )
+
+
+@mcp.tool()
+async def get_firewall_policy(policy_id: str, site_id: str) -> dict:
+    """Get a specific firewall policy by ID."""
+    return await firewall_policies_tools.get_firewall_policy(policy_id, site_id, settings)
+
+
+@mcp.tool()
+async def create_firewall_policy(
+    name: str,
+    action: str,
+    site_id: str,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
+    source_matching_target: str = "ANY",
+    destination_matching_target: str = "ANY",
+    protocol: str = "all",
+    enabled: bool = True,
+    description: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Create a new zone-based firewall policy (requires confirm=True)."""
+    return await firewall_policies_tools.create_firewall_policy(
+        name, action, site_id, settings,
+        source_zone_id, destination_zone_id,
+        source_matching_target, destination_matching_target,
+        protocol, enabled, description, confirm, dry_run,
+    )
+
+
+@mcp.tool()
+async def update_firewall_policy(
+    policy_id: str,
+    site_id: str = "default",
+    name: str | None = None,
+    action: str | None = None,
+    enabled: bool | None = None,
+    description: str | None = None,
+    protocol: str | None = None,
+    ip_version: str | None = None,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
+    source_matching_target: str | None = None,
+    destination_matching_target: str | None = None,
+    logging: bool | None = None,
+    connection_state_type: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Update an existing firewall policy. Fetches current state and merges changes (requires confirm=True)."""
+    return await firewall_policies_tools.update_firewall_policy(
+        policy_id, site_id, settings,
+        name, action, enabled, description, protocol, ip_version,
+        source_zone_id, destination_zone_id,
+        source_matching_target, destination_matching_target,
+        logging, connection_state_type, confirm, dry_run,
+    )
+
+
+@mcp.tool()
+async def delete_firewall_policy(
+    policy_id: str,
+    site_id: str = "default",
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict:
+    """Delete a firewall policy (requires confirm=True)."""
+    return await firewall_policies_tools.delete_firewall_policy(
+        policy_id, site_id, settings, confirm, dry_run
+    )
 
 
 # Backup and Restore Tools (Phase 4)
@@ -1727,23 +1815,6 @@ async def list_countries(
     return await ref_tools.list_countries(settings, limit, offset)
 
 
-# Zone-Based Firewall Matrix Tools
-# ⚠️ REMOVED: All zone policy matrix and application blocking tools have been removed
-# because the UniFi API endpoints do not exist (verified on API v10.0.156).
-# See tests/verification/PHASE2_FINDINGS.md for details.
-#
-# Removed tools:
-# - get_zbf_matrix (endpoint /firewall/policies/zone-matrix does not exist)
-# - get_zone_policies (endpoint /firewall/policies/zones/{id} does not exist)
-# - update_zbf_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
-# - block_application_by_zone (endpoint /firewall/zones/{id}/app-block does not exist)
-# - list_blocked_applications (endpoint /firewall/zones/{id}/app-block does not exist)
-# - get_zone_matrix_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
-# - delete_zbf_policy (endpoint /firewall/policies/zone-matrix/{src}/{dst} does not exist)
-#
-# Alternative: Configure zone policies manually in UniFi Console UI
-
-
 @mcp.tool()
 async def assign_network_to_zone(
     site_id: str,
@@ -1790,16 +1861,6 @@ async def unassign_network_from_zone(
         site_id, zone_id, network_id, settings, confirm, dry_run
     )
 
-
-# ⚠️ REMOVED: get_zone_statistics - endpoint does not exist
-# Zone statistics endpoint (/firewall/zones/{id}/statistics) does not exist in UniFi API v10.0.156.
-# Monitor traffic via /sites/{siteId}/clients endpoint instead.
-
-# ⚠️ REMOVED: get_zone_matrix_policy - endpoint does not exist
-# Zone matrix policy endpoint does not exist in UniFi API v10.0.156.
-
-# ⚠️ REMOVED: delete_zbf_policy - endpoint does not exist
-# Zone policy delete endpoint does not exist in UniFi API v10.0.156.
 
 
 # Traffic Flows Tools

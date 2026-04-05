@@ -6,7 +6,7 @@ from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..models.firewall_policy import FirewallPolicy, FirewallPolicyCreate
 from ..utils import ResourceNotFoundError, get_logger, log_audit
-from ..utils.validators import coerce_bool
+from ..utils.validators import coerce_bool, validate_limit_offset
 
 logger = get_logger(__name__)
 
@@ -23,15 +23,26 @@ def _ensure_local_api(settings: Settings) -> None:
 async def list_firewall_policies(
     site_id: str,
     settings: Settings,
+    limit: int | None = None,
+    offset: int | None = None,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """List all firewall policies (Traffic & Firewall Rules) for a site.
 
     This tool fetches firewall policies from the UniFi v2 API endpoint.
     Only available with local gateway API (api_type="local").
 
+    The UniFi v2 API returns all policies in a single response (no server-side
+    pagination). Use limit and offset to page through results client-side.
+
     Args:
         site_id: Site identifier (default: "default")
         settings: Application settings
+        limit: Maximum number of policies to return
+        offset: Number of policies to skip
+        source_zone_id: Filter to policies with this source zone ID
+        destination_zone_id: Filter to policies with this destination zone ID
 
     Returns:
         List of firewall policy objects
@@ -45,6 +56,7 @@ async def list_firewall_policies(
         and UNIFI_LOCAL_HOST to use this tool.
     """
     _ensure_local_api(settings)
+    limit, offset = validate_limit_offset(limit, offset)
 
     async with UniFiClient(settings) as client:
         logger.info(f"Listing firewall policies for site {site_id}")
@@ -57,7 +69,21 @@ async def list_firewall_policies(
 
         policies_data = response if isinstance(response, list) else response.get("data", [])
 
-        return [FirewallPolicy(**policy).model_dump() for policy in policies_data]
+        all_policies = [FirewallPolicy(**policy).model_dump() for policy in policies_data]
+
+        # Apply zone filters before pagination
+        if source_zone_id is not None:
+            all_policies = [
+                p for p in all_policies if p.get("source", {}).get("zone_id") == source_zone_id
+            ]
+        if destination_zone_id is not None:
+            all_policies = [
+                p
+                for p in all_policies
+                if p.get("destination", {}).get("zone_id") == destination_zone_id
+            ]
+
+        return all_policies[offset : offset + limit]
 
 
 async def get_firewall_policy(
@@ -262,20 +288,40 @@ async def update_firewall_policy(
     name: str | None = None,
     action: str | None = None,
     enabled: bool | None = None,
+    description: str | None = None,
+    protocol: str | None = None,
+    ip_version: str | None = None,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
+    source_matching_target: str | None = None,
+    destination_matching_target: str | None = None,
+    logging: bool | None = None,
+    connection_state_type: str | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update an existing firewall policy.
 
-    Only provided fields are updated (partial update).
+    The UniFi v2 API requires a full object on PUT (partial payloads return 400).
+    This function fetches the current policy, merges the provided changes, then
+    PUTs the complete merged object. Only provided (non-None) fields are changed.
 
     Args:
         policy_id: ID of policy to update
         site_id: Site identifier
         settings: Application settings
-        name: New policy name (optional)
-        action: New action ALLOW/BLOCK (optional)
-        enabled: Enable/disable (optional)
+        name: Policy name
+        action: ALLOW or BLOCK
+        enabled: Enable/disable the policy
+        description: Policy description
+        protocol: all, tcp, udp, tcp_udp, or icmpv6
+        ip_version: IPV4, IPV6, or BOTH
+        source_zone_id: Source zone ID
+        destination_zone_id: Destination zone ID
+        source_matching_target: ANY, IP, NETWORK, REGION, or CLIENT
+        destination_matching_target: ANY, IP, NETWORK, or REGION
+        logging: Enable/disable rule logging
+        connection_state_type: ALL, RESPOND_ONLY, or CUSTOM
         confirm: REQUIRED True for mutating operations
         dry_run: Preview changes without applying
 
@@ -284,7 +330,7 @@ async def update_firewall_policy(
 
     Raises:
         NotImplementedError: When using cloud API (v2 endpoints require local access)
-        ValueError: If confirmation not provided
+        ValueError: If confirmation not provided or invalid field values
         ResourceNotFoundError: If policy not found
     """
     _ensure_local_api(settings)
@@ -295,25 +341,8 @@ async def update_firewall_policy(
             "Use dry_run=True to preview changes first."
         )
 
-    # Build update payload with only provided fields
-    update_data: dict[str, Any] = {}
-    if name is not None:
-        update_data["name"] = name
-    if action is not None:
-        action_upper = action.upper()
-        if action_upper not in ["ALLOW", "BLOCK"]:
-            raise ValueError(f"Invalid action '{action}'. Must be ALLOW or BLOCK.")
-        update_data["action"] = action_upper
-    if enabled is not None:
-        update_data["enabled"] = enabled
-
-    if dry_run:
-        logger.info(f"DRY RUN: Would update firewall policy {policy_id}")
-        return {
-            "status": "dry_run",
-            "policy_id": policy_id,
-            "changes": update_data,
-        }
+    if action is not None and action.upper() not in ["ALLOW", "BLOCK"]:
+        raise ValueError(f"Invalid action '{action}'. Must be ALLOW or BLOCK.")
 
     async with UniFiClient(settings) as client:
         logger.info(f"Updating firewall policy {policy_id} for site {site_id}")
@@ -323,25 +352,104 @@ async def update_firewall_policy(
 
         endpoint = f"{settings.get_v2_api_path(site_id)}/firewall-policies/{policy_id}"
 
+        # Fetch current policy — required because v2 PUT needs the full object
         try:
-            response = await client.put(endpoint, json_data=update_data)
+            current_response = await client.get(endpoint)
         except ResourceNotFoundError as err:
             raise ResourceNotFoundError("firewall_policy", policy_id) from err
 
-        if isinstance(response, dict) and "data" in response:
-            data = response["data"]
-        else:
-            data = response
+        current_data = (
+            current_response["data"]
+            if isinstance(current_response, dict) and "data" in current_response
+            else current_response
+        )
+        if not current_data:
+            raise ResourceNotFoundError("firewall_policy", policy_id)
+
+        # Start with a copy of the current full object (preserves all fields the API needs)
+        payload: dict[str, Any] = dict(current_data)
+
+        # Merge top-level scalar changes
+        if name is not None:
+            payload["name"] = name
+        if action is not None:
+            payload["action"] = action.upper()
+        if enabled is not None:
+            payload["enabled"] = enabled
+        if description is not None:
+            payload["description"] = description
+        if protocol is not None:
+            payload["protocol"] = protocol
+        if ip_version is not None:
+            payload["ip_version"] = ip_version.upper()
+        if logging is not None:
+            payload["logging"] = logging
+        if connection_state_type is not None:
+            payload["connection_state_type"] = connection_state_type.upper()
+
+        # Merge source/destination zone and matching target changes
+        if source_zone_id is not None or source_matching_target is not None:
+            source = dict(payload.get("source", {}))
+            if source_zone_id is not None:
+                source["zone_id"] = source_zone_id
+            if source_matching_target is not None:
+                source["matching_target"] = source_matching_target.upper()
+            payload["source"] = source
+
+        if destination_zone_id is not None or destination_matching_target is not None:
+            destination = dict(payload.get("destination", {}))
+            if destination_zone_id is not None:
+                destination["zone_id"] = destination_zone_id
+            if destination_matching_target is not None:
+                destination["matching_target"] = destination_matching_target.upper()
+            payload["destination"] = destination
+
+        # Collect what changed for audit log and dry-run output
+        changes: dict[str, Any] = {}
+        for field in [
+            "name",
+            "action",
+            "enabled",
+            "description",
+            "protocol",
+            "ip_version",
+            "logging",
+            "connection_state_type",
+        ]:
+            if payload.get(field) != current_data.get(field):
+                changes[field] = payload[field]
+        if payload.get("source") != current_data.get("source"):
+            changes["source"] = payload["source"]
+        if payload.get("destination") != current_data.get("destination"):
+            changes["destination"] = payload["destination"]
+
+        if coerce_bool(dry_run):
+            logger.info(f"DRY RUN: Would update firewall policy {policy_id}")
+            return {
+                "status": "dry_run",
+                "policy_id": policy_id,
+                "changes": changes,
+                "full_payload": payload,
+            }
+
+        try:
+            response = await client.put(endpoint, json_data=payload)
+        except ResourceNotFoundError as err:
+            raise ResourceNotFoundError("firewall_policy", policy_id) from err
+
+        updated_data = (
+            response["data"] if isinstance(response, dict) and "data" in response else response
+        )
 
         logger.info(f"Updated firewall policy {policy_id}")
         log_audit(
             operation="update_firewall_policy",
-            parameters={"policy_id": policy_id, "site_id": site_id, **update_data},
+            parameters={"policy_id": policy_id, "site_id": site_id, **changes},
             result="success",
             site_id=site_id,
         )
 
-        return FirewallPolicy(**data).model_dump()
+        return FirewallPolicy(**updated_data).model_dump()
 
 
 async def delete_firewall_policy(

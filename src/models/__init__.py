@@ -48,7 +48,7 @@ from .traffic_matching_list import (
 from .voucher import Voucher
 from .vpn import VPNServer, VPNTunnel
 from .wan import WANConnection
-from .zbf_matrix import ApplicationBlockRule, ZoneNetworkAssignment, ZonePolicy, ZonePolicyMatrix
+from .zbf_matrix import ZoneNetworkAssignment
 
 __all__ = [
     "Site",
@@ -71,9 +71,6 @@ __all__ = [
     "DPICategory",
     "DPIApplication",
     "Country",
-    "ZonePolicyMatrix",
-    "ZonePolicy",
-    "ApplicationBlockRule",
     "ZoneNetworkAssignment",
     "TrafficFlow",
     "FlowStatistics",

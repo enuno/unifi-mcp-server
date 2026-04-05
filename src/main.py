@@ -391,7 +391,29 @@ async def list_firewall_policies(
     source_zone_id: str | None = None,
     destination_zone_id: str | None = None,
 ) -> list[dict]:
-    """List firewall policies for a site. Optionally filter by source/destination zone ID and paginate with limit/offset."""
+    """List firewall policies (Traffic & Firewall Rules) for a site.
+
+    Returns all matching policies when limit/offset are omitted. Use limit and
+    offset to page through large result sets.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        site_id: Site identifier (default: "default").
+        limit: Maximum number of policies to return. When omitted, all matching
+            policies are returned.
+        offset: Number of policies to skip. Only applied when limit is provided.
+        source_zone_id: If provided, only return policies whose source zone
+            matches this zone ID.
+        destination_zone_id: If provided, only return policies whose destination
+            zone matches this zone ID.
+
+    Returns:
+        List of firewall policy objects.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+    """
     return await firewall_policies_tools.list_firewall_policies(
         site_id, settings, limit, offset, source_zone_id, destination_zone_id
     )
@@ -399,7 +421,21 @@ async def list_firewall_policies(
 
 @mcp.tool()
 async def get_firewall_policy(policy_id: str, site_id: str) -> dict:
-    """Get a specific firewall policy by ID."""
+    """Get a specific firewall policy by ID.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        policy_id: MongoDB ObjectID of the policy to retrieve.
+        site_id: Site identifier (default: "default").
+
+    Returns:
+        Firewall policy object.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+        ResourceNotFoundError: If no policy with the given ID exists.
+    """
     return await firewall_policies_tools.get_firewall_policy(policy_id, site_id, settings)
 
 
@@ -418,12 +454,51 @@ async def create_firewall_policy(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
-    """Create a new zone-based firewall policy (requires confirm=True)."""
+    """Create a new zone-based firewall policy.
+
+    Use this tool when no existing policy covers the desired zone pair. To modify
+    a policy that already exists, use update_firewall_policy instead.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        name: Human-readable policy name.
+        action: Policy action. Must be "ALLOW" or "BLOCK".
+        site_id: Site identifier (default: "default").
+        source_zone_id: Source zone ID (ObjectID). Leave None for any-zone source.
+        destination_zone_id: Destination zone ID (ObjectID). Leave None for any-zone destination.
+        source_matching_target: Source matching type. One of "ANY", "IP", "NETWORK",
+            "REGION", "CLIENT". Default: "ANY".
+        destination_matching_target: Destination matching type. One of "ANY", "IP",
+            "NETWORK", "REGION". Default: "ANY".
+        protocol: Protocol to match. One of "all", "tcp", "udp", "tcp_udp", "icmpv6".
+            Default: "all".
+        enabled: Whether the policy is active. Default: True.
+        description: Optional description.
+        confirm: Must be True to apply the change. Use dry_run=True to preview first.
+        dry_run: If True, return a preview of the policy without creating it.
+
+    Returns:
+        Created policy object, or a dry-run preview dict.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+        ValueError: If confirm is not True and dry_run is not True.
+    """
     return await firewall_policies_tools.create_firewall_policy(
-        name, action, site_id, settings,
-        source_zone_id, destination_zone_id,
-        source_matching_target, destination_matching_target,
-        protocol, enabled, description, confirm, dry_run,
+        name,
+        action,
+        site_id,
+        settings,
+        source_zone_id,
+        destination_zone_id,
+        source_matching_target,
+        destination_matching_target,
+        protocol,
+        enabled,
+        description,
+        confirm,
+        dry_run,
     )
 
 
@@ -446,13 +521,65 @@ async def update_firewall_policy(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
-    """Update an existing firewall policy. Fetches current state and merges changes (requires confirm=True)."""
+    """Update fields on an existing firewall policy.
+
+    Fetches the current policy, merges the provided changes, and PUTs the full
+    object back (the v2 API requires a complete payload). Only fields that are
+    explicitly provided (non-None) are changed.
+
+    Use get_firewall_policy first to obtain the policy_id. To create a new policy
+    use create_firewall_policy instead.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        policy_id: MongoDB ObjectID of the policy to update.
+        site_id: Site identifier (default: "default").
+        name: New policy name.
+        action: Policy action. One of "ALLOW", "BLOCK".
+        enabled: Enable or disable the policy.
+        description: Policy description.
+        protocol: Protocol to match. One of "all", "tcp", "udp", "tcp_udp", "icmpv6".
+        ip_version: IP version filter. One of "IPV4", "IPV6", "BOTH".
+        source_zone_id: New source zone ID (ObjectID).
+        destination_zone_id: New destination zone ID (ObjectID).
+        source_matching_target: Source matching type. One of "ANY", "IP", "NETWORK",
+            "REGION", "CLIENT".
+        destination_matching_target: Destination matching type. One of "ANY", "IP",
+            "NETWORK", "REGION".
+        logging: Enable or disable rule logging.
+        connection_state_type: Connection state matching. One of "ALL", "RESPOND_ONLY",
+            "CUSTOM".
+        confirm: Must be True to apply the change. Use dry_run=True to preview first.
+        dry_run: If True, return a preview of the merged payload without applying it.
+
+    Returns:
+        Updated policy object, or a dry-run preview dict.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+        ValueError: If confirm is not True and dry_run is not True, or if an
+            enum-like parameter has an invalid value.
+        ResourceNotFoundError: If no policy with the given ID exists.
+    """
     return await firewall_policies_tools.update_firewall_policy(
-        policy_id, site_id, settings,
-        name, action, enabled, description, protocol, ip_version,
-        source_zone_id, destination_zone_id,
-        source_matching_target, destination_matching_target,
-        logging, connection_state_type, confirm, dry_run,
+        policy_id,
+        site_id,
+        settings,
+        name,
+        action,
+        enabled,
+        description,
+        protocol,
+        ip_version,
+        source_zone_id,
+        destination_zone_id,
+        source_matching_target,
+        destination_matching_target,
+        logging,
+        connection_state_type,
+        confirm,
+        dry_run,
     )
 
 
@@ -463,7 +590,24 @@ async def delete_firewall_policy(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
-    """Delete a firewall policy (requires confirm=True)."""
+    """Delete a firewall policy permanently.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        policy_id: MongoDB ObjectID of the policy to delete.
+        site_id: Site identifier (default: "default").
+        confirm: Must be True to apply the deletion. Use dry_run=True to preview first.
+        dry_run: If True, return a preview of what would be deleted without deleting it.
+
+    Returns:
+        Confirmation dict with the deleted policy ID, or a dry-run preview dict.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+        ValueError: If confirm is not True and dry_run is not True.
+        ResourceNotFoundError: If no policy with the given ID exists.
+    """
     return await firewall_policies_tools.delete_firewall_policy(
         policy_id, site_id, settings, confirm, dry_run
     )
@@ -471,7 +615,30 @@ async def delete_firewall_policy(
 
 @mcp.tool()
 async def get_zone_policy_matrix(site_id: str = "default") -> dict:
-    """Get a snapshot of the full zone-based firewall matrix — all policies grouped by source/destination zone pair."""
+    """Get a snapshot of the zone-based firewall policy matrix.
+
+    Returns all firewall zones and all policies, grouped by source/destination
+    zone pair. Useful for auditing the full security posture at a glance.
+
+    Note: The v2 policies API uses MongoDB ObjectIDs for zone_id fields while the
+    integration v1 zones API uses UUIDs — these ID spaces cannot be automatically
+    joined. Use list_firewall_zones to map zone names to their ObjectIDs.
+
+    **Local API only** — requires UNIFI_API_TYPE=local.
+
+    Args:
+        site_id: Site identifier (default: "default").
+
+    Returns:
+        Dict with keys:
+        - ``zones``: list of zone objects (name, id, network_count).
+        - ``matrix``: list of zone-pair entries, each with source_zone_id,
+          destination_zone_id, policy_count, and policies list.
+        - ``summary``: counts of total_zones, total_policies, covered_zone_pairs.
+
+    Raises:
+        NotImplementedError: If UNIFI_API_TYPE is not "local".
+    """
     return await firewall_policies_tools.get_zone_policy_matrix(site_id, settings)
 
 
@@ -1866,7 +2033,6 @@ async def unassign_network_from_zone(
     return await firewall_zones_tools.unassign_network_from_zone(
         site_id, zone_id, network_id, settings, confirm, dry_run
     )
-
 
 
 # Traffic Flows Tools

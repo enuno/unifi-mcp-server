@@ -1,9 +1,9 @@
 # Endpoint Research: Firewall Policies (v2 API)
 
-**Status:** VERIFIED ✅  
-**Verified on:** UniFi Network (UDM-Pro-Max, firmware current as of 2026-04-05)  
-**Verified date:** 2026-04-05  
-**Verified by:** Live curl probes against 192.168.100.1  
+**Status:** VERIFIED ✅
+**Verified on:** UniFi Network (UDM-Pro-Max, firmware current as of 2026-04-05)
+**Verified date:** 2026-04-05
+**Verified by:** Live curl probes against 192.168.100.1
 **Controller hardware:** UDM-Pro-Max
 
 ---

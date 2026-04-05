@@ -1154,7 +1154,7 @@ Zone-Based Firewall provides modern, scalable network security by grouping netwo
 
 - ZBF is **NOT available via Cloud API** - requires local gateway API access (`api_type='local'`)
 - Tested on UniFi Express 7 and UDM Pro (API v10.0.156)
-- Only **2 out of 15 implemented endpoints actually exist** in the UniFi API
+- Zone management (7 tools) and firewall policy management (6 tools) are available via the local API
 
 **What Works (✅):**
 
@@ -1168,7 +1168,6 @@ Zone-Based Firewall provides modern, scalable network security by grouping netwo
 
 **What Doesn't Work (❌ Endpoints Do Not Exist):**
 
-- ❌ Zone policy matrix operations (get/update/delete policies between zones)
 - ❌ Application blocking per zone
 - ❌ Zone traffic statistics
 - **These tools have been REMOVED** - configure these features in UniFi Console UI
@@ -1177,7 +1176,7 @@ Zone-Based Firewall provides modern, scalable network security by grouping netwo
 
 - **Zones:** Logical groups of networks (e.g., Internal, External, Gateway, VPN, Hotspot, DMZ)
 - **Network Assignment:** Assign networks to zones for organization
-- **Zone-to-Zone Policies:** Must be configured manually in UniFi Console UI
+- **Zone-to-Zone Policies:** Managed via the Firewall Policy tools below (v2 API)
 - **Application Blocking:** Use DPI categories at network level instead
 
 #### Zone Management
@@ -1389,11 +1388,188 @@ networks = await mcp.call_tool("get_zone_networks", {
 
 **⚠️ Important Notes:**
 
-- Zone-to-zone policies must be configured in UniFi Console UI
 - Application blocking per zone is not available via API - use DPI categories at network level
 - Zone traffic statistics are not available - use client statistics instead
 - Always use `dry_run=True` to preview changes before applying
 - See `tests/verification/PHASE2_FINDINGS.md` for complete verification details
+
+#### Firewall Policy Management (v2 API)
+
+> **Local API only** — requires `UNIFI_API_TYPE=local`. Not available via Cloud API.
+
+Zone-based firewall policies (Traffic & Firewall Rules) define what traffic is allowed or blocked between zones. The v2 API requires a complete object on PUT — all update operations fetch the current policy first and merge changes.
+
+##### `list_firewall_policies`
+
+List all firewall policies for a site, with optional zone filtering and pagination.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Maximum policies to return. When omitted, **all** matching policies are returned.
+- `offset` (integer, optional): Policies to skip. Only applied when `limit` is provided.
+- `source_zone_id` (string, optional): Filter to policies with this source zone ID
+- `destination_zone_id` (string, optional): Filter to policies with this destination zone ID
+
+**Returns:** Array of firewall policy objects.
+
+**Example:**
+
+```python
+# All policies
+policies = await mcp.call_tool("list_firewall_policies", {"site_id": "default"})
+
+# Policies leaving the IoT zone
+iot_outbound = await mcp.call_tool("list_firewall_policies", {
+    "site_id": "default",
+    "source_zone_id": "<iot-zone-object-id>"
+})
+```
+
+---
+
+##### `get_firewall_policy`
+
+Get a single firewall policy by ID.
+
+**Parameters:**
+
+- `policy_id` (string, required): MongoDB ObjectID of the policy
+- `site_id` (string, required): Site identifier
+
+**Returns:** Firewall policy object.
+
+---
+
+##### `create_firewall_policy`
+
+Create a new zone-based firewall policy. Use `update_firewall_policy` if the policy already exists.
+
+**Parameters:**
+
+- `name` (string, required): Policy name
+- `action` (string, required): `"ALLOW"` or `"BLOCK"`
+- `site_id` (string, required): Site identifier
+- `source_zone_id` (string, optional): Source zone ObjectID
+- `destination_zone_id` (string, optional): Destination zone ObjectID
+- `source_matching_target` (string, optional): `"ANY"`, `"IP"`, `"NETWORK"`, `"REGION"`, or `"CLIENT"`. Default: `"ANY"`
+- `destination_matching_target` (string, optional): `"ANY"`, `"IP"`, `"NETWORK"`, or `"REGION"`. Default: `"ANY"`
+- `protocol` (string, optional): `"all"`, `"tcp"`, `"udp"`, `"tcp_udp"`, or `"icmpv6"`. Default: `"all"`
+- `enabled` (boolean, optional): Whether the policy is active. Default: `true`
+- `description` (string, optional): Policy description
+- `confirm` (boolean, required): Must be `true` to apply. Use `dry_run=true` to preview first.
+- `dry_run` (boolean, optional): Return a preview without creating the policy.
+
+**Returns:** Created policy object, or a dry-run preview dict.
+
+**Example:**
+
+```python
+# Preview first
+preview = await mcp.call_tool("create_firewall_policy", {
+    "name": "Block IoT to LAN",
+    "action": "BLOCK",
+    "site_id": "default",
+    "source_zone_id": "<iot-zone-id>",
+    "destination_zone_id": "<lan-zone-id>",
+    "dry_run": True
+})
+
+# Apply
+result = await mcp.call_tool("create_firewall_policy", {
+    "name": "Block IoT to LAN",
+    "action": "BLOCK",
+    "site_id": "default",
+    "source_zone_id": "<iot-zone-id>",
+    "destination_zone_id": "<lan-zone-id>",
+    "confirm": True
+})
+```
+
+---
+
+##### `update_firewall_policy`
+
+Update fields on an existing policy. Only provided (non-None) fields are changed; all others retain their current values.
+
+**Parameters:**
+
+- `policy_id` (string, required): MongoDB ObjectID of the policy to update
+- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `name` (string, optional): New policy name
+- `action` (string, optional): `"ALLOW"` or `"BLOCK"`
+- `enabled` (boolean, optional): Enable or disable the policy
+- `description` (string, optional): Policy description
+- `protocol` (string, optional): `"all"`, `"tcp"`, `"udp"`, `"tcp_udp"`, or `"icmpv6"`
+- `ip_version` (string, optional): `"IPV4"`, `"IPV6"`, or `"BOTH"`
+- `source_zone_id` (string, optional): New source zone ObjectID
+- `destination_zone_id` (string, optional): New destination zone ObjectID
+- `source_matching_target` (string, optional): `"ANY"`, `"IP"`, `"NETWORK"`, `"REGION"`, or `"CLIENT"`
+- `destination_matching_target` (string, optional): `"ANY"`, `"IP"`, `"NETWORK"`, or `"REGION"`
+- `logging` (boolean, optional): Enable or disable rule logging
+- `connection_state_type` (string, optional): `"ALL"`, `"RESPOND_ONLY"`, or `"CUSTOM"`
+- `confirm` (boolean, required): Must be `true` to apply. Use `dry_run=true` to preview first.
+- `dry_run` (boolean, optional): Return a preview of the merged payload without applying it.
+
+**Returns:** Updated policy object, or a dry-run preview dict.
+
+---
+
+##### `delete_firewall_policy`
+
+Delete a firewall policy permanently.
+
+**Parameters:**
+
+- `policy_id` (string, required): MongoDB ObjectID of the policy to delete
+- `site_id` (string, optional): Site identifier. Default: `"default"`
+- `confirm` (boolean, required): Must be `true` to apply. Use `dry_run=true` to preview first.
+- `dry_run` (boolean, optional): Return a preview without deleting.
+
+**Returns:** Confirmation dict with the deleted policy ID.
+
+---
+
+##### `get_zone_policy_matrix`
+
+Get a snapshot of the full zone-based firewall matrix — all policies grouped by source/destination zone pair. Useful for auditing the current security posture at a glance.
+
+> **Note:** The v2 policies API uses MongoDB ObjectIDs for `zone_id` fields while the integration v1 zones API uses UUIDs. These ID spaces cannot be automatically joined. Use `list_firewall_zones` to map zone names to their ObjectIDs.
+
+**Parameters:**
+
+- `site_id` (string, optional): Site identifier. Default: `"default"`
+
+**Returns:**
+
+```json
+{
+  "zones": [
+    {"id": "uuid-...", "name": "IoT", "network_count": 2}
+  ],
+  "matrix": [
+    {
+      "source_zone_id": "oid-iot",
+      "destination_zone_id": "oid-lan",
+      "policy_count": 2,
+      "policies": [...]
+    }
+  ],
+  "summary": {
+    "total_zones": 5,
+    "total_policies": 12,
+    "covered_zone_pairs": 4
+  }
+}
+```
+
+**Example:**
+
+```python
+matrix = await mcp.call_tool("get_zone_policy_matrix", {"site_id": "default"})
+for pair in matrix["matrix"]:
+    print(f"{pair['source_zone_id']} → {pair['destination_zone_id']}: {pair['policy_count']} policies")
+```
 
 ### Network Configuration
 

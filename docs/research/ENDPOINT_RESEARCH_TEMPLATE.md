@@ -1,9 +1,9 @@
 # Endpoint Research: [ENDPOINT NAME]
 
-**Status:** UNVERIFIED / VERIFIED  
-**Verified on:** [controller firmware version, e.g. UniFi Network 9.x.x]  
-**Verified date:** [YYYY-MM-DD]  
-**Verified by:** [who ran the probe]  
+**Status:** UNVERIFIED / VERIFIED
+**Verified on:** [controller firmware version, e.g. UniFi Network 9.x.x]
+**Verified date:** [YYYY-MM-DD]
+**Verified by:** [who ran the probe]
 **Controller hardware:** [e.g. UDM-Pro-Max]
 
 ---

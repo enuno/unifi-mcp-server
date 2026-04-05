@@ -1,5 +1,96 @@
 # UniFi MCP Server - Claude Instructions
 
+---
+
+## ⚡ Fork Context — Read This First
+
+This is **Aaron's fork** (`busukajw/unifi-mcp-server`) of `enuno/unifi-mcp-server`.
+The goal is to fix real bugs discovered during home network segmentation work, then
+contribute them back upstream as PRs.
+
+### What we're here to fix
+
+| # | Issue | File | Status |
+|---|-------|------|--------|
+| 1 | `assign_network_to_zone` sends `networks` but API expects `networkIds` | `src/tools/firewall_zones.py` | DONE ✅ (PR #54) |
+| 2 | `list_firewall_policies` has no pagination | `src/tools/firewall_policies.py` | DONE ✅ (PR #55) |
+
+### Current work — ZBF management
+
+| # | Task | Branch | Status |
+|---|------|--------|--------|
+| 3 | Remove dead zbf_matrix + broken zone tools | `feat/zbf-management` | TODO |
+| 4 | Full-field `update_firewall_policy` | `feat/zbf-management` | BLOCKED — API research gate (see `docs/research/firewall/FIREWALL_POLICIES_V2.md`) |
+| 5 | Zone filtering on `list_firewall_policies` | `feat/zbf-management` | TODO |
+| 6 | `get_zone_policy_matrix` tool | `feat/zbf-management` | TODO (depends on 4+5) |
+
+### How we work
+
+**Always start a session with `/dev-workflow start <branch-name>`** — this syncs
+upstream, creates the feature branch, activates the venv, and checks the live controller.
+
+Full rules in `.claude/skills/dev-workflow/SKILL.md`. Short version:
+
+- Never commit to `main` — always a `fix/` or `feat/` branch
+- **API research gate must pass before implementation** — see below
+- Unit tests first, then validate against the live controller before marking done
+- All quality gates must pass: `pre-commit run --all-files`
+- Conventional commits enforced by pre-commit hook
+
+### API Research Gate
+
+Before implementing any new tool or modifying an existing one that touches a UniFi API endpoint, a research doc **must exist and be marked `VERIFIED`** in `docs/research/`. No exceptions.
+
+**Required steps in order:**
+
+| Step | Action | Output |
+|------|--------|--------|
+| 1 | Fetch portal docs (`developer.ui.com`) | Note path, schema, version |
+| 2 | Check existing `docs/research/` for prior findings | Reuse or update if found |
+| 3 | Live `GET` probe on target controller | Actual response shape |
+| 4 | Live mutating probe (`PUT`/`POST`/`PATCH`) | Confirm partial vs full-object, accepted fields, error shapes |
+| 5 | Save to `docs/research/<area>/<ENDPOINT>.md` | Use `ENDPOINT_RESEARCH_TEMPLATE.md` |
+| 6 | Mark doc `VERIFIED` with firmware version + date | Gate is now clear |
+
+**Version discrepancy rule:** If portal docs describe a different API path than what the code uses (e.g. `/integration/v1/` vs `/v2/api/`), call it out explicitly in the research doc and resolve which path is correct before writing any code.
+
+**If live access is unavailable:** Stop. State the blocker. Do not implement based on docs alone.
+
+### Live controller
+
+| Setting | Value |
+|---------|-------|
+| Host | `192.168.100.1` (UDM-Pro-Max) |
+| API type | `local` |
+| Site ID | `default` |
+| SSL verify | `false` |
+| `.env` | Pre-configured — just add your `UNIFI_API_KEY` |
+
+Get the API key from: UniFi UI → Settings → Control Plane → Integrations → Create API Key
+
+### Git remotes
+
+| Remote | URL |
+|--------|-----|
+| `origin` | `git@github.com:busukajw/unifi-mcp-server.git` (your fork) |
+| `upstream` | `https://github.com/enuno/unifi-mcp-server.git` (source) |
+
+### Key source files
+
+| File | What it does |
+|------|-------------|
+| `src/tools/firewall_zones.py` | Zone management (list, create, update, delete, assign/unassign networks) |
+| `src/tools/firewall_policies.py` | Firewall policy CRUD — primary file for ZBF work |
+| `src/tools/zbf_matrix.py` | Dead code — 5 tools with non-existent endpoints, pending removal |
+| `src/models/firewall_policy.py` | Pydantic models for policy API |
+| `src/models/zbf_matrix.py` | Models for zone assignments |
+| `ZBF_STATUS.md` | Detailed status of what works vs what doesn't |
+| `docs/research/firewall/FIREWALL_POLICIES_V2.md` | API research doc — must be VERIFIED before implementing update changes |
+| `docs/research/ENDPOINT_RESEARCH_TEMPLATE.md` | Template for new endpoint research docs |
+| `tests/unit/` | Unit tests — follow existing patterns here |
+
+---
+
 This file provides project-specific instructions for AI coding assistants working on the UniFi MCP Server.
 
 ## Project Overview

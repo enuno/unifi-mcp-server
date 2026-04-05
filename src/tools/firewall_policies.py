@@ -6,7 +6,7 @@ from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..models.firewall_policy import FirewallPolicy, FirewallPolicyCreate, FirewallZoneV2Mapping
 from ..utils import APIError, ResourceNotFoundError, get_logger, log_audit, sanitize_log_message
-from ..utils.validators import coerce_bool
+from ..utils.validators import coerce_bool, validate_limit_offset
 
 logger = get_logger(__name__)
 
@@ -342,15 +342,26 @@ async def list_firewall_zones_v2(
 async def list_firewall_policies(
     site_id: str,
     settings: Settings,
+    limit: int | None = None,
+    offset: int | None = None,
+    source_zone_id: str | None = None,
+    destination_zone_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """List all firewall policies (Traffic & Firewall Rules) for a site.
 
     This tool fetches firewall policies from the UniFi v2 API endpoint.
     Only available with local gateway API (api_type="local").
 
+    The UniFi v2 API returns all policies in a single response (no server-side
+    pagination). Use limit and offset to page through results client-side.
+
     Args:
         site_id: Site identifier (default: "default")
         settings: Application settings
+        limit: Maximum number of policies to return
+        offset: Number of policies to skip
+        source_zone_id: Filter to policies with this source zone ID
+        destination_zone_id: Filter to policies with this destination zone ID
 
     Returns:
         List of firewall policy objects
@@ -364,6 +375,7 @@ async def list_firewall_policies(
         and UNIFI_LOCAL_HOST to use this tool.
     """
     _ensure_local_api(settings)
+    limit, offset = validate_limit_offset(limit, offset)
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing firewall policies for site {site_id}"))
@@ -377,7 +389,21 @@ async def list_firewall_policies(
 
         policies_data = response if isinstance(response, list) else response.get("data", [])
 
-        return [FirewallPolicy(**policy).model_dump() for policy in policies_data]
+        all_policies = [FirewallPolicy(**policy).model_dump() for policy in policies_data]
+
+        # Apply zone filters before pagination
+        if source_zone_id is not None:
+            all_policies = [
+                p for p in all_policies if p.get("source", {}).get("zone_id") == source_zone_id
+            ]
+        if destination_zone_id is not None:
+            all_policies = [
+                p
+                for p in all_policies
+                if p.get("destination", {}).get("zone_id") == destination_zone_id
+            ]
+
+        return all_policies[offset : offset + limit]
 
 
 async def get_firewall_policy(
@@ -960,7 +986,7 @@ async def update_firewall_policy(
             site_id=site_id,
         )
 
-        return FirewallPolicy(**data).model_dump()
+        return FirewallPolicy(**updated_data).model_dump()
 
 
 async def delete_firewall_policy(

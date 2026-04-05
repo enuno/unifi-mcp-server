@@ -634,11 +634,3 @@ class TestGetZoneNetworks:
             assert result[0]["network_id"] == "net-001"
             assert result[0]["network_name"] is None
 
-
-class TestGetZoneStatistics:
-    @pytest.mark.asyncio
-    async def test_get_zone_statistics_not_implemented(self, mock_settings):
-        from src.tools.firewall_zones import get_zone_statistics
-
-        with pytest.raises(NotImplementedError, match="does not exist"):
-            await get_zone_statistics("default", "zone-001", mock_settings)

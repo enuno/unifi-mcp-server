@@ -73,10 +73,14 @@ async def get_traffic_flows(
             params["offset"] = offset
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows", params=params
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows"
+                ),
+                params=params,
             )
-            data = response.get("data", [])
+            data = response.get("data", []) if isinstance(response, dict) else response
         except Exception as e:
             logger.warning(sanitize_log_message(f"Traffic flows endpoint not available: {e}"))
             return []
@@ -102,11 +106,24 @@ async def get_flow_statistics(site_id: str, settings: Settings, time_range: str 
             await client.authenticate()
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows/statistics",
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows/statistics"
+                ),
                 params={"time_range": time_range},
             )
-            data = response.get("data", response)
+            # UniFiClient normalises `{"data": [...]}` → raw list and
+            # `{"data": {...}}` → inner dict, but some firmware returns
+            # wrapped payloads untouched. Handle all three shapes.
+            if isinstance(response, list):
+                data = response[0] if response else {}
+            elif isinstance(response, dict):
+                data = response.get("data", response)
+                if isinstance(data, list):
+                    data = data[0] if data else {}
+            else:
+                data = {}
         except Exception as e:
             logger.warning(sanitize_log_message(f"Flow statistics endpoint not available: {e}"))
             # Return empty statistics
@@ -160,7 +177,12 @@ async def get_traffic_flow_details(site_id: str, flow_id: str, settings: Setting
             await client.authenticate()
 
         try:
-            response = await client.get(f"/integration/v1/sites/{site_id}/traffic/flows/{flow_id}")
+            resolved_site_id = await client.resolve_site_id(site_id)
+            response = await client.get(
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows/{flow_id}"
+                )
+            )
             data = response.get("data", response)
         except Exception as e:
             logger.warning(sanitize_log_message(f"Traffic flow details endpoint not available: {e}"))
@@ -195,11 +217,14 @@ async def get_top_flows(
             await client.authenticate()
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows/top",
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows/top"
+                ),
                 params={"limit": limit, "time_range": time_range, "sort_by": sort_by},
             )
-            data = response.get("data", [])
+            data = response.get("data", []) if isinstance(response, dict) else response
         except Exception:
             # Fallback: get all flows and sort manually
             logger.info("Top flows endpoint not available, fetching all flows")
@@ -243,10 +268,14 @@ async def get_flow_risks(
             params["min_risk_level"] = min_risk_level
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows/risks", params=params
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows/risks"
+                ),
+                params=params,
             )
-            data = response.get("data", [])
+            data = response.get("data", []) if isinstance(response, dict) else response
         except Exception:
             logger.warning("Flow risks endpoint not available")
             return []
@@ -278,11 +307,14 @@ async def get_flow_trends(
             await client.authenticate()
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows/trends",
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows/trends"
+                ),
                 params={"time_range": time_range, "interval": interval},
             )
-            data = response.get("data", [])
+            data = response.get("data", []) if isinstance(response, dict) else response
         except Exception:
             logger.warning("Flow trends endpoint not available")
             return []
@@ -322,10 +354,14 @@ async def filter_traffic_flows(
             params["limit"] = limit
 
         try:
+            resolved_site_id = await client.resolve_site_id(site_id)
             response = await client.get(
-                f"/integration/v1/sites/{site_id}/traffic/flows", params=params
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/traffic/flows"
+                ),
+                params=params,
             )
-            data = response.get("data", [])
+            data = response.get("data", []) if isinstance(response, dict) else response
         except Exception:
             logger.warning("Filtered flows endpoint not available, using basic filtering")
             # Fallback to basic filtering
@@ -376,10 +412,14 @@ async def stream_traffic_flows(
                 if filter_expression:
                     params["filter"] = filter_expression
 
+                resolved_site_id = await client.resolve_site_id(site_id)
                 response = await client.get(
-                    f"/integration/v1/sites/{site_id}/traffic/flows", params=params
+                    settings.get_integration_path(
+                        f"sites/{resolved_site_id}/traffic/flows"
+                    ),
+                    params=params,
                 )
-                data = response.get("data", [])
+                data = response.get("data", []) if isinstance(response, dict) else response
 
                 current_time = datetime.now(timezone.utc).isoformat()
 

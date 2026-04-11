@@ -177,6 +177,20 @@ class TestValidateDeviceId:
         with pytest.raises(ValidationError, match="Invalid device ID"):
             validate_device_id("507f1f77bcf86cd79943901g")
 
+    def test_valid_uuid(self):
+        """Integration API device IDs are RFC-style UUIDs."""
+        result = validate_device_id("10f4daa4-b87a-3c19-ac11-4697f945cb59")
+        assert result == "10f4daa4-b87a-3c19-ac11-4697f945cb59"
+
+    def test_valid_uuid_uppercase(self):
+        result = validate_device_id("10F4DAA4-B87A-3C19-AC11-4697F945CB59")
+        assert result == "10f4daa4-b87a-3c19-ac11-4697f945cb59"
+
+    def test_invalid_uuid_format(self):
+        # UUID-shaped but wrong segment lengths
+        with pytest.raises(ValidationError, match="Invalid device ID"):
+            validate_device_id("10f4daa4-b87a-3c19-ac1-4697f945cb59")
+
 
 class TestCoerceBool:
     def test_bool_true(self):

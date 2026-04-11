@@ -21,6 +21,9 @@ def mock_settings():
     settings.local_port = 443
     settings.local_verify_ssl = False
     settings.log_level = "INFO"
+    settings.get_integration_path = MagicMock(
+        side_effect=lambda endpoint: f"/proxy/network/integration/v1/{endpoint}"
+    )
     return settings
 
 
@@ -599,6 +602,7 @@ class TestApiEndpoints:
             mock_client.return_value.__aenter__.return_value = mock_instance
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
+            mock_instance.resolve_site_id = AsyncMock(side_effect=lambda s: s)
             mock_instance.get = AsyncMock(return_value={"data": sample_traffic_flows})
 
             await get_traffic_flows("test-site", mock_settings)
@@ -618,6 +622,7 @@ class TestApiEndpoints:
             mock_client.return_value.__aenter__.return_value = mock_instance
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
+            mock_instance.resolve_site_id = AsyncMock(side_effect=lambda s: s)
             mock_instance.get = AsyncMock(return_value={"data": sample_flow_statistics})
 
             await get_flow_statistics("test-site", mock_settings)
@@ -637,6 +642,7 @@ class TestApiEndpoints:
             mock_client.return_value.__aenter__.return_value = mock_instance
             mock_instance.is_authenticated = False
             mock_instance.authenticate = AsyncMock()
+            mock_instance.resolve_site_id = AsyncMock(side_effect=lambda s: s)
             mock_instance.get = AsyncMock(return_value={"data": sample_flow_risks})
 
             await get_flow_risks("test-site", mock_settings)

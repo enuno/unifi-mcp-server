@@ -98,26 +98,40 @@ def validate_site_id(site_id: str) -> str:
     return site_id
 
 
+_OBJECT_ID_RE = re.compile(r"^[a-f0-9]{24}$")
+_UUID_RE = re.compile(
+    r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"
+)
+
+
 def validate_device_id(device_id: str) -> str:
     """Validate device ID format.
 
+    Accepts two ID spaces:
+
+    * 24-character hex MongoDB ObjectIds (the legacy internal stats API)
+    * RFC-style UUIDs (the UniFi integration API — what
+      ``get_network_topology`` and the v1 ``/devices`` endpoint return)
+
     Args:
-        device_id: Device identifier
+        device_id: Device identifier (UUID or legacy ObjectId)
 
     Returns:
-        Validated device ID
+        Validated, lowercased device ID
 
     Raises:
-        ValidationError: If device ID is invalid
+        ValidationError: If device ID matches neither format
     """
     if not device_id or not isinstance(device_id, str):
         raise ValidationError("Device ID cannot be empty")
 
-    # Device IDs are typically 24-character hex strings (MongoDB ObjectId)
-    if not re.match(r"^[a-f0-9]{24}$", device_id.lower()):
-        raise ValidationError(f"Invalid device ID format: {device_id}")
+    lowered = device_id.lower()
+    if not (_OBJECT_ID_RE.match(lowered) or _UUID_RE.match(lowered)):
+        raise ValidationError(
+            f"Invalid device ID format: {device_id} (expected 24-hex ObjectId or UUID)"
+        )
 
-    return device_id.lower()
+    return lowered
 
 
 def coerce_bool(value: bool | str | None) -> bool:

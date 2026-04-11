@@ -89,15 +89,22 @@ async def create_firewall_zone(
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build request payload
-        # Note: networkIds is required by API (even if empty list)
+        # Build request payload. `networkIds` is required by the integration
+        # API even when empty. `description` is silently rejected by the API
+        # (`api.request.unknown-property`) so we accept it in the signature for
+        # backwards compatibility but log a warning and omit it from the body.
+        if description:
+            logger.warning(
+                sanitize_log_message(
+                    "create_firewall_zone: 'description' is not supported by the "
+                    "UniFi integration API and will be ignored."
+                )
+            )
+
         payload: dict[str, Any] = {
             "name": name,
             "networkIds": network_ids if network_ids else [],
         }
-
-        if description:
-            payload["description"] = description
 
         if dry_run:
             logger.info(sanitize_log_message(f"[DRY RUN] Would create firewall zone '{name}' for site {site_id}"))
@@ -171,15 +178,23 @@ async def update_firewall_zone(
         current_zone = current_zone_response.get("data", current_zone_response)
         current_network_ids = current_zone.get("networkIds", [])
 
-        # Build request payload - networkIds is required by API
+        # Build request payload - networkIds is required by API. `description`
+        # is silently rejected by the integration API (`api.request.unknown-property`);
+        # see create_firewall_zone for details.
+        if description is not None:
+            logger.warning(
+                sanitize_log_message(
+                    "update_firewall_zone: 'description' is not supported by the "
+                    "UniFi integration API and will be ignored."
+                )
+            )
+
         payload: dict[str, Any] = {
             "networkIds": network_ids if network_ids is not None else current_network_ids
         }
 
         if name is not None:
             payload["name"] = name
-        if description is not None:
-            payload["description"] = description
 
         if dry_run:
             logger.info(sanitize_log_message(f"[DRY RUN] Would update firewall zone {firewall_zone_id} for site {site_id}"))

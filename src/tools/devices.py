@@ -6,6 +6,7 @@ from ..api import UniFiClient
 from ..config import Settings
 from ..models import Device
 from ..utils import (
+    APIError,
     ResourceNotFoundError,
     audit_action,
     get_logger,
@@ -20,9 +21,14 @@ from ..utils import (
 async def get_device_details(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed information for a specific device.
 
+    Uses the integration API so ``device_id`` matches the UUIDs returned by
+    ``get_network_topology`` and other integration tools. Also accepts the
+    legacy internal-stats MongoDB ObjectId (``_id``) as a fallback, so callers
+    that already store the legacy ID continue to work.
+
     Args:
         site_id: Site identifier
-        device_id: Device identifier
+        device_id: Device integration-API UUID (or legacy ``_id``)
         settings: Application settings
 
     Returns:
@@ -38,15 +44,61 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        # Get all devices and find the specific one
-        response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", []) if isinstance(response, dict) else response
+        resolved_site_id = await client.resolve_site_id(site_id)
 
-        for device_data in devices_data:
-            if device_data.get("_id") == device_id:
-                device = Device(**device_data)
-                logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
-                return device.model_dump()  # type: ignore[no-any-return]
+        # Fast path: direct lookup on the integration API.
+        try:
+            response = await client.get(
+                settings.get_integration_path(
+                    f"sites/{resolved_site_id}/devices/{device_id}"
+                )
+            )
+            if isinstance(response, dict):
+                device_data = response.get("data", response)
+                # Direct lookup returns a single device object; a list means
+                # we hit a collection endpoint (mocked or otherwise) — fall
+                # through to the list scan below.
+                if isinstance(device_data, dict) and device_data:
+                    logger.info(
+                        sanitize_log_message(f"Retrieved device details for {device_id}")
+                    )
+                    return Device(**device_data).model_dump()  # type: ignore[no-any-return]
+        except (ResourceNotFoundError, APIError) as e:
+            # Direct lookup is a best-effort fast path. A 404 / missing-resource
+            # response just means we should fall through to the paginated list
+            # scan below. Any other exception (auth, network, pydantic) should
+            # propagate — we intentionally don't swallow it.
+            logger.debug(
+                sanitize_log_message(
+                    f"Direct device lookup returned no match, falling back to list scan: {e}"
+                )
+            )
+
+        # Fallback: page through the integration devices list and match on
+        # either ``id`` (integration UUID) or ``_id`` (legacy ObjectId).
+        offset = 0
+        while True:
+            response = await client.get(
+                settings.get_integration_path(f"sites/{resolved_site_id}/devices"),
+                params={"offset": offset, "limit": 100},
+            )
+            devices_data = (
+                response if isinstance(response, list) else response.get("data", [])
+            )
+            if not devices_data:
+                break
+            for device_data in devices_data:
+                if (
+                    device_data.get("id") == device_id
+                    or device_data.get("_id") == device_id
+                ):
+                    logger.info(
+                        sanitize_log_message(f"Retrieved device details for {device_id}")
+                    )
+                    return Device(**device_data).model_dump()  # type: ignore[no-any-return]
+            if len(devices_data) < 100:
+                break
+            offset += len(devices_data)
 
         raise ResourceNotFoundError("device", device_id)
 

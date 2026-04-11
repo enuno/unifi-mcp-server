@@ -7,7 +7,10 @@ class ACLRule(BaseModel):
     """ACL rule model."""
 
     id: str = Field(..., alias="_id", description="ACL rule identifier")
-    site_id: str = Field(..., description="Site identifier")
+    site_id: str | None = Field(
+        None,
+        description="Site identifier (not returned by UniFi integration API v1)",
+    )
     name: str = Field(..., description="Rule name")
     enabled: bool = Field(True, description="Whether the rule is enabled")
     action: str = Field(..., description="Action to take (allow/deny)")

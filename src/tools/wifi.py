@@ -72,6 +72,7 @@ async def create_wlan(
     minrate_ng_enabled: bool | None = None,
     minrate_ng_data_rate_kbps: int | None = None,
     hide_ssid: bool = False,
+    client_isolation: bool = False,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -96,6 +97,8 @@ async def create_wlan(
         minrate_ng_enabled: Enable minimum data rate for 2.4GHz
         minrate_ng_data_rate_kbps: Minimum 2.4GHz data rate in kbps (e.g. 1000)
         hide_ssid: Hide SSID from broadcast
+        client_isolation: Enable client device isolation (prevents wireless clients
+            from communicating with each other on this SSID)
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't create the WLAN
 
@@ -140,6 +143,7 @@ async def create_wlan(
         "enabled": enabled,
         "is_guest": is_guest,
         "hide_ssid": hide_ssid,
+        "l2_isolation": client_isolation,
     }
 
     if security == "wpapsk":
@@ -210,7 +214,10 @@ async def create_wlan(
             await client.authenticate()
 
             response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json_data=wlan_data)
-            created_wlan: dict[str, Any] = response.get("data", [{}])[0]
+            if isinstance(response, list):
+                created_wlan: dict[str, Any] = response[0] if response else {}
+            else:
+                created_wlan = response.get("data", [{}])[0]
 
             logger.info(sanitize_log_message(f"Created WLAN '{name}' in site '{site_id}'"))
             log_audit(
@@ -245,7 +252,15 @@ async def update_wlan(
     wpa_mode: str | None = None,
     wpa_enc: str | None = None,
     vlan_id: int | None = None,
+    networkconf_id: str | None = None,
+    ap_group_ids: list[str] | None = None,
+    ap_group_mode: str | None = None,
+    wlan_bands: list[str] | None = None,
+    optimize_iot_wifi_connectivity: bool | None = None,
+    minrate_ng_enabled: bool | None = None,
+    minrate_ng_data_rate_kbps: int | None = None,
     hide_ssid: bool | None = None,
+    client_isolation: bool | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -263,7 +278,16 @@ async def update_wlan(
         wpa_mode: New WPA mode (wpa, wpa2, wpa3)
         wpa_enc: New WPA encryption (tkip, ccmp, ccmp-tkip)
         vlan_id: New VLAN ID
+        networkconf_id: Network configuration ID to associate this SSID with
+        ap_group_ids: List of AP group IDs to broadcast this SSID on
+        ap_group_mode: AP group mode (groups, all)
+        wlan_bands: WiFi bands as list (e.g. ["2g"], ["5g"], ["2g", "5g"])
+        optimize_iot_wifi_connectivity: Enable IoT WiFi optimizations
+        minrate_ng_enabled: Enable minimum data rate for 2.4GHz (forces efficient
+            clients off low rates that hog airtime)
+        minrate_ng_data_rate_kbps: Minimum 2.4GHz data rate in kbps (e.g. 6000-12000)
         hide_ssid: Hide/show SSID from broadcast
+        client_isolation: Enable/disable client device isolation
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't update the WLAN
 
@@ -314,7 +338,13 @@ async def update_wlan(
         "enabled": enabled,
         "is_guest": is_guest,
         "vlan_id": vlan_id,
+        "networkconf_id": networkconf_id,
+        "ap_group_ids": ap_group_ids,
+        "wlan_bands": wlan_bands,
+        "minrate_ng_enabled": minrate_ng_enabled,
+        "minrate_ng_data_rate_kbps": minrate_ng_data_rate_kbps,
         "hide_ssid": hide_ssid,
+        "client_isolation": client_isolation,
         "password": "***MASKED***" if password else None,
     }
 
@@ -333,9 +363,12 @@ async def update_wlan(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            # Get existing WLAN
+            # Get existing WLAN (response may be auto-unwrapped list or wrapped dict)
             response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-            wlans_data: list[dict[str, Any]] = response.get("data", [])
+            if isinstance(response, list):
+                wlans_data: list[dict[str, Any]] = response
+            else:
+                wlans_data = response.get("data", [])
 
             existing_wlan = None
             for wlan in wlans_data:
@@ -366,13 +399,35 @@ async def update_wlan(
             if vlan_id is not None:
                 update_data["vlan"] = vlan_id
                 update_data["vlan_enabled"] = True
+            if networkconf_id is not None:
+                update_data["networkconf_id"] = networkconf_id
+            if ap_group_ids is not None:
+                update_data["ap_group_ids"] = ap_group_ids
+            if ap_group_mode is not None:
+                update_data["ap_group_mode"] = ap_group_mode
+            if wlan_bands is not None:
+                update_data["wlan_bands"] = wlan_bands
+            if optimize_iot_wifi_connectivity is not None:
+                update_data["optimize_iot_wifi_connectivity"] = optimize_iot_wifi_connectivity
+                if optimize_iot_wifi_connectivity:
+                    update_data["b_supported"] = True
+                    update_data["no2ghz_oui"] = False
+            if minrate_ng_enabled is not None:
+                update_data["minrate_ng_enabled"] = minrate_ng_enabled
+            if minrate_ng_data_rate_kbps is not None:
+                update_data["minrate_ng_data_rate_kbps"] = minrate_ng_data_rate_kbps
             if hide_ssid is not None:
                 update_data["hide_ssid"] = hide_ssid
+            if client_isolation is not None:
+                update_data["l2_isolation"] = client_isolation
 
             response = await client.put(
                 f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}", json_data=update_data
             )
-            updated_wlan: dict[str, Any] = response.get("data", [{}])[0]
+            if isinstance(response, list):
+                updated_wlan: dict[str, Any] = response[0] if response else {}
+            else:
+                updated_wlan = response.get("data", [{}])[0]
 
             logger.info(sanitize_log_message(f"Updated WLAN '{wlan_id}' in site '{site_id}'"))
             log_audit(
@@ -441,7 +496,10 @@ async def delete_wlan(
 
             # Verify WLAN exists before deleting
             response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-            wlans_data: list[dict[str, Any]] = response.get("data", [])
+            if isinstance(response, list):
+                wlans_data: list[dict[str, Any]] = response
+            else:
+                wlans_data = response.get("data", [])
 
             wlan_exists = any(wlan.get("_id") == wlan_id for wlan in wlans_data)
             if not wlan_exists:
@@ -493,11 +551,17 @@ async def get_wlan_statistics(
 
         # Get WLANs
         wlans_response = await client.get(f"/ea/sites/{site_id}/rest/wlanconf")
-        wlans_data = wlans_response.get("data", [])
+        wlans_data = (
+            wlans_response if isinstance(wlans_response, list) else wlans_response.get("data", [])
+        )
 
         # Get active clients
         clients_response = await client.get(f"/ea/sites/{site_id}/sta")
-        clients_data = clients_response.get("data", [])
+        clients_data = (
+            clients_response
+            if isinstance(clients_response, list)
+            else clients_response.get("data", [])
+        )
 
         # Calculate statistics per WLAN
         wlan_stats = []

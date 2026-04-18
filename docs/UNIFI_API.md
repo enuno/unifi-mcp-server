@@ -1,4 +1,4 @@
-# UniFi Network API Documentation (v10.0.160)
+# UniFi Network API Documentation (v10.2.105)
 
 ## Overview
 
@@ -21,6 +21,7 @@ This document provides comprehensive reference documentation for the UniFi Netwo
 - [Firewall](#firewall)
 - [Firewall Policies](#firewall-policies)
 - [Access Control (ACL Rules)](#access-control-acl-rules)
+- [Switching](#switching)
 - [DNS Policies](#dns-policies)
 - [Traffic Matching Lists](#traffic-matching-lists)
 - [Quality of Service (QoS)](#quality-of-service-qos)
@@ -571,6 +572,22 @@ Perform an action on a specific device port.
 
 **Response:** `200 OK`
 
+### Remove (Unadopt) Device
+
+Removes (unadopts) an adopted device from the site. If the device is online, it will be reset to factory defaults.
+
+- **Method:** `DELETE`
+- **Endpoint:** `/v1/sites/{siteId}/devices/{deviceId}`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+| `deviceId` | string (uuid) | Yes |
+
+**Response:** `200 OK`
+
 ---
 
 ## Clients
@@ -642,7 +659,13 @@ Perform an action on a specific connected client.
 
 ## Networks
 
-Endpoints for creating, updating, deleting, and inspecting network configurations.
+Endpoints for creating, updating, deleting, and inspecting network configurations including VLANs, DHCP, NAT, and IPv4/IPv6 settings.
+
+> **API Limitations (verified 2026-04-13):**
+> - The v1 Network API only exposes `management`, `name`, `enabled`, `vlanId`, and `dhcpGuarding`. DHCP range, subnet, purpose, and isolation settings are NOT available through the v1 API.
+> - The legacy REST API (`/rest/networkconf`) exposes more fields (DHCP, subnet, purpose) but `purpose` is **immutable after creation**.
+> - **Network-level client isolation** ("Isolate Network" in the UI) is not available through any documented API. Use `clientIsolationEnabled` on WiFi Broadcasts for SSID-level isolation instead.
+> - The legacy REST API uses `"vlan"` (not `"vlan_id"`) for the VLAN number field.
 
 ### List Networks
 
@@ -1640,6 +1663,162 @@ Reorder user-defined ACL rules on a site.
 ```
 
 **Response:** `200 OK`
+
+---
+
+## Switching
+
+Endpoints for managing switching features like Switch Stacking and LAG (Link Aggregation Groups).
+
+### List Switch Stacks
+
+Retrieve a paginated list of all Switch Stacks on a site.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/switch-stacks`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+
+**Query Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `offset` | integer (int32) | 0 |
+| `limit` | integer (int32) | 25 |
+| `filter` | string | - |
+
+**Response:** `200 OK` — paginated list
+
+### Get Switch Stack
+
+Retrieve Switch Stack details.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/switch-stacks/{switchStackId}`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+| `switchStackId` | string (uuid) | Yes |
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "name": "string",
+  "members": [{}, {}],
+  "lags": [{}],
+  "metadata": {
+    "origin": "string"
+  }
+}
+```
+
+### List MC-LAG Domains
+
+Retrieve a paginated list of all MC-LAG Domains on a site.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/mc-lag-domains`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+
+**Query Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `offset` | integer (int32) | 0 |
+| `limit` | integer (int32) | 25 |
+| `filter` | string | - |
+
+**Response:** `200 OK` — paginated list
+
+### Get MC-LAG Domain
+
+Retrieve MC-LAG Domain details.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/mc-lag-domains/{mcLagDomainId}`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+| `mcLagDomainId` | string (uuid) | Yes |
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "name": "string",
+  "peers": [{}],
+  "lags": [{}],
+  "metadata": {
+    "origin": "string"
+  }
+}
+```
+
+### List LAGs
+
+Retrieve a paginated list of all LAGs (Link Aggregation Groups) on a site.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/lags`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+
+**Query Parameters:**
+
+| Parameter | Type | Default |
+|-----------|------|---------|
+| `offset` | integer (int32) | 0 |
+| `limit` | integer (int32) | 25 |
+| `filter` | string | - |
+
+**Response:** `200 OK` — paginated list
+
+### Get LAG Details
+
+Retrieve LAG details.
+
+- **Method:** `GET`
+- **Endpoint:** `/v1/sites/{siteId}/switching/lags/{lagId}`
+
+**Path Parameters:**
+
+| Parameter | Type | Required |
+|-----------|------|----------|
+| `siteId` | string (uuid) | Yes |
+| `lagId` | string (uuid) | Yes |
+
+**Response:** `200 OK`
+
+```json
+{
+  "type": "SWITCH_STACK",
+  "id": "497f6eca-6276-4993-bfeb-53cbbbba6f08",
+  "members": [{}],
+  "switchStackId": "bd2c5532-16a4-4f97-91d1-09f6ed6a3b97"
+}
+```
 
 ---
 

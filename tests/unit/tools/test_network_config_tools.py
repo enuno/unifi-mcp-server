@@ -596,21 +596,6 @@ async def test_update_network_invalid_vlan(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_update_network_invalid_purpose(mock_settings):
-    """Test update network with invalid purpose."""
-    with pytest.raises(ValidationError) as excinfo:
-        await update_network(
-            site_id="default",
-            network_id="network123",
-            settings=mock_settings,
-            purpose="invalid",
-            confirm=True,
-        )
-
-    assert "purpose" in str(excinfo.value).lower()
-
-
-@pytest.mark.asyncio
 async def test_update_network_invalid_subnet(mock_settings):
     """Test update network with invalid subnet format."""
     with pytest.raises(ValidationError) as excinfo:
@@ -645,7 +630,7 @@ async def test_update_network_multiple_fields(mock_settings):
             {
                 "_id": "network123",
                 "name": "New Name",
-                "purpose": "guest",
+                "purpose": "corporate",
                 "vlan": 20,
                 "ip_subnet": "192.168.20.0/24",
                 "dhcpd_enabled": False,
@@ -666,7 +651,6 @@ async def test_update_network_multiple_fields(mock_settings):
             network_id="network123",
             settings=mock_settings,
             name="New Name",
-            purpose="guest",
             vlan_id=20,
             subnet="192.168.20.0/24",
             dhcp_enabled=False,
@@ -674,7 +658,7 @@ async def test_update_network_multiple_fields(mock_settings):
         )
 
     assert result["name"] == "New Name"
-    assert result["purpose"] == "guest"
+    assert result["purpose"] == "corporate"
     assert result["vlan"] == 20
     assert result["dhcpd_enabled"] is False
 

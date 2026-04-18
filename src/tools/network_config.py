@@ -164,7 +164,6 @@ async def update_network(
     name: str | None = None,
     vlan_id: int | None = None,
     subnet: str | None = None,
-    purpose: str | None = None,
     dhcp_enabled: bool | None = None,
     dhcp_start: str | None = None,
     dhcp_stop: str | None = None,
@@ -178,6 +177,9 @@ async def update_network(
 ) -> dict[str, Any]:
     """Update an existing network.
 
+    Note: Network purpose (corporate, guest, vlan-only) cannot be changed after
+    creation. To change purpose, delete and recreate the network.
+
     Args:
         site_id: Site identifier
         network_id: Network ID
@@ -185,7 +187,6 @@ async def update_network(
         name: New network name
         vlan_id: New VLAN ID (1-4094)
         subnet: New subnet in CIDR notation
-        purpose: New purpose (corporate, guest, vlan-only)
         dhcp_enabled: Enable/disable DHCP
         dhcp_start: New DHCP range start IP
         dhcp_stop: New DHCP range stop IP
@@ -210,12 +211,6 @@ async def update_network(
     if vlan_id is not None and not 1 <= vlan_id <= 4094:
         raise ValidationError(f"Invalid VLAN ID {vlan_id}. Must be between 1 and 4094")
 
-    # Validate purpose if provided
-    if purpose is not None:
-        valid_purposes = ["corporate", "guest", "vlan-only", "wan"]
-        if purpose not in valid_purposes:
-            raise ValidationError(f"Invalid purpose '{purpose}'. Must be one of: {valid_purposes}")
-
     # Validate subnet format if provided
     if subnet is not None and "/" not in subnet:
         raise ValidationError(f"Invalid subnet '{subnet}'. Must be in CIDR notation")
@@ -226,7 +221,6 @@ async def update_network(
         "name": name,
         "vlan_id": vlan_id,
         "subnet": subnet,
-        "purpose": purpose,
         "dhcp_enabled": dhcp_enabled,
     }
 
@@ -271,8 +265,6 @@ async def update_network(
                 update_data["vlan"] = vlan_id
             if subnet is not None:
                 update_data["ip_subnet"] = subnet
-            if purpose is not None:
-                update_data["purpose"] = purpose
             if dhcp_enabled is not None:
                 update_data["dhcpd_enabled"] = dhcp_enabled
             if dhcp_start is not None:

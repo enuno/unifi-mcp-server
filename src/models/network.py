@@ -11,8 +11,8 @@ class Network(BaseModel):
     purpose: str = Field(..., description="Network purpose (corporate, guest, etc.)")
 
     # Network configuration
-    vlan: int | None = Field(None, description="VLAN ID", alias="vlan_enabled")
-    vlan_id: int | None = Field(None, description="VLAN number")
+    vlan_enabled: bool | None = Field(None, description="VLAN assignment enabled")
+    vlan_id: int | None = Field(None, description="VLAN ID number", alias="vlan")
     enabled: bool | None = Field(None, description="Whether network is enabled")
 
     # IP configuration
@@ -52,7 +52,7 @@ class Network(BaseModel):
                 "name": "LAN",
                 "purpose": "corporate",
                 "vlan_enabled": True,
-                "vlan_id": 1,
+                "vlan": 1,
                 "ip_subnet": "192.168.1.0/24",
                 "dhcpd_enabled": True,
                 "dhcpd_start": "192.168.2.100",

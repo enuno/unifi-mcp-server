@@ -986,3 +986,54 @@ async def test_create_wlan_6g_explicit_params_override_defaults(mock_settings):
     assert payload.get("wpa3_support") is True  # still auto-inferred for 6G
     assert payload.get("wpa3_transition") is True  # caller override respected
     assert payload.get("pmf_mode") == "optional"  # caller override respected
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_invalid_band_raises_validation_error(mock_settings):
+    """Band strings must be lowercase '2g'/'5g'/'6g'; '6G' or 'wifi6' must be rejected."""
+    with pytest.raises(ValidationError, match="band"):
+        await create_wlan(
+            site_id="default",
+            name="Bad Band SSID",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wlan_bands=["6G"],  # uppercase — invalid
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_wpa3_mode_also_sets_transition_and_pmf_defaults(mock_settings):
+    """wpa_mode='wpa3' must default wpa3_transition=False and pmf_mode='required'.
+
+    A WPA3-only request should not silently produce a mixed-mode or
+    unprotected (PMF-less) payload. Explicit caller values still override.
+    """
+    mock_response = {"data": [{"_id": "wlan_wpa3_full", "name": "WPA3 Full"}]}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        await create_wlan(
+            site_id="default",
+            name="WPA3 Full",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wpa_mode="wpa3",
+            confirm=True,
+        )
+
+    payload = mock_client.post.call_args.kwargs["json_data"]
+    assert payload["wpa_mode"] == "wpa2"
+    assert payload.get("wpa3_support") is True
+    assert (
+        payload.get("wpa3_transition") is False
+    ), "wpa_mode='wpa3' must default wpa3_transition=False (WPA3-only, not mixed)"
+    assert (
+        payload.get("pmf_mode") == "required"
+    ), "wpa_mode='wpa3' must default pmf_mode='required' (WPA3 mandates PMF)"

@@ -149,6 +149,15 @@ async def create_wlan(
             f"Invalid WPA encryption '{wpa_enc}'. Must be one of: {valid_wpa_enc}"
         )
 
+    # Validate WLAN bands (mirrors the same check in update_wlan)
+    if wlan_bands is not None:
+        valid_bands = {"2g", "5g", "6g"}
+        invalid = set(wlan_bands) - valid_bands
+        if invalid:
+            raise ValidationError(f"Invalid WLAN band(s): {invalid}. Must be from: {valid_bands}")
+        if not wlan_bands:
+            raise ValidationError("wlan_bands must contain at least one band")
+
     # Validate PMF mode
     valid_pmf_modes = ["required", "optional", "disabled"]
     if pmf_mode is not None and pmf_mode not in valid_pmf_modes:
@@ -157,6 +166,8 @@ async def create_wlan(
     # Translate wpa_mode="wpa3" to the API-compatible representation.
     # UniFi controllers reject wpa_mode="wpa3" with api.err.InvalidPayload.
     # The correct payload uses wpa_mode="wpa2" with wpa3_support=True.
+    # Also default transition=False and pmf=required — a WPA3-only request
+    # should not silently produce a mixed-mode or unprotected configuration.
     effective_wpa_mode = wpa_mode
     effective_wpa3_support = wpa3_support
     effective_wpa3_transition = wpa3_transition
@@ -166,6 +177,10 @@ async def create_wlan(
         effective_wpa_mode = "wpa2"
         if effective_wpa3_support is None:
             effective_wpa3_support = True
+        if effective_wpa3_transition is None:
+            effective_wpa3_transition = False
+        if effective_pmf_mode is None:
+            effective_pmf_mode = "required"
 
     # Auto-infer WPA3 + PMF for 6 GHz (802.11ax mandate).
     # Explicit caller values always override these defaults.

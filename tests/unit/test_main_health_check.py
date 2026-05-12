@@ -60,8 +60,7 @@ class TestHealthCheck:
             expected = "unknown"
 
         assert result["version"] == expected, (
-            f"health_check returned '{result['version']}' but "
-            f"expected '{expected}'."
+            f"health_check returned '{result['version']}' but " f"expected '{expected}'."
         )
 
     async def test_health_check_returns_required_fields(self) -> None:

@@ -825,3 +825,164 @@ async def test_get_wlan_statistics_wlan_not_found(mock_settings):
 
     # Should return empty dict when specific WLAN not found
     assert result == {}
+
+
+# =============================================================================
+# WPA3 / 6 GHz payload tests (issue #77)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_wpa3_sends_correct_api_payload(mock_settings):
+    """wpa_mode='wpa3' must NOT be sent literally to the UniFi API.
+
+    UniFi controllers reject wpa_mode='wpa3' with api.err.InvalidPayload.
+    The correct API payload uses wpa_mode='wpa2' together with wpa3_support=True.
+    """
+    mock_response = {"data": [{"_id": "wlan_wpa3", "name": "WPA3 SSID"}]}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        await create_wlan(
+            site_id="default",
+            name="WPA3 SSID",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wpa_mode="wpa3",
+            confirm=True,
+        )
+
+    payload = mock_client.post.call_args.kwargs["json_data"]
+    assert payload["wpa_mode"] == "wpa2", (
+        "UniFi API expects wpa_mode='wpa2', not 'wpa3'. " "WPA3 is signalled via wpa3_support=True."
+    )
+    assert payload.get("wpa3_support") is True, "wpa_mode='wpa3' must set wpa3_support=True"
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_6g_band_auto_infers_wpa3_pmf(mock_settings):
+    """6 GHz SSIDs mandate WPA3 + PMF — these must be auto-inferred when not explicit.
+
+    802.11ax (Wi-Fi 6E) requires WPA3 and Protected Management Frames on 6 GHz.
+    A controller returns api.err.InvalidPayload if these fields are missing.
+    """
+    mock_response = {"data": [{"_id": "wlan_6g", "name": "6G SSID"}]}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        await create_wlan(
+            site_id="default",
+            name="6G SSID",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wlan_bands=["6g"],
+            confirm=True,
+        )
+
+    payload = mock_client.post.call_args.kwargs["json_data"]
+    assert payload.get("wpa3_support") is True, "6G band requires wpa3_support=True"
+    assert payload.get("wpa3_transition") is False, "6G band must disable WPA2/WPA3 transition"
+    assert payload.get("pmf_mode") == "required", "6G band mandates pmf_mode='required'"
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_6g_dry_run_includes_wpa3_fields(mock_settings):
+    """dry_run for a 6G SSID must preview the inferred WPA3+PMF payload fields."""
+    result = await create_wlan(
+        site_id="default",
+        name="6G SSID",
+        security="wpapsk",
+        settings=mock_settings,
+        password="SecurePass123!",
+        wlan_bands=["6g"],
+        confirm=True,
+        dry_run=True,
+    )
+
+    assert result["dry_run"] is True
+    would_create = result["would_create"]
+    assert would_create.get("wpa3_support") is True, "dry_run should show inferred wpa3_support"
+    assert would_create.get("pmf_mode") == "required", "dry_run should show inferred pmf_mode"
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_explicit_wpa3_params_are_sent(mock_settings):
+    """Explicitly provided wpa3_support/wpa3_transition/pmf_mode must be included in payload."""
+    mock_response = {"data": [{"_id": "wlan_trans", "name": "Transition SSID"}]}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        await create_wlan(
+            site_id="default",
+            name="Transition SSID",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wpa3_support=True,
+            wpa3_transition=True,
+            pmf_mode="optional",
+            confirm=True,
+        )
+
+    payload = mock_client.post.call_args.kwargs["json_data"]
+    assert payload.get("wpa3_support") is True
+    assert payload.get("wpa3_transition") is True
+    assert payload.get("pmf_mode") == "optional"
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_invalid_pmf_mode_raises_validation_error(mock_settings):
+    """An unrecognised pmf_mode value must be caught before hitting the API."""
+    with pytest.raises(ValidationError, match="pmf_mode"):
+        await create_wlan(
+            site_id="default",
+            name="Bad SSID",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            pmf_mode="bogus_mode",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_wlan_6g_explicit_params_override_defaults(mock_settings):
+    """Explicit params on a 6G SSID override auto-inferred defaults (WPA3 transition mode)."""
+    mock_response = {"data": [{"_id": "wlan_6g_t", "name": "6G Transition"}]}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        await create_wlan(
+            site_id="default",
+            name="6G Transition",
+            security="wpapsk",
+            settings=mock_settings,
+            password="SecurePass123!",
+            wlan_bands=["6g"],
+            wpa3_transition=True,  # caller explicitly wants transition mode
+            pmf_mode="optional",  # caller explicitly sets optional PMF
+            confirm=True,
+        )
+
+    payload = mock_client.post.call_args.kwargs["json_data"]
+    assert payload.get("wpa3_support") is True  # still auto-inferred for 6G
+    assert payload.get("wpa3_transition") is True  # caller override respected
+    assert payload.get("pmf_mode") == "optional"  # caller override respected

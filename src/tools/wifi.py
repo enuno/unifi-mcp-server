@@ -68,6 +68,9 @@ async def create_wlan(
     ap_group_ids: list[str] | None = None,
     ap_group_mode: str | None = None,
     wlan_bands: list[str] | None = None,
+    wpa3_support: bool | None = None,
+    wpa3_transition: bool | None = None,
+    pmf_mode: str | None = None,
     optimize_iot_wifi_connectivity: bool | None = None,
     minrate_ng_enabled: bool | None = None,
     minrate_ng_data_rate_kbps: int | None = None,
@@ -86,13 +89,23 @@ async def create_wlan(
         password: WiFi password (required for wpapsk)
         enabled: Enable the WLAN immediately
         is_guest: Mark as guest network
-        wpa_mode: WPA mode (wpa, wpa2, wpa3)
+        wpa_mode: WPA mode (wpa, wpa2, wpa3). Note: "wpa3" is translated to
+            wpa_mode="wpa2" + wpa3_support=True — UniFi controllers do not
+            accept wpa_mode="wpa3" directly.
         wpa_enc: WPA encryption (tkip, ccmp, ccmp-tkip)
         vlan_id: VLAN ID for network isolation
         networkconf_id: Network configuration ID to associate this SSID with
         ap_group_ids: List of AP group IDs to broadcast this SSID on
         ap_group_mode: AP group mode (groups, all). Required when using ap_group_ids.
-        wlan_bands: WiFi bands as list (e.g. ["2g"], ["5g"], ["2g", "5g"])
+        wlan_bands: WiFi bands as list (e.g. ["2g"], ["5g"], ["6g"], ["2g", "5g"]).
+            When "6g" is included, wpa3_support/wpa3_transition/pmf_mode are
+            auto-inferred to meet the 802.11ax 6 GHz mandate unless explicitly set.
+        wpa3_support: Enable WPA3 support. Auto-set True when wpa_mode="wpa3"
+            or wlan_bands contains "6g".
+        wpa3_transition: Enable WPA2/WPA3 transition (mixed) mode. Auto-set False
+            for 6 GHz (transition mode is not permitted on 6 GHz).
+        pmf_mode: Protected Management Frames mode ("required", "optional",
+            "disabled"). Auto-set to "required" for 6 GHz (802.11ax mandate).
         optimize_iot_wifi_connectivity: Enable IoT WiFi optimizations
         minrate_ng_enabled: Enable minimum data rate for 2.4GHz
         minrate_ng_data_rate_kbps: Minimum 2.4GHz data rate in kbps (e.g. 1000)
@@ -136,6 +149,34 @@ async def create_wlan(
             f"Invalid WPA encryption '{wpa_enc}'. Must be one of: {valid_wpa_enc}"
         )
 
+    # Validate PMF mode
+    valid_pmf_modes = ["required", "optional", "disabled"]
+    if pmf_mode is not None and pmf_mode not in valid_pmf_modes:
+        raise ValidationError(f"Invalid pmf_mode '{pmf_mode}'. Must be one of: {valid_pmf_modes}")
+
+    # Translate wpa_mode="wpa3" to the API-compatible representation.
+    # UniFi controllers reject wpa_mode="wpa3" with api.err.InvalidPayload.
+    # The correct payload uses wpa_mode="wpa2" with wpa3_support=True.
+    effective_wpa_mode = wpa_mode
+    effective_wpa3_support = wpa3_support
+    effective_wpa3_transition = wpa3_transition
+    effective_pmf_mode = pmf_mode
+
+    if wpa_mode == "wpa3":
+        effective_wpa_mode = "wpa2"
+        if effective_wpa3_support is None:
+            effective_wpa3_support = True
+
+    # Auto-infer WPA3 + PMF for 6 GHz (802.11ax mandate).
+    # Explicit caller values always override these defaults.
+    if wlan_bands and "6g" in wlan_bands:
+        if effective_wpa3_support is None:
+            effective_wpa3_support = True
+        if effective_wpa3_transition is None:
+            effective_wpa3_transition = False
+        if effective_pmf_mode is None:
+            effective_pmf_mode = "required"
+
     # Build WLAN data
     wlan_data = {
         "name": name,
@@ -148,8 +189,14 @@ async def create_wlan(
 
     if security == "wpapsk":
         wlan_data["x_passphrase"] = password
-        wlan_data["wpa_mode"] = wpa_mode
+        wlan_data["wpa_mode"] = effective_wpa_mode
         wlan_data["wpa_enc"] = wpa_enc
+        if effective_wpa3_support is not None:
+            wlan_data["wpa3_support"] = effective_wpa3_support
+        if effective_wpa3_transition is not None:
+            wlan_data["wpa3_transition"] = effective_wpa3_transition
+        if effective_pmf_mode is not None:
+            wlan_data["pmf_mode"] = effective_pmf_mode
 
     if vlan_id is not None:
         if not 1 <= vlan_id <= 4094:

@@ -45,14 +45,23 @@ class TestHealthCheck:
         )
 
     async def test_version_matches_installed_package(self) -> None:
-        """health_check version must match the installed package version."""
+        """health_check version must match the installed package version.
+
+        Skips the version-equality assertion when the package is not installed
+        (e.g., running from source without `pip install -e .`), since
+        health_check correctly returns "unknown" in that case.
+        """
         main_mod = _reload_main()
         result = await main_mod.health_check()
 
-        expected = importlib.metadata.version("unifi-mcp-server")
+        try:
+            expected = importlib.metadata.version("unifi-mcp-server")
+        except importlib.metadata.PackageNotFoundError:
+            expected = "unknown"
+
         assert result["version"] == expected, (
             f"health_check returned '{result['version']}' but "
-            f"installed package version is '{expected}'."
+            f"expected '{expected}'."
         )
 
     async def test_health_check_returns_required_fields(self) -> None:

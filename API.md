@@ -63,7 +63,7 @@ Configure the MCP server using environment variables:
 | `UNIFI_LOCAL_VERIFY_SSL` | Verify SSL for local gateway (set `false` for self-signed certs) | No | `true` |
 | `UNIFI_CLOUD_API_URL` | UniFi Cloud API base URL | No | `https://api.ui.com` |
 | `UNIFI_DEFAULT_SITE` | Default site ID | No | `default` |
-| `UNIFI_RATE_LIMIT_REQUESTS` | Max requests per minute | No | `100` |
+| `UNIFI_RATE_LIMIT_REQUESTS` | Max requests per rate limit period | No | `100` |
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
@@ -73,7 +73,7 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 
-\* Required when `UNIFI_API_TYPE=local`.
+* Required when `UNIFI_API_TYPE=local`.
 
 ### Configuration File
 

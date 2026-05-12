@@ -1,5 +1,7 @@
 """Main entry point for UniFi MCP Server."""
 
+from __future__ import annotations
+
 import importlib.metadata
 import json
 import os

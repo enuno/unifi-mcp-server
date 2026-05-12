@@ -1,8 +1,14 @@
 """Main entry point for UniFi MCP Server."""
 
+import importlib.metadata
 import json
 import os
 from typing import Any
+
+try:
+    _SERVER_VERSION = importlib.metadata.version("unifi-mcp-server")
+except importlib.metadata.PackageNotFoundError:
+    _SERVER_VERSION = "unknown"
 
 from fastmcp import FastMCP
 
@@ -185,7 +191,7 @@ async def health_check() -> dict[str, str]:
     """
     return {
         "status": "healthy",
-        "version": "0.2.4",
+        "version": _SERVER_VERSION,
         "api_type": settings.api_type.value,
     }
 

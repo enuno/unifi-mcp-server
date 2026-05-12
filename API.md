@@ -56,17 +56,24 @@ Configure the MCP server using environment variables:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `UNIFI_API_KEY` | UniFi API Key from unifi.ui.com | Yes | - |
-| `UNIFI_API_TYPE` | API type: `cloud` or `local` | No | `cloud` |
-| `UNIFI_HOST` | API host (cloud: api.ui.com, local: gateway IP) | No | `api.ui.com` |
-| `UNIFI_PORT` | API port | No | `443` |
-| `UNIFI_VERIFY_SSL` | Verify SSL certificates | No | `true` |
-| `UNIFI_SITE` | Default site ID | No | `default` |
-| `UNIFI_RATE_LIMIT` | Max requests per minute | No | `100` |
-| `UNIFI_TIMEOUT` | Request timeout (seconds) | No | `30` |
+| `UNIFI_API_KEY` | UniFi API Key (used for both Network and Site Manager APIs) | Yes | - |
+| `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
+| `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
+| `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify SSL for local gateway (set `false` for self-signed certs) | No | `true` |
+| `UNIFI_CLOUD_API_URL` | UniFi Cloud API base URL | No | `https://api.ui.com` |
+| `UNIFI_DEFAULT_SITE` | Default site ID | No | `default` |
+| `UNIFI_RATE_LIMIT_REQUESTS` | Max requests per minute | No | `100` |
+| `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
+| `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
-| `MCP_SERVER_PORT` | MCP server port | No | `3000` |
-| `MCP_LOG_LEVEL` | Logging level | No | `INFO` |
+| `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
+| `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
+| `MCP_SERVER_HOST` | Server bind address (http/sse transports) | No | `0.0.0.0` |
+| `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
+| `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
+
+\* Required when `UNIFI_API_TYPE=local`.
 
 ### Configuration File
 
@@ -848,7 +855,7 @@ result = await mcp.call_tool("get_site_statistics", {
 **Note:** These tools require the Site Manager API to be enabled:
 
 - Set `UNIFI_SITE_MANAGER_ENABLED=true`
-- Provide your `SITE_MANAGER_API_KEY` from [api.ui.com](https://api.ui.com/)
+- The same `UNIFI_API_KEY` is used for both Site Manager and Network APIs
 - See [Site Manager API Docs](https://developer.ui.com/site-manager-api/gettingstarted) for more details
 
 The Site Manager API (`api.ui.com/v1/`) provides cloud-based multi-site management, ISP metrics monitoring, SD-WAN configuration, and host management capabilities.
@@ -1868,82 +1875,25 @@ result = await mcp.call_tool("get_traffic_flows", {
 
 #### `stream_traffic_flows`
 
-Stream real-time traffic flow updates with bandwidth rate calculations.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `interval_seconds` (integer, optional): Update interval in seconds (default: 15)
-- `filter_expression` (string, optional): Filter expression
-
-**Example:**
-
-```python
-# Returns an async generator
-stream = await mcp.call_tool("stream_traffic_flows", {
-    "site_id": "default",
-    "interval_seconds": 10
-})
-```
-
-**Response (streamed):**
-
-```json
-{
-  "update_type": "new",
-  "flow": {
-    "flow_id": "flow_123abc",
-    "source_ip": "192.168.2.100",
-    "destination_ip": "8.8.8.8",
-    "bytes_sent": 1024000,
-    "bytes_received": 2048000
-  },
-  "timestamp": "2025-11-08T10:30:15Z",
-  "bandwidth_rate": {
-    "bps": 819200,
-    "upload_bps": 273066,
-    "download_bps": 546134
-  }
-}
-```
+> ⚠️ **NOT SUPPORTED** — This tool raises `NotImplementedError`.
+>
+> The UniFi v2 `traffic-flows` endpoint returns a rolling snapshot of the 50 most-recent
+> completed flows per call. It has no persistent connection, no pagination, and no server-push
+> mechanism, so true streaming is not possible. Fast networks roll through the 50-flow window
+> in under a second, making polling-based streaming impractical.
+>
+> **Use instead:** Poll `get_traffic_flows` on your own interval.
 
 #### `get_connection_states`
 
-Get connection states for all traffic flows.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `time_range` (string, optional): Time range for flows (default: 1h)
-
-**Example:**
-
-```python
-result = await mcp.call_tool("get_connection_states", {
-    "site_id": "default",
-    "time_range": "1h"
-})
-```
-
-**Response:**
-
-```json
-[
-  {
-    "flow_id": "flow_123abc",
-    "state": "active",
-    "last_seen": "2025-11-08T10:30:00Z",
-    "total_duration": 300,
-    "termination_reason": null
-  }
-]
-```
-
-**Connection States:**
-
-- `active`: Flow is currently active
-- `closed`: Flow closed normally
-- `timed_out`: Flow timed out (no activity for 5+ minutes)
+> ⚠️ **NOT SUPPORTED** — This tool raises `NotImplementedError`.
+>
+> The UniFi v2 `traffic-flows` endpoint reports **completed** flows with start/end timestamps.
+> It does not expose a live connection table or track in-progress connection states
+> (`active`, `closed`, `timed_out`).
+>
+> **Use instead:** Use `get_traffic_flows` and inspect `flow_start_time` / `flow_end_time` fields
+> to infer connection duration.
 
 #### `get_client_flow_aggregation`
 
@@ -2247,23 +2197,14 @@ result = await mcp.call_tool("get_flow_risks", {
 
 #### `get_flow_trends`
 
-Get historical flow trends.
-
-**Parameters:**
-
-- `site_id` (string, required): Site identifier
-- `time_range` (string, optional): Time range (default: 7d)
-- `interval` (string, optional): Time interval - "1h", "6h", "1d" (default: 1h)
-
-**Example:**
-
-```python
-result = await mcp.call_tool("get_flow_trends", {
-    "site_id": "default",
-    "time_range": "7d",
-    "interval": "6h"
-})
-```
+> ⚠️ **NOT SUPPORTED** — This tool raises `NotImplementedError`.
+>
+> The UniFi v2 `traffic-flows` endpoint provides a rolling snapshot of the 50 most-recent
+> completed flows — it has no historical query capability and does not support time ranges
+> or aggregation intervals.
+>
+> **Use instead:** For bandwidth time-series data, use the `stat/report/*` endpoints
+> via other tools (e.g., client bandwidth history).
 
 #### `filter_traffic_flows`
 
@@ -2680,7 +2621,7 @@ The MCP server implements intelligent rate limit handling:
 
 - **Automatic retry** with exponential backoff
 - **Request queuing** to prevent overwhelming the API
-- **Configurable rate limit** via `UNIFI_RATE_LIMIT` environment variable
+- **Configurable rate limit** via `UNIFI_RATE_LIMIT_REQUESTS` environment variable
 - **Graceful degradation** when limits are reached
 
 ### Best Practices
@@ -2704,7 +2645,7 @@ The MCP server implements intelligent rate limit handling:
 
 ```env
 # Set to match your API version
-UNIFI_RATE_LIMIT=100  # EA: 100, v1 Stable: 10000
+UNIFI_RATE_LIMIT_REQUESTS=100  # EA: 100, v1 Stable: 10000
 ```
 
 ## Examples

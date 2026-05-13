@@ -16,24 +16,11 @@ project's safety convention for any operation that can change controller state.
 
 from __future__ import annotations
 
-from functools import wraps
 from typing import Any
 
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
 from ..utils import ValidationError, get_logger, validate_confirmation
-
-
-def _require_site_manager(func: Any) -> Any:
-    """Raise ValueError if Site Manager API is not enabled."""
-
-    @wraps(func)
-    async def wrapper(settings: Settings, *args: Any, **kwargs: Any) -> Any:
-        if not settings.site_manager_enabled:
-            raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
-        return await func(settings, *args, **kwargs)
-
-    return wrapper
 
 
 def _validate_connector_params(console_id: str, path: str) -> str:

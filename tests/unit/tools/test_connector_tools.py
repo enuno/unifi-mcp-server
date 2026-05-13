@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import src.tools.connector as connector_module
 from src.tools.connector import (
     connector_network_delete,
     connector_network_get,
@@ -61,7 +60,7 @@ class TestConnectorNetworkGet:
     async def test_success_builds_correct_endpoint(self, mock_settings):
         """GET must proxy to connector/{console_id}/proxy/network/{path}."""
         response = {"data": [{"_id": "wlan1"}]}
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client(response)
             result = await connector_network_get(
                 console_id="console-abc",
@@ -77,7 +76,7 @@ class TestConnectorNetworkGet:
     @pytest.mark.asyncio
     async def test_strips_leading_slash_from_path(self, mock_settings):
         """Leading slash in path must be stripped before building endpoint."""
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             await connector_network_get(
                 console_id="console-abc",
@@ -92,7 +91,7 @@ class TestConnectorNetworkGet:
     @pytest.mark.asyncio
     async def test_passes_params(self, mock_settings):
         """Query params must be forwarded to the underlying GET call."""
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             await connector_network_get(
                 console_id="c1",
@@ -136,7 +135,7 @@ class TestConnectorNetworkPost:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
         response = {"data": {"_id": "new-wlan"}}
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client(response)
             result = await connector_network_post(
                 console_id="c1",
@@ -164,7 +163,7 @@ class TestConnectorNetworkPost:
 
     @pytest.mark.asyncio
     async def test_dry_run_skips_api_call(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             result = await connector_network_post(
                 console_id="c1",
@@ -182,7 +181,7 @@ class TestConnectorNetworkPost:
 class TestConnectorNetworkPut:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({"data": {}})
             await connector_network_put(
                 console_id="c1",
@@ -208,7 +207,7 @@ class TestConnectorNetworkPut:
 class TestConnectorNetworkPatch:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({"data": {}})
             await connector_network_patch(
                 console_id="c1",
@@ -234,7 +233,7 @@ class TestConnectorNetworkPatch:
 class TestConnectorNetworkDelete:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             result = await connector_network_delete(
                 console_id="c1",
@@ -259,7 +258,7 @@ class TestConnectorNetworkDelete:
 
     @pytest.mark.asyncio
     async def test_dry_run(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             result = await connector_network_delete(
                 console_id="c1",
@@ -282,7 +281,7 @@ class TestConnectorProtectGet:
     async def test_success_builds_protect_endpoint(self, mock_settings):
         """GET must proxy to connector/{console_id}/proxy/protect/{path}."""
         response = {"data": [{"id": "cam-1"}]}
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client(response)
             result = await connector_protect_get(
                 console_id="console-xyz",
@@ -311,7 +310,7 @@ class TestConnectorProtectGet:
 class TestConnectorProtectPost:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({"data": {}})
             await connector_protect_post(
                 console_id="c1",
@@ -366,7 +365,7 @@ class TestConnectorProtectPatch:
 class TestConnectorProtectDelete:
     @pytest.mark.asyncio
     async def test_success(self, mock_settings):
-        with patch.object(connector_module, "SiteManagerClient") as mock_cls:
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client({})
             await connector_protect_delete(
                 console_id="c1",

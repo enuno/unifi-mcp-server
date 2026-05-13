@@ -116,6 +116,74 @@ class SiteManagerClient:
             self.logger.error(f"Unexpected error in Site Manager API request: {e}")
             raise APIError(f"Unexpected error: {e}") from e
 
+    async def _mutate(
+        self,
+        method: str,
+        endpoint: str,
+        json_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Make a mutating (POST/PUT/PATCH/DELETE) request to Site Manager API.
+
+        Args:
+            method: HTTP method (post, put, patch, delete)
+            endpoint: API endpoint path (without /v1/ prefix)
+            json_data: Optional request body
+
+        Returns:
+            Response data as dictionary
+
+        Raises:
+            APIError: If API returns an error
+            AuthenticationError: If authentication fails
+        """
+        if not self._authenticated:
+            await self.authenticate()
+
+        try:
+            endpoint = endpoint.lstrip("/")
+            http_method = getattr(self.client, method)
+            if json_data is not None:
+                response = await http_method(endpoint, json=json_data)
+            else:
+                response = await http_method(endpoint)
+            response.raise_for_status()
+
+            if response.content:
+                return cast(dict[str, Any], response.json())
+            return {}
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 401:
+                raise AuthenticationError("Site Manager API authentication failed") from e
+            elif e.response.status_code == 404:
+                raise ResourceNotFoundError("resource", endpoint) from e
+            else:
+                raise APIError(
+                    message=f"Site Manager API error: {e.response.text}",
+                    status_code=e.response.status_code,
+                ) from e
+        except httpx.NetworkError as e:
+            raise NetworkError(f"Network communication failed: {e}") from e
+        except Exception as e:
+            self.logger.error(f"Unexpected error in Site Manager API request: {e}")
+            raise APIError(f"Unexpected error: {e}") from e
+
+    async def post(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Make a POST request to Site Manager API."""
+        return await self._mutate("post", endpoint, json_data)
+
+    async def put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Make a PUT request to Site Manager API."""
+        return await self._mutate("put", endpoint, json_data)
+
+    async def patch(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Make a PATCH request to Site Manager API."""
+        return await self._mutate("patch", endpoint, json_data)
+
+    async def delete(self, endpoint: str) -> dict[str, Any]:
+        """Make a DELETE request to Site Manager API."""
+        return await self._mutate("delete", endpoint)
+
     async def list_sites(
         self, limit: int | None = None, offset: int | None = None
     ) -> dict[str, Any]:

@@ -23,6 +23,7 @@ from .tools import application as application_tools
 from .tools import backups as backups_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
+from .tools import connector as connector_tools
 from .tools import content_filtering as content_filtering_tools
 from .tools import device_control as device_control_tools
 from .tools import devices as devices_tools
@@ -110,6 +111,7 @@ if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
 _CLOUD_TOOL_MODULES = [
     sites_tools,
     site_manager_tools,
+    connector_tools,
 ]
 
 _LOCAL_TOOL_MODULES = [

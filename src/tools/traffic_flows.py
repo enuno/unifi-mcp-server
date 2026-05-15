@@ -381,6 +381,9 @@ async def get_top_flows(
     """Return the top N flows in the current sample, sorted by volume.
 
     Args:
+        site_id: Site identifier
+        settings: Application settings
+        limit: Maximum number of flows to return (default 10)
         sort_by: ``"bytes"`` (default), ``"packets"``, or ``"duration"``.
     """
     flows = await _get_filtered_flows(site_id, settings)

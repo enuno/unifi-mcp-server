@@ -106,6 +106,7 @@ All checks are enforced on every PR — no `continue-on-error` except where note
 | Release | SBOM (CycloneDX JSON) attached to GitHub Release | Informational |
 
 **Known quirks:**
+
 - `Security Scanning` workflow is `disabled_fork` — GitHub disables it for forks. Security scanning runs via bandit/dependency-review in ci.yml instead.
 - `safety check` is deprecated in safety ≥3.0; replaced by bandit + pip-audit.
 - mypy has 147 pre-existing type errors from upstream — `continue-on-error: true` until fixed incrementally.

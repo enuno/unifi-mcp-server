@@ -83,7 +83,7 @@ def _build_match_target(
     # an incomplete payload and reject it, so fail fast here.
     if resolved_mt == "SPECIFIC" and not port:
         raise ValueError(
-            "port_matching_type='SPECIFIC' requires a 'port' value " "(e.g. '53' or '9000-9010')."
+            "port_matching_type='SPECIFIC' requires a 'port' value (e.g. '53' or '9000-9010')."
         )
     if resolved_mt == "OBJECT" and not port_group_id:
         raise ValueError(
@@ -262,8 +262,11 @@ async def _load_zone_index(client: UniFiClient, settings: Settings, site_id: str
 async def _resolve_zone_id(
     client: UniFiClient, settings: Settings, site_id: str, identifier: str
 ) -> str:
-    """Resolve a zone name, external UUID, or internal ObjectId to the v2 API's
-    internal zone _id. Raises ValueError if no match."""
+    """Resolve a zone identifier to the v2 API's internal zone _id.
+
+    Accepts a zone name, external UUID, or internal ObjectId.
+    Raises ValueError if no match is found.
+    """
     if not identifier:
         raise ValueError("Zone identifier is required")
     index = _zone_cache.get(site_id) or await _load_zone_index(client, settings, site_id)
@@ -558,6 +561,8 @@ async def create_firewall_policy(
         enabled: Whether policy is active
         description: Optional description
         ip_version: IPV4, IPV6, or BOTH (required by API; defaults to BOTH)
+        create_allow_respond: When True, automatically create a paired ALLOW
+            RESPOND rule for stateful TCP/UDP sessions.
         confirm: REQUIRED True for mutating operations
         dry_run: Preview changes without applying
 
@@ -797,6 +802,17 @@ async def update_firewall_policy(
         destination_port_matching_type: Same as source_port_matching_type.
         source_match_opposite_ports: Invert the source port match (NOT)
         destination_match_opposite_ports: Invert the destination port match
+        source_zone_id: New source zone — name, UUID, or ObjectId
+        destination_zone_id: New destination zone — name, UUID, or ObjectId
+        source_ips: Replace source IP/CIDR list (sets matching_target=IP)
+        destination_ips: Replace destination IP/CIDR list
+        source_network_ids: Replace source network ID list
+        destination_network_ids: Replace destination network ID list
+        source_client_macs: Replace source MAC list
+        destination_client_macs: Replace destination MAC list
+        source_match_opposite_ips: Invert the source IP match (NOT)
+        destination_match_opposite_ips: Invert the destination IP match
+        create_allow_respond: Create a paired stateful respond rule
         confirm: REQUIRED True for mutating operations
         dry_run: Preview changes without applying
 
@@ -834,19 +850,9 @@ async def update_firewall_policy(
                 f"Invalid ip_version '{ip_version}'. Must be one of: {list(_VALID_IP_VERSIONS)}"
             )
 
-
     if protocol is not None and protocol.lower() not in {"all", "tcp", "udp", "tcp_udp", "icmpv6"}:
         raise ValueError(
             f"Invalid protocol '{protocol}'. Must be one of: all, icmpv6, tcp, tcp_udp, udp."
-        )
-    if connection_state_type is not None and connection_state_type.upper() not in {
-        "ALL",
-        "RESPOND_ONLY",
-        "CUSTOM",
-    }:
-        raise ValueError(
-            f"Invalid connection_state_type '{connection_state_type}'. "
-            "Must be one of: ALL, CUSTOM, RESPOND_ONLY."
         )
 
     # Collect top-level overrides so we can both preview them and merge them.
@@ -1007,7 +1013,7 @@ async def update_firewall_policy(
             site_id=site_id,
         )
 
-        return FirewallPolicy(**updated_data).model_dump()
+        return FirewallPolicy(**data).model_dump()
 
 
 async def delete_firewall_policy(

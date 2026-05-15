@@ -97,7 +97,7 @@ jobs:
           path: dist/
 
   build-docker:
-    name: Build and Push Docker Image
+    name: Build, Scan, and Push Docker Image
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
@@ -138,7 +138,25 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push Docker image
+      - name: Build Docker image (local — no push yet)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-target
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy vulnerability scan — BLOCKS on HIGH/CRITICAL
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-target
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+      - name: Push Docker image (only if Trivy passed)
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -146,8 +164,20 @@ jobs:
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cyclonedx.json
 
   create-release:
     name: Create GitHub Release
@@ -164,6 +194,12 @@ jobs:
         with:
           name: python-package
           path: dist/
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+          path: .
 
       - name: Extract version
         id: version
@@ -207,18 +243,10 @@ jobs:
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
           \`\`\`
 
-          ## Installation
-
-          ### Via pip
+          ## Install from source
 
           \`\`\`bash
-          pip install unifi-mcp-server==${{ steps.version.outputs.version }}
-          \`\`\`
-
-          ### Via uv
-
-          \`\`\`bash
-          uv pip install unifi-mcp-server==${{ steps.version.outputs.version }}
+          pip install git+https://github.com/${{ github.repository }}.git@${{ steps.version.outputs.version }}
           \`\`\`
           EOF
 
@@ -232,29 +260,9 @@ jobs:
           prerelease: false
           files: |
             dist/*
+            sbom.cyclonedx.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  publish-pypi:
-    name: Publish to PyPI
-    runs-on: ubuntu-latest
-    needs: create-release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    environment:
-      name: pypi
-      url: https://pypi.org/p/unifi-mcp-server
-    steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: python-package
-          path: dist/
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_TOKEN }}
-          skip-existing: true
 
   announce:
     name: Create Release Announcement
@@ -382,7 +390,7 @@ jobs:
   notify:
     name: Notification
     runs-on: ubuntu-latest
-    needs: [create-release, publish-pypi, announce]
+    needs: [create-release, announce]
     if: always()
     steps:
       - name: Create release summary
@@ -392,7 +400,6 @@ jobs:
           echo "| Step | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Build & Test | ${{ needs.build-and-test.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Build | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| GitHub Release | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| PyPI Publish | ${{ needs.publish-pypi.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Build + Trivy Scan | ${{ needs.build-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Release (+ SBOM) | ${{ needs.create-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Announcement | ${{ needs.announce.result }} |" >> $GITHUB_STEP_SUMMARY

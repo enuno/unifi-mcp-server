@@ -4,25 +4,26 @@
 
 ## ⚡ Fork Context — Read This First
 
-This is **Aaron's fork** (`busukajw/unifi-mcp-server`) of `enuno/unifi-mcp-server`.
+This is **Aaron's fork** (`The-Early-risers/unifi-mcp-server`) of `enuno/unifi-mcp-server`.
 The goal is to fix real bugs discovered during home network segmentation work, then
 contribute them back upstream as PRs.
 
-### What we're here to fix
+### Completed work
 
-| # | Issue | File | Status |
-|---|-------|------|--------|
-| 1 | `assign_network_to_zone` sends `networks` but API expects `networkIds` | `src/tools/firewall_zones.py` | DONE ✅ (PR #54) |
-| 2 | `list_firewall_policies` has no pagination | `src/tools/firewall_policies.py` | DONE ✅ (PR #55) |
+| # | Issue | Branch | Status |
+|---|-------|--------|--------|
+| 1 | `assign_network_to_zone` sends `networks` but API expects `networkIds` | upstream PR #54 | DONE ✅ |
+| 2 | `list_firewall_policies` has no pagination | upstream PR #55 | DONE ✅ |
+| 3 | Full ZBF management — dead zbf_matrix removal, zone filtering, `get_zone_policy_matrix` | `feat/zbf-management` → main | DONE ✅ |
+| 4 | CI/CD hardening — real enforcement gates, security scanning, docstring coverage | `feat/ci-hardening` → main (PR #1) | DONE ✅ |
 
-### Current work — ZBF management
+### Current work — next priorities
 
-| # | Task | Branch | Status |
-|---|------|--------|--------|
-| 3 | Remove dead zbf_matrix + broken zone tools | `feat/zbf-management` | TODO |
-| 4 | Full-field `update_firewall_policy` | `feat/zbf-management` | BLOCKED — API research gate (see `docs/research/firewall/FIREWALL_POLICIES_V2.md`) |
-| 5 | Zone filtering on `list_firewall_policies` | `feat/zbf-management` | TODO |
-| 6 | `get_zone_policy_matrix` tool | `feat/zbf-management` | TODO (depends on 4+5) |
+| # | Task | Notes |
+|---|------|-------|
+| 5 | Full-field `update_firewall_policy` | BLOCKED — API research gate (see `docs/research/firewall/FIREWALL_POLICIES_V2.md`) |
+| 6 | VPN Management (`site_vpn.py`) | 0% test coverage |
+| 7 | WAN Management (`wans.py`) | 0% test coverage |
 
 ### How we work
 
@@ -72,7 +73,7 @@ Get the API key from: UniFi UI → Settings → Control Plane → Integrations �
 
 | Remote | URL |
 |--------|-----|
-| `origin` | `git@github.com:busukajw/unifi-mcp-server.git` (your fork) |
+| `origin` | `git@github.com:The-Early-risers/unifi-mcp-server.git` (fork) |
 | `upstream` | `https://github.com/enuno/unifi-mcp-server.git` (source) |
 
 ### Key source files
@@ -81,13 +82,34 @@ Get the API key from: UniFi UI → Settings → Control Plane → Integrations �
 |------|-------------|
 | `src/tools/firewall_zones.py` | Zone management (list, create, update, delete, assign/unassign networks) |
 | `src/tools/firewall_policies.py` | Firewall policy CRUD — primary file for ZBF work |
-| `src/tools/zbf_matrix.py` | Dead code — 5 tools with non-existent endpoints, pending removal |
 | `src/models/firewall_policy.py` | Pydantic models for policy API |
-| `src/models/zbf_matrix.py` | Models for zone assignments |
 | `ZBF_STATUS.md` | Detailed status of what works vs what doesn't |
 | `docs/research/firewall/FIREWALL_POLICIES_V2.md` | API research doc — must be VERIFIED before implementing update changes |
 | `docs/research/ENDPOINT_RESEARCH_TEMPLATE.md` | Template for new endpoint research docs |
 | `tests/unit/` | Unit tests — follow existing patterns here |
+
+### CI/CD pipeline (as of PR #1)
+
+All checks are enforced on every PR — no `continue-on-error` except where noted.
+
+| Check | Tool | Gate |
+|-------|------|------|
+| Lint | black, isort, ruff (incl. Google D rules) | Hard block |
+| Type check | mypy | Non-blocking (147 pre-existing errors) |
+| Tests | pytest 3.10 / 3.11 / 3.12, coverage ≥80% | Hard block |
+| Docstring coverage | interrogate ≥80% | Hard block |
+| SAST | bandit (`-ll` medium+) | Hard block |
+| Dependency review | GitHub dependency-review-action | `continue-on-error` — needs Dependency Graph enabled in repo settings |
+| Secret scanning | detect-secrets v1.5.0 | Hard block (via pre-commit) |
+| Pre-commit | all hooks | Hard block |
+| Release | Docker → Trivy scan → push (blocks on HIGH/CRITICAL) | Hard block |
+| Release | SBOM (CycloneDX JSON) attached to GitHub Release | Informational |
+
+**Known quirks:**
+- `Security Scanning` workflow is `disabled_fork` — GitHub disables it for forks. Security scanning runs via bandit/dependency-review in ci.yml instead.
+- `safety check` is deprecated in safety ≥3.0; replaced by bandit + pip-audit.
+- mypy has 147 pre-existing type errors from upstream — `continue-on-error: true` until fixed incrementally.
+- ruff excludes `.claude/` — pre-commit hook runs on all files but `.claude/skills/` scripts aren't part of the package.
 
 ---
 
@@ -203,7 +225,7 @@ The server supports three UniFi API access modes:
 
 ### Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/enuno/unifi-mcp-server/issues)
+- **Issues**: [GitHub Issues](https://github.com/The-Early-risers/unifi-mcp-server/issues)
 - **Documentation**: See `API.md` for complete tool reference
 - **Examples**: Check `docs/examples/` for AI assistant prompts
 
@@ -225,5 +247,5 @@ The server supports three UniFi API access modes:
 
 ---
 
-**Last Updated**: 2026-02-18
-**Maintained By**: Development Team
+**Last Updated**: 2026-05-15
+**Maintained By**: Aaron Walker

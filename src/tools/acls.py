@@ -27,7 +27,7 @@ def _normalise_action(action: str) -> str:
     upper = action.upper()
     if upper not in _VALID_ACTIONS:
         raise ValueError(
-            f"Invalid action '{action}'. UniFi integration API accepts only " f"{_VALID_ACTIONS}."
+            f"Invalid action '{action}'. UniFi integration API accepts only {_VALID_ACTIONS}."
         )
     return upper
 
@@ -36,14 +36,17 @@ def _normalise_type(type_value: str) -> str:
     upper = type_value.upper()
     if upper not in _VALID_TYPES:
         raise ValueError(
-            f"Invalid type '{type_value}'. UniFi integration API accepts only " f"{_VALID_TYPES}."
+            f"Invalid type '{type_value}'. UniFi integration API accepts only {_VALID_TYPES}."
         )
     return upper
 
 
 def _warn_deprecated(operation: str, deprecated: dict[str, Any]) -> None:
-    """Log a warning when a caller passes parameters that the UniFi integration
-    API no longer accepts. Kept in the signature for backwards compatibility."""
+    """Log a warning when a caller passes deprecated parameters.
+
+    The UniFi integration API no longer accepts these parameters; they are
+    kept in the signature for backwards compatibility.
+    """
     supplied = [name for name, value in deprecated.items() if value is not None]
     if supplied:
         logger.warning(

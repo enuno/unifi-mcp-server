@@ -82,7 +82,7 @@ def _build_match_target(
     # an incomplete payload and reject it, so fail fast here.
     if resolved_mt == "SPECIFIC" and not port:
         raise ValueError(
-            "port_matching_type='SPECIFIC' requires a 'port' value " "(e.g. '53' or '9000-9010')."
+            "port_matching_type='SPECIFIC' requires a 'port' value (e.g. '53' or '9000-9010')."
         )
     if resolved_mt == "OBJECT" and not port_group_id:
         raise ValueError(
@@ -261,8 +261,11 @@ async def _load_zone_index(client: UniFiClient, settings: Settings, site_id: str
 async def _resolve_zone_id(
     client: UniFiClient, settings: Settings, site_id: str, identifier: str
 ) -> str:
-    """Resolve a zone name, external UUID, or internal ObjectId to the v2 API's
-    internal zone _id. Raises ValueError if no match."""
+    """Resolve a zone identifier to the v2 API's internal zone _id.
+
+    Accepts a zone name, external UUID, or internal ObjectId. Raises
+    ValueError if no match is found.
+    """
     if not identifier:
         raise ValueError("Zone identifier is required")
     index = _zone_cache.get(site_id) or await _load_zone_index(client, settings, site_id)
@@ -526,6 +529,8 @@ async def create_firewall_policy(
         enabled: Whether policy is active
         description: Optional description
         ip_version: IPV4, IPV6, or BOTH (required by API; defaults to BOTH)
+        create_allow_respond: Also create a matching ALLOW rule for the return
+            traffic direction when action is ALLOW.
         confirm: REQUIRED True for mutating operations
         dry_run: Preview changes without applying
 
@@ -765,6 +770,17 @@ async def update_firewall_policy(
         destination_port_matching_type: Same as source_port_matching_type.
         source_match_opposite_ports: Invert the source port match (NOT)
         destination_match_opposite_ports: Invert the destination port match
+        source_zone_id: New source zone identifier (name, UUID, or ObjectId)
+        destination_zone_id: New destination zone identifier
+        source_ips: List of source IPs or CIDRs
+        destination_ips: List of destination IPs or CIDRs
+        source_network_ids: List of source network (VLAN) internal IDs
+        destination_network_ids: List of destination network IDs
+        source_client_macs: List of source client MAC addresses
+        destination_client_macs: List of destination client MACs
+        source_match_opposite_ips: Invert the source IP match (NOT)
+        destination_match_opposite_ips: Invert the destination IP match
+        create_allow_respond: Also create/update matching return-traffic rule
         confirm: REQUIRED True for mutating operations
         dry_run: Preview changes without applying
 

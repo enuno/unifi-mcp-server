@@ -173,7 +173,7 @@ def sanitize_log_message(message: str, context: dict[str, Any] | None = None) ->
     # Redact IP addresses (XXX.XXX.XXX.XXX)
     sanitized_msg = re.sub(
         r"\b(\d{1,3}\.){3}(\d{1,3})\b",
-        lambda m: f"***.***.***.{m.group(2)}" if m.group(0) != "0.0.0.0" else m.group(0),
+        lambda m: f"***.***.***.{m.group(2)}" if m.group(0) != "0.0.0.0" else m.group(0),  # nosec B104
         sanitized_msg,
     )
 

@@ -4,11 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.tools.site_vpn import (
-    get_site_to_site_vpn,
-    list_site_to_site_vpns,
-    update_site_to_site_vpn,
-)
+from src.tools.site_vpn import get_site_to_site_vpn, list_site_to_site_vpns, update_site_to_site_vpn
 from src.utils import ResourceNotFoundError
 
 

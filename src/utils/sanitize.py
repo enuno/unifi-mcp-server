@@ -170,10 +170,11 @@ def sanitize_log_message(message: str, context: dict[str, Any] | None = None) ->
         sanitized_msg,
     )
 
-    # Redact IP addresses (XXX.XXX.XXX.XXX)
+    # Redact IP addresses (XXX.XXX.XXX.XXX); preserve 0.0.0.0 (wildcard, not a real host)
+    _ZERO_IP = "0.0.0.0"  # nosec B104 — string comparison, not a bind address
     sanitized_msg = re.sub(
         r"\b(\d{1,3}\.){3}(\d{1,3})\b",
-        lambda m: f"***.***.***.{m.group(2)}" if m.group(0) != "0.0.0.0" else m.group(0),
+        lambda m: f"***.***.***.{m.group(2)}" if m.group(0) != _ZERO_IP else m.group(0),
         sanitized_msg,
     )
 

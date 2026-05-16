@@ -108,6 +108,12 @@ class FirewallPolicyCreate(BaseModel):
     ip_version: str = Field("BOTH", description="IP version filter")
     connection_state_type: str = Field("ALL", description="Connection state type")
     connection_states: list[str] | None = Field(None, description="Connection states")
+    icmp_typename: str | None = Field(
+        None, description="ICMP type name filter (e.g. 'ANY', 'echo')"
+    )
+    icmp_v6_typename: str | None = Field(None, description="ICMPv6 type name filter")
+    match_ip_sec: bool | None = Field(None, description="Match IPsec traffic only")
+    match_opposite_protocol: bool | None = Field(None, description="Invert protocol matching")
     source: dict = Field(..., description="Source matching criteria")
     destination: dict = Field(..., description="Destination matching criteria")
     description: str | None = Field(None, description="Policy description")
@@ -165,6 +171,10 @@ class FirewallPolicyUpdate(BaseModel):
     ip_version: str | None = Field(None, description="IP version filter")
     connection_state_type: str | None = Field(None, description="Connection state type")
     connection_states: list[str] | None = Field(None, description="Connection states")
+    icmp_typename: str | None = Field(None, description="ICMP type name filter")
+    icmp_v6_typename: str | None = Field(None, description="ICMPv6 type name filter")
+    match_ip_sec: bool | None = Field(None, description="Match IPsec traffic only")
+    match_opposite_protocol: bool | None = Field(None, description="Invert protocol matching")
     source: dict | None = Field(None, description="Source matching criteria")
     destination: dict | None = Field(None, description="Destination matching criteria")
     description: str | None = Field(None, description="Policy description")

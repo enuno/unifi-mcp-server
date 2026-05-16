@@ -53,7 +53,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          cache: 'pip'
 
       - name: Install uv
         run: |
@@ -70,14 +69,18 @@ jobs:
         run: |
           source .venv/bin/activate
           safety check --json --output safety-report.json
-        continue-on-error: true
+        continue-on-error: true  # safety check deprecated in safety>=3.0; pip-audit below is the gate
 
       - name: Run pip-audit
         run: |
           source .venv/bin/activate
-          pip install pip-audit
-          pip-audit --format json --output pip-audit-report.json
-        continue-on-error: true
+          # pip-audit is already in dev deps (installed via uv above); using pip here
+          # would pull in py==1.11.0 via pip's resolver, introducing PYSEC-2022-42969.
+          # PYSEC-2022-42969 / CVE-2022-42969: ReDoS in py's SVN info parsing.
+          # No fix version exists; py is unmaintained. This project does not use SVN,
+          # so the vulnerability is not exploitable here.
+          pip-audit --format json --output pip-audit-report.json \
+            --ignore-vuln PYSEC-2022-42969
 
       - name: Upload Safety report
         uses: actions/upload-artifact@v4
@@ -115,7 +118,6 @@ jobs:
       - name: Run detect-secrets scan
         run: |
           detect-secrets scan --baseline .secrets.baseline --all-files
-        continue-on-error: true
 
       - name: TruffleHog OSS
         uses: trufflesecurity/trufflehog@main
@@ -153,14 +155,13 @@ jobs:
         run: |
           source .venv/bin/activate
           bandit -r src/ -f json -o bandit-report.json -ll -ii
-        continue-on-error: true
 
       - name: Run Bandit SARIF
         run: |
           source .venv/bin/activate
           pip install bandit[sarif]
           bandit -r src/ -f sarif -o bandit-results.sarif -ll -ii
-        continue-on-error: true
+        continue-on-error: true  # SARIF upload may fail on forks — scan result above is the gate
 
       - name: Upload Bandit SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -284,24 +285,34 @@ jobs:
     steps:
       - name: Check scan results
         run: |
-          echo "CodeQL: ${{ needs.codeql.result }}"
-          echo "Dependency Scan: ${{ needs.dependency-scan.result }}"
-          echo "Secret Scanning: ${{ needs.secret-scanning.result }}"
-          echo "Bandit: ${{ needs.bandit-scan.result }}"
-          echo "Trivy: ${{ needs.trivy-scan.result }}"
-          echo "Docker Scan: ${{ needs.docker-scan.result }}"
-          echo "OSV Scanner: ${{ needs.osv-scanner.result }}"
+          echo "CodeQL:           ${{ needs.codeql.result }}"
+          echo "Dependency Scan:  ${{ needs.dependency-scan.result }}"
+          echo "Secret Scanning:  ${{ needs.secret-scanning.result }}"
+          echo "Bandit:           ${{ needs.bandit-scan.result }}"
+          echo "Trivy FS:         ${{ needs.trivy-scan.result }}"
+          echo "Docker Scan:      ${{ needs.docker-scan.result }}"
+          echo "OSV Scanner:      ${{ needs.osv-scanner.result }}"
 
       - name: Create security summary
         run: |
           echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Scanner | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| CodeQL | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Scan | ${{ needs.dependency-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Bandit | ${{ needs.bandit-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy FS | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker Scan | ${{ needs.docker-scan.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| OSV Scanner | ${{ needs.osv-scanner.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scanner | Status | Blocking? |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
+          echo "| CodeQL | ${{ needs.codeql.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan (Safety + pip-audit) | ${{ needs.dependency-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret Scanning | ${{ needs.secret-scanning.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Bandit SAST | ${{ needs.bandit-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trivy FS | ${{ needs.trivy-scan.result }} | ⚠️ Report only |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Scan | ${{ needs.docker-scan.result }} | ⚠️ Report only |" >> $GITHUB_STEP_SUMMARY
+          echo "| OSV Scanner | ${{ needs.osv-scanner.result }} | ⚠️ Report only |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Fail if any blocking security scan failed
+        if: |
+          needs.codeql.result == 'failure' ||
+          needs.dependency-scan.result == 'failure' ||
+          needs.secret-scanning.result == 'failure' ||
+          needs.bandit-scan.result == 'failure'
+        run: |
+          echo "One or more blocking security scans failed. Merge blocked."
+          exit 1

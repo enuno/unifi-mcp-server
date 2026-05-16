@@ -56,6 +56,8 @@ dev = [
     "types-PyYAML>=6.0.0",
     "types-requests>=2.31.0",
     "types-redis>=4.6.0",
+    "interrogate>=1.5.0",
+    "pip-audit>=2.6.0",
 ]
 
 [project.urls]
@@ -145,6 +147,7 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=html",
     "--cov-report=xml",
+    "--cov-fail-under=80",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
@@ -180,6 +183,21 @@ exclude_lines = [
 [tool.coverage.html]
 directory = "htmlcov"
 
+# Interrogate — docstring coverage enforcement
+[tool.interrogate]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+ignore-property-decorators = true
+ignore-module = true
+ignore-nested-functions = true
+fail-under = 80
+exclude = ["tests", "src/models"]
+verbose = 0
+quiet = false
+
 # Bandit Security Linter Configuration
 [tool.bandit]
 exclude_dirs = ["tests", "venv", ".venv"]
@@ -190,6 +208,14 @@ skips = ["B101", "B601"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = [
+    ".claude",
+    ".git",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
 
 [tool.ruff.lint]
 select = [
@@ -200,16 +226,23 @@ select = [
     "B",  # flake8-bugbear
     "C4", # flake8-comprehensions
     "UP", # pyupgrade
+    "D",  # pydocstyle — Google-style docstrings enforced
 ]
 ignore = [
     "E501",  # line too long, handled by black
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
+    "D401",  # imperative mood — too pedantic
+    "D415",  # trailing period — too pedantic
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"tests/*" = ["B011"]
+"tests/**" = ["B011", "D"]      # no docstring requirement in tests
+"src/models/**" = ["D"]         # Pydantic models are self-documenting via Field descriptions
 
 [dependency-groups]
 dev = [

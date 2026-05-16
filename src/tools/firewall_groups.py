@@ -44,9 +44,10 @@ def _ensure_local_api(settings: Settings) -> None:
 
 
 def _endpoint(site_id: str, group_id: str | None = None) -> str:
-    """Build an /ea/sites/... path that the client's auto-translator will
-    rewrite to /proxy/network/api/s/{site}/rest/firewallgroup/... in local
-    mode.
+    """Build the /ea/sites/... path for the firewall groups REST endpoint.
+
+    The client's auto-translator rewrites this to
+    /proxy/network/api/s/{site}/rest/firewallgroup/... in local mode.
     """
     suffix = f"/{group_id}" if group_id else ""
     return f"/ea/sites/{site_id}/rest/firewallgroup{suffix}"

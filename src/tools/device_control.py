@@ -194,8 +194,7 @@ async def locate_device(
     if dry_run:
         logger.info(
             sanitize_log_message(
-                f"DRY RUN: Would {action} locate mode for device '{device_mac}' "
-                f"in site '{site_id}'"
+                f"DRY RUN: Would {action} locate mode for device '{device_mac}' in site '{site_id}'"
             )
         )
         log_audit(
@@ -344,7 +343,7 @@ async def upgrade_device(
 
             logger.info(
                 sanitize_log_message(
-                    f"Initiated firmware upgrade for device '{device_mac}' " f"in site '{site_id}'"
+                    f"Initiated firmware upgrade for device '{device_mac}' in site '{site_id}'"
                 )
             )
             log_audit(
@@ -394,6 +393,7 @@ async def get_ap_radio_config(
     Args:
         site_id: Site identifier
         device_id: Device ID or MAC address
+        settings: Application settings
 
     Returns:
         Dictionary with device info and radio_table entries
@@ -577,7 +577,7 @@ async def set_ap_radio_channel(
             radio_table = device.get("radio_table", [])
             if not radio_table:
                 raise ValidationError(
-                    f"Device '{device_id}' has no radio_table — " "it may not be an access point"
+                    f"Device '{device_id}' has no radio_table — it may not be an access point"
                 )
 
             # Find the target radio entry
@@ -590,7 +590,7 @@ async def set_ap_radio_channel(
             if not target:
                 available = [e.get("radio", e.get("name")) for e in radio_table]
                 raise ValidationError(
-                    f"Radio '{radio}' not found on device. " f"Available radios: {available}"
+                    f"Radio '{radio}' not found on device. Available radios: {available}"
                 )
 
             # Capture old values for the response

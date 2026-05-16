@@ -73,7 +73,7 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 
-* Required when `UNIFI_API_TYPE=local`.
+- Required when `UNIFI_API_TYPE=local`.
 
 ### Configuration File
 

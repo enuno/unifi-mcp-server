@@ -22,6 +22,30 @@ from fastmcp import FastMCP
 from .config import Settings
 
 
+def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
+    """Return the tool names already registered on this MCP instance.
+
+    FastMCP's duplicate-component warnings are emitted when the same tool name
+    is registered more than once on a live server instance.  We keep a per-
+    instance registry so repeated registration passes can safely skip names that
+    were already seen, instead of relying on FastMCP's warning path.
+    """
+    try:
+        registry = mcp.__dict__
+    except AttributeError:
+        registered = getattr(mcp, "_registered_tool_names", None)
+        if registered is None:
+            registered = set()
+            setattr(mcp, "_registered_tool_names", registered)
+        return registered
+
+    registered = registry.get("_registered_tool_names")
+    if registered is None:
+        registered = set()
+        registry["_registered_tool_names"] = registered
+    return registered
+
+
 def _make_tool_wrapper(fn: Any, settings: Settings) -> Any:
     """Return an async wrapper for *fn* with ``settings`` bound.
 
@@ -91,6 +115,7 @@ def register_module_tools(
     """
     registered: list[str] = []
     exclude_set = set(exclude or [])
+    registered_names = _get_registered_tool_names(mcp)
 
     for name, obj in inspect.getmembers(module, inspect.isfunction):
         # Skip private / dunder names
@@ -112,7 +137,13 @@ def register_module_tools(
         else:
             tool_fn = obj
 
+        if name in registered_names:
+            # Keep the first registered variant when multiple modules define the
+            # same public tool name.
+            continue
+
         mcp.tool()(tool_fn)
+        registered_names.add(name)
         registered.append(name)
 
     return registered

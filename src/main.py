@@ -128,6 +128,7 @@ _LOCAL_TOOL_MODULES = [
     dhcp_tools,
     dns_tools,
     devices_tools,
+    ref_tools,
     dpi_tools,
     dpi_new_tools,
     firewall_tools,

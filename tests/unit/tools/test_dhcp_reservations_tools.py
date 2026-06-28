@@ -231,7 +231,31 @@ class TestUpdateDhcpReservation:
 
         assert result["fixed_ip"] == "192.168.30.99"
         put_body = client.put.call_args.kwargs["json_data"]
-        assert put_body == {"fixed_ip": "192.168.30.99"}
+        # Setting a fixed_ip must also enable use_fixedip, otherwise the
+        # controller stores the IP inertly and the reservation never activates.
+        assert put_body == {"fixed_ip": "192.168.30.99", "use_fixedip": True}
+
+    @pytest.mark.asyncio
+    async def test_update_name_only_does_not_enable_fixedip(
+        self, local_settings: MagicMock, sample_users: list[dict[str, Any]]
+    ) -> None:
+        """A metadata-only update (no fixed_ip) must not toggle use_fixedip."""
+        client = _mock_client({"data": sample_users})
+        client.put.return_value = {"data": [{**sample_users[0], "name": "Renamed"}]}
+
+        with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            await dhcp.update_dhcp_reservation(
+                mac="aa:bb:cc:dd:ee:01",
+                site_id="default",
+                settings=local_settings,
+                name="Renamed",
+                confirm=True,
+            )
+
+        put_body = client.put.call_args.kwargs["json_data"]
+        assert put_body == {"name": "Renamed"}
+        assert "use_fixedip" not in put_body
 
     @pytest.mark.asyncio
     async def test_update_unknown_mac_raises(

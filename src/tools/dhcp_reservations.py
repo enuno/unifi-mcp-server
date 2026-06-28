@@ -224,7 +224,7 @@ async def create_dhcp_reservation(
             "name": data.get("name"),
             "fixed_ip": data.get("fixed_ip"),
             "network_id": data.get("network_id"),
-            "use_fixedip": data.get("use_fixedip", True),
+            "use_fixedip": data.get("use_fixedip", False),
         }
 
 
@@ -289,6 +289,11 @@ async def update_dhcp_reservation(
         overrides: dict[str, Any] = {}
         if fixed_ip is not None:
             overrides["fixed_ip"] = fixed_ip
+            # A fixed_ip is inert unless use_fixedip is also set: the controller
+            # stores the address but does not activate the reservation, so it
+            # never appears in list_dhcp_reservations (which filters on this
+            # flag). Setting the IP always implies enabling the reservation.
+            overrides["use_fixedip"] = True
         if name is not None:
             overrides["name"] = name
         if network_id is not None:
@@ -326,7 +331,7 @@ async def update_dhcp_reservation(
             "name": data[0].get("name"),
             "fixed_ip": data[0].get("fixed_ip"),
             "network_id": data[0].get("network_id"),
-            "use_fixedip": data[0].get("use_fixedip", True),
+            "use_fixedip": data[0].get("use_fixedip", False),
         }
 
 

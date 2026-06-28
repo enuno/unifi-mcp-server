@@ -209,6 +209,29 @@ class TestCreateDhcpReservation:
                 confirm=False,
             )
 
+    @pytest.mark.asyncio
+    async def test_create_defaults_use_fixedip_true_when_response_omits(
+        self, local_settings: MagicMock
+    ) -> None:
+        """create always requests use_fixedip, so an absent key means active."""
+        client = _mock_client()
+        client.post.return_value = {
+            "data": [{"_id": "new-2", "mac": "11:22:33:44:55:77", "fixed_ip": "192.168.10.201"}]
+        }
+
+        with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await dhcp.create_dhcp_reservation(
+                mac="11:22:33:44:55:77",
+                fixed_ip="192.168.10.201",
+                network_id="net-lan",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )
+
+        assert result["use_fixedip"] is True
+
 
 class TestUpdateDhcpReservation:
     @pytest.mark.asyncio
@@ -256,6 +279,29 @@ class TestUpdateDhcpReservation:
         put_body = client.put.call_args.kwargs["json_data"]
         assert put_body == {"name": "Renamed"}
         assert "use_fixedip" not in put_body
+
+    @pytest.mark.asyncio
+    async def test_update_metadata_only_preserves_existing_use_fixedip(
+        self, local_settings: MagicMock, sample_users: list[dict[str, Any]]
+    ) -> None:
+        """If the PUT response omits use_fixedip, fall back to the prior state."""
+        client = _mock_client({"data": sample_users})
+        # Response echoes the rename but not use_fixedip; user-1 was active.
+        client.put.return_value = {
+            "data": [{"_id": "user-1", "mac": "aa:bb:cc:dd:ee:01", "name": "Renamed"}]
+        }
+
+        with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await dhcp.update_dhcp_reservation(
+                mac="aa:bb:cc:dd:ee:01",
+                site_id="default",
+                settings=local_settings,
+                name="Renamed",
+                confirm=True,
+            )
+
+        assert result["use_fixedip"] is True
 
     @pytest.mark.asyncio
     async def test_update_unknown_mac_raises(

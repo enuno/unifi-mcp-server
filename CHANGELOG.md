@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **`update_dhcp_reservation` never activated the reservation**: setting a `fixed_ip` wrote the address onto the client entry but omitted `use_fixedip=true`, so the controller stored the IP inertly — the reservation never took effect and never appeared in `list_dhcp_reservations` (which filters on `use_fixedip`). The return value also hard-coded `use_fixedip: true` regardless of the controller response, masking the failure. `update_dhcp_reservation` now sets `use_fixedip=true` whenever a `fixed_ip` is provided, and both `create_dhcp_reservation` and `update_dhcp_reservation` now report the controller's actual `use_fixedip` value (defaulting to `false` instead of `true`).
+- **`update_dhcp_reservation` never activated the reservation**: setting a `fixed_ip` wrote the address onto the client entry but omitted `use_fixedip=true`, so the controller stored the IP inertly — the reservation never took effect and never appeared in `list_dhcp_reservations` (which filters on `use_fixedip`). The return value also hard-coded `use_fixedip: true` regardless of the controller response, masking the failure. `update_dhcp_reservation` now sets `use_fixedip=true` whenever a `fixed_ip` is provided, and both `create_dhcp_reservation` and `update_dhcp_reservation` now report the controller's actual `use_fixedip` value — falling back to the requested/known reservation state (coerced via `coerce_bool`) instead of hard-coding `true`.
 
 ### Tests
 

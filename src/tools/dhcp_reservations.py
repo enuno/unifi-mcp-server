@@ -224,7 +224,9 @@ async def create_dhcp_reservation(
             "name": data.get("name"),
             "fixed_ip": data.get("fixed_ip"),
             "network_id": data.get("network_id"),
-            "use_fixedip": data.get("use_fixedip", False),
+            # create always requests use_fixedip=True, so an absent key in the
+            # controller response means "active", not "disabled".
+            "use_fixedip": coerce_bool(data.get("use_fixedip", True)),
         }
 
 
@@ -331,7 +333,15 @@ async def update_dhcp_reservation(
             "name": data[0].get("name"),
             "fixed_ip": data[0].get("fixed_ip"),
             "network_id": data[0].get("network_id"),
-            "use_fixedip": data[0].get("use_fixedip", False),
+            # Prefer the controller's echoed value; if absent, fall back to what
+            # this call requested, then the reservation's prior state — so a
+            # metadata-only update never misreports an active reservation.
+            "use_fixedip": coerce_bool(
+                data[0].get(
+                    "use_fixedip",
+                    overrides.get("use_fixedip", user_entry.get("use_fixedip", False)),
+                )
+            ),
         }
 
 

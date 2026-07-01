@@ -66,7 +66,7 @@
 - `package.json` - npm metadata with mcpName field
 - `mcp-registry.json` - MCP registry manifest
 - `index.js` - npm wrapper entry point
-- `README.npm.md` - npm installation guide
+- `README.npm.md` - legacy npm installation guide (retired)
 - `server.json` - MCP registry server manifest with environment variables
 
 **Modified Files:**
@@ -243,7 +243,7 @@ b217abf docs: add comprehensive release completion guide for v0.2.0
 - `server.json` (MCP registry manifest)
 - `mcp-registry.json` (registry submission)
 - `index.js` (npm wrapper)
-- `README.npm.md` (npm docs)
+- `README.npm.md` (legacy npm docs, retired)
 
 ---
 

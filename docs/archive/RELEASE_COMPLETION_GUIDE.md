@@ -13,7 +13,7 @@
 - [x] Created package.json with mcpName field
 - [x] Created mcp-registry.json for MCP registry submission
 - [x] Updated pyproject.toml to version 0.2.0
-- [x] Created npm wrapper package (index.js, README.npm.md)
+- [x] Created npm wrapper package (index.js; README.npm.md has since been retired)
 
 ### 2. Git Release
 
@@ -76,7 +76,7 @@ npm view unifi-mcp-server
 
 - `package.json` - Package metadata with mcpName field
 - `index.js` - Metadata about Python server installation
-- `README.npm.md` - Installation instructions
+- `README.npm.md` - Installation instructions (retired legacy file)
 - `LICENSE` - Apache 2.0 license
 
 ---

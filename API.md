@@ -92,7 +92,7 @@ Use this reference to verify the exposed MCP surface before changing configs, wr
 
 Configure the MCP server using environment variables:
 
-> Note: the table below includes both currently supported settings and roadmap-aligned controls that will become active as Phase 5 lands.
+> Note: the table below includes both currently supported settings and planned controls that will become active as Phase 5 lands.
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `UNIFI_API_KEY` | UniFi API Key (used for both Network and Site Manager APIs) | Yes | - |
@@ -1608,9 +1608,9 @@ All mutating tools raise:
 - `ResourceNotFoundError`: If resource not found
 - `APIError`: If UniFi API returns error
 
-## Phase 5: Advanced Features
+## Phase 5: Enterprise scale and operational excellence
 
-Phase 5 adds WiFi management, port forwarding, DPI analytics, caching, and webhook support.
+Phase 5 expands the platform with WiFi management, port forwarding, DPI analytics, caching, webhook support, and enterprise-scale controls.
 
 ### WiFi Network (SSID) Management
 

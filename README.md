@@ -58,7 +58,7 @@ Give operators a fast, safe reading order for understanding what the server does
 pip install unifi-mcp-server
 ```
 
-**Current focus:**
+**Roadmap focus:**
 
 - Phase 3: native Protect API integration
 - Phase 4: testing, polish, minor gaps, runbooks, skills, and developer workflow hardening
@@ -68,7 +68,7 @@ pip install unifi-mcp-server
 
 ## Current Development Posture
 
-- Current repo codebase: ~215 async tool functions across 40+ modules
+- Current repo codebase: ~220 async tool functions across 40+ modules
 - Phases 0–2 are complete
 - Phase 3 (Protect API integration) is the active implementation target
 - The architectural target is documented in `SPEC.md`
@@ -299,7 +299,7 @@ Once running in SSE mode, configure your MCP gateway to connect:
 - **Network Depth Analysis**: Identify network hierarchy and uplink relationships
 - **Visual Coordinates**: Optional device positioning for diagrams
 
-### Advanced Features
+### Phase 5: Enterprise scale and operational excellence
 
 - **Redis Caching**: Optional Redis-based caching for improved performance (configurable TTL per resource type)
 - **Webhook Support**: Real-time event processing with HMAC signature verification
@@ -428,7 +428,7 @@ docker-compose down
 
 **Included Services:**
 
-- **UniFi MCP Server**: Main MCP server with ~215 async tool functions
+- **UniFi MCP Server**: Main MCP server with ~220 async tool functions
 - **MCP Toolbox**: Web-based analytics dashboard (port 8080)
 - **Redis**: High-performance caching layer
 
@@ -1304,7 +1304,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] Client management (block, unblock, reconnect)
 - [x] Safety mechanisms (confirmation, dry-run, audit logging)
 
-**Phase 5: Advanced Features (11 tools)**
+**Phase 5: Enterprise scale and operational excellence (11 tools)**
 
 - [x] WiFi/SSID management (create, update, delete, statistics)
 - [x] Port forwarding configuration (create, delete, list)

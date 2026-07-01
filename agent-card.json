@@ -1,163 +1,25 @@
 {
-  "name": "UniFi MCP Server",
-  "version": "0.2.5",
-  "description": "A UniFi Network control surface exposed through MCP and A2A for local and cloud controller operations.",
-  "protocol": "A2A",
+  "name": "unifi-mcp-server",
+  "description": "MCP server for managing UniFi Network, Protect, and Site Manager APIs",
+  "version": "0.4.0-planned",
+  "protocol": "MCP/1.0",
+  "capabilities": [
+    "network-management",
+    "protect",
+    "multi-site",
+    "audit-log",
+    "dry-run",
+    "rbac",
+    "metrics",
+    "webhooks"
+  ],
   "authentication": {
-    "modes": ["local", "cloud_v1", "cloud_ea"],
     "schemes": ["bearer", "api-key"],
     "scopes": ["read", "write", "destructive", "admin"]
   },
-  "skills_manifest_url": "/a2a/discover",
-  "delegate_url": "/a2a/delegate",
-  "confirm_url": "/a2a/confirm",
-  "audit_url": "/a2a/audit",
-  "capabilities": [
-    "network-management",
-    "multi-site",
-    "audit-log",
-    "safety-controls",
-    "multi-auth",
-    "prompt-playbooks"
-  ],
-  "specialized_skills": [
-    {
-      "name": "read-network-state",
-      "description": "Read-only site, client, device, and topology queries.",
-      "risk": "read",
-      "examples": [
-        "list_sites",
-        "get_device_details",
-        "get_client_statistics",
-        "get_network_topology"
-      ]
-    },
-    {
-      "name": "mutate-network-state",
-      "description": "Create and update UniFi resources.",
-      "risk": "write",
-      "examples": [
-        "create_network",
-        "update_firewall_rule",
-        "set_wifi_settings",
-        "add_dhcp_reservation"
-      ]
-    },
-    {
-      "name": "destructive-operations",
-      "description": "Removal, reset, and other irreversible actions.",
-      "risk": "destructive",
-      "examples": [
-        "delete_device",
-        "remove_client",
-        "reset_ap",
-        "delete_network"
-      ]
-    }
-  ],
-  "resource_uris": [
-    {
-      "uri": "sites://",
-      "name": "sites",
-      "description": "All UniFi sites",
-      "mimeType": "text/plain"
-    },
-    {
-      "uri": "sites://{site_id}/devices",
-      "name": "site-devices",
-      "description": "Devices for a specific site",
-      "mimeType": "text/plain"
-    },
-    {
-      "uri": "sites://{site_id}/clients",
-      "name": "site-clients",
-      "description": "Clients for a specific site",
-      "mimeType": "text/plain"
-    },
-    {
-      "uri": "sites://{site_id}/networks",
-      "name": "site-networks",
-      "description": "Networks for a specific site",
-      "mimeType": "text/plain"
-    },
-    {
-      "uri": "site-manager://sites",
-      "name": "site-manager-sites",
-      "description": "All sites from Site Manager API",
-      "mimeType": "application/json"
-    },
-    {
-      "uri": "site-manager://health",
-      "name": "site-manager-health",
-      "description": "Cross-site health metrics",
-      "mimeType": "application/json"
-    }
-  ],
-  "safety_requirements": {
-    "confirmation_levels": {
-      "none": "No confirmation required for read-only operations",
-      "recommended": "Sensitive parameters detected; confirmation advised",
-      "required": "Mutating controller state requires explicit confirmation"
-    },
-    "destructive_prefixes": [
-      "delete_", "remove_", "reset_", "restore_", "reboot_", "restart_",
-      "disable_", "enable_", "update_", "patch_", "set_", "modify_",
-      "purge_", "clear_", "flush_", "provision_", "deprovision_", "shutdown_"
-    ],
-    "sensitive_fields": [
-      "api_key", "apikey", "auth", "authorization", "client_secret",
-      "confirm", "description", "key", "passphrase", "password",
-      "secret", "ssid", "token", "username"
-    ]
-  },
-  "prompt_playbooks": [
-    {
-      "name": "network_diagnostics",
-      "description": "Diagnose network issues across clients, devices, topology, and WAN health.",
-      "safety_level": "none",
-      "steps": 6
-    },
-    {
-      "name": "security_audit",
-      "description": "Audit security posture including firewall rules, ACLs, DPI, and port forwards.",
-      "safety_level": "confirm",
-      "steps": 6
-    },
-    {
-      "name": "device_provisioning",
-      "description": "Adopt and configure new UniFi devices into a site.",
-      "safety_level": "confirm",
-      "steps": 6
-    },
-    {
-      "name": "guest_wifi_setup",
-      "description": "Configure guest WiFi with vouchers, content filtering, and bandwidth limits.",
-      "safety_level": "confirm",
-      "steps": 6
-    },
-    {
-      "name": "site_migration",
-      "description": "Migrate site settings between UniFi controllers.",
-      "safety_level": "strict",
-      "steps": 6
-    },
-    {
-      "name": "incident_response",
-      "description": "Respond to security incidents by blocking clients, isolating devices, and capturing logs.",
-      "safety_level": "strict",
-      "steps": 6
-    }
-  ],
-  "integration_examples": [
-    "Use health_check to verify server availability before delegating a task.",
-    "Call a read-only skill such as list_sites or list_devices to discover available scope.",
-    "For destructive skills, supply confirm=true and optional dry_run=true for preview.",
-    "Query /a2a/discover to get the skills manifest for agent-to-agent negotiation.",
-    "POST to /a2a/delegate with tool_name and params to execute a delegated operation.",
-    "Use /a2a/confirm with a confirmation_token to approve pending destructive actions.",
-    "Retrieve audit history via GET /a2a/audit?agent_id=<agent>&tool_name=<tool>"
-  ],
+  "tools_manifest_url": "/mcp/tools",
   "contact": {
     "url": "https://github.com/enuno/unifi-mcp-server"
-  }
+  },
+  "status": "planned"
 }

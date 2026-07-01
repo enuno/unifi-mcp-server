@@ -4,6 +4,41 @@
 
 This document provides comprehensive reference documentation for the UniFi Network API version 10.3.55. Each UniFi Application has its own API endpoints running locally on each site, offering detailed analytics and control related to that specific application. For a single endpoint with high-level insights across all your UniFi sites, refer to the [UniFi Site Manager API](https://developer.ui.com/).
 
+## Operator usage
+
+### Objective
+
+Treat this as the source of truth for Network API shape when verifying endpoint coverage, creating mocks, or checking drift against implementation.
+
+### Prerequisites
+
+- You know the controller type and the applicable API base path.
+- You know whether you are validating a read path, write path, or model/schema change.
+- You have the current roadmap and phase docs available for cross-checking.
+
+### Procedure
+
+1. Use the table of contents to find the domain you are changing.
+2. Confirm the version history before assuming schema or field stability.
+3. Check the roadmap alignment note to see whether the behavior is implemented or planned.
+4. Use the relevant endpoint details to build tests, runbooks, or operational checks.
+
+### Verification
+
+- The endpoint surface in this doc matches the code and fixtures.
+- New fields or schemas are reflected in tests and runbooks.
+- The doc does not describe future phase work as already shipped.
+
+### Rollback
+
+- If drift is detected, revert the doc claim to the last known-good surface and log the discrepancy for the next phase update.
+
+### Common failure modes
+
+- Copying upstream API details without checking whether the repo supports them yet.
+- Missing a schema drift when the version history changes.
+- Using this reference without checking the phase-specific runbooks for operator procedure.
+
 ## Table of Contents
 
 - [Getting Started](#getting-started)
@@ -57,6 +92,12 @@ Updated from OpenAPI spec extracted from UniFi Network 10.3.55. Endpoint count u
 ### v10.2.105 (Prior)
 
 Previous baseline. Added Switching section (Switch Stacks, MC-LAG Domains, LAGs), WiFi broadcast parity, and firewall zone/policy endpoints.
+
+---
+
+## Roadmap alignment
+
+This reference currently covers the Network API surface. The broader product roadmap adds native Protect support, Access support, multi-controller orchestration, dry-run controls, metrics, audit logging, and webhook/event-bus documentation in separate phase-specific docs.
 
 ---
 

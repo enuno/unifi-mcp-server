@@ -6,6 +6,40 @@
 
 This TODO mirrors `DEVELOPMENT_PLAN.md` and tracks the work that is still open in the repo.
 
+## Using this backlog
+
+### Objective
+
+Keep the live backlog actionable and phase-aligned so operators and contributors know what is genuinely next.
+
+### Prerequisites
+
+- You know the current development phase.
+- You have the supporting roadmap or runbook for the item you are updating.
+
+### Procedure
+
+1. Move items between phase buckets only when the phase boundary changes.
+2. Keep completed items short and factual.
+3. When a phase item becomes operator-facing, add or refresh the matching runbook.
+4. Reconcile the TODO with the development plan after every meaningful update.
+
+### Verification
+
+- Active work matches the phase plan.
+- Completed work is not re-labeled as active.
+- The backlog can be read without guessing the current release posture.
+
+### Rollback
+
+- If the TODO drifts, restore the phase bucket and status markers before making further edits.
+
+### Common failure modes
+
+- Letting the backlog become a duplicate roadmap.
+- Marking phase work complete before the implementation is actually shipped.
+- Leaving stale maintenance items active after they are already folded into another doc.
+
 ---
 
 ## Active work

@@ -18,6 +18,43 @@ This document provides comprehensive documentation for the Model Context Protoco
 
 The UniFi MCP Server bridges the gap between AI applications and UniFi Network Controllers by exposing network management capabilities as MCP tools and resources. It handles authentication, request formatting, and error handling, providing a clean interface for network automation.
 
+This API reference is aligned to the current implementation baseline and the forward architecture described in `SPEC.md`.
+
+## Operator usage
+
+### Objective
+
+Use this reference to verify the exposed MCP surface before changing configs, writing tests, or planning a rollout.
+
+### Prerequisites
+
+- You know the target API mode and transport mode.
+- You know whether you need read-only verification or a write-path review.
+- You have the current phase docs open alongside this reference.
+
+### Procedure
+
+1. Start with configuration and authentication to confirm the runtime assumptions.
+2. Read the feature surface that matches the current deployment mode.
+3. Cross-check any roadmap-dependent claims against `SPEC.md`, `DEVELOPMENT_PLAN.md`, and the phase runbooks.
+4. Use the examples and endpoint listings to validate the intended behavior before changing production state.
+
+### Verification
+
+- The documented endpoint or tool exists in the current implementation.
+- The reference does not overstate future features as live.
+- The operator can map the doc to an actual test or validation step.
+
+### Rollback
+
+- If the API reference drifts from the implementation, restate the supported surface and move aspirational material back to roadmap docs.
+
+### Common failure modes
+
+- Treating roadmap language as if it were an implemented guarantee.
+- Skipping the phase docs and relying on the API reference alone.
+- Confusing future transport or auth modes with currently shipped behavior.
+
 ### Architecture
 
 ```
@@ -47,6 +84,7 @@ The UniFi MCP Server bridges the gap between AI applications and UniFi Network C
 - **Firewall Rules:** Create and manage firewall rules
 - **Site Management:** Work with multiple UniFi sites
 - **Real-time Monitoring:** Access device and network statistics
+- **Roadmap alignment:** native Protect, Access, multi-controller, dry-run, RBAC, audit, metrics, A2A, and webhooks are defined in `SPEC.md`
 
 ## Configuration
 
@@ -54,6 +92,7 @@ The UniFi MCP Server bridges the gap between AI applications and UniFi Network C
 
 Configure the MCP server using environment variables:
 
+> Note: the table below includes both currently supported settings and roadmap-aligned controls that will become active as Phase 5 lands.
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `UNIFI_API_KEY` | UniFi API Key (used for both Network and Site Manager APIs) | Yes | - |
@@ -67,6 +106,12 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
+| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect`, `access`, `talk`, `drive`, `read-only` | No | unset |
+| `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
+| `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
+| `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
+| `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
+| `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address (http/sse transports) | No | `0.0.0.0` |

@@ -8,7 +8,45 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/enuno/unifi-mcp-server)
 
-A Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
+A Model Context Protocol (MCP) server that exposes the UniFi Network Controller API today and is evolving into a production-grade multi-domain platform for Protect, Access, and enterprise-scale orchestration.
+
+See `SPEC.md` for the architecture target and `DEVELOPMENT_PLAN.md` for the phase roadmap.
+
+## Operator quick start
+
+### Objective
+
+Give operators a fast, safe reading order for understanding what the server does today, what it is becoming, and which docs govern rollout decisions.
+
+### Prerequisites
+
+- You know which UniFi API mode the deployment uses: local, cloud-ea, or cloud-v1.
+- You know whether the runtime is stdio, HTTP, SSE, or streamable HTTP.
+- You have read the phase target in `SPEC.md` and the current work item in `DEVELOPMENT_PLAN.md`.
+
+### Procedure
+
+1. Confirm the current stable release and current phase focus.
+2. Read `SPEC.md` for architecture intent and `DEVELOPMENT_PLAN.md` for sequencing.
+3. Use `API.md` and `docs/UNIFI_API.md` for implementation surface details.
+4. Use the phase runbooks in `NETWORK_PLAYBOOK.md`, `HARBOR_SETUP.md`, `MULTI_CONTROLLER.md`, `METRICS.md`, `WEBHOOK_SETUP.md`, and `A2A.md` when operating or extending phase 5 systems.
+5. For release work, consult `RELEASE_CHECKLIST.md` and `docs/RELEASE_PROCESS.md` before tagging or publishing.
+
+### Verification
+
+- The chosen API mode matches the runtime configuration.
+- The current phase and the documented roadmap agree.
+- The operator can point to the correct runbook before making a change.
+
+### Rollback
+
+- If the selected runbook does not match the deployed capability, stop and reconcile docs before changing production state.
+
+### Common failure modes
+
+- README claims outrun the codebase.
+- Operators follow phase language without checking the specific runbook.
+- Release or rollout decisions are made from the README alone instead of the canonical docs.
 
 ## 📋 Version Notice
 
@@ -20,13 +58,11 @@ A Model Context Protocol (MCP) server that exposes the UniFi Network Controller 
 pip install unifi-mcp-server
 ```
 
-**What's New in v0.2.5:**
+**Current focus:**
 
-- 🚀 **SSE/HTTP Transport Mode** - Direct HTTP connectivity for MCP gateway integration with long-lived persistent bidirectional communication channels. Enable with `UNIFI_TRANSPORT_MODE=sse` and `UNIFI_HTTP_PORT=8000`.
-- 🔧 **API Compatibility Fixes** - 7 critical UniFi Network 9.x fixes including firewall policy zone resolution, WLAN band parameter handling, and response parsing
-- ☁️ **Cloud EA API Hardening** - Enhanced Site Manager endpoint resilience with graceful fallbacks and improved error handling
-- 🔐 **Security Updates** - Dependency bumps: fastmcp → latest, MCP framework → 1.26.0+, cryptography → 46.0.5+, httpx → 0.28.1+
-- 🧪 **1,236 Tests Passing** - Maintained high coverage across Python 3.10–3.13
+- Phase 3: native Protect API integration
+- Phase 4: testing, polish, minor gaps, runbooks, skills, and developer workflow hardening
+- Phase 5: multi-controller orchestration, dry-run, RBAC, audit logging, metrics, A2A, webhooks, Access API work, and tool exposure profiles
 
 **See:** [RELEASE_NOTES_0.2.5.md](RELEASE_NOTES_0.2.5.md) for complete changelog.
 
@@ -35,9 +71,8 @@ pip install unifi-mcp-server
 - Current repo codebase: ~215 async tool functions across 40+ modules
 - Phases 0–2 are complete
 - Phase 3 (Protect API integration) is the active implementation target
-- Phase 4 adds testing, polish, minor gaps, runbooks, skills, and developer workflow hardening
-- Phase 5 adds multi-controller orchestration, dry-run, RBAC, audit logging, metrics, A2A, webhooks, Access API work, and tool exposure modes for context reduction
-- Canonical roadmap: `DEVELOPMENT_PLAN.md`
+- The architectural target is documented in `SPEC.md`
+- The canonical roadmap is `DEVELOPMENT_PLAN.md`
 
 **Previous Release - v0.2.4 (2026-02-19):**
 
@@ -145,11 +180,11 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 
 **💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **SSE** when running behind an MCP gateway to consolidate multiple MCP servers into a single URL.
 
-## 🧭 Tool Exposure Modes (Planned)
+## 🧭 Tool Exposure Profiles
 
-To reduce context-window bloat, the server will add named tool-exposure modes that only register the tools relevant to a given UniFi application area.
+To reduce context-window bloat, the server will support named exposure profiles that register only the tools relevant to a given UniFi application area.
 
-### Planned modes
+### Planned profiles
 
 - `network` — network, switching, WiFi, DHCP, DNS, traffic, and client tools
 - `protect` — cameras, NVR, events, talkback, and Protect workflows
@@ -160,10 +195,10 @@ To reduce context-window bloat, the server will add named tool-exposure modes th
 
 ### Intended behavior
 
-- Keep the full tool surface available when no mode is selected
+- Keep the full tool surface available when no profile is selected
 - Expose fewer tools per session so agents do not carry unrelated UniFi modules in context
 - Make the server easier to use in application-specific deployments and focused agent workflows
-- Pair with `UNIFI_PROFILE` so mode selection is explicit and repeatable
+- Pair with `UNIFI_PROFILE` so profile selection is explicit and repeatable
 
 ### Running in SSE Mode
 
@@ -271,12 +306,14 @@ Once running in SSE mode, configure your MCP gateway to connect:
 - **Automatic Cache Invalidation**: Smart cache invalidation when configuration changes
 - **Event Handlers**: Built-in handlers for device, client, and alert events
 - **Performance Tracking**: Optional agnost.ai integration for monitoring MCP tool performance and usage analytics
+- **Roadmap-aligned controls**: planned dry-run, RBAC, audit logging, metrics, and A2A discovery
 
 ### Safety & Security
 
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
-- **Dry-Run Mode**: Preview changes before applying them with `dry_run=True`
-- **Audit Logging**: All operations logged to `audit.log` for compliance
+- **Dry-Run Mode**: Planned change-safe preview path for all write and destructive operations
+- **Audit Logging**: Planned append-only audit trail for mutation paths
+- **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages
 - **Password Masking**: Sensitive data automatically masked in logs
 - **Type-Safe**: Full type hints and Pydantic validation throughout

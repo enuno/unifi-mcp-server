@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-19
+
+### Added
+
+- **Protect Phase 3 docs update**: documented the new read-only Protect surfaces in `API.md`, `README.md`, and `docs/UNIFI_API.md` so the repo now calls out devices, live views, and events as wired where applicable.
+- **Protect device surface**: added `list_protect_devices` as the read-only device update/message tool for the Phase 3 Protect module.
+- **Protect views surface**: added `list_protect_views` as the live views / viewer metadata tool for the Phase 3 Protect module.
+- **Protect events surface**: added `list_protect_events` as the read-only Protect event / alarm notification tool for the Phase 3 Protect module.
+
 ## [0.2.4] - 2026-02-19
 
 ### Fixed

@@ -97,7 +97,7 @@ Previous baseline. Added Switching section (Switch Stacks, MC-LAG Domains, LAGs)
 
 ## Roadmap alignment
 
-This reference currently covers the Network API surface. The broader product roadmap adds native Protect support, Access support, multi-controller orchestration, dry-run controls, metrics, audit logging, and webhook/event-bus documentation in separate phase-specific docs.
+This reference currently covers the Network API surface plus the Phase 3 Protect read surfaces (cameras, NVRs, devices, views, and events). The broader product roadmap still adds Access support, multi-controller orchestration, dry-run controls, metrics, audit logging, and webhook/event-bus documentation in separate phase-specific docs.
 
 ---
 
@@ -3889,6 +3889,16 @@ curl -L -g -X PATCH "https://api.ui.com/v1/connector/consoles/{id}/*path" \-H "A
 ## Protect API - New Endpoints
 
 *Added: 2026-01-24*
+
+### Protect Phase 3 read surfaces
+
+| Surface | Endpoint(s) | MCP surface | Notes |
+|---|---|---|---|
+| Cameras | `/proxy/protect/integration/v1/cameras`, `/proxy/protect/integration/v1/cameras/{id}` | `protect://cameras`, `list_protect_cameras`, `get_protect_camera` | Existing read path |
+| NVRs | `/proxy/protect/integration/v1/nvrs`, `/proxy/protect/integration/v1/nvrs/{id}` | `protect://nvrs`, `list_protect_nvrs`, `get_protect_nvr` | Existing read path |
+| Devices | `/proxy/protect/integration/v1/subscribe/devices` | `list_protect_devices` | Read-only device update messages |
+| Live views / viewers | `/proxy/protect/integration/v1/liveviews`, `/proxy/protect/integration/v1/viewers` | `list_protect_views` | Read-only metadata surface; write endpoints remain a roadmap item |
+| Events | `/proxy/protect/integration/v1/subscribe/events` | `list_protect_events` | Read-only event stream |
 
 ### Connector - POST
 

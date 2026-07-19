@@ -45,6 +45,23 @@ from .integration_api import (
 from .network import Network
 from .port_profile import PortOverride, PortProfile, PortTableEntry
 from .protect_camera import ProtectCamera
+from .protect_device import (
+    ProtectChime,
+    ProtectChimeRingSetting,
+    ProtectDevice,
+    ProtectLight,
+    ProtectLightDeviceSettings,
+    ProtectLightModeSettings,
+    ProtectSensor,
+    ProtectSensorSettings,
+    ProtectSensorThresholdSettings,
+)
+from .protect_event import (
+    ProtectAlarmWebhookResult,
+    ProtectDeviceUpdateMessage,
+    ProtectEventMessage,
+)
+from .protect_view import ProtectLiveView, ProtectLiveViewSlot, ProtectMetaInfo, ProtectViewer
 from .protect_nvr import ProtectNVR
 from .qos_profile import MatchCriteria, RouteAction, RouteSchedule, TrafficRoute
 from .radius import RADIUSProfile
@@ -125,6 +142,22 @@ __all__ = [
     "PortOverride",
     "PortTableEntry",
     "ProtectCamera",
+    "ProtectDevice",
+    "ProtectLightModeSettings",
+    "ProtectLightDeviceSettings",
+    "ProtectSensorThresholdSettings",
+    "ProtectSensorSettings",
+    "ProtectChimeRingSetting",
+    "ProtectLight",
+    "ProtectSensor",
+    "ProtectChime",
+    "ProtectViewer",
+    "ProtectLiveViewSlot",
+    "ProtectLiveView",
+    "ProtectMetaInfo",
+    "ProtectDeviceUpdateMessage",
+    "ProtectEventMessage",
+    "ProtectAlarmWebhookResult",
     "ProtectNVR",
     "IntegrationSite",
     "IntegrationDevice",

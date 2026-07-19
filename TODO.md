@@ -49,10 +49,10 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Implement `src/api/protect_client.py` (scaffolded; wired for local/Cloud path prefixes)
 - [x] Add Protect models under `src/models/protect_*.py` (ProtectCamera, ProtectNVR)
 - [x] Add camera tools (`src/tools/protect_cameras.py`) (list, get)
-- [ ] Add Protect device tools (`src/tools/protect_devices.py`)
+- [x] Add Protect device tools (`src/tools/protect_devices.py`)
 - [x] Add NVR / asset tools (`src/tools/protect_nvr.py`) (list, get)
-- [ ] Add live view / viewer tools (`src/tools/protect_views.py`)
-- [ ] Add Protect events / webhook tools (`src/tools/protect_events.py`)
+- [x] Add live view / viewer tools (`src/tools/protect_views.py`)
+- [x] Add Protect events / webhook tools (`src/tools/protect_events.py`)
 - [x] Add Protect MCP resources (`src/resources/protect.py`) (nvrs, cameras resource URIs)
 - [ ] Build mocked integration tests for Protect
 - [ ] Update `API.md` and `UNIFI_API.md` with Protect coverage

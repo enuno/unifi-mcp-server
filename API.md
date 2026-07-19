@@ -106,7 +106,7 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
-| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (cameras/NVR read wired; events/PTZ in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
+| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (camera/NVR/device/view/event read wired; PTZ/media streams in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
@@ -431,6 +431,101 @@ result = await mcp.call_tool("health_check", {})
   "version": "0.2.5",
   "api_type": "cloud"
 }
+```
+
+### Protect Phase 3 Read Tools
+
+The Protect profile now exposes read-only tools for the Phase 3 surfaces. Cameras and NVRs are already wired, and the new device, view, and event tools are now documented alongside them.
+
+#### `list_protect_cameras`
+
+List Protect cameras.
+
+**Parameters:**
+
+- `limit` (integer, optional): Maximum results to return
+- `offset` (integer, optional): Pagination offset
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_protect_cameras", {"limit": 10, "offset": 0})
+```
+
+#### `get_protect_camera`
+
+Get a single Protect camera by ID.
+
+**Parameters:**
+
+- `camera_id` (string, required): Protect camera identifier
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_protect_camera", {"camera_id": "cam-1"})
+```
+
+#### `list_protect_nvrs`
+
+List Protect NVRs.
+
+**Parameters:** None
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_protect_nvrs", {})
+```
+
+#### `get_protect_nvr`
+
+Get a single Protect NVR by ID.
+
+**Parameters:**
+
+- `nvr_id` (string, required): Protect NVR identifier
+
+**Example:**
+
+```python
+result = await mcp.call_tool("get_protect_nvr", {"nvr_id": "nvr-1"})
+```
+
+#### `list_protect_devices`
+
+List Protect device update records surfaced through the read-only Phase 3 device module.
+
+**Parameters:** None
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_protect_devices", {})
+```
+
+#### `list_protect_views`
+
+List Protect live views and viewer metadata exposed by the Phase 3 views module.
+
+**Parameters:** None
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_protect_views", {})
+```
+
+#### `list_protect_events`
+
+List Protect event messages and alarm/event notifications from the Phase 3 events module.
+
+**Parameters:** None
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_protect_events", {})
 ```
 
 ### Device Management Tools

@@ -60,7 +60,7 @@ pip install unifi-mcp-server
 
 **Roadmap focus:**
 
-- Phase 3: native Protect API integration
+- Phase 3: native Protect API integration (camera/NVR read tools and resources now wired; devices, views, events, PTZ, and media streams still in progress)
 - Phase 4: testing, polish, minor gaps, runbooks, skills, and developer workflow hardening
 - Phase 5: multi-controller orchestration, dry-run, RBAC, audit logging, metrics, A2A, webhooks, Access API work, and tool exposure profiles
 
@@ -187,7 +187,7 @@ To reduce context-window bloat, the server will support named exposure profiles 
 ### Planned profiles
 
 - `network` — network, switching, WiFi, DHCP, DNS, traffic, and client tools
-- `protect` — cameras, NVR, events, talkback, and Protect workflows
+- `protect` — cameras, NVR, events, talkback, and Protect workflows (partial; cameras and NVR read tools/resources wired)
 - `access` — doors, readers, credentials, visitors, and access-control workflows
 - `talk` — UniFi Talk devices, calls, lines, and telephony workflows
 - `drive` — UniFi Drive storage, files, sharing, and drive workflows

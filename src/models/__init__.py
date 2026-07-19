@@ -44,6 +44,8 @@ from .integration_api import (
 )
 from .network import Network
 from .port_profile import PortOverride, PortProfile, PortTableEntry
+from .protect_camera import ProtectCamera
+from .protect_nvr import ProtectNVR
 from .qos_profile import MatchCriteria, RouteAction, RouteSchedule, TrafficRoute
 from .radius import RADIUSProfile
 from .reference_data import DeviceTag
@@ -122,6 +124,8 @@ __all__ = [
     "PortProfile",
     "PortOverride",
     "PortTableEntry",
+    "ProtectCamera",
+    "ProtectNVR",
     "IntegrationSite",
     "IntegrationDevice",
     "IntegrationClient",

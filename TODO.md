@@ -46,16 +46,17 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 
 ### Phase 3 — Protect API integration
 
-- [ ] Implement `src/api/protect_client.py`
-- [ ] Add Protect models under `src/models/protect_*.py`
-- [ ] Add camera tools (`src/tools/protect_cameras.py`)
+- [x] Implement `src/api/protect_client.py` (scaffolded; wired for local/Cloud path prefixes)
+- [x] Add Protect models under `src/models/protect_*.py` (ProtectCamera, ProtectNVR)
+- [x] Add camera tools (`src/tools/protect_cameras.py`) (list, get)
 - [ ] Add Protect device tools (`src/tools/protect_devices.py`)
-- [ ] Add NVR / asset tools (`src/tools/protect_nvr.py`)
+- [x] Add NVR / asset tools (`src/tools/protect_nvr.py`) (list, get)
 - [ ] Add live view / viewer tools (`src/tools/protect_views.py`)
 - [ ] Add Protect events / webhook tools (`src/tools/protect_events.py`)
-- [ ] Add Protect MCP resources (`src/resources/protect.py`)
+- [x] Add Protect MCP resources (`src/resources/protect.py`) (nvrs, cameras resource URIs)
 - [ ] Build mocked integration tests for Protect
 - [ ] Update `API.md` and `UNIFI_API.md` with Protect coverage
+- [x] Wire exports, runtime profile, and config helper for Protect (completed 2026-07-19)
 
 ### Phase 4 — Testing, polish, minor gaps, developer experience
 

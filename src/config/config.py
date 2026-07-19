@@ -310,6 +310,36 @@ class Settings(BaseSettings):
             # Local gateways require /proxy/network/ prefix
             return f"/proxy/network/integration/v1/{endpoint}"
 
+    def get_protect_integration_path(self, endpoint: str) -> str:
+        """Get the correct UniFi Protect integration API endpoint path based on API type.
+
+        For Cloud V1 API: Returns /v1/{endpoint}
+        For Cloud EA API: Returns /integration/v1/{endpoint}
+        For Local API: Returns /proxy/protect/integration/v1/{endpoint}
+
+        Args:
+            endpoint: The endpoint path (e.g., "cameras", "nvrs/nvr-1")
+
+        Returns:
+            Complete endpoint path with correct prefix
+
+        Example:
+            >>> settings.get_protect_integration_path("cameras")
+            # Cloud V1: "/v1/cameras"
+            # Cloud EA: "/integration/v1/cameras"
+            # Local: "/proxy/protect/integration/v1/cameras"
+        """
+        # Remove leading slash if present for consistency
+        endpoint = endpoint.lstrip("/")
+
+        if self.api_type == APIType.CLOUD_V1:
+            return f"/v1/{endpoint}"
+        elif self.api_type == APIType.CLOUD_EA:
+            return f"/integration/v1/{endpoint}"
+        else:
+            # Local gateways require /proxy/protect/ prefix for Protect API
+            return f"/proxy/protect/integration/v1/{endpoint}"
+
     def get_site_api_path(self, site_id: str, endpoint: str) -> str:
         """Get the correct standard UniFi API endpoint path based on API type.
 

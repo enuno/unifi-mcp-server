@@ -14,13 +14,14 @@ except importlib.metadata.PackageNotFoundError:
 
 from fastmcp import FastMCP
 
+from .a2a import A2AHTTPRouter, A2AState
+from .a2a.audit import get_audit_logger
+from .a2a.auth import AuthManager
+from .a2a.route_policy import ConfirmationWorkflow, SafetyController
 from .config import APIType, Settings, TransportMode
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
+from .resources import protect as protect_resource
 from .resources import site_manager as site_manager_resource
-from .a2a import A2AHTTPRouter, A2AState
-from .a2a.auth import AuthManager
-from .a2a.audit import get_audit_logger
-from .a2a.route_policy import SafetyController, ConfirmationWorkflow
 from .tool_registry import register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
@@ -40,11 +41,13 @@ from .tools import firewall as firewall_tools
 from .tools import firewall_groups as firewall_groups_tools
 from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
-from .tools import network_config as network_config_tools
 from .tools import integration_api as integration_api_tools
+from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
 from .tools import port_profiles as port_profile_tools
+from .tools import protect_cameras as protect_cameras_tools
+from .tools import protect_nvr as protect_nvr_tools
 from .tools import qos as qos_tools
 from .tools import radius as radius_tools
 from .tools import reference_data as ref_tools
@@ -143,6 +146,8 @@ _LOCAL_TOOL_MODULES = [
     networks_tools,
     port_fwd_tools,
     port_profile_tools,
+    protect_cameras_tools,
+    protect_nvr_tools,
     qos_tools,
     radius_tools,
     ref_tools,
@@ -161,7 +166,7 @@ _LOCAL_TOOL_MODULES = [
 # Profile-based module filtering (UNIFI_PROFILE env var)
 #
 # Set UNIFI_PROFILE to load only a subset of tools, reducing LLM context size.
-# Valid profiles: network, devices, security, system, minimal
+# Valid profiles: network, devices, security, system, minimal, protect
 # Omit UNIFI_PROFILE (or set to "all") to load all tools for the API type.
 # ---------------------------------------------------------------------------
 
@@ -216,6 +221,10 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         clients_tools,
         devices_tools,
     ],
+    "protect": [
+        protect_cameras_tools,
+        protect_nvr_tools,
+    ],
 }
 
 _active_profile = os.getenv("UNIFI_PROFILE", "").lower().strip()
@@ -247,7 +256,7 @@ else:
     else:
         _TOOL_MODULES = _all_local
     logger.info(
-        f"Local API mode"
+        "Local API mode"
         + (f", profile={_active_profile}" if _active_profile else "")
         + f" - registering {len(_TOOL_MODULES)} tool module(s)"
     )
@@ -265,6 +274,7 @@ if settings.api_type == APIType.LOCAL:
     devices_resource = DevicesResource(settings)
     clients_resource = ClientsResource(settings)
     networks_resource = NetworksResource(settings)
+    protect_res = protect_resource.ProtectResource(settings)
 
 # ---------------------------------------------------------------------------
 # Built-in tools (not in a module, or require special handling)
@@ -383,6 +393,56 @@ if settings.api_type == APIType.LOCAL:
         flows = await traffic_flows_tools.get_traffic_flows(site_id, settings)
         return json.dumps(flows, indent=2)
 
+    @mcp.resource("protect://nvrs")
+    async def get_protect_nvrs_resource() -> str:
+        """Get all UniFi Protect NVRs.
+
+        Returns:
+            JSON string of NVRs list
+        """
+        nvrs = await protect_res.list_nvrs()
+        return "\n".join([f"NVR: {n.name} ({n.id}) - {n.model}" for n in nvrs])
+
+    @mcp.resource("protect://nvrs/{nvr_id}")
+    async def get_protect_nvr_resource(nvr_id: str) -> str:
+        """Get a single UniFi Protect NVR.
+
+        Args:
+            nvr_id: NVR identifier
+
+        Returns:
+            JSON string of NVR details
+        """
+        nvr = await protect_res.get_nvr(nvr_id)
+        if nvr is None:
+            return f"NVR {nvr_id} not found"
+        return f"NVR: {nvr.name} ({nvr.id}) - {nvr.model}"
+
+    @mcp.resource("protect://cameras")
+    async def get_protect_cameras_resource() -> str:
+        """Get all UniFi Protect cameras.
+
+        Returns:
+            JSON string of cameras list
+        """
+        cameras = await protect_res.list_cameras()
+        return "\n".join([f"Camera: {c.name} ({c.id}) - {c.model}" for c in cameras])
+
+    @mcp.resource("protect://cameras/{camera_id}")
+    async def get_protect_camera_resource(camera_id: str) -> str:
+        """Get a single UniFi Protect camera.
+
+        Args:
+            camera_id: Camera identifier
+
+        Returns:
+            JSON string of camera details
+        """
+        camera = await protect_res.get_camera(camera_id)
+        if camera is None:
+            return f"Camera {camera_id} not found"
+        return f"Camera: {camera.name} ({camera.id}) - {camera.model}"
+
 
 @mcp.resource("site-manager://sites")
 async def get_site_manager_sites_resource() -> str:
@@ -438,6 +498,7 @@ def main() -> None:
         confirmation_workflow=ConfirmationWorkflow(),
     )
     a2a_router = A2AHTTPRouter(state=a2a_state)
+    _ = a2a_router  # mounted below onto FastMCP's internal Starlette app
 
     if settings.server_transport == TransportMode.STDIO:
         logger.info("Transport: stdio (default)")
@@ -446,14 +507,12 @@ def main() -> None:
     else:
         logger.info(f"Transport: {settings.server_transport.value}")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
-        logger.info("A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit")
+        logger.info(
+            "A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit"
+        )
         # FastMCP 3.x HTTP transport uses an internal Starlette app; we mount
         # the A2A router after server startup via a small wrapper.
-        import asyncio
-
-        from starlette.applications import Starlette
         from starlette.responses import JSONResponse
-        from starlette.routing import Mount, Route
 
         from .a2a.http_handlers import (
             confirm_handler,
@@ -497,7 +556,9 @@ def main() -> None:
                 _mounted = True
                 break
         if not _mounted:
-            logger.warning("Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually")
+            logger.warning(
+                "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
+            )
 
         mcp.run(
             transport=settings.server_transport.value,

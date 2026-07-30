@@ -175,6 +175,67 @@ class TestUniFiClientEndpointTranslation:
 
         await client.close()
 
+    @pytest.mark.asyncio
+    async def test_translate_v2_uuid_to_site_name(self, mock_settings_local):
+        """The v2 API rejects UUIDs, so they must be mapped to the short name."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+
+        result = client._translate_endpoint("/proxy/network/v2/api/site/abc-123-uuid/traffic-flows")
+        assert result == "/proxy/network/v2/api/site/default/traffic-flows"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_v2_nested_path_is_preserved(self, mock_settings_local):
+        """Everything after the site segment must survive the rewrite intact."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+
+        result = client._translate_endpoint(
+            "/proxy/network/v2/api/site/abc-123-uuid/firewall-policies/pol-1"
+        )
+        assert result == "/proxy/network/v2/api/site/default/firewall-policies/pol-1"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_v2_short_name_is_idempotent(self, mock_settings_local):
+        """Callers that already normalize must not be broken by the rewrite."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+
+        result = client._translate_endpoint("/proxy/network/v2/api/site/default/traffic-flows")
+        assert result == "/proxy/network/v2/api/site/default/traffic-flows"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_v2_unknown_site_passes_through(self, mock_settings_local):
+        """An unmapped id is left alone so the API can report the real error."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {}
+
+        result = client._translate_endpoint(
+            "/proxy/network/v2/api/site/unmapped-uuid/traffic-flows"
+        )
+        assert result == "/proxy/network/v2/api/site/unmapped-uuid/traffic-flows"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_non_v2_proxy_path_unchanged(self, mock_settings_local):
+        """Only the v2 site pattern is rewritten; other local paths pass through."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+
+        result = client._translate_endpoint(
+            "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
+        )
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
+
+        await client.close()
+
 
 class TestUniFiClientAuthentication:
     @pytest.mark.asyncio
@@ -207,6 +268,42 @@ class TestUniFiClientAuthentication:
             await client.authenticate()
 
         assert client._authenticated is True
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_builds_site_map_from_dict_response(self, mock_settings_local):
+        """A wrapped {"data": [...]} payload must still populate the UUID map."""
+        client = UniFiClient(mock_settings_local)
+        sites = [{"id": "abc-123-uuid", "internalReference": "default", "name": "Default"}]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "{}"
+        mock_response.json = MagicMock(return_value={"data": sites})
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            await client.authenticate()
+
+        assert client._site_uuid_to_name == {"abc-123-uuid": "default"}
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_authenticate_builds_site_map_from_list_response(self, mock_settings_local):
+        """The bare-list shape must keep working."""
+        client = UniFiClient(mock_settings_local)
+        sites = [{"id": "abc-123-uuid", "internalReference": "default", "name": "Default"}]
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = "[]"
+        mock_response.json = MagicMock(return_value=sites)
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            await client.authenticate()
+
+        assert client._site_uuid_to_name == {"abc-123-uuid": "default"}
         await client.close()
 
     @pytest.mark.asyncio

@@ -176,6 +176,21 @@ class UniFiClient:
                 self.logger.debug(f"Translated site ID: {site_id} -> {site_name}")
             return f"/proxy/network/api/s/{site_name}/self"
 
+        # Pattern: /proxy/network/v2/api/site/{site_id}/{rest}
+        # The v2 API keys off the site short name and rejects UUIDs with
+        # {"errorCode":404,"message":"Site does not exist"}. Callers normally
+        # hold the UUID that list_sites returns, so translate centrally here
+        # rather than relying on every call site to remember. The lookup is
+        # idempotent -- a short name maps to itself -- so callers that already
+        # normalize are unaffected.
+        match = re.match(r"^(/proxy/network/v2/api/site/)([^/]+)(/.*)?$", endpoint)
+        if match:
+            prefix, site_id, rest = match.groups()
+            site_name = self._site_uuid_to_name.get(site_id, site_id)
+            if site_id != site_name:
+                self.logger.debug(f"Translated v2 site ID: {site_id} -> {site_name}")
+            return f"{prefix}{site_name}{rest or ''}"
+
         # If no pattern matches, check if it's already a local endpoint
         if endpoint.startswith("/proxy/network/"):
             return endpoint
@@ -214,9 +229,6 @@ class UniFiClient:
             if isinstance(response, list):
                 # List response means we got data successfully (local API)
                 self._authenticated = True
-                # Build site UUID -> name mapping for local API
-                if self.settings.api_type == APIType.LOCAL:
-                    self._build_site_uuid_map(response)
             elif isinstance(response, dict):
                 # Dict response - check for success indicators
                 self._authenticated = (
@@ -227,12 +239,39 @@ class UniFiClient:
             else:
                 self._authenticated = False
 
+            # Build site UUID -> name mapping for local API.
+            # /ea/sites arrives either as a bare list or wrapped as {"data": [...]},
+            # depending on how _request normalizes the payload. Accept both, or the
+            # map silently stays empty and every UUID -> site name lookup no-ops.
+            if self.settings.api_type == APIType.LOCAL:
+                sites = self._extract_site_list(response)
+                if sites is not None:
+                    self._build_site_uuid_map(sites)
+
             self.logger.info(
                 f"Successfully authenticated with UniFi API (response type: {type(response).__name__})"
             )
         except Exception as e:
             self.logger.error(f"Authentication failed: {e}")
             raise AuthenticationError(f"Failed to authenticate with UniFi API: {e}") from e
+
+    @staticmethod
+    def _extract_site_list(response: Any) -> list[dict[str, Any]] | None:
+        """Pull the site list out of an /ea/sites response.
+
+        Args:
+            response: Raw response, either a bare list or ``{"data": [...]}``
+
+        Returns:
+            The list of site objects, or None if the response carries none
+        """
+        if isinstance(response, list):
+            return response
+        if isinstance(response, dict):
+            data = response.get("data")
+            if isinstance(data, list):
+                return data
+        return None
 
     def _build_site_uuid_map(self, sites: list[dict[str, Any]]) -> None:
         """Build a mapping of site UUIDs to internal reference names.

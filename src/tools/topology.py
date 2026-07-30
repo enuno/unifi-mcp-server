@@ -1,5 +1,6 @@
 """Network topology tools for UniFi MCP Server."""
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Any, Literal, cast
@@ -8,6 +9,91 @@ from src.api.client import UniFiClient
 from src.config import Settings
 from src.models.topology import NetworkDiagram, TopologyConnection, TopologyNode
 from src.utils.exceptions import ValidationError
+
+# The Integration API reports "ONLINE"; older/legacy payloads use "CONNECTED".
+_ONLINE_DEVICE_STATES = frozenset({"ONLINE", "CONNECTED"})
+
+
+def _extract_device_detail(response: Any) -> dict[str, Any] | None:
+    """Unwrap a per-device detail response into the device object."""
+    if isinstance(response, dict):
+        data = response.get("data")
+        if isinstance(data, dict):
+            return data
+        if isinstance(data, list):
+            return data[0] if data and isinstance(data[0], dict) else None
+        return response
+    return None
+
+
+async def _merge_device_uplinks(
+    client: UniFiClient, devices_endpoint: str, devices: list[dict[str, Any]]
+) -> None:
+    """Populate each device's ``uplink`` from the per-device detail route.
+
+    The device *list* endpoint omits ``uplink`` entirely, so a topology built
+    from it alone contains no device-to-device edges. The detail route does
+    carry it, as ``{"deviceId": ...}``. Lookups run concurrently; a device whose
+    lookup fails keeps no uplink rather than failing the whole graph.
+
+    Args:
+        client: Authenticated API client
+        devices_endpoint: Base devices endpoint for the resolved site
+        devices: Device dicts to enrich in place
+    """
+
+    async def fetch(device: dict[str, Any]) -> None:
+        device_id = device.get("id")
+        if not device_id or isinstance(device.get("uplink"), dict):
+            return
+        try:
+            response = await client.get(f"{devices_endpoint}/{device_id}")
+        except Exception as exc:  # noqa: BLE001 - one bad device must not sink the graph
+            client.logger.debug(f"No uplink detail for device {device_id}: {exc}")
+            return
+        detail = _extract_device_detail(response)
+        if detail is not None and isinstance(detail.get("uplink"), dict):
+            device["uplink"] = detail["uplink"]
+
+    await asyncio.gather(*(fetch(device) for device in devices))
+
+
+def _resolve_depth(device_id: str, uplinks: dict[str, str], cache: dict[str, int]) -> int:
+    """Return a device's hop count from the gateway.
+
+    Walks the uplink chain rather than trusting device ordering, so depth is
+    correct regardless of the order the API returns devices in. A cycle in the
+    reported uplinks is broken by treating the repeated device as a root.
+
+    Args:
+        device_id: Device to resolve
+        uplinks: Device ID -> uplink device ID
+        cache: Memo of already-resolved depths, updated in place
+
+    Returns:
+        Hop count, 0 for a device with no uplink
+    """
+    chain: list[str] = []
+    seen: set[str] = set()
+    current = device_id
+
+    while current not in cache:
+        if current in seen:
+            cache[current] = 0
+            break
+        seen.add(current)
+        parent = uplinks.get(current)
+        if parent is None:
+            cache[current] = 0
+            break
+        chain.append(current)
+        current = parent
+
+    depth = cache[current]
+    for node in reversed(chain):
+        depth += 1
+        cache[node] = depth
+    return cache[device_id]
 
 
 async def get_network_topology(
@@ -70,23 +156,32 @@ async def get_network_topology(
             if len(data) < 100:
                 break
 
+        # The list endpoint above returns no `uplink` key; without this the
+        # graph would contain client edges only, with every device a root.
+        await _merge_device_uplinks(client, devices_endpoint, device_nodes)
+
         # Convert devices to topology nodes
         nodes = []
         connections = []
         depth_map: dict[str, int] = {}  # Track network depth for each device
 
+        # Uplink chain must be known up front: depth cannot be derived from a
+        # single pass unless parents happen to precede children.
+        uplinks: dict[str, str] = {}
+        for device in device_nodes:
+            device_id = device.get("id", "")
+            uplink_device_id = (device.get("uplink") or {}).get("deviceId")
+            if device_id and uplink_device_id:
+                uplinks[device_id] = uplink_device_id
+
         # First pass: Create all device nodes and calculate depth
         for device in device_nodes:
             device_id = device.get("id", "")
-            uplink_info = device.get("uplink", {})
+            uplink_info = device.get("uplink") or {}
             uplink_device_id = uplink_info.get("deviceId")
+            is_online = device.get("state") in _ONLINE_DEVICE_STATES
 
-            # Calculate depth (distance from gateway)
-            if uplink_device_id:
-                parent_depth = depth_map.get(uplink_device_id, 0)
-                depth_map[device_id] = parent_depth + 1
-            else:
-                depth_map[device_id] = 0  # Gateway device
+            _resolve_depth(device_id, uplinks, depth_map)
 
             node = TopologyNode(
                 node_id=device_id,
@@ -99,7 +194,7 @@ async def get_network_topology(
                 uplink_device_id=uplink_device_id,
                 uplink_port=uplink_info.get("portIndex"),
                 uplink_depth=depth_map.get(device_id, 0),
-                state=1 if device.get("state") == "CONNECTED" else 0,
+                state=1 if is_online else 0,
                 adopted=True,  # All returned devices are adopted
             )
             nodes.append(node)
@@ -114,7 +209,7 @@ async def get_network_topology(
                     source_port=uplink_info.get("portIndex"),
                     speed_mbps=uplink_info.get("speedMbps"),
                     is_uplink=True,
-                    status="up" if device.get("state") == "CONNECTED" else "down",
+                    status="up" if is_online else "down",
                 )
                 connections.append(conn)
 

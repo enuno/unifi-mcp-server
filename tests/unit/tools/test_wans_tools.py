@@ -35,6 +35,15 @@ def make_wan(wan_id="wan-1"):
     }
 
 
+def make_sparse_wan(wan_id="wan-1"):
+    """A WAN exactly as Integration v1 ``/sites/{site_id}/wans`` returns it.
+
+    That endpoint reports only ``id`` and ``name``; there is no per-WAN detail
+    route to enrich the record from.
+    """
+    return {"id": wan_id, "name": "Internet 1"}
+
+
 def create_mock_client(return_value):
     mock_client = AsyncMock()
     mock_client.get = AsyncMock(return_value=return_value)
@@ -92,6 +101,32 @@ class TestListWanConnections:
         with patch("src.tools.wans.UniFiClient", return_value=mock_client):
             await list_wan_connections("default", mock_settings)
         mock_client.authenticate.assert_called_once()
+
+    async def test_accepts_sparse_integration_api_response(self, mock_settings):
+        """Integration v1 returns only id and name; that must not raise."""
+        mock_client = create_mock_client({"data": [make_sparse_wan()]})
+        with patch("src.tools.wans.UniFiClient", return_value=mock_client):
+            result = await list_wan_connections("default", mock_settings)
+
+        assert len(result) == 1
+        assert result[0]["id"] == "wan-1"
+        assert result[0]["name"] == "Internet 1"
+        # Absent fields surface as None rather than failing validation.
+        assert result[0]["site_id"] is None
+        assert result[0]["wan_type"] is None
+        assert result[0]["interface"] is None
+        assert result[0]["status"] is None
+
+    async def test_populated_optional_fields_are_preserved(self, mock_settings):
+        """Relaxing the model must not drop values when they are present."""
+        mock_client = create_mock_client({"data": [make_wan()]})
+        with patch("src.tools.wans.UniFiClient", return_value=mock_client):
+            result = await list_wan_connections("default", mock_settings)
+
+        assert result[0]["site_id"] == "default"
+        assert result[0]["wan_type"] == "dhcp"
+        assert result[0]["interface"] == "eth0"
+        assert result[0]["status"] == "online"
 
 
 class TestDynamicDNS:

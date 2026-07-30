@@ -6,13 +6,17 @@ from pydantic import BaseModel, ConfigDict, Field
 class WANConnection(BaseModel):
     """WAN connection model."""
 
+    # Only ``id`` and ``name`` are guaranteed: the Integration v1
+    # ``/sites/{site_id}/wans`` endpoint returns just those two fields, and
+    # there is no per-WAN detail route to enrich them from. Everything below is
+    # optional so a sparse response validates instead of raising.
     id: str = Field(..., alias="_id", description="WAN connection identifier")
-    site_id: str = Field(..., description="Site identifier")
+    site_id: str | None = Field(None, description="Site identifier")
     name: str = Field(..., description="WAN connection name")
 
     # Connection type
-    wan_type: str = Field(..., description="WAN type (dhcp/static/pppoe)")
-    interface: str = Field(..., description="Physical interface (eth0/eth1/etc)")
+    wan_type: str | None = Field(None, description="WAN type (dhcp/static/pppoe)")
+    interface: str | None = Field(None, description="Physical interface (eth0/eth1/etc)")
 
     # IP configuration
     ip_address: str | None = Field(None, description="WAN IP address")
@@ -21,7 +25,7 @@ class WANConnection(BaseModel):
     dns_servers: list[str] = Field(default_factory=list, description="DNS server IPs")
 
     # Connection status
-    status: str = Field(..., description="Connection status (online/offline/connecting)")
+    status: str | None = Field(None, description="Connection status (online/offline/connecting)")
     uptime: int | None = Field(None, description="Connection uptime in seconds")
 
     # Statistics

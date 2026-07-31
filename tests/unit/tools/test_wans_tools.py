@@ -38,10 +38,16 @@ def make_wan(wan_id="wan-1"):
 
 
 def make_sparse_wan(wan_id="wan-1"):
-    """A WAN exactly as Integration v1 ``/sites/{site_id}/wans`` returns it.
+    """Build a WAN exactly as Integration v1 ``/sites/{site_id}/wans`` returns it.
 
     That endpoint reports only ``id`` and ``name``; there is no per-WAN detail
     route to enrich the record from.
+
+    Args:
+        wan_id: Identifier to report as ``id``
+
+    Returns:
+        The two-field WAN record the sparse endpoint sends
     """
     return {"id": wan_id, "name": "Internet 1"}
 

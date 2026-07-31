@@ -32,6 +32,8 @@ def make_wan(wan_id="wan-1"):
         "wan_type": "dhcp",
         "interface": "eth0",
         "status": "online",
+        "dns_servers": ["1.1.1.1", "8.8.8.8"],
+        "is_backup": True,
     }
 
 
@@ -111,11 +113,15 @@ class TestListWanConnections:
         assert len(result) == 1
         assert result[0]["id"] == "wan-1"
         assert result[0]["name"] == "Internet 1"
-        # Absent fields surface as None rather than failing validation.
+        # Absent fields surface as None rather than failing validation. No field
+        # carries a concrete default, so "omitted by the controller" is never
+        # reported as an empty list or a False flag.
         assert result[0]["site_id"] is None
         assert result[0]["wan_type"] is None
         assert result[0]["interface"] is None
         assert result[0]["status"] is None
+        assert result[0]["dns_servers"] is None
+        assert result[0]["is_backup"] is None
 
     async def test_populated_optional_fields_are_preserved(self, mock_settings):
         """Relaxing the model must not drop values when they are present."""
@@ -127,6 +133,8 @@ class TestListWanConnections:
         assert result[0]["wan_type"] == "dhcp"
         assert result[0]["interface"] == "eth0"
         assert result[0]["status"] == "online"
+        assert result[0]["dns_servers"] == ["1.1.1.1", "8.8.8.8"]
+        assert result[0]["is_backup"] is True
 
 
 class TestDynamicDNS:

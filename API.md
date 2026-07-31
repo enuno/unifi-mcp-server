@@ -909,6 +909,14 @@ List WAN connections for a site.
 **Returns:**
 Array of WAN connection objects.
 
+Only `id` and `name` are guaranteed. The Integration v1
+`/sites/{site_id}/wans` endpoint returns just those two fields and offers no
+per-WAN detail route, so every other key — including `site_id`, `wan_type`,
+`interface`, `status`, `dns_servers` and `is_backup` — is `null` when the
+controller omits it. Consumers must treat those fields as nullable rather than
+assuming they are always populated. A `null` means "not reported", never "empty"
+or "false".
+
 **Example:**
 
 ```python

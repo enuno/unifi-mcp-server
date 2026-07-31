@@ -1,13 +1,14 @@
 """Unit tests for UniFi API client."""
 
 import asyncio
+from types import MethodType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
 from src.api.client import RateLimiter, UniFiClient
-from src.config import APIType
+from src.config import APIType, Settings
 from src.utils.exceptions import (
     APIError,
     AuthenticationError,
@@ -332,6 +333,102 @@ class TestUniFiClientAuthentication:
         assert client._site_uuid_to_name["uuid-1"] == "default"
         assert client._site_uuid_to_name["uuid-2"] == "office"
         await client.close()
+
+    @pytest.mark.asyncio
+    async def test_build_site_uuid_map_skips_unparsable_entries(self, mock_settings_local):
+        """A malformed entry must not cost every other site its mapping."""
+        client = UniFiClient(mock_settings_local)
+
+        sites = [
+            {"id": "uuid-1", "internalReference": "default"},
+            "not-a-site",
+            {"internalReference": "office"},  # no id
+        ]
+
+        client._build_site_uuid_map(sites)
+
+        assert client._site_uuid_to_name == {"uuid-1": "default"}
+        await client.close()
+
+
+class TestLocalV2SiteTranslationEndToEnd:
+    """The v2 rewrite must hold for a real request, not just the helper."""
+
+    @staticmethod
+    def _response(payload, status_code=200):
+        """Build a stub httpx response carrying a JSON payload.
+
+        Args:
+            payload: Object returned by ``response.json()``
+            status_code: HTTP status code to report
+
+        Returns:
+            A MagicMock shaped like the httpx response the client expects
+        """
+        response = MagicMock()
+        response.status_code = status_code
+        response.text = "{}"
+        response.json = MagicMock(return_value=payload)
+        response.headers = {}
+        return response
+
+    @pytest.fixture
+    def local_client(self, mock_settings_local):
+        """A local client whose ``get_v2_api_path`` is the real implementation.
+
+        Args:
+            mock_settings_local: Local-mode settings fixture
+
+        Returns:
+            An un-authenticated UniFiClient in local mode
+        """
+        mock_settings_local.get_v2_api_path = MethodType(
+            Settings.get_v2_api_path, mock_settings_local
+        )
+        return UniFiClient(mock_settings_local)
+
+    @pytest.mark.asyncio
+    async def test_v2_call_with_a_uuid_from_list_sites_hits_the_short_name(self, local_client):
+        """A UUID straight out of list_sites must reach the controller as a name."""
+        sites = [{"id": "abc-123-uuid", "internalReference": "default", "name": "Default"}]
+
+        with patch.object(local_client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = self._response({"data": sites})
+            await local_client.authenticate()
+
+            # Exactly the identifier list_sites hands back to a caller.
+            site_id = sites[0]["id"]
+            mock_request.return_value = self._response({"data": []})
+            await local_client.get(
+                f"{local_client.settings.get_v2_api_path(site_id)}/firewall/zone"
+            )
+
+        assert (
+            mock_request.call_args.kwargs["url"]
+            == "https://192.168.2.1/proxy/network/v2/api/site/default/firewall/zone"
+        )
+        await local_client.close()
+
+    @pytest.mark.asyncio
+    async def test_v2_call_with_an_unmapped_site_reports_the_upstream_error(self, local_client):
+        """An unknown site is passed through so the controller's 404 surfaces."""
+        sites = [{"id": "abc-123-uuid", "internalReference": "default", "name": "Default"}]
+
+        with patch.object(local_client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = self._response({"data": sites})
+            await local_client.authenticate()
+
+            mock_request.return_value = self._response({"message": "Site does not exist"}, 404)
+            with pytest.raises(ResourceNotFoundError):
+                await local_client.get(
+                    f"{local_client.settings.get_v2_api_path('unmapped-uuid')}/firewall/zone"
+                )
+
+        # Passed through verbatim rather than rewritten to something wrong.
+        assert mock_request.call_args.kwargs["url"].endswith(
+            "/proxy/network/v2/api/site/unmapped-uuid/firewall/zone"
+        )
+        await local_client.close()
 
 
 class TestUniFiClientHttpMethods:

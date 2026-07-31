@@ -66,7 +66,7 @@ from .protect_nvr import ProtectNVR
 from .qos_profile import MatchCriteria, RouteAction, RouteSchedule, TrafficRoute
 from .radius import RADIUSProfile
 from .reference_data import DeviceTag
-from .site import Site
+from .site import Site, SiteReference
 from .site_manager import (
     CrossSiteStatistics,
     InternetHealthMetrics,
@@ -87,6 +87,7 @@ from .zbf_matrix import ApplicationBlockRule, ZoneNetworkAssignment, ZonePolicy,
 
 __all__ = [
     "Site",
+    "SiteReference",
     "Device",
     "Client",
     "Network",

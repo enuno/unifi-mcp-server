@@ -7,8 +7,10 @@ from typing import Any
 from uuid import UUID
 
 import httpx
+from pydantic import ValidationError as PydanticValidationError
 
 from ..config import APIType, Settings
+from ..models.site import SiteReference
 from ..utils import (
     APIError,
     AuthenticationError,
@@ -256,14 +258,17 @@ class UniFiClient:
             raise AuthenticationError(f"Failed to authenticate with UniFi API: {e}") from e
 
     @staticmethod
-    def _extract_site_list(response: Any) -> list[dict[str, Any]] | None:
-        """Pull the site list out of an /ea/sites response.
+    def _extract_site_list(response: Any) -> list[Any] | None:
+        """Pull the site list out of an /ea/sites response envelope.
+
+        Envelope handling only: the entries themselves are validated as
+        :class:`SiteReference` in :meth:`_build_site_uuid_map`.
 
         Args:
             response: Raw response, either a bare list or ``{"data": [...]}``
 
         Returns:
-            The list of site objects, or None if the response carries none
+            The list of site entries, or None if the response carries none
         """
         if isinstance(response, list):
             return response
@@ -273,24 +278,26 @@ class UniFiClient:
                 return data
         return None
 
-    def _build_site_uuid_map(self, sites: list[dict[str, Any]]) -> None:
+    def _build_site_uuid_map(self, sites: list[Any]) -> None:
         """Build a mapping of site UUIDs to internal reference names.
 
         This is required for local API, which uses site names (e.g., 'default')
-        instead of UUIDs in endpoint paths.
+        instead of UUIDs in endpoint paths. Entries are validated through
+        :class:`SiteReference`; one malformed entry is skipped rather than
+        failing authentication for every other site.
 
         Args:
             sites: List of site objects from /ea/sites endpoint
         """
         self._site_uuid_to_name.clear()
         for site in sites:
-            if not isinstance(site, dict):
-                self.logger.warning(f"Skipping non-dict site entry: {type(site).__name__}")
+            try:
+                reference = SiteReference.model_validate(site)
+            except PydanticValidationError as exc:
+                self.logger.warning(f"Skipping unparsable site entry: {exc}")
                 continue
-            site_id = site.get("id")
-            internal_ref = site.get("internalReference")
-            if site_id and internal_ref:
-                self._site_uuid_to_name[site_id] = internal_ref
+            if reference.internal_reference:
+                self._site_uuid_to_name[reference.id] = reference.internal_reference
 
         self.logger.info(f"Built site UUID mapping: {len(self._site_uuid_to_name)} sites")
 

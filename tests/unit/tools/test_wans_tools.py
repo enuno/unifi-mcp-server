@@ -110,18 +110,11 @@ class TestListWanConnections:
         with patch("src.tools.wans.UniFiClient", return_value=mock_client):
             result = await list_wan_connections("default", mock_settings)
 
-        assert len(result) == 1
-        assert result[0]["id"] == "wan-1"
-        assert result[0]["name"] == "Internet 1"
-        # Absent fields surface as None rather than failing validation. No field
-        # carries a concrete default, so "omitted by the controller" is never
-        # reported as an empty list or a False flag.
-        assert result[0]["site_id"] is None
-        assert result[0]["wan_type"] is None
-        assert result[0]["interface"] is None
-        assert result[0]["status"] is None
-        assert result[0]["dns_servers"] is None
-        assert result[0]["is_backup"] is None
+        # Absent fields are dropped from the output rather than failing
+        # validation or padding the record with 20 nulls. No field carries a
+        # concrete default, so "omitted by the controller" is never reported as
+        # an empty list or a False flag either.
+        assert result == [{"id": "wan-1", "name": "Internet 1"}]
 
     async def test_populated_optional_fields_are_preserved(self, mock_settings):
         """Relaxing the model must not drop values when they are present."""
@@ -135,6 +128,9 @@ class TestListWanConnections:
         assert result[0]["status"] == "online"
         assert result[0]["dns_servers"] == ["1.1.1.1", "8.8.8.8"]
         assert result[0]["is_backup"] is True
+        # Only what the controller reported: is_backup=True survives the
+        # exclude_none filter, but a field nobody sent stays out.
+        assert "ip_address" not in result[0]
 
 
 class TestDynamicDNS:

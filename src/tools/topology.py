@@ -8,14 +8,33 @@ from typing import Any, Literal, cast
 from src.api.client import UniFiClient
 from src.config import Settings
 from src.models.topology import NetworkDiagram, TopologyConnection, TopologyNode
-from src.utils.exceptions import ValidationError
+from src.utils.exceptions import (
+    APIError,
+    AuthenticationError,
+    NetworkError,
+    RateLimitError,
+    ValidationError,
+)
 
 # The Integration API reports "ONLINE"; older/legacy payloads use "CONNECTED".
 _ONLINE_DEVICE_STATES = frozenset({"ONLINE", "CONNECTED"})
 
+# Upper bound on in-flight per-device detail lookups. The enrichment pass issues
+# one request per device, so a large site would otherwise queue hundreds of
+# requests behind the client's rate limiter at once.
+_UPLINK_DETAIL_CONCURRENCY = 8
+
 
 def _extract_device_detail(response: Any) -> dict[str, Any] | None:
-    """Unwrap a per-device detail response into the device object."""
+    """Unwrap a per-device detail response into the device object.
+
+    Args:
+        response: Raw detail response, either the device itself or wrapped in
+            ``data`` as an object or a single-element list
+
+    Returns:
+        The device object, or None if the response carries none
+    """
     if isinstance(response, dict):
         data = response.get("data")
         if isinstance(data, dict):
@@ -33,24 +52,47 @@ async def _merge_device_uplinks(
 
     The device *list* endpoint omits ``uplink`` entirely, so a topology built
     from it alone contains no device-to-device edges. The detail route does
-    carry it, as ``{"deviceId": ...}``. Lookups run concurrently; a device whose
-    lookup fails keeps no uplink rather than failing the whole graph.
+    carry it, as ``{"deviceId": ...}``.
+
+    Lookups run concurrently, bounded by ``_UPLINK_DETAIL_CONCURRENCY``. A
+    device whose lookup fails with a per-device API error keeps no uplink rather
+    than failing the whole graph, but a systemic failure — an authentication
+    rejection or an exhausted rate limit, which every other lookup is hitting
+    too — propagates instead of quietly yielding a graph with missing edges.
 
     Args:
         client: Authenticated API client
         devices_endpoint: Base devices endpoint for the resolved site
         devices: Device dicts to enrich in place
+
+    Raises:
+        AuthenticationError: If the controller rejects the credentials
+        RateLimitError: If the rate limit is exhausted after retries
     """
+    semaphore = asyncio.Semaphore(_UPLINK_DETAIL_CONCURRENCY)
 
     async def fetch(device: dict[str, Any]) -> None:
+        """Fetch one device's detail record and copy its uplink onto ``device``.
+
+        Args:
+            device: Device dict to enrich in place; skipped when it already
+                carries an ``uplink`` or has no ``id``
+        """
         device_id = device.get("id")
         if not device_id or isinstance(device.get("uplink"), dict):
             return
-        try:
-            response = await client.get(f"{devices_endpoint}/{device_id}")
-        except Exception as exc:  # noqa: BLE001 - one bad device must not sink the graph
-            client.logger.debug(f"No uplink detail for device {device_id}: {exc}")
-            return
+        async with semaphore:
+            try:
+                response = await client.get(f"{devices_endpoint}/{device_id}")
+            except (AuthenticationError, RateLimitError):
+                # Systemic, not device-specific: every other lookup is failing
+                # the same way, so a degraded graph would misrepresent the site.
+                raise
+            except (APIError, NetworkError) as exc:
+                # One bad device must not sink the graph. Narrow on purpose:
+                # anything else is a bug and should fail loudly.
+                client.logger.debug(f"No uplink detail for device {device_id}: {exc}")
+                return
         detail = _extract_device_detail(response)
         if detail is not None and isinstance(detail.get("uplink"), dict):
             device["uplink"] = detail["uplink"]
@@ -91,6 +133,13 @@ def _resolve_depth(device_id: str, uplinks: dict[str, str], cache: dict[str, int
 
     depth = cache[current]
     for node in reversed(chain):
+        # A node already in the cache is the cycle root this walk just pinned to
+        # 0. Keep that value and continue counting from it, rather than
+        # overwriting the root and inflating everything downstream of it.
+        cached = cache.get(node)
+        if cached is not None:
+            depth = cached
+            continue
         depth += 1
         cache[node] = depth
     return cache[device_id]

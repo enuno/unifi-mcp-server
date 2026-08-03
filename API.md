@@ -2023,6 +2023,49 @@ result = await mcp.call_tool("list_top_applications", {
 ]
 ```
 
+#### `list_dpi_categories`
+
+List the DPI categories the controller recognises.
+
+**Parameters:** none.
+
+**Returns:**
+Array of category objects. Only `id` and `name` are guaranteed, and `id` is a
+number on the Integration v1 route (categories are numbered from zero) while
+the legacy endpoint sends a string. Fields the controller does not report are
+omitted rather than returned as `null`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_dpi_categories", {})
+# [{"id": 0, "name": "Instant messengers"}, {"id": 1, "name": "File transfer"}]
+```
+
+#### `list_dpi_applications`
+
+List the DPI applications the controller recognises.
+
+**Parameters:**
+
+- `limit` (integer, optional): Maximum number of results
+- `offset` (integer, optional): Starting position
+- `filter_expr` (string, optional): Filter expression
+
+**Returns:**
+Array of application objects. Only `id` and `name` are guaranteed — the
+Integration v1 route returns just those two, with a numeric `id` — so
+`category_id`, `category_name`, `enabled`, `protocols` and `ports` may all be
+missing. Absent keys are omitted rather than returned as `null`; an absent key
+means "not reported", never "empty" or "disabled".
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_dpi_applications", {"limit": 2})
+# [{"id": 3, "name": "ICQ"}, {"id": 7, "name": "Skype"}]
+```
+
 #### `get_client_dpi`
 
 Get DPI statistics for a specific client.

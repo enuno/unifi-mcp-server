@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`list_dpi_applications` on Integration v1 (issue #108)**: `GET /integration/v1/dpi/applications` returns only `{"id": 3, "name": "ICQ"}`, but `DPIApplication` required `category_id` and typed `id` as a string, so every response raised `ValidationError` and the tool was unusable in local API mode. `category_id` is now optional, `id` accepts the numeric form the Integration v1 route sends, and `category_id`/`category_name` also accept the API's camelCase spellings.
+
+### Changed
+
+- **`list_dpi_applications` / `list_dpi_categories` output contract**: optional fields now default to `None` instead of `[]`/`True` (`protocols`, `ports`, `enabled`), and both tools dump with `exclude_none=True`, so fields the controller does not report are omitted rather than emitted as `null`. An absent key means "not reported", never "empty" or "disabled". Both tools are now documented in `API.md`.
+
 ## [0.4.0] - 2026-07-19
 
 ### Added

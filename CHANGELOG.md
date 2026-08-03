@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`list_wan_connections` on Integration v1 (issue #100)**: `GET /integration/v1/sites/{site_id}/wans` returns only `id` and `name`, but `WANConnection` required `site_id`, `wan_type`, `interface` and `status`, so every response raised `ValidationError` and the tool was unusable in local API mode. Those four fields are now optional. There is no per-WAN detail route to enrich the sparse record from, so relaxing the model is the only fix.
+
+### Changed
+
+- **`list_wan_connections` output contract**: optional fields now default to `None` instead of `[]`/`False` (`dns_servers`, `is_backup`), and the tool dumps with `exclude_none=True`, so fields the controller does not report are omitted rather than emitted as `null`. An absent key means "not reported", never "empty" or "false" — consumers must look keys up defensively. Documented in `API.md`.
+
 ## [0.4.0] - 2026-07-19
 
 ### Added

@@ -41,6 +41,43 @@ DEVICE_ID_1 = "507f1f77bcf86cd799439011"
 DEVICE_ID_2 = "507f1f77bcf86cd799439022"
 DEVICE_ID_3 = "507f1f77bcf86cd799439033"
 
+# The integration API keys devices by UUID, not by the legacy ObjectId above.
+DEVICE_UUID_1 = "b12257d4-d910-3b09-bcf9-e842229ac697"
+DEVICE_UUID_2 = "c33f1a92-7e41-4a0d-9a55-1de6f0b2c841"
+
+
+def make_integration_device(device_id=DEVICE_UUID_1, name="Test Device"):
+    """Build a device exactly as ``/integration/v1/sites/{site}/devices`` returns it.
+
+    Note the differences from the legacy ``/ea/`` shape in ``make_device``:
+    ``macAddress`` instead of ``mac``, a string ``state``, no ``type`` key, and
+    ``features`` / ``interfaces`` as objects rather than lists of strings.
+
+    Args:
+        device_id: Integration-API UUID to report as ``id``
+        name: Device display name
+
+    Returns:
+        A device record in the integration API's shape
+    """
+    return {
+        "id": device_id,
+        "name": name,
+        "model": "U7-Pro-Wall",
+        "macAddress": "1c:6a:1b:5b:c7:85",
+        "ipAddress": "192.168.1.185",
+        "state": "ONLINE",
+        "supported": True,
+        "firmwareVersion": "8.6.11.18870",
+        "firmwareUpdatable": False,
+        "adoptedAt": "2025-10-04T10:00:00Z",
+        "features": {"accessPoint": {}},
+        "interfaces": {
+            "ports": [],
+            "radios": [{"frequencyGHz": 5, "channelWidthMHz": 320, "channel": 53}],
+        },
+    }
+
 
 def make_device(
     device_id=DEVICE_ID_1, name="Test Device", device_type="uap", model="U7-Pro", state=1
@@ -66,31 +103,80 @@ def make_device(
 class TestGetDeviceDetails:
     @pytest.mark.asyncio
     async def test_get_device_details_success(self, mock_settings):
-        mock_response = {"data": [make_device(DEVICE_ID_1, "AP-Living")]}
+        mock_response = {"data": [make_integration_device(DEVICE_UUID_1, "AP-Living")]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
 
-            result = await get_device_details("site-1", DEVICE_ID_1, mock_settings)
+            result = await get_device_details("site-1", DEVICE_UUID_1, mock_settings)
 
-            assert result["id"] == DEVICE_ID_1
+            assert result["id"] == DEVICE_UUID_1
             assert result["name"] == "AP-Living"
 
     @pytest.mark.asyncio
     async def test_get_device_details_list_response(self, mock_settings):
-        mock_response = [make_device(DEVICE_ID_2, "Switch-Main")]
+        mock_response = [make_integration_device(DEVICE_UUID_2, "Switch-Main")]
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
 
-            result = await get_device_details("site-1", DEVICE_ID_2, mock_settings)
+            result = await get_device_details("site-1", DEVICE_UUID_2, mock_settings)
 
-            assert result["id"] == DEVICE_ID_2
+            assert result["id"] == DEVICE_UUID_2
             assert result["name"] == "Switch-Main"
 
     @pytest.mark.asyncio
+    async def test_get_device_details_parses_real_integration_payload(self, mock_settings):
+        """The integration API shape must validate — see issue #108.
+
+        It reports ``macAddress`` rather than ``mac``, a string ``state`` rather
+        than the legacy integer, no ``type`` at all, and ``features`` /
+        ``interfaces`` as objects rather than lists. Every one of those used to
+        raise because the response was parsed with the legacy ``Device`` model.
+        """
+        device = make_integration_device(DEVICE_UUID_1, "2p ap 2")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(device)
+
+            result = await get_device_details("site-1", DEVICE_UUID_1, mock_settings)
+
+        assert result["mac_address"] == "1c:6a:1b:5b:c7:85"
+        assert result["state"] == "ONLINE"
+        assert result["firmware_version"] == "8.6.11.18870"
+        assert result["interfaces"]["radios"][0]["channel"] == 53
+        assert result["features"] == {"accessPoint": {}}
+        # Unmodelled keys survive via extra="allow" rather than being dropped
+        assert result["adoptedAt"] == "2025-10-04T10:00:00Z"
+
+    @pytest.mark.asyncio
+    async def test_get_device_details_omits_unreported_fields(self, mock_settings):
+        """Absent keys are omitted, not returned as null — same rule as #103."""
+        sparse = {"id": DEVICE_UUID_1, "name": "Sparse AP"}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(sparse)
+
+            result = await get_device_details("site-1", DEVICE_UUID_1, mock_settings)
+
+        assert result == {"id": DEVICE_UUID_1, "name": "Sparse AP"}
+
+    @pytest.mark.asyncio
+    async def test_get_device_details_accepts_legacy_id_key(self, mock_settings):
+        """A legacy ``_id`` record still resolves, per the documented fallback."""
+        legacy = {"_id": DEVICE_ID_1, "name": "Legacy AP", "mac": "00:11:22:33:44:55"}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client({"data": [legacy]})
+
+            result = await get_device_details("site-1", DEVICE_ID_1, mock_settings)
+
+        assert result["id"] == DEVICE_ID_1
+        assert result["mac"] == "00:11:22:33:44:55"
+
+    @pytest.mark.asyncio
     async def test_get_device_details_not_found(self, mock_settings):
-        mock_response = {"data": [make_device(DEVICE_ID_1)]}
+        mock_response = {"data": [make_integration_device(DEVICE_UUID_1)]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)

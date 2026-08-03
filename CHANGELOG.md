@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`get_device_details` on Integration v1 (issue #108)**: the tool reads the Integration v1 device route but parsed the response with the legacy `Device` model, which requires `type` and `mac` and types `state` as an integer. The Integration v1 API sends `macAddress`, no `type` at all, and a string `state` (`"ONLINE"`), so every call raised `ValidationError` for every device in local API mode. Now parsed with `IntegrationDevice`, the model that matches the endpoint.
+- **`IntegrationDevice.features` / `.interfaces`**: both were typed `list[str]` but the controller returns objects (`features.accessPoint`, `interfaces.ports[...]`, `interfaces.radios[...]`). This also broke `list_integration_devices` and `get_integration_device` against real hardware.
+
+### Changed
+
+- **`get_device_details` output shape**: now the Integration v1 shape — `mac_address`/`ip_address` rather than `mac`/`ip`, a string `state`, no `type` — and dumped with `exclude_none=True` so unreported keys are omitted rather than emitted as `null`. Documented in `API.md`. The legacy `/ea/` shape is unchanged for `search_devices` and `list_devices_by_type`.
+
 ## [0.4.0] - 2026-07-19
 
 ### Added

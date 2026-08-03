@@ -95,8 +95,8 @@ async def test_list_integration_devices_success(mock_settings, mock_client):
                 "supported": True,
                 "firmwareVersion": "4.4.50",
                 "firmwareUpdatable": False,
-                "features": ["routing"],
-                "interfaces": ["ports"],
+                "features": {"switching": {}},
+                "interfaces": {"ports": [{"idx": 1, "state": "UP"}], "radios": []},
             }
         ],
     }

@@ -340,9 +340,7 @@ class TestListFirewallPolicies:
             # The unrelated policy must survive alongside the WEB one
             assert len(result) == 2
             assert result[0]["name"] == "Block Web Categories"
-            assert (
-                result[0]["destination"]["matching_target"] == MatchingTarget.WEB.value
-            )
+            assert result[0]["destination"]["matching_target"] == MatchingTarget.WEB.value
             assert result[1]["name"] == "Unrelated Allow Rule"
 
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`WEB` firewall matching target (issue #106)**: `MatchingTarget` was missing the `WEB` member that the UniFi controller returns for web-category rules, so any policy using it failed model validation. Because `list_firewall_policies` validates the whole payload, a single `WEB` rule made the entire policy list unavailable rather than just that one entry.
+
 ## [0.4.0] - 2026-07-19
 
 ### Added

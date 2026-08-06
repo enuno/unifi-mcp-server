@@ -24,7 +24,6 @@ from ..models import (
     IntegrationWifiBroadcast,
 )
 from ..utils import (
-    APIError,
     get_logger,
     sanitize_log_message,
     validate_limit_offset,
@@ -54,7 +53,6 @@ async def list_integration_sites(
     Returns:
         Paginated list of integration API sites
     """
-
     logger = get_logger(__name__, settings.log_level)
     final_limit, final_offset = validate_limit_offset(limit, offset)
 
@@ -103,7 +101,6 @@ async def list_integration_devices(
     Returns:
         Paginated list of integration API devices
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -149,7 +146,6 @@ async def get_integration_device(
     Returns:
         Device details
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
 
@@ -188,7 +184,6 @@ async def list_integration_clients(
     Returns:
         Paginated list of integration API clients
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -234,7 +229,6 @@ async def get_integration_client(
     Returns:
         Client details
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
 
@@ -273,7 +267,6 @@ async def list_integration_networks(
     Returns:
         Paginated list of integration API networks
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -326,7 +319,6 @@ async def list_integration_wifi_broadcasts(
     Returns:
         Paginated list of WiFi broadcasts
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -376,7 +368,6 @@ async def get_integration_wifi_broadcast(
     Returns:
         WiFi broadcast details
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
 
@@ -417,7 +408,6 @@ async def list_integration_dns_policies(
     Returns:
         Paginated list of DNS policies
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -467,7 +457,6 @@ async def get_integration_dns_policy(
     Returns:
         DNS policy details
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
 
@@ -506,7 +495,6 @@ async def list_integration_wans(
     Returns:
         Paginated list of WAN connections
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -557,7 +545,6 @@ async def list_integration_vpn_servers(
     Returns:
         Paginated list of VPN servers
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -612,7 +599,6 @@ async def list_integration_device_tags(
     Returns:
         Paginated list of device tags
     """
-
     logger = get_logger(__name__, settings.log_level)
     site_id = validate_site_id(site_id)
     final_limit, final_offset = validate_limit_offset(limit, offset)
@@ -666,7 +652,6 @@ async def list_dpi_application_categories(
     Returns:
         Paginated list of DPI categories
     """
-
     logger = get_logger(__name__, settings.log_level)
     final_limit, final_offset = validate_limit_offset(limit, offset)
 

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Callable
 from types import ModuleType
-from typing import Any, Callable
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,7 +17,7 @@ if importlib.util.find_spec("fastmcp") is None:
     class FastMCP:  # type: ignore[too-many-ancestors]
         pass
 
-    setattr(fastmcp_stub, "FastMCP", FastMCP)
+    fastmcp_stub.FastMCP = FastMCP
     sys.modules["fastmcp"] = fastmcp_stub
 
 from src.tool_registry import register_module_tools

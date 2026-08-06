@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Awaitable, Callable, Mapping
+from typing import Any
 
 from ..config import APIType, Settings
 from ..utils import get_logger
@@ -281,6 +282,7 @@ class A2AHTTPRouter:
     """Framework-agnostic router for the A2A HTTP surface."""
 
     def __init__(self, state: A2AState | None = None) -> None:
+        """Bind the router to an A2A state container, creating one if omitted."""
         self.state = _state(state)
         self.logger = get_logger(__name__)
 
@@ -290,6 +292,7 @@ class A2AHTTPRouter:
         path: str,
         payload: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """Dispatch a request to the handler registered for its method and path."""
         payload = payload or {}
         method = method.upper()
         if method == "GET" and path == "/a2a/agent-card":
@@ -315,7 +318,6 @@ class A2AHTTPRouter:
         transport, Starlette, FastAPI, or custom ASGI wrappers without pulling in
         an additional dependency.
         """
-
         if hasattr(app, "add_route"):
             app.add_route(
                 "/a2a/agent-card",

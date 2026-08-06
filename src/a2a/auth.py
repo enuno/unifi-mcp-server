@@ -7,9 +7,10 @@ layer and HTTP endpoints.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Mapping
+from typing import Any
 
 from ..config import APIType
 from ..utils import get_logger
@@ -33,6 +34,7 @@ class LocalAuthProvider:
     """Authenticate against a local UniFi controller."""
 
     def __init__(self, default_ttl_seconds: int = 3600) -> None:
+        """Set the fallback lifetime for local auth contexts, in seconds."""
         self.default_ttl_seconds = default_ttl_seconds
         self.logger = get_logger(__name__)
 
@@ -75,6 +77,7 @@ class CloudAuthProvider:
     """Authenticate against UniFi Cloud APIs."""
 
     def __init__(self, default_ttl_seconds: int = 1800) -> None:
+        """Set the fallback lifetime for cloud auth contexts, in seconds."""
         self.default_ttl_seconds = default_ttl_seconds
         self.logger = get_logger(__name__)
 
@@ -122,6 +125,7 @@ class AuthManager:
     """Authenticate and authorize A2A requests across local and cloud modes."""
 
     def __init__(self) -> None:
+        """Construct the local and cloud providers this manager dispatches to."""
         self.logger = get_logger(__name__)
         self.local_provider = LocalAuthProvider()
         self.cloud_provider = CloudAuthProvider()

@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 
 from ..config import Settings
 from ..utils import validate_confirmation
-from .agent_card import _is_destructive_tool, _safety_requirement_for_tool
+from .agent_card import _safety_requirement_for_tool
 from .types import AuthenticationMode, DelegationContract
 
 

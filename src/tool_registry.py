@@ -36,7 +36,7 @@ def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
         registered = getattr(mcp, "_registered_tool_names", None)
         if registered is None:
             registered = set()
-            setattr(mcp, "_registered_tool_names", registered)
+            mcp._registered_tool_names = registered
         return registered
 
     registered = registry.get("_registered_tool_names")

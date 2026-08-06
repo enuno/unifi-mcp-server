@@ -20,7 +20,9 @@ class ProtectLiveViewSlot(BaseModel):
 
     cameras: list[str] | None = Field(None, description="Camera IDs shown in the slot")
     cycle_mode: str | None = Field(None, alias="cycleMode", description="Slot cycling mode")
-    cycle_interval: int | None = Field(None, alias="cycleInterval", description="Slot cycling interval")
+    cycle_interval: int | None = Field(
+        None, alias="cycleInterval", description="Slot cycling interval"
+    )
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
@@ -31,7 +33,9 @@ class ProtectLiveView(BaseModel):
     id: str | None = Field(None, description="Live view identifier")
     model_key: str | None = Field(None, alias="modelKey", description="Model key")
     name: str | None = Field(None, description="Live view name")
-    is_default: bool | None = Field(None, alias="isDefault", description="Whether this is the default view")
+    is_default: bool | None = Field(
+        None, alias="isDefault", description="Whether this is the default view"
+    )
     is_global: bool | None = Field(None, alias="isGlobal", description="Whether the view is global")
     owner: str | None = Field(None, description="Owner identifier")
     layout: int | None = Field(None, description="Layout index")

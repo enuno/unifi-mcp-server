@@ -134,7 +134,9 @@ async def list_protect_live_views(
 
     live_views_data = _extract_collection(response)
     paginated = live_views_data[final_offset : final_offset + final_limit]
-    live_views = [ProtectLiveView.model_validate(item).model_dump(by_alias=True) for item in paginated]
+    live_views = [
+        ProtectLiveView.model_validate(item).model_dump(by_alias=True) for item in paginated
+    ]
     total_count = len(live_views_data)
     logger.info(sanitize_log_message(f"Listed {len(live_views)} Protect live views"))
 
@@ -154,7 +156,9 @@ async def get_protect_live_view(live_view_id: str, settings: Settings) -> dict[s
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        response = await client.get(settings.get_protect_integration_path(f"liveviews/{live_view_id}"))
+        response = await client.get(
+            settings.get_protect_integration_path(f"liveviews/{live_view_id}")
+        )
 
     live_view = ProtectLiveView.model_validate(_extract_item(response))
     logger.info(sanitize_log_message(f"Retrieved Protect live view {live_view_id}"))

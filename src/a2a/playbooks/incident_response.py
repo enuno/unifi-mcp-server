@@ -56,7 +56,12 @@ PLAYBOOK = PromptPlaybook(
             order=4,
             action="Block the most likely malicious path while preserving the rest of the site.",
             tool="create_firewall_rule",
-            params={"site_id": "${site_id}", "action": "block", "source": "${indicator}", "destination": "any"},
+            params={
+                "site_id": "${site_id}",
+                "action": "block",
+                "source": "${indicator}",
+                "destination": "any",
+            },
             validation="Verify the rule is scoped as narrowly as possible and does not disrupt unrelated traffic.",
             fallback="If a firewall rule is too broad, use block_flow_source_ip or block_flow_application for a tighter containment path.",
         ),

@@ -242,7 +242,9 @@ async def confirm_handler(
     if not token_value:
         return {"status": "error", "error": "confirmation token is required"}
 
-    approved = active_state.confirmation_workflow.verify_confirmation(token_value, response or payload)
+    approved = active_state.confirmation_workflow.verify_confirmation(
+        token_value, response or payload
+    )
     if approved:
         active_state.confirmation_workflow.expire_confirmation(token_value)
         return {"status": "approved", "token": token_value}

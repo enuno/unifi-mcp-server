@@ -41,7 +41,12 @@ class LocalAuthProvider:
         credentials_dict = dict(credentials)
         permissions = self._permissions_from_credentials(credentials_dict)
         expiry = self._expiry_from_credentials(credentials_dict)
-        return AuthContext(mode=APIType.LOCAL.value, credentials=credentials_dict, permissions=permissions, expiry=expiry)
+        return AuthContext(
+            mode=APIType.LOCAL.value,
+            credentials=credentials_dict,
+            permissions=permissions,
+            expiry=expiry,
+        )
 
     def refresh(self, auth_context: AuthContext) -> AuthContext:
         """Refresh a local auth context without changing the credential payload."""
@@ -79,7 +84,12 @@ class CloudAuthProvider:
         permissions = self._permissions_from_credentials(credentials_dict)
         expiry = self._expiry_from_credentials(credentials_dict)
         mode = credentials_dict.get("mode") or APIType.CLOUD_EA.value
-        return AuthContext(mode=str(mode).lower(), credentials=credentials_dict, permissions=permissions, expiry=expiry)
+        return AuthContext(
+            mode=str(mode).lower(),
+            credentials=credentials_dict,
+            permissions=permissions,
+            expiry=expiry,
+        )
 
     def refresh(self, auth_context: AuthContext) -> AuthContext:
         """Refresh a cloud auth context."""

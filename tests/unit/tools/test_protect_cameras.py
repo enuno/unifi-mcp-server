@@ -12,7 +12,9 @@ from src.utils.exceptions import ValidationError
 def mock_settings():
     settings = MagicMock()
     settings.log_level = "INFO"
-    settings.get_protect_integration_path = MagicMock(side_effect=lambda endpoint: f"/integration/v1/{endpoint.lstrip('/')}")
+    settings.get_protect_integration_path = MagicMock(
+        side_effect=lambda endpoint: f"/integration/v1/{endpoint.lstrip('/')}"
+    )
     return settings
 
 
@@ -44,7 +46,9 @@ async def test_list_protect_cameras_success(mock_settings, mock_client):
         result = await list_protect_cameras(mock_settings, limit=10, offset=0)
 
     mock_client.authenticate.assert_awaited_once()
-    mock_client.get.assert_awaited_once_with("/integration/v1/cameras", params={"limit": 10, "offset": 0})
+    mock_client.get.assert_awaited_once_with(
+        "/integration/v1/cameras", params={"limit": 10, "offset": 0}
+    )
     assert result["count"] == 2
     assert result["data"][0]["id"] == "cam-1"
     assert result["data"][0]["name"] == "Front Door"

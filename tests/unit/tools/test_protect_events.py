@@ -83,7 +83,9 @@ async def test_send_protect_alarm_webhook_success(mock_settings, mock_client):
         result = await send_protect_alarm_webhook("webhook-1", mock_settings)
 
     mock_client.authenticate.assert_awaited_once()
-    mock_client.post.assert_awaited_once_with("/integration/v1/alarm-manager/webhook/webhook-1", json_data={})
+    mock_client.post.assert_awaited_once_with(
+        "/integration/v1/alarm-manager/webhook/webhook-1", json_data={}
+    )
     assert result == {"success": None, "message": None, "ok": True}
 
 

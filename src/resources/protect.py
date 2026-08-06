@@ -28,7 +28,9 @@ class ProtectResource:
         """Get a single UniFi Protect NVR by ID."""
         async with ProtectClient(self.settings) as client:
             await client.authenticate()
-            response = await client.get(self.settings.get_protect_integration_path(f"nvrs/{nvr_id}"))
+            response = await client.get(
+                self.settings.get_protect_integration_path(f"nvrs/{nvr_id}")
+            )
 
         data = response.get("data", response) if isinstance(response, dict) else response
         return ProtectNVR.model_validate(data) if data else None
@@ -46,7 +48,9 @@ class ProtectResource:
         """Get a single UniFi Protect camera by ID."""
         async with ProtectClient(self.settings) as client:
             await client.authenticate()
-            response = await client.get(self.settings.get_protect_integration_path(f"cameras/{camera_id}"))
+            response = await client.get(
+                self.settings.get_protect_integration_path(f"cameras/{camera_id}")
+            )
 
         data = response.get("data", response) if isinstance(response, dict) else response
         return ProtectCamera.model_validate(data) if data else None

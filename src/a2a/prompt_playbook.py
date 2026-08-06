@@ -10,9 +10,9 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import importlib
 import json
+from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable, Mapping
 
 

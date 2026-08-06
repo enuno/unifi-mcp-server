@@ -24,7 +24,9 @@ class IntegrationSite(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     id: str = Field(..., description="Site UUID")
-    internal_reference: str | None = Field(None, alias="internalReference", description="Internal site reference (short name)")
+    internal_reference: str | None = Field(
+        None, alias="internalReference", description="Internal site reference (short name)"
+    )
     name: str = Field(..., description="Site display name")
 
 
@@ -40,8 +42,12 @@ class IntegrationDevice(BaseModel):
     model: str | None = Field(None, description="Device model string")
     state: str | None = Field(None, description="Device state (e.g., ONLINE, OFFLINE)")
     supported: bool | None = Field(None, description="Whether the device is supported")
-    firmware_version: str | None = Field(None, alias="firmwareVersion", description="Current firmware version")
-    firmware_updatable: bool | None = Field(None, alias="firmwareUpdatable", description="Whether firmware can be updated")
+    firmware_version: str | None = Field(
+        None, alias="firmwareVersion", description="Current firmware version"
+    )
+    firmware_updatable: bool | None = Field(
+        None, alias="firmwareUpdatable", description="Whether firmware can be updated"
+    )
     features: list[str] | None = Field(None, description="Supported feature tags")
     interfaces: list[str] | None = Field(None, description="Available interface types")
 
@@ -54,7 +60,9 @@ class IntegrationClient(BaseModel):
     type: str | None = Field(None, description="Client type")
     id: str = Field(..., description="Client UUID")
     name: str | None = Field(None, description="Client name or hostname")
-    connected_at: str | None = Field(None, alias="connectedAt", description="ISO 8601 connection timestamp")
+    connected_at: str | None = Field(
+        None, alias="connectedAt", description="ISO 8601 connection timestamp"
+    )
     ip_address: str | None = Field(None, alias="ipAddress", description="Client IP address")
     access: dict[str, Any] | None = Field(None, description="Access point association details")
 
@@ -116,8 +124,12 @@ class IntegrationWifiBroadcast(BaseModel):
     enabled: bool | None = Field(None, description="Whether the broadcast is enabled")
     metadata: NetworkMetadata | None = Field(None, description="Broadcast metadata")
     network: WifiNetworkRef | None = Field(None, description="Associated network reference")
-    security_configuration: WifiSecurityConfiguration | None = Field(None, alias="securityConfiguration", description="Security settings")
-    broadcasting_device_filter: WifiBroadcastingDeviceFilter | None = Field(None, alias="broadcastingDeviceFilter", description="Device filter rules")
+    security_configuration: WifiSecurityConfiguration | None = Field(
+        None, alias="securityConfiguration", description="Security settings"
+    )
+    broadcasting_device_filter: WifiBroadcastingDeviceFilter | None = Field(
+        None, alias="broadcastingDeviceFilter", description="Device filter rules"
+    )
 
 
 class IntegrationDNSPolicy(BaseModel):
@@ -160,7 +172,9 @@ class IntegrationDeviceTag(BaseModel):
 
     id: str = Field(..., description="Tag UUID")
     name: str = Field(..., description="Tag name")
-    device_ids: list[str] | None = Field(None, alias="deviceIds", description="Associated device UUIDs")
+    device_ids: list[str] | None = Field(
+        None, alias="deviceIds", description="Associated device UUIDs"
+    )
     metadata: NetworkMetadata | None = Field(None, description="Tag metadata")
 
 

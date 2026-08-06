@@ -53,7 +53,11 @@ PLAYBOOK = PromptPlaybook(
             order=4,
             action="Apply the first-pass physical and port-level configuration.",
             tool="set_device_port_overrides",
-            params={"site_id": "${site_id}", "device_id": "${device_id}", "overrides": "${overrides}"},
+            params={
+                "site_id": "${site_id}",
+                "device_id": "${device_id}",
+                "overrides": "${overrides}",
+            },
             validation="Check that port profiles, PoE settings, and trunk/access intent match the deployment plan.",
             fallback="If port overrides fail, apply the minimum safe configuration and document the missing settings for follow-up.",
         ),

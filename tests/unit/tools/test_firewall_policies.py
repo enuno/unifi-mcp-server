@@ -2328,6 +2328,8 @@ class TestCreateFirewallPolicyNewFields:
                 connection_state_type="CUSTOM",
                 confirm=True,
             )
+
+
 class TestGetZonePolicyMatrix:
     """Tests for get_zone_policy_matrix function."""
 

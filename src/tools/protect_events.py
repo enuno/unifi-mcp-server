@@ -93,7 +93,9 @@ async def list_protect_events(
 
     events_data = _extract_collection(response)
     paginated = events_data[final_offset : final_offset + final_limit]
-    events = [ProtectEventMessage.model_validate(item).model_dump(by_alias=True) for item in paginated]
+    events = [
+        ProtectEventMessage.model_validate(item).model_dump(by_alias=True) for item in paginated
+    ]
     total_count = len(events_data)
     logger.info(sanitize_log_message(f"Retrieved {len(events)} Protect event messages"))
 

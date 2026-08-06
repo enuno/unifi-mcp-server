@@ -91,7 +91,9 @@ class SafetyController:
     )
     _CONFIRMATION_KEYS = ("confirm", "confirmed", "confirmation", "approve")
 
-    def __init__(self, settings: Settings | None = None, policies: list[RoutePolicy] | None = None) -> None:
+    def __init__(
+        self, settings: Settings | None = None, policies: list[RoutePolicy] | None = None
+    ) -> None:
         self.settings = settings
         self.logger = get_logger(__name__, settings.log_level if settings else "INFO")
         self._lock = RLock()
@@ -112,7 +114,9 @@ class SafetyController:
             RoutePolicy("/a2a/audit", ("GET",), "admin", "none", read_rate),
             RoutePolicy("tool://*", ("POST",), "read", "standard", read_rate),
             RoutePolicy("tool://write", ("POST",), "write", "standard", write_rate),
-            RoutePolicy("tool://destructive", ("POST",), "destructive", "critical", destructive_rate),
+            RoutePolicy(
+                "tool://destructive", ("POST",), "destructive", "critical", destructive_rate
+            ),
         ]
 
     @staticmethod
@@ -237,7 +241,9 @@ class SafetyController:
             while window and window[0] < window_start:
                 window.popleft()
             if len(window) >= policy.rateLimit:
-                self.logger.warning("A2A rate limit exceeded", extra={"agent_id": agent_id, "tool_name": tool_name})
+                self.logger.warning(
+                    "A2A rate limit exceeded", extra={"agent_id": agent_id, "tool_name": tool_name}
+                )
                 return False
             window.append(now)
             return True
@@ -315,7 +321,9 @@ class ConfirmationWorkflow:
         self._tokens: dict[str, ConfirmationToken] = {}
         self.logger = get_logger(__name__)
 
-    def request_confirmation(self, tool_name: str, params: Mapping[str, Any], reason: str) -> ConfirmationToken:
+    def request_confirmation(
+        self, tool_name: str, params: Mapping[str, Any], reason: str
+    ) -> ConfirmationToken:
         """Create a confirmation token for a pending action."""
         now = datetime.now(tz=UTC)
         token = ConfirmationToken(

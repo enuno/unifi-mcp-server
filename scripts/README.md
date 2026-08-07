@@ -258,6 +258,33 @@ When modifying the scraper:
 4. Add fallback selectors for robustness
 5. Document any new options or features
 
+## check_model_ids.py
+
+Checks that every Claude model id referenced in this repository is still
+served by the Anthropic API. Pinned dated snapshots (for example
+`claude-3-7-sonnet-20250219`) keep working right up to their retirement date
+and then fail everywhere at once, so this turns a silent expiry into a check
+you can run.
+
+```bash
+# List which ids are referenced and where — no network, no credentials
+python scripts/check_model_ids.py --offline
+
+# Verify those ids against the live API
+export ANTHROPIC_API_KEY=sk-ant-...
+python scripts/check_model_ids.py
+```
+
+`ANTHROPIC_AUTH_TOKEN` (written by Claude Code OAuth logins) is accepted as a
+fallback when `ANTHROPIC_API_KEY` is unset.
+
+Exit codes: `0` all referenced ids are served, `1` at least one is retired,
+`2` the API could not be reached. The non-zero exit on retirement makes it
+usable as a scheduled CI job.
+
+Only ids that are actually sent to the API are matched. Product names such as
+`claude-code-action` or `claude-desktop` are ignored.
+
 ## License
 
 Same as parent project (see root LICENSE file).

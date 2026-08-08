@@ -1,8 +1,11 @@
 """Tests for topology tools."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from src.utils.exceptions import AuthenticationError, RateLimitError, ResourceNotFoundError
 
 
 @pytest.fixture
@@ -465,3 +468,170 @@ class TestGetTopologyStatistics:
             assert result["total_devices"] == 0
             assert result["total_clients"] == 0
             assert result["max_depth"] == 0
+
+
+class TestDeviceUplinkResolution:
+    """The device list endpoint omits `uplink`; it comes from the detail route."""
+
+    def test_depth_is_independent_of_device_order(self):
+        """Depth comes from the uplink chain, not from device ordering."""
+        from src.tools.topology import _resolve_depth
+
+        # Deliberately leaf-first: a single forward pass would score these 0.
+        uplinks = {"ap": "switch", "switch": "gateway"}
+        cache: dict[str, int] = {}
+
+        assert _resolve_depth("ap", uplinks, cache) == 2
+        assert _resolve_depth("switch", uplinks, cache) == 1
+        assert _resolve_depth("gateway", uplinks, cache) == 0
+
+    def test_depth_survives_an_uplink_cycle(self):
+        """A cycle terminates, with the repeated device pinned as the root."""
+        from src.tools.topology import _resolve_depth
+
+        uplinks = {"a": "b", "b": "a"}
+        cache: dict[str, int] = {}
+
+        # The repeated device is the cycle root and must stay at 0; the unwind
+        # pass must not overwrite it and inflate the rest of the chain.
+        assert _resolve_depth("a", uplinks, cache) == 0
+        assert cache["a"] == 0
+        assert cache["b"] == 1
+
+    def test_depth_of_a_device_hanging_off_a_cycle(self):
+        """A device feeding into a cycle counts hops from the cycle root."""
+        from src.tools.topology import _resolve_depth
+
+        uplinks = {"leaf": "a", "a": "b", "b": "a"}
+        cache: dict[str, int] = {}
+
+        # "a" is pinned to 0 as the cycle root, so its child is one hop away.
+        assert _resolve_depth("leaf", uplinks, cache) == 1
+        assert cache["a"] == 0
+
+    @pytest.mark.asyncio
+    async def test_merge_device_uplinks_fills_from_detail_route(self):
+        """The detail route supplies the uplink the list route omits."""
+        from src.tools.topology import _merge_device_uplinks
+
+        devices = [{"id": "ap_001"}, {"id": "switch_001"}]
+        details = {
+            "ap_001": {"data": {"id": "ap_001", "uplink": {"deviceId": "switch_001"}}},
+            "switch_001": {"data": {"id": "switch_001", "uplink": {"deviceId": "gw_001"}}},
+        }
+
+        client = MagicMock()
+        client.logger = MagicMock()
+        client.get = AsyncMock(side_effect=lambda ep: details[ep.rsplit("/", 1)[1]])
+
+        await _merge_device_uplinks(client, "/integration/v1/sites/default/devices", devices)
+
+        assert devices[0]["uplink"] == {"deviceId": "switch_001"}
+        assert devices[1]["uplink"] == {"deviceId": "gw_001"}
+
+    @pytest.mark.asyncio
+    async def test_merge_device_uplinks_tolerates_detail_failure(self):
+        """A per-device API failure degrades that device only."""
+        from src.tools.topology import _merge_device_uplinks
+
+        devices = [{"id": "ap_001"}, {"id": "switch_001"}]
+        detail = {"data": {"id": "switch_001", "uplink": {"deviceId": "gw_001"}}}
+
+        async def get(endpoint):
+            if endpoint.endswith("ap_001"):
+                raise ResourceNotFoundError("device", "ap_001")
+            return detail
+
+        client = MagicMock()
+        client.logger = MagicMock()
+        client.get = AsyncMock(side_effect=get)
+
+        await _merge_device_uplinks(client, "/integration/v1/sites/default/devices", devices)
+
+        # One unreachable device must not sink the whole graph.
+        assert "uplink" not in devices[0]
+        assert devices[1]["uplink"] == {"deviceId": "gw_001"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "systemic_error",
+        [AuthenticationError("401"), RateLimitError(retry_after=60)],
+    )
+    async def test_merge_device_uplinks_reraises_systemic_failures(self, systemic_error):
+        """Auth and rate-limit failures affect every lookup, so they surface.
+
+        Args:
+            systemic_error: Controller-wide failure raised by the detail route
+        """
+        from src.tools.topology import _merge_device_uplinks
+
+        devices = [{"id": "ap_001"}]
+
+        client = MagicMock()
+        client.logger = MagicMock()
+        client.get = AsyncMock(side_effect=systemic_error)
+
+        with pytest.raises(type(systemic_error)):
+            await _merge_device_uplinks(client, "/integration/v1/sites/default/devices", devices)
+
+    @pytest.mark.asyncio
+    async def test_merge_device_uplinks_bounds_concurrency(self):
+        """Detail lookups are capped rather than fanned out one per device."""
+        from src.tools import topology
+        from src.tools.topology import _merge_device_uplinks
+
+        devices = [{"id": f"ap_{index:03d}"} for index in range(50)]
+        in_flight = 0
+        peak = 0
+
+        async def get(endpoint):
+            nonlocal in_flight, peak
+            in_flight += 1
+            peak = max(peak, in_flight)
+            await asyncio.sleep(0)
+            in_flight -= 1
+            return {"data": {"uplink": {"deviceId": "gw_001"}}}
+
+        client = MagicMock()
+        client.logger = MagicMock()
+        client.get = AsyncMock(side_effect=get)
+
+        await _merge_device_uplinks(client, "/integration/v1/sites/default/devices", devices)
+
+        assert peak <= topology._UPLINK_DETAIL_CONCURRENCY
+        assert all(device["uplink"] == {"deviceId": "gw_001"} for device in devices)
+
+    @pytest.mark.asyncio
+    async def test_merge_device_uplinks_skips_already_populated(self):
+        """A device that already carries an uplink is not re-fetched."""
+        from src.tools.topology import _merge_device_uplinks
+
+        devices = [{"id": "ap_001", "uplink": {"deviceId": "switch_001"}}]
+
+        client = MagicMock()
+        client.logger = MagicMock()
+        client.get = AsyncMock()
+
+        await _merge_device_uplinks(client, "/integration/v1/sites/default/devices", devices)
+
+        client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_online_state_is_recognised(self, mock_settings, sample_client_data):
+        """The Integration API reports ONLINE, not CONNECTED."""
+        from src.tools.topology import get_network_topology
+
+        devices = [{"id": "gw_001", "name": "UDM Pro", "state": "ONLINE"}]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(side_effect=[devices, [], {"data": devices[0]}])
+
+            result = await get_network_topology("default", mock_settings)
+
+        device_nodes = [n for n in result["nodes"] if n["node_type"] == "device"]
+        assert device_nodes[0]["state"] == 1

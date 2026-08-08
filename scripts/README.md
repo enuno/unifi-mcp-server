@@ -285,6 +285,13 @@ usable as a scheduled CI job.
 Only ids that are actually sent to the API are matched. Product names such as
 `claude-code-action` or `claude-desktop` are ignored.
 
+The behaviour above is covered by `tests/unit/test_check_model_ids.py`, which
+stubs the API response so no network access or credential is needed:
+
+```bash
+pytest tests/unit/test_check_model_ids.py
+```
+
 ## License
 
 Same as parent project (see root LICENSE file).

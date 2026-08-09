@@ -2647,6 +2647,10 @@ all_connections = await mcp.call_tool("get_device_connections", {
 
 Get detailed port-level connection mapping for a device.
 
+Each port maps to a **list** of peers: one physical port routinely
+carries several hosts — a virtualization host bridging its guests, or a
+downstream unmanaged switch.
+
 **Example:**
 
 ```python
@@ -2662,24 +2666,31 @@ port_map = await mcp.call_tool("get_port_mappings", {
 {
   "device_id": "switch_001",
   "ports": {
-    "1": {
-      "connected_to": "gateway_001",
-      "connection_type": "uplink",
-      "speed_mbps": 10000,
-      "status": "up"
-    },
-    "5": {
-      "connected_to": "ap_001",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    },
-    "10": {
-      "connected_to": "client_002",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    }
+    "1": [
+      {
+        "connected_to": "gateway_001",
+        "connected_name": "Gateway",
+        "connection_type": "uplink",
+        "speed_mbps": 10000,
+        "status": "up"
+      }
+    ],
+    "10": [
+      {
+        "connected_to": "client_002",
+        "connected_name": "Hypervisor",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      },
+      {
+        "connected_to": "client_003",
+        "connected_name": "VM guest",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      }
+    ]
   }
 }
 ```

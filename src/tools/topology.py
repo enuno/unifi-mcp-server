@@ -438,41 +438,49 @@ async def get_port_mappings(
         settings: Application settings
 
     Returns:
-        Dictionary with device_id and port mapping information
+        Dictionary with device_id and port mapping information. Each port maps
+        to a *list* of peers: one physical port routinely carries many hosts —
+        a virtualization host bridging its guests, or a downstream unmanaged
+        switch — and reporting only one of them hides the rest.
 
     Example:
         ```python
         ports = await get_port_mappings("default", "switch_001", settings)
-        for port_num, connected_device in ports['ports'].items():
-            print(f"Port {port_num}: {connected_device}")
+        for port_num, peers in ports['ports'].items():
+            for peer in peers:
+                print(f"Port {port_num}: {peer['connected_name']}")
         ```
     """
     topology = await get_network_topology(site_id, settings)
 
     connections = topology.get("connections", [])
+    names = {node.get("node_id"): node.get("name") for node in topology.get("nodes", [])}
 
     # Build port mapping
-    port_map = {}
+    port_map: dict[Any, list[dict[str, Any]]] = {}
 
     for conn in connections:
         if conn.get("source_node_id") == device_id:
             port_num = conn.get("source_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("target_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
+            peer_id = conn.get("target_node_id")
         elif conn.get("target_node_id") == device_id:
             port_num = conn.get("target_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("source_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
+            peer_id = conn.get("source_node_id")
+        else:
+            continue
+
+        if port_num is None:
+            continue
+
+        port_map.setdefault(port_num, []).append(
+            {
+                "connected_to": peer_id,
+                "connected_name": names.get(peer_id),
+                "connection_type": conn.get("connection_type"),
+                "speed_mbps": conn.get("speed_mbps"),
+                "status": conn.get("status"),
+            }
+        )
 
     return {"device_id": device_id, "ports": port_map}
 

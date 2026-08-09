@@ -299,6 +299,44 @@ class TestGetPortMappings:
             assert result["device_id"] == "switch_001"
             assert "ports" in result
 
+    @pytest.mark.asyncio
+    async def test_one_port_reports_every_host_behind_it(self, mock_settings):
+        """A virtualization host bridges many guests onto a single switch port.
+
+        Keying one peer per port silently dropped all but the last of them.
+        """
+        from src.tools.topology import get_port_mappings
+
+        clients = [
+            {
+                "id": f"c{i}",
+                "name": name,
+                "macAddress": f"AA:BB:CC:00:00:0{i}",
+                "type": "WIRED",
+                "uplinkDeviceId": "sw1",
+            }
+            for i, name in enumerate(["vm-alpha", "vm-beta", "vm-gamma"], start=1)
+        ]
+        legacy_clients = [
+            {"mac": f"aa:bb:cc:00:00:0{i}", "sw_port": 5, "wired_rate_mbps": 1000}
+            for i in range(1, 4)
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(side_effect=[[], clients, [], legacy_clients])
+
+            result = await get_port_mappings("default", "sw1", mock_settings)
+
+        peers = result["ports"][5]
+        assert len(peers) == 3
+        assert {p["connected_name"] for p in peers} == {"vm-alpha", "vm-beta", "vm-gamma"}
+        assert all(p["speed_mbps"] == 1000 for p in peers)
+
 
 class TestExportTopology:
     """Tests for export_topology tool."""

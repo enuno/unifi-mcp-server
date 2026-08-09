@@ -537,17 +537,26 @@ Get detailed information for a specific device.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `device_id` (string, required): Device ID
+- `device_id` (string, required): Device integration-API UUID (the IDs returned
+  by `get_network_topology`). A legacy `_id` ObjectId is also accepted.
 
 **Returns:**
-Object containing detailed device information.
+Object containing detailed device information, in the Integration v1 shape.
+
+This tool reads the Integration v1 device route, which reports a different
+shape from the legacy `/ea/` endpoints behind `search_devices` and
+`list_devices_by_type`: `mac_address` rather than `mac`, `ip_address` rather
+than `ip`, a string `state` (`"ONLINE"`) rather than the legacy integer, and no
+`type` field at all. Keys the controller does not report are omitted rather
+than returned as `null`, so look keys up defensively — an absent key means "not
+reported", never "empty" or "false".
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("get_device_details", {
     "site_id": "default",
-    "device_id": "507f1f77bcf86cd799439011"
+    "device_id": "b12257d4-d910-3b09-bcf9-e842229ac697"
 })
 ```
 
@@ -555,15 +564,20 @@ result = await mcp.call_tool("get_device_details", {
 
 ```json
 {
-  "id": "507f1f77bcf86cd799439011",
+  "id": "b12257d4-d910-3b09-bcf9-e842229ac697",
   "name": "Living Room AP",
-  "model": "U6-LR",
-  "type": "uap",
-  "mac": "aa:bb:cc:dd:ee:ff",
-  "ip": "192.168.2.100",
-  "state": 1,
-  "uptime": 86400,
-  "version": "6.5.55.14277"
+  "model": "U7-Pro-Wall",
+  "mac_address": "aa:bb:cc:dd:ee:ff",
+  "ip_address": "192.168.2.100",
+  "state": "ONLINE",
+  "supported": true,
+  "firmware_version": "8.6.11.18870",
+  "firmware_updatable": false,
+  "features": {"accessPoint": {}},
+  "interfaces": {
+    "ports": [],
+    "radios": [{"frequencyGHz": 5, "channelWidthMHz": 320, "channel": 53}]
+  }
 }
 ```
 

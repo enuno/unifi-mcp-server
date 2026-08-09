@@ -30,7 +30,9 @@ class ProtectLightDeviceSettings(BaseModel):
 class ProtectSensorThresholdSettings(BaseModel):
     """Threshold configuration for a sensor sub-capability."""
 
-    is_enabled: bool | None = Field(None, alias="isEnabled", description="Whether the setting is enabled")
+    is_enabled: bool | None = Field(
+        None, alias="isEnabled", description="Whether the setting is enabled"
+    )
     margin: int | None = Field(None, description="Threshold margin")
     sensitivity: int | None = Field(None, description="Sensitivity value")
 
@@ -79,10 +81,14 @@ class ProtectDevice(BaseModel):
     type: str | None = Field(None, description="Device type")
     state: str | int | None = Field(None, description="Device state")
     mac: str | None = Field(None, description="Device MAC address")
-    firmware_version: str | None = Field(None, alias="firmwareVersion", description="Firmware version")
+    firmware_version: str | None = Field(
+        None, alias="firmwareVersion", description="Firmware version"
+    )
     last_seen: str | None = Field(None, alias="lastSeen", description="Last seen timestamp")
     is_online: bool | None = Field(None, alias="isOnline", description="Whether device is online")
-    is_adopted: bool | None = Field(None, alias="isAdopted", description="Whether device is adopted")
+    is_adopted: bool | None = Field(
+        None, alias="isAdopted", description="Whether device is adopted"
+    )
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

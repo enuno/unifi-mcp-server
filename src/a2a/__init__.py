@@ -7,8 +7,8 @@ lightweight wrappers and the new safety / auth / audit / HTTP helpers.
 
 from __future__ import annotations
 
-from .auth import AuthContext, AuthManager, CloudAuthProvider, LocalAuthProvider
 from .audit import AuditLog, AuditLogger
+from .auth import AuthContext, AuthManager, CloudAuthProvider, LocalAuthProvider
 from .http_handlers import (
     A2AHTTPRouter,
     A2AState,
@@ -18,8 +18,21 @@ from .http_handlers import (
     get_agent_card_handler,
     get_audit_handler,
 )
-from .route_policy import ConfirmationToken, ConfirmationWorkflow, RoutePolicy, SafetyController, SafetyResult
-from .types import AgentCard, AuthenticationMode, DelegationContract, ResourceURI, SafetyRequirement, Skill
+from .route_policy import (
+    ConfirmationToken,
+    ConfirmationWorkflow,
+    RoutePolicy,
+    SafetyController,
+    SafetyResult,
+)
+from .types import (
+    AgentCard,
+    AuthenticationMode,
+    DelegationContract,
+    ResourceURI,
+    SafetyRequirement,
+    Skill,
+)
 
 
 def build_agent_card(*args, **kwargs):

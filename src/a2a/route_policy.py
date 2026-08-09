@@ -7,14 +7,15 @@ confirmation requirements, rate limits, and authorization-aware validation.
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from dataclasses import dataclass, field
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from secrets import compare_digest, token_urlsafe
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
 
-from ..config import APIType, Settings
+from ..config import Settings
 from ..utils import get_logger
 
 
@@ -91,7 +92,10 @@ class SafetyController:
     )
     _CONFIRMATION_KEYS = ("confirm", "confirmed", "confirmation", "approve")
 
-    def __init__(self, settings: Settings | None = None, policies: list[RoutePolicy] | None = None) -> None:
+    def __init__(
+        self, settings: Settings | None = None, policies: list[RoutePolicy] | None = None
+    ) -> None:
+        """Set up rate-limit tracking and load the route policies to enforce."""
         self.settings = settings
         self.logger = get_logger(__name__, settings.log_level if settings else "INFO")
         self._lock = RLock()
@@ -112,7 +116,9 @@ class SafetyController:
             RoutePolicy("/a2a/audit", ("GET",), "admin", "none", read_rate),
             RoutePolicy("tool://*", ("POST",), "read", "standard", read_rate),
             RoutePolicy("tool://write", ("POST",), "write", "standard", write_rate),
-            RoutePolicy("tool://destructive", ("POST",), "destructive", "critical", destructive_rate),
+            RoutePolicy(
+                "tool://destructive", ("POST",), "destructive", "critical", destructive_rate
+            ),
         ]
 
     @staticmethod
@@ -237,7 +243,9 @@ class SafetyController:
             while window and window[0] < window_start:
                 window.popleft()
             if len(window) >= policy.rateLimit:
-                self.logger.warning("A2A rate limit exceeded", extra={"agent_id": agent_id, "tool_name": tool_name})
+                self.logger.warning(
+                    "A2A rate limit exceeded", extra={"agent_id": agent_id, "tool_name": tool_name}
+                )
                 return False
             window.append(now)
             return True
@@ -310,12 +318,15 @@ class ConfirmationWorkflow:
     """Track confirmation requests for safety-sensitive actions."""
 
     def __init__(self, ttl_seconds: int = 300) -> None:
+        """Set how long an issued confirmation token stays valid, in seconds."""
         self.ttl_seconds = ttl_seconds
         self._lock = RLock()
         self._tokens: dict[str, ConfirmationToken] = {}
         self.logger = get_logger(__name__)
 
-    def request_confirmation(self, tool_name: str, params: Mapping[str, Any], reason: str) -> ConfirmationToken:
+    def request_confirmation(
+        self, tool_name: str, params: Mapping[str, Any], reason: str
+    ) -> ConfirmationToken:
         """Create a confirmation token for a pending action."""
         now = datetime.now(tz=UTC)
         token = ConfirmationToken(

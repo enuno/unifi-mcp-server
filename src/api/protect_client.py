@@ -88,7 +88,9 @@ class ProtectClient:
             self.logger.debug(f"Protect {method} {url} completed in {duration_ms}ms")
 
             if response.status_code >= 400:
-                raise APIError(f"Protect API request failed ({response.status_code}): {response.text}")
+                raise APIError(
+                    f"Protect API request failed ({response.status_code}): {response.text}"
+                )
 
             try:
                 return response.json()

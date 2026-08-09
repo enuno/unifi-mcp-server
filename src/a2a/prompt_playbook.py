@@ -10,10 +10,11 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import importlib
 import json
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -53,6 +54,7 @@ class PlaybookRegistry:
     """Registry for prompt playbooks."""
 
     def __init__(self, playbooks: Iterable[PromptPlaybook] | None = None) -> None:
+        """Create an empty registry, registering any playbooks supplied up front."""
         self._playbooks: dict[str, PromptPlaybook] = {}
         if playbooks:
             for playbook in playbooks:
@@ -82,7 +84,7 @@ class PlaybookRegistry:
         return {name: playbook.to_dict() for name, playbook in self.items()}
 
     @classmethod
-    def load_builtin(cls) -> "PlaybookRegistry":
+    def load_builtin(cls) -> PlaybookRegistry:
         """Load bundled playbooks from ``src.a2a.playbooks``."""
         module = importlib.import_module("src.a2a.playbooks")
         playbooks = getattr(module, "PLAYBOOKS", [])

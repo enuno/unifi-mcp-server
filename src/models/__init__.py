@@ -61,8 +61,8 @@ from .protect_event import (
     ProtectDeviceUpdateMessage,
     ProtectEventMessage,
 )
-from .protect_view import ProtectLiveView, ProtectLiveViewSlot, ProtectMetaInfo, ProtectViewer
 from .protect_nvr import ProtectNVR
+from .protect_view import ProtectLiveView, ProtectLiveViewSlot, ProtectMetaInfo, ProtectViewer
 from .qos_profile import MatchCriteria, RouteAction, RouteSchedule, TrafficRoute
 from .radius import RADIUSProfile
 from .reference_data import DeviceTag

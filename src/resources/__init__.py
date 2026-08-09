@@ -6,4 +6,10 @@ from .networks import NetworksResource
 from .protect import ProtectResource
 from .sites import SitesResource
 
-__all__ = ["SitesResource", "DevicesResource", "ClientsResource", "NetworksResource", "ProtectResource"]
+__all__ = [
+    "SitesResource",
+    "DevicesResource",
+    "ClientsResource",
+    "NetworksResource",
+    "ProtectResource",
+]

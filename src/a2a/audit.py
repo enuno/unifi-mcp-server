@@ -7,11 +7,11 @@ emitting structured events through the project's logging infrastructure.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from ..utils import get_logger, log_audit_event
 
@@ -33,6 +33,7 @@ class AuditLogger:
     """Collect and export A2A audit logs."""
 
     def __init__(self, log_file: str | Path | None = None, log_level: str = "INFO") -> None:
+        """Resolve the audit log path and create its parent directory."""
         self.logger = get_logger(__name__, log_level)
         self.log_file = Path(log_file) if log_file else Path("logs") / "a2a-audit.jsonl"
         self.log_file.parent.mkdir(parents=True, exist_ok=True)

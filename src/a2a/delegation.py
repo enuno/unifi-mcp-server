@@ -11,7 +11,7 @@ from fastmcp import FastMCP
 
 from ..config import Settings
 from ..utils import validate_confirmation
-from .agent_card import _is_destructive_tool, _safety_requirement_for_tool
+from .agent_card import _safety_requirement_for_tool
 from .types import AuthenticationMode, DelegationContract
 
 
@@ -28,7 +28,9 @@ def _run_sync(coro: Any) -> Any:
         return asyncio.run(coro)
 
     if loop.is_running():
-        raise RuntimeError("Cannot synchronously wait for a delegated call inside a running event loop")
+        raise RuntimeError(
+            "Cannot synchronously wait for a delegated call inside a running event loop"
+        )
     return loop.run_until_complete(coro)
 
 
@@ -94,7 +96,9 @@ def create_delegation_contract(
             if safety is not None:
                 break
 
-    requires_confirmation = bool(safety.destructive) if safety is not None else _is_destructive_tool_name(tool_name)
+    requires_confirmation = (
+        bool(safety.destructive) if safety is not None else _is_destructive_tool_name(tool_name)
+    )
     return DelegationContract(
         contractId=str(uuid.uuid4()),
         toolName=tool_name,

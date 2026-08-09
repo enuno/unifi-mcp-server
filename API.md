@@ -923,12 +923,24 @@ List WAN connections for a site.
 **Returns:**
 Array of WAN connection objects.
 
+Only `id` and `name` are guaranteed. The Integration v1
+`/sites/{site_id}/wans` endpoint returns just those two fields and offers no
+per-WAN detail route, so every other key — including `site_id`, `wan_type`,
+`interface`, `status`, `dns_servers` and `is_backup` — may be missing. Fields
+the controller does not report are omitted from the object rather than returned
+as `null`, so consumers must look keys up defensively instead of assuming they
+are always present. An absent key means "not reported", never "empty" or
+"false".
+
 **Example:**
 
 ```python
 result = await mcp.call_tool("list_wan_connections", {
     "site_id": "default"
 })
+# A sparse controller response:
+# [{"id": "<uuid-1>", "name": "Internet 1"},
+#  {"id": "<uuid-2>", "name": "Internet 2"}]
 ```
 
 #### `list_dynamic_dns`

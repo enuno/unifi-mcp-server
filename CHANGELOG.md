@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`update_dhcp_reservation` never activated the reservation**: setting a `fixed_ip` wrote the address onto the client entry but omitted `use_fixedip=true`, so the controller stored the IP inertly — the reservation never took effect and never appeared in `list_dhcp_reservations` (which filters on `use_fixedip`). The return value also hard-coded `use_fixedip: true` regardless of the controller response, masking the failure. `update_dhcp_reservation` now sets `use_fixedip=true` whenever a `fixed_ip` is provided, and both `create_dhcp_reservation` and `update_dhcp_reservation` now report the controller's actual `use_fixedip` value — falling back to the requested/known reservation state (coerced via `coerce_bool`) instead of hard-coding `true`.
 - **`list_wan_connections` on Integration v1 (issue #100)**: `GET /integration/v1/sites/{site_id}/wans` returns only `id` and `name`, but `WANConnection` required `site_id`, `wan_type`, `interface` and `status`, so every response raised `ValidationError` and the tool was unusable in local API mode. Those four fields are now optional. There is no per-WAN detail route to enrich the sparse record from, so relaxing the model is the only fix.
 - **`get_device_details` on Integration v1 (issue #108)**: the tool reads the Integration v1 device route but parsed the response with the legacy `Device` model, which requires `type` and `mac` and types `state` as an integer. The Integration v1 API sends `macAddress`, no `type` at all, and a string `state` (`"ONLINE"`), so every call raised `ValidationError` for every device in local API mode. Now parsed with `IntegrationDevice`, the model that matches the endpoint.
 - **`IntegrationDevice.features` / `.interfaces`**: both were typed `list[str]` but the controller returns objects (`features.accessPoint`, `interfaces.ports[...]`, `interfaces.radios[...]`). This also broke `list_integration_devices` and `get_integration_device` against real hardware.
@@ -20,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`list_wan_connections` output contract**: optional fields now default to `None` instead of `[]`/`False` (`dns_servers`, `is_backup`), and the tool dumps with `exclude_none=True`, so fields the controller does not report are omitted rather than emitted as `null`. An absent key means "not reported", never "empty" or "false" — consumers must look keys up defensively. Documented in `API.md`.
 - **`get_device_details` output shape**: now the Integration v1 shape — `mac_address`/`ip_address` rather than `mac`/`ip`, a string `state`, no `type` — and dumped with `exclude_none=True` so unreported keys are omitted rather than emitted as `null`. Documented in `API.md`. The legacy `/ea/` shape is unchanged for `search_devices` and `list_devices_by_type`.
 - **`list_dpi_applications` / `list_dpi_categories` output contract**: optional fields now default to `None` instead of `[]`/`True` (`protocols`, `ports`, `enabled`), and both tools dump with `exclude_none=True`, so fields the controller does not report are omitted rather than emitted as `null`. An absent key means "not reported", never "empty" or "disabled". Both tools are now documented in `API.md`.
+
+### Tests
+
+- Corrected `test_update_ip` to assert the PUT body enables `use_fixedip`, and added `test_update_name_only_does_not_enable_fixedip` to ensure metadata-only updates don't flip the flag.
 
 ## [0.4.0] - 2026-07-19
 

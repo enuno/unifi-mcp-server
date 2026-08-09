@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class PaginatedResponse(BaseModel):
@@ -35,7 +35,11 @@ class IntegrationDevice(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    id: str = Field(..., description="Device UUID")
+    id: str = Field(
+        ...,
+        validation_alias=AliasChoices("id", "_id"),
+        description="Device UUID (accepts the legacy ``_id`` key as well)",
+    )
     mac_address: str | None = Field(None, alias="macAddress", description="Device MAC address")
     ip_address: str | None = Field(None, alias="ipAddress", description="Device IP address")
     name: str | None = Field(None, description="Device name")
@@ -48,8 +52,13 @@ class IntegrationDevice(BaseModel):
     firmware_updatable: bool | None = Field(
         None, alias="firmwareUpdatable", description="Whether firmware can be updated"
     )
-    features: list[str] | None = Field(None, description="Supported feature tags")
-    interfaces: list[str] | None = Field(None, description="Available interface types")
+    # ``features`` and ``interfaces`` are objects, not lists: the controller
+    # sends ``features.switching`` / ``features.accessPoint`` and
+    # ``interfaces.ports[...]`` / ``interfaces.radios[...]``.
+    features: dict[str, Any] | None = Field(None, description="Per-capability feature details")
+    interfaces: dict[str, Any] | None = Field(
+        None, description="Ports and radios reported by the device"
+    )
 
 
 class IntegrationClient(BaseModel):

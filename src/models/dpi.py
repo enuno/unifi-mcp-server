@@ -21,19 +21,35 @@ class DPICategory(BaseModel):
 class DPIApplication(BaseModel):
     """DPI application model."""
 
-    id: str = Field(..., alias="_id", description="Application identifier")
+    # Only ``id`` and ``name`` are guaranteed: ``/integration/v1/dpi/applications``
+    # returns just those two, and ``id`` comes back as a number there while the
+    # legacy endpoint sends a string ``_id``. Everything below is optional so a
+    # sparse response validates instead of raising, and every optional field
+    # defaults to ``None`` rather than to a concrete value, so an omitted field
+    # is never reported as an empty list or an enabled flag nobody set.
+    id: int | str = Field(
+        ...,
+        validation_alias=AliasChoices("id", "_id"),
+        description="Application identifier",
+    )
     name: str = Field(..., description="Application name")
-    category_id: str = Field(..., description="Category identifier")
-    category_name: str | None = Field(None, description="Category name")
+    category_id: int | str | None = Field(
+        None,
+        validation_alias=AliasChoices("category_id", "categoryId"),
+        description="Category identifier",
+    )
+    category_name: str | None = Field(
+        None,
+        validation_alias=AliasChoices("category_name", "categoryName"),
+        description="Category name",
+    )
 
     # Application metadata
-    enabled: bool = Field(True, description="Whether application detection is enabled")
+    enabled: bool | None = Field(None, description="Whether application detection is enabled")
 
     # Traffic classification
-    protocols: list[str] = Field(
-        default_factory=list, description="Protocols used by this application"
-    )
-    ports: list[int] = Field(default_factory=list, description="Common ports used")
+    protocols: list[str] | None = Field(None, description="Protocols used by this application")
+    ports: list[int] | None = Field(None, description="Common ports used")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

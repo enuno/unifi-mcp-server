@@ -245,7 +245,10 @@ async def list_wan_connections(site_id: str, settings: Settings) -> list[dict]:
         settings: Application settings
 
     Returns:
-        List of WAN connections
+        List of WAN connections. Fields the controller does not report are
+        omitted rather than returned as ``null``: the Integration v1 list route
+        supplies only ``id`` and ``name``, so keeping the nulls would bury those
+        two under 20 empty keys.
     """
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing WAN connections for site {site_id}"))
@@ -256,7 +259,7 @@ async def list_wan_connections(site_id: str, settings: Settings) -> list[dict]:
         response = await client.get(f"/integration/v1/sites/{site_id}/wans")
         data = response if isinstance(response, list) else response.get("data", [])
 
-        return [WANConnection(**wan).model_dump() for wan in data]
+        return [WANConnection(**wan).model_dump(exclude_none=True) for wan in data]
 
 
 async def list_dynamic_dns(site_id: str, settings: Settings) -> list[dict[str, Any]]:

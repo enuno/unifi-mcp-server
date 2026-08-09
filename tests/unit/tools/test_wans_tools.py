@@ -32,7 +32,24 @@ def make_wan(wan_id="wan-1"):
         "wan_type": "dhcp",
         "interface": "eth0",
         "status": "online",
+        "dns_servers": ["1.1.1.1", "8.8.8.8"],
+        "is_backup": True,
     }
+
+
+def make_sparse_wan(wan_id="wan-1"):
+    """Build a WAN exactly as Integration v1 ``/sites/{site_id}/wans`` returns it.
+
+    That endpoint reports only ``id`` and ``name``; there is no per-WAN detail
+    route to enrich the record from.
+
+    Args:
+        wan_id: Identifier to report as ``id``
+
+    Returns:
+        The two-field WAN record the sparse endpoint sends
+    """
+    return {"id": wan_id, "name": "Internet 1"}
 
 
 def create_mock_client(return_value):
@@ -92,6 +109,34 @@ class TestListWanConnections:
         with patch("src.tools.wans.UniFiClient", return_value=mock_client):
             await list_wan_connections("default", mock_settings)
         mock_client.authenticate.assert_called_once()
+
+    async def test_accepts_sparse_integration_api_response(self, mock_settings):
+        """Integration v1 returns only id and name; that must not raise."""
+        mock_client = create_mock_client({"data": [make_sparse_wan()]})
+        with patch("src.tools.wans.UniFiClient", return_value=mock_client):
+            result = await list_wan_connections("default", mock_settings)
+
+        # Absent fields are dropped from the output rather than failing
+        # validation or padding the record with 20 nulls. No field carries a
+        # concrete default, so "omitted by the controller" is never reported as
+        # an empty list or a False flag either.
+        assert result == [{"id": "wan-1", "name": "Internet 1"}]
+
+    async def test_populated_optional_fields_are_preserved(self, mock_settings):
+        """Relaxing the model must not drop values when they are present."""
+        mock_client = create_mock_client({"data": [make_wan()]})
+        with patch("src.tools.wans.UniFiClient", return_value=mock_client):
+            result = await list_wan_connections("default", mock_settings)
+
+        assert result[0]["site_id"] == "default"
+        assert result[0]["wan_type"] == "dhcp"
+        assert result[0]["interface"] == "eth0"
+        assert result[0]["status"] == "online"
+        assert result[0]["dns_servers"] == ["1.1.1.1", "8.8.8.8"]
+        assert result[0]["is_backup"] is True
+        # Only what the controller reported: is_backup=True survives the
+        # exclude_none filter, but a field nobody sent stays out.
+        assert "ip_address" not in result[0]
 
 
 class TestDynamicDNS:

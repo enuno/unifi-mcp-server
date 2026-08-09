@@ -17,7 +17,9 @@ async def list_dpi_categories(settings: Settings) -> list[dict]:
         settings: Application settings
 
     Returns:
-        List of DPI categories
+        List of DPI categories. Fields the controller does not report are
+        omitted rather than returned as ``null`` — the Integration v1 route
+        supplies little more than ``id`` and ``name``.
     """
     async with UniFiClient(settings) as client:
         logger.info("Listing DPI categories")
@@ -28,7 +30,7 @@ async def list_dpi_categories(settings: Settings) -> list[dict]:
         response = await client.get("/integration/v1/dpi/categories")
         data = response if isinstance(response, list) else response.get("data", [])
 
-        return [DPICategory(**category).model_dump() for category in data]
+        return [DPICategory(**category).model_dump(exclude_none=True) for category in data]
 
 
 async def list_dpi_applications(
@@ -46,7 +48,10 @@ async def list_dpi_applications(
         filter_expr: Filter expression
 
     Returns:
-        List of DPI applications
+        List of DPI applications. Fields the controller does not report are
+        omitted rather than returned as ``null``: the Integration v1 route
+        supplies only ``id`` and ``name``, so keeping the nulls would bury
+        those two under five empty keys.
     """
     async with UniFiClient(settings) as client:
         logger.info("Listing DPI applications")
@@ -65,7 +70,7 @@ async def list_dpi_applications(
         response = await client.get("/integration/v1/dpi/applications", params=params)
         data = response if isinstance(response, list) else response.get("data", [])
 
-        return [DPIApplication(**app).model_dump() for app in data]
+        return [DPIApplication(**app).model_dump(exclude_none=True) for app in data]
 
 
 async def list_countries(settings: Settings) -> list[dict]:

@@ -279,8 +279,13 @@ python scripts/check_model_ids.py
 fallback when `ANTHROPIC_API_KEY` is unset.
 
 Exit codes: `0` all referenced ids are served, `1` at least one is retired,
-`2` the API could not be reached. The non-zero exit on retirement makes it
-usable as a scheduled CI job.
+`2` the API could not be reached, or no credential was found. The non-zero
+exit on retirement makes it usable as a scheduled CI job.
+
+This PR does not wire the script into any workflow. Running it live needs an
+`ANTHROPIC_API_KEY` secret, and whether to spend one on a scheduled job is the
+maintainer's call, so it stays a manual script here. `--offline` needs no
+credential and can be added to an existing job as-is.
 
 Only ids that are actually sent to the API are matched. Product names such as
 `claude-code-action` or `claude-desktop` are ignored.

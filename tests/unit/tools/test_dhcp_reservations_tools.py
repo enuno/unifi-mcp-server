@@ -198,6 +198,38 @@ class TestCreateDhcpReservation:
         assert result["payload"]["fixed_ip"] == "192.168.10.200"
 
     @pytest.mark.asyncio
+    async def test_create_existing_mac_merges_via_put(
+        self, local_settings: MagicMock, sample_users: list[dict[str, Any]]
+    ) -> None:
+        """A MAC the controller already knows is merged, not re-posted.
+
+        Posting it would fail with api.err.MacUsed.
+        """
+        merged = {**sample_users[1], "fixed_ip": "192.168.10.200", "use_fixedip": True}
+        client = _mock_client({"data": sample_users})
+        client.put.return_value = {"data": [merged]}
+
+        with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await dhcp.create_dhcp_reservation(
+                mac="aa:bb:cc:dd:ee:02",
+                fixed_ip="192.168.10.200",
+                network_id="net-lan",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )
+
+        client.post.assert_not_called()
+        assert client.put.call_args.args[0].endswith("/user-2")
+        put_body = client.put.call_args.kwargs["json_data"]
+        assert put_body["use_fixedip"] is True
+        assert put_body["fixed_ip"] == "192.168.10.200"
+        # The MAC identifies the existing entry; re-sending it is rejected.
+        assert "mac" not in put_body
+        assert result["fixed_ip"] == "192.168.10.200"
+
+    @pytest.mark.asyncio
     async def test_create_without_confirm_raises(self, local_settings: MagicMock) -> None:
         with pytest.raises(ValueError, match="confirm=True"):
             await dhcp.create_dhcp_reservation(

@@ -460,6 +460,105 @@ async def test_list_dpi_applications_empty(mock_settings):
     assert result == []
 
 
+@pytest.mark.asyncio
+async def test_list_dpi_applications_accepts_sparse_integration_response(mock_settings):
+    """Integration v1 returns only a numeric id and a name; that must not raise.
+
+    See issue #108: ``/integration/v1/dpi/applications`` sends exactly
+    ``{"id": 3, "name": "ICQ"}``, so requiring ``category_id`` and typing ``id``
+    as a string made the tool unusable on the local API.
+    """
+    mock_response = {"data": [{"id": 3, "name": "ICQ"}, {"id": 7, "name": "Skype"}]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.is_authenticated = True
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(dpi_tools_module, "UniFiClient", return_value=mock_client):
+        result = await list_dpi_applications(mock_settings)
+
+    # Absent fields are dropped rather than failing validation or padding the
+    # record with five nulls. Nothing carries a concrete default either, so an
+    # application the controller never described is not reported as enabled.
+    assert result == [{"id": 3, "name": "ICQ"}, {"id": 7, "name": "Skype"}]
+
+
+@pytest.mark.asyncio
+async def test_list_dpi_applications_preserves_populated_fields(mock_settings):
+    """Relaxing the model must not drop values when they are present."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "app1",
+                "name": "YouTube",
+                "category_id": "cat1",
+                "category_name": "Streaming",
+                "enabled": False,
+                "protocols": ["tcp", "udp"],
+                "ports": [80, 443],
+            }
+        ]
+    }
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.is_authenticated = True
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(dpi_tools_module, "UniFiClient", return_value=mock_client):
+        result = await list_dpi_applications(mock_settings)
+
+    assert result[0]["id"] == "app1"
+    assert result[0]["category_id"] == "cat1"
+    assert result[0]["category_name"] == "Streaming"
+    assert result[0]["protocols"] == ["tcp", "udp"]
+    assert result[0]["ports"] == [80, 443]
+    # enabled=False survives the exclude_none filter; it is a reported value,
+    # not an absent one.
+    assert result[0]["enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_dpi_applications_accepts_camel_case_category(mock_settings):
+    """The integration API spells the category key ``categoryId``."""
+    mock_response = {"data": [{"id": 3, "name": "ICQ", "categoryId": 1}]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.is_authenticated = True
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(dpi_tools_module, "UniFiClient", return_value=mock_client):
+        result = await list_dpi_applications(mock_settings)
+
+    assert result[0]["category_id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_list_dpi_categories_accepts_numeric_id(mock_settings):
+    """``/integration/v1/dpi/categories`` numbers its categories from zero."""
+    mock_response = {"data": [{"id": 0, "name": "Instant messengers"}]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.is_authenticated = True
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(dpi_tools_module, "UniFiClient", return_value=mock_client):
+        result = await list_dpi_categories(mock_settings)
+
+    assert result == [{"id": 0, "name": "Instant messengers"}]
+
+
 # =============================================================================
 # list_countries Tests
 # =============================================================================

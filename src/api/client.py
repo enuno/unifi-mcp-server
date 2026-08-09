@@ -89,6 +89,8 @@ class UniFiClient:
         self._site_id_cache: dict[str, str] = {}
         # Cache for site UUID -> internalReference mapping (needed for local API)
         self._site_uuid_to_name: dict[str, str] = {}
+        # Reverse mapping, for endpoints that key off the UUID instead
+        self._site_name_to_uuid: dict[str, str] = {}
 
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
@@ -193,6 +195,25 @@ class UniFiClient:
                 self.logger.debug(f"Translated v2 site ID: {site_id} -> {site_name}")
             return f"{prefix}{site_name}{rest or ''}"
 
+        # Pattern: /integration/v1/sites/{site_id}/{rest}, with or without the
+        # /proxy/network prefix already applied.
+        #
+        # This is the mirror image of the v2 case above: the Integration API
+        # keys off the site UUID and rejects short names with
+        # {"code":"api.request.argument-type-mismatch"}, while the legacy and v2
+        # APIs reject the UUID. Callers hold whichever ID they happened to get
+        # from list_sites, so translate centrally rather than making each tool
+        # remember which ID space its endpoint wants. The lookup is idempotent
+        # -- a UUID maps to itself -- so callers already passing the UUID are
+        # unaffected.
+        match = re.match(r"^(?:/proxy/network)?(/integration/v\d+/sites/)([^/]+)(/.*)?$", endpoint)
+        if match:
+            sites_path, site_id, rest = match.groups()
+            site_uuid = self._site_name_to_uuid.get(site_id, site_id)
+            if site_id != site_uuid:
+                self.logger.debug(f"Translated integration site ID: {site_id} -> {site_uuid}")
+            return f"/proxy/network{sites_path}{site_uuid}{rest or ''}"
+
         # If no pattern matches, check if it's already a local endpoint
         if endpoint.startswith("/proxy/network/"):
             return endpoint
@@ -279,17 +300,20 @@ class UniFiClient:
         return None
 
     def _build_site_uuid_map(self, sites: list[Any]) -> None:
-        """Build a mapping of site UUIDs to internal reference names.
+        """Build the site UUID <-> internal reference name mappings.
 
-        This is required for local API, which uses site names (e.g., 'default')
-        instead of UUIDs in endpoint paths. Entries are validated through
-        :class:`SiteReference`; one malformed entry is skipped rather than
-        failing authentication for every other site.
+        Both directions are required for the local API, because its endpoint
+        families disagree on which ID space they accept: the legacy and v2 APIs
+        use site names (e.g. 'default'), while the Integration API uses UUIDs.
+        Entries are validated through :class:`SiteReference`; one malformed
+        entry is skipped rather than failing authentication for every other
+        site.
 
         Args:
             sites: List of site objects from /ea/sites endpoint
         """
         self._site_uuid_to_name.clear()
+        self._site_name_to_uuid.clear()
         for site in sites:
             try:
                 reference = SiteReference.model_validate(site)
@@ -298,6 +322,7 @@ class UniFiClient:
                 continue
             if reference.internal_reference:
                 self._site_uuid_to_name[reference.id] = reference.internal_reference
+                self._site_name_to_uuid[reference.internal_reference] = reference.id
 
         self.logger.info(f"Built site UUID mapping: {len(self._site_uuid_to_name)} sites")
 

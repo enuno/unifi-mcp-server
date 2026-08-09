@@ -6,22 +6,28 @@ from pydantic import BaseModel, ConfigDict, Field
 class WANConnection(BaseModel):
     """WAN connection model."""
 
+    # Only ``id`` and ``name`` are guaranteed: the Integration v1
+    # ``/sites/{site_id}/wans`` endpoint returns just those two fields, and
+    # there is no per-WAN detail route to enrich them from. Everything below is
+    # optional so a sparse response validates instead of raising, and every
+    # optional field defaults to ``None`` rather than to a concrete value, so an
+    # omitted field is never reported as an empty list or a ``False`` flag.
     id: str = Field(..., alias="_id", description="WAN connection identifier")
-    site_id: str = Field(..., description="Site identifier")
+    site_id: str | None = Field(None, description="Site identifier")
     name: str = Field(..., description="WAN connection name")
 
     # Connection type
-    wan_type: str = Field(..., description="WAN type (dhcp/static/pppoe)")
-    interface: str = Field(..., description="Physical interface (eth0/eth1/etc)")
+    wan_type: str | None = Field(None, description="WAN type (dhcp/static/pppoe)")
+    interface: str | None = Field(None, description="Physical interface (eth0/eth1/etc)")
 
     # IP configuration
     ip_address: str | None = Field(None, description="WAN IP address")
     netmask: str | None = Field(None, description="Subnet mask")
     gateway: str | None = Field(None, description="Gateway IP")
-    dns_servers: list[str] = Field(default_factory=list, description="DNS server IPs")
+    dns_servers: list[str] | None = Field(None, description="DNS server IPs")
 
     # Connection status
-    status: str = Field(..., description="Connection status (online/offline/connecting)")
+    status: str | None = Field(None, description="Connection status (online/offline/connecting)")
     uptime: int | None = Field(None, description="Connection uptime in seconds")
 
     # Statistics
@@ -40,7 +46,7 @@ class WANConnection(BaseModel):
     failover_priority: int | None = Field(
         None, description="Failover priority (lower = higher priority)"
     )
-    is_backup: bool = Field(False, description="Whether this is a backup WAN")
+    is_backup: bool | None = Field(None, description="Whether this is a backup WAN")
 
     # ISP information
     isp_name: str | None = Field(None, description="ISP name")

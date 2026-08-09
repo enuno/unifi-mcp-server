@@ -9,7 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`list_dpi_applications` on Integration v1 (issue #108)**: `GET /integration/v1/dpi/applications` returns only `{"id": 3, "name": "ICQ"}`, but `DPIApplication` required `category_id` and typed `id` as a string, so every response raised `ValidationError` and the tool was unusable in local API mode. `category_id` is now optional, `id` accepts the numeric form the Integration v1 route sends, and `category_id`/`category_name` also accept the API's camelCase spellings.
 - **`WEB` firewall matching target (issue #106)**: `MatchingTarget` was missing the `WEB` member that the UniFi controller returns for web-category rules, so any policy using it failed model validation. Because `list_firewall_policies` validates the whole payload, a single `WEB` rule made the entire policy list unavailable rather than just that one entry.
+
+### Changed
+
+- **`list_dpi_applications` / `list_dpi_categories` output contract**: optional fields now default to `None` instead of `[]`/`True` (`protocols`, `ports`, `enabled`), and both tools dump with `exclude_none=True`, so fields the controller does not report are omitted rather than emitted as `null`. An absent key means "not reported", never "empty" or "disabled". Both tools are now documented in `API.md`.
 
 ## [0.4.0] - 2026-07-19
 

@@ -57,3 +57,22 @@ class Site(BaseModel):
         if self.name is None or self.name == "":
             self.name = f"Site {self.id}"
         return self
+
+
+class SiteReference(BaseModel):
+    """A site entry from the local ``/ea/sites`` listing.
+
+    Only the two fields needed to translate a site UUID into the short name the
+    local API's path segments expect. ``internalReference`` is the short name
+    ("default"); it is optional because older controllers omit it, in which case
+    the site simply cannot be translated.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+    id: str = Field(..., description="Site UUID as returned by /ea/sites")
+    internal_reference: str | None = Field(
+        None,
+        description="Site short name used in local API paths",
+        validation_alias=AliasChoices("internalReference", "internal_reference"),
+    )

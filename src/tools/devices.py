@@ -4,7 +4,7 @@ from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
-from ..models import Device
+from ..models import Device, IntegrationDevice
 from ..utils import (
     APIError,
     ResourceNotFoundError,
@@ -25,6 +25,12 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
     ``get_network_topology`` and other integration tools. Also accepts the
     legacy internal-stats MongoDB ObjectId (``_id``) as a fallback, so callers
     that already store the legacy ID continue to work.
+
+    The response is parsed with ``IntegrationDevice`` rather than the legacy
+    ``Device`` model, because the two endpoints report different shapes: the
+    integration API sends ``macAddress`` (not ``mac``), a string ``state``
+    (``"ONLINE"``, not ``1``) and no ``type`` field at all. Fields the
+    controller does not report are omitted rather than returned as ``null``.
 
     Args:
         site_id: Site identifier
@@ -58,7 +64,9 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
                 # through to the list scan below.
                 if isinstance(device_data, dict) and device_data:
                     logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
-                    return Device(**device_data).model_dump()
+                    return IntegrationDevice.model_validate(device_data).model_dump(
+                        exclude_none=True
+                    )
         except (ResourceNotFoundError, APIError) as e:
             # Direct lookup is a best-effort fast path. A 404 / missing-resource
             # response just means we should fall through to the paginated list
@@ -84,7 +92,9 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
             for device_data in devices_data:
                 if device_data.get("id") == device_id or device_data.get("_id") == device_id:
                     logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
-                    return Device(**device_data).model_dump()
+                    return IntegrationDevice.model_validate(device_data).model_dump(
+                        exclude_none=True
+                    )
             if len(devices_data) < 100:
                 break
             offset += len(devices_data)

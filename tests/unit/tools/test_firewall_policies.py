@@ -273,6 +273,76 @@ class TestListFirewallPolicies:
             assert result[0]["name"] == "Block APP Traffic"
             assert result[0]["source"]["matching_target"] == MatchingTarget.APP.value
 
+    @pytest.mark.asyncio
+    async def test_list_firewall_policies_with_web_matching_target(
+        self, local_settings: Settings
+    ) -> None:
+        """Test that list_firewall_policies succeeds with matching_target='WEB'.
+
+        Bug #106: a single policy using the 'WEB' destination matching target
+        failed validation, and because the whole list is validated at once it
+        took every other policy on the site down with it.
+        """
+        from src.models.firewall_policy import MatchingTarget
+        from src.tools.firewall_policies import list_firewall_policies
+
+        policies_with_web_target = [
+            {
+                "_id": "682a0e42220317278bb0b2cb",
+                "name": "Block Web Categories",
+                "enabled": True,
+                "action": "BLOCK",
+                "predefined": False,
+                "index": 10000,
+                "protocol": "all",
+                "ip_version": "BOTH",
+                "connection_state_type": "ALL",
+                "source": {
+                    "zone_id": "682a0e42220317278bb0b2c5",
+                    "matching_target": "ANY",
+                },
+                "destination": {
+                    "zone_id": "682a0e42220317278bb0b2c5",
+                    "matching_target": "WEB",
+                },
+            },
+            {
+                "_id": "682a0e42220317278bb0b2cc",
+                "name": "Unrelated Allow Rule",
+                "enabled": True,
+                "action": "ALLOW",
+                "predefined": False,
+                "index": 10001,
+                "protocol": "all",
+                "ip_version": "BOTH",
+                "connection_state_type": "ALL",
+                "source": {
+                    "zone_id": "682a0e42220317278bb0b2c5",
+                    "matching_target": "ANY",
+                },
+                "destination": {
+                    "zone_id": "682a0e42220317278bb0b2c5",
+                    "matching_target": "ANY",
+                },
+            },
+        ]
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client._site_uuid_to_name = {"default": "default"}
+            mock_client.get.return_value = policies_with_web_target
+
+            result = await list_firewall_policies("default", local_settings)
+
+            assert isinstance(result, list)
+            # The unrelated policy must survive alongside the WEB one
+            assert len(result) == 2
+            assert result[0]["name"] == "Block Web Categories"
+            assert result[0]["destination"]["matching_target"] == MatchingTarget.WEB.value
+            assert result[1]["name"] == "Unrelated Allow Rule"
+
 
 class TestGetFirewallPolicy:
     """Tests for get_firewall_policy function."""

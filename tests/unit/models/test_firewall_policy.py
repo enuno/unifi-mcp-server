@@ -70,6 +70,12 @@ class TestMatchingTarget:
 
         assert MatchingTarget.APP.value == "APP"
 
+    def test_web_value(self):
+        """WEB should be a valid matching target (Bug #106 fix)."""
+        from src.models.firewall_policy import MatchingTarget
+
+        assert MatchingTarget.WEB.value == "WEB"
+
 
 class TestConnectionStateType:
     """Tests for ConnectionStateType enum."""
@@ -423,6 +429,25 @@ class TestFirewallPolicy:
         policy = FirewallPolicy(**app_rule)
         assert policy.destination.matching_target == MatchingTarget.APP
         assert policy.name == "Block Streaming Apps"
+        assert policy.action.value == "BLOCK"
+
+    def test_web_matching_target_rule(self):
+        """Should parse rules with WEB matching target (Bug #106 fix)."""
+        from src.models.firewall_policy import FirewallPolicy, MatchingTarget
+
+        web_rule = {
+            "_id": "web-001",
+            "name": "Block Web Categories",
+            "action": "BLOCK",
+            "source": {"zone_id": "zone-internal", "matching_target": "ANY"},
+            "destination": {
+                "zone_id": "zone-external",
+                "matching_target": "WEB",
+            },
+        }
+        policy = FirewallPolicy(**web_rule)
+        assert policy.destination.matching_target == MatchingTarget.WEB
+        assert policy.name == "Block Web Categories"
         assert policy.action.value == "BLOCK"
 
 

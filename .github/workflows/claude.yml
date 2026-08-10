@@ -45,7 +45,7 @@ jobs:
 
           # Optional: Configure Claude's behavior with CLI arguments
           # claude_args: |
-          #   --model claude-opus-4-1-20250805
+          #   --model claude-opus-4-8
           #   --max-turns 10
           #   --allowedTools "Bash(npm install),Bash(npm run build),Bash(npm run test:*),Bash(npm run lint:*)"
           #   --system-prompt "Follow our coding standards. Ensure all new code has tests. Use TypeScript for new files."

@@ -95,7 +95,7 @@ jobs:
             - Add/remove labels
 
           claude_args: |
-            --model claude-opus-4-1-20250805
+            --model claude-opus-4-8
             --max-turns 25
             --allowedTools "Read,Edit,Create,Bash(pytest:*),Bash(git:*),Bash(gh:*),
             Bash(uv:*),Bash(python:*),Bash(grep:*),Bash(find:*)"

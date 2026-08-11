@@ -821,9 +821,12 @@ async def test_set_device_port_overrides_missing_port_idx(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_set_device_port_overrides_missing_portconf_id(mock_settings):
-    """Test setting overrides with missing portconf_id."""
-    with pytest.raises(ValidationError, match="portconf_id"):
+async def test_set_device_port_overrides_rejects_empty_override(mock_settings):
+    """Test that an override setting no fields at all is rejected.
+
+    port_idx alone says which port to change without saying what to change.
+    """
+    with pytest.raises(ValidationError, match="sets no fields"):
         await set_device_port_overrides(
             site_id="default",
             device_id="dev1",
@@ -1158,3 +1161,55 @@ async def test_set_device_port_overrides_list_response(mock_settings):
         )
 
     assert result["device_id"] == "dev1"
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_name_only(mock_settings):
+    """Test that renaming a port does not require reassigning its profile.
+
+    A port with no portconf_id inherits the site default. Requiring one made
+    it impossible to rename a port or turn its PoE off without also moving it
+    onto some profile.
+    """
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 6, "name": "Port 6"}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 6, "name": "Port 6-Uplink"}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["name"] == "Port 6-Uplink"
+    assert "portconf_id" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_poe_only(mock_settings):
+    """Test that a PoE-only override is accepted."""
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 2, "poe_mode": "auto"}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 2, "poe_mode": "off"}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["poe_mode"] == "off"

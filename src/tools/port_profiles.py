@@ -598,11 +598,20 @@ async def set_device_port_overrides(
     if not port_overrides:
         raise ValidationError("port_overrides cannot be empty")
 
+    # port_idx identifies the port and is genuinely required. portconf_id is
+    # not: a port with no profile inherits the site default, and overrides that
+    # only set a name, PoE mode or speed are both valid and common. Demanding
+    # it made it impossible to rename a port or disable its PoE without also
+    # reassigning its profile.
     for override in port_overrides:
         if "port_idx" not in override:
             raise ValidationError("Each port override must include 'port_idx'")
-        if "portconf_id" not in override:
-            raise ValidationError("Each port override must include 'portconf_id'")
+        if len(override) < 2:
+            raise ValidationError(
+                f"Port override for port_idx {override['port_idx']} sets no "
+                "fields. Include at least one of portconf_id, name, poe_mode, "
+                "speed, autoneg, full_duplex."
+            )
 
     parameters = {
         "site_id": site_id,

@@ -9,6 +9,7 @@ from ..utils import (
     DuplicateResourceError,
     ResourceNotFoundError,
     ValidationError,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -17,6 +18,28 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+
+
+def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) -> list[str]:
+    """Report requested fields the controller did not store as asked.
+
+    The controller silently normalizes some fields -- notably ``forward``, which
+    it may rewrite to ``customize`` regardless of the value sent. Returning
+    success while the stored configuration differs from the requested one hides
+    a real difference in port behaviour, so surface it to the caller instead.
+
+    Args:
+        requested: Field values sent to the controller
+        stored: Field values the controller echoed back
+
+    Returns:
+        One human-readable warning per field that differs, empty if all match
+    """
+    return [
+        f"Controller stored {key}={stored[key]!r}, not the requested {value!r}"
+        for key, value in requested.items()
+        if key in stored and stored[key] != value
+    ]
 
 
 async def list_port_profiles(
@@ -221,10 +244,13 @@ async def create_port_profile(
             response = await client.post(
                 f"/ea/sites/{site_id}/rest/portconf", json_data=profile_data
             )
-            if isinstance(response, list):
-                created: dict[str, Any] = response[0] if response else {}
-            else:
-                created = response.get("data", [{}])[0]
+            created = first_response_item(response)
+
+            warnings = _stored_value_warnings(profile_data, created)
+            if warnings:
+                for warning in warnings:
+                    logger.warning(sanitize_log_message(warning))
+                created = {**created, "warnings": warnings}
 
             logger.info(sanitize_log_message(f"Created port profile '{name}' in site '{site_id}'"))
             log_audit(
@@ -344,40 +370,53 @@ async def update_port_profile(
             if not profiles:
                 raise ResourceNotFoundError("port_profile", profile_id)
 
-            update_data = profiles[0].copy()
-
-            # Merge provided fields
+            # Collect only the fields the caller explicitly provided, so the
+            # post-write comparison does not flag pre-existing values.
+            changes: dict[str, Any] = {}
             if name is not None:
-                update_data["name"] = name
+                changes["name"] = name
             if forward is not None:
-                update_data["forward"] = forward
+                changes["forward"] = forward
             if native_networkconf_id is not None:
-                update_data["native_networkconf_id"] = native_networkconf_id
+                changes["native_networkconf_id"] = native_networkconf_id
             if excluded_networkconf_ids is not None:
-                update_data["excluded_networkconf_ids"] = excluded_networkconf_ids
+                changes["excluded_networkconf_ids"] = excluded_networkconf_ids
             if tagged_networkconf_ids is not None:
-                update_data["tagged_networkconf_ids"] = tagged_networkconf_ids
+                changes["tagged_networkconf_ids"] = tagged_networkconf_ids
             if poe_mode is not None:
-                update_data["poe_mode"] = poe_mode
+                changes["poe_mode"] = poe_mode
             if speed is not None:
-                update_data["speed"] = speed
+                changes["speed"] = speed
             if full_duplex is not None:
-                update_data["full_duplex"] = full_duplex
+                changes["full_duplex"] = full_duplex
             if autoneg is not None:
-                update_data["autoneg"] = autoneg
+                changes["autoneg"] = autoneg
             if dot1x_ctrl is not None:
-                update_data["dot1x_ctrl"] = dot1x_ctrl
+                changes["dot1x_ctrl"] = dot1x_ctrl
             if lldpmed_enabled is not None:
-                update_data["lldpmed_enabled"] = lldpmed_enabled
+                changes["lldpmed_enabled"] = lldpmed_enabled
+
+            update_data = {**profiles[0], **changes}
 
             response = await client.put(
                 f"/ea/sites/{site_id}/rest/portconf/{profile_id}",
                 json_data=update_data,
             )
-            if isinstance(response, list):
-                updated: dict[str, Any] = response[0] if response else {}
-            else:
-                updated = response.get("data", [{}])[0]
+            updated = first_response_item(response)
+
+            # An accepted write is not always echoed back. Re-read rather than
+            # returning an empty dict, so the caller sees what is actually
+            # stored and the comparison below has something to check against.
+            if not updated:
+                updated = first_response_item(
+                    await client.get(f"/ea/sites/{site_id}/rest/portconf/{profile_id}")
+                )
+
+            warnings = _stored_value_warnings(changes, updated)
+            if warnings:
+                for warning in warnings:
+                    logger.warning(sanitize_log_message(warning))
+                updated = {**updated, "warnings": warnings}
 
             logger.info(
                 sanitize_log_message(f"Updated port profile '{profile_id}' in site '{site_id}'")
@@ -665,10 +704,7 @@ async def set_device_port_overrides(
                 endpoint,
                 json_data=device,
             )
-            if isinstance(response, list):
-                updated_device: dict[str, Any] = response[0] if response else {}
-            else:
-                updated_device = response.get("data", [{}])[0]
+            updated_device = first_response_item(response)
 
             logger.info(
                 f"Set {len(final_overrides)} port overrides on device "

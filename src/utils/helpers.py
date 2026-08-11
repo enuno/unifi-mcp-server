@@ -99,6 +99,34 @@ def sanitize_dict(data: dict[str, Any], exclude_keys: list[str] | None = None) -
     return {k: v for k, v in data.items() if k.lower() not in [e.lower() for e in exclude_keys]}
 
 
+def first_response_item(response: Any) -> dict[str, Any]:
+    """Return the first object from a UniFi API response payload.
+
+    UniFi wraps most write responses as ``{"meta": ..., "data": [obj]}``, but
+    returns ``{"data": []}`` when it accepts a request without echoing the
+    stored object back. Indexing ``[0]`` directly raises ``IndexError`` on that
+    empty-list case -- and because it happens while parsing the reply to a write
+    that was already sent, the caller cannot tell whether the write landed.
+
+    Note that ``response.get("data", [{}])[0]`` does not protect against this:
+    the default only applies when the key is absent, not when it is an empty
+    list.
+
+    Args:
+        response: Raw response, either a bare list or a ``data``-wrapped dict
+
+    Returns:
+        The first item, or an empty dict when the payload carries none
+    """
+    items = response if isinstance(response, list) else response.get("data", [])
+
+    if not isinstance(items, list) or not items:
+        return {}
+
+    first = items[0]
+    return first if isinstance(first, dict) else {}
+
+
 def merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Merge two dictionaries, with override taking precedence.
 

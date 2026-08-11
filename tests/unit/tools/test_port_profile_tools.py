@@ -1158,3 +1158,150 @@ async def test_set_device_port_overrides_list_response(mock_settings):
         )
 
     assert result["device_id"] == "dev1"
+
+
+# =============================================================================
+# Controller normalization / empty-echo regression tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_empty_response_does_not_raise(mock_settings):
+    """Test that a create accepted without an echoed object returns cleanly.
+
+    Regression: parsing used ``response.get("data", [{}])[0]``, whose default
+    only applies when the key is absent. A ``{"data": []}`` reply raised
+    IndexError after the POST had already been sent.
+    """
+    client = _make_client(get_return={"data": []}, post_return={"data": []})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_warns_when_forward_normalized(mock_settings):
+    """Test that a controller-rewritten forward mode is surfaced, not hidden.
+
+    The controller may store ``customize`` regardless of the value sent, which
+    changes whether the port is an access port or a trunk.
+    """
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "customize"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["forward"] == "customize"
+    assert len(result["warnings"]) == 1
+    assert "forward" in result["warnings"][0]
+    assert "'native'" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_no_warnings_when_stored_as_requested(mock_settings):
+    """Test that a faithful create carries no warnings key."""
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "native"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_refetches_when_put_not_echoed(mock_settings):
+    """Test that an un-echoed update is re-read instead of returning nothing.
+
+    Regression: this reply raised IndexError while parsing, so the caller could
+    not tell whether the PUT had landed.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    refetched = {"data": [{"_id": "pp1", "name": "Updated", "forward": "native"}]}
+    client = _make_client(put_return={"data": []})
+    client.get = AsyncMock(side_effect=[existing, refetched])
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            forward="native",
+            confirm=True,
+        )
+
+    assert client.get.await_count == 2
+    assert result["name"] == "Updated"
+    assert result["forward"] == "native"
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_warns_when_refetch_shows_normalization(mock_settings):
+    """Test that a silently-normalized update is reported after the re-read."""
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    refetched = {"data": [{"_id": "pp1", "name": "Original", "forward": "customize"}]}
+    client = _make_client(put_return={"data": []})
+    client.get = AsyncMock(side_effect=[existing, refetched])
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            forward="native",
+            confirm=True,
+        )
+
+    assert result["forward"] == "customize"
+    assert len(result["warnings"]) == 1
+    assert "'native'" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_ignores_untouched_fields(mock_settings):
+    """Test that only caller-provided fields are compared after the write.
+
+    Fields the caller never mentioned must not produce warnings just because
+    the stored profile carries different values.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    updated = {"data": [{"_id": "pp1", "name": "Updated", "forward": "all", "poe_mode": "auto"}]}
+    client = _make_client(get_return=existing, put_return=updated)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            confirm=True,
+        )
+
+    assert "warnings" not in result

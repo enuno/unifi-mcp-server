@@ -7,6 +7,7 @@ from ..config import Settings
 from ..utils import (
     ResourceNotFoundError,
     ValidationError,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -159,10 +160,7 @@ async def create_port_forward(
             await client.authenticate()
 
             response = await client.post(f"/ea/sites/{site_id}/rest/portforward", json_data=pf_data)
-            # Handle both list and dict responses
-            created_rule: dict[str, Any] = (
-                response[0] if isinstance(response, list) else response.get("data", [{}])[0]
-            )
+            created_rule = first_response_item(response)
 
             logger.info(
                 f"Created port forward '{name}' "

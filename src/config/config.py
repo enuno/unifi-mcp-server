@@ -156,6 +156,19 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_LOG_ENABLED",
     )
 
+    # Supermemory Configuration (optional operator notes/context store)
+    supermemory_enabled: bool = Field(
+        default=False,
+        description="Enable Supermemory integration for persisting operator notes/context",
+        validation_alias="SUPERMEMORY_ENABLED",
+    )
+
+    supermemory_api_key: str | None = Field(
+        default=None,
+        description="Supermemory API key (get one at https://console.supermemory.ai)",
+        validation_alias="SUPERMEMORY_API_KEY",
+    )
+
     # MCP Server Transport Configuration
     server_transport: TransportMode = Field(
         default=TransportMode.STDIO,

@@ -306,6 +306,7 @@ Once running in SSE mode, configure your MCP gateway to connect:
 - **Automatic Cache Invalidation**: Smart cache invalidation when configuration changes
 - **Event Handlers**: Built-in handlers for device, client, and alert events
 - **Performance Tracking**: Optional agnost.ai integration for monitoring MCP tool performance and usage analytics
+- **Operator Memory**: Optional Supermemory integration for persisting operator notes/context across tool calls, scoped per site
 - **Roadmap-aligned controls**: planned dry-run, RBAC, audit logging, metrics, and A2A discovery
 
 ### Safety & Security
@@ -714,6 +715,12 @@ WEBHOOK_SECRET=your-webhook-secret-here
 # AGNOST_ENDPOINT=https://api.agnost.ai
 # AGNOST_DISABLE_INPUT=false  # Set to true to disable input tracking
 # AGNOST_DISABLE_OUTPUT=false # Set to true to disable output tracking
+
+# Supermemory (optional - operator notes/context storage, scoped per site)
+# Requires: pip install supermemory
+# Get your API key from https://console.supermemory.ai
+# SUPERMEMORY_ENABLED=true
+# SUPERMEMORY_API_KEY=your-supermemory-api-key-here
 ```
 
 See `.env.example` for all available options.
@@ -1203,6 +1210,7 @@ unifi-mcp-server/
 ├── src/
 │   ├── main.py            # MCP server entry point (215+ tools registered)
 │   ├── cache.py           # Redis caching implementation
+│   ├── memory.py          # Supermemory operator notes/context storage
 │   ├── config/            # Configuration management
 │   ├── api/               # UniFi API client with rate limiting
 │   ├── models/            # Pydantic data models

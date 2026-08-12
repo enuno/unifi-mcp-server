@@ -23,11 +23,18 @@ logger = get_logger(__name__)
 
 
 def _voucher_items(response: Any) -> list[dict]:
-    """Unwrap a voucher response into a list of voucher objects."""
+    """Unwrap a voucher response into a list of voucher objects.
+
+    Generation replies with the batch nested under a ``vouchers`` key —
+    ``{"vouchers": [...]}``, observed live on Network 10.5.67 — while reads
+    return the objects directly. Handle both, plus a ``data`` envelope.
+    """
     if isinstance(response, list):
         return [item for item in response if isinstance(item, dict)]
     if isinstance(response, dict):
         data = response.get("data", response)
+        if isinstance(data, dict) and isinstance(data.get("vouchers"), list):
+            data = data["vouchers"]
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
         if isinstance(data, dict) and data:
@@ -73,8 +80,7 @@ async def list_vouchers(
         )
 
         return [
-            Voucher(**voucher).model_dump(exclude_none=True)
-            for voucher in _voucher_items(response)
+            Voucher(**voucher).model_dump(exclude_none=True) for voucher in _voucher_items(response)
         ]
 
 
@@ -180,8 +186,7 @@ async def create_vouchers(
             f"/integration/v1/sites/{site_id}/hotspot/vouchers", json_data=payload
         )
         vouchers = [
-            Voucher(**voucher).model_dump(exclude_none=True)
-            for voucher in _voucher_items(response)
+            Voucher(**voucher).model_dump(exclude_none=True) for voucher in _voucher_items(response)
         ]
 
         # Audit the action

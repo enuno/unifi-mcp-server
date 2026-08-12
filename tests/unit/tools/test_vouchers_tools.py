@@ -181,6 +181,32 @@ async def test_create_vouchers_sends_documented_body(mock_settings, sample_vouch
 
 
 @pytest.mark.asyncio
+async def test_create_vouchers_parses_wrapped_201(mock_settings, sample_voucher):
+    """Generation nests the batch under a ``vouchers`` key.
+
+    Observed live on Network 10.5.67: the 201 body is
+    ``{"vouchers": [...]}``, not a bare list or a ``data`` envelope. Note the
+    live controller also returned ``code`` as a *string* — the docs say
+    integer — which is why the model types it ``int | str``.
+    """
+    created = {**sample_voucher, "code": "6014397834"}
+    client = _make_client({"vouchers": [created]})
+
+    with patch.object(vouchers_module, "UniFiClient", return_value=client):
+        result = await create_vouchers(
+            site_id="default",
+            name="Guest access",
+            time_limit_minutes=60,
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert len(result["vouchers"]) == 1
+    assert result["vouchers"][0]["id"] == VOUCHER_ID
+    assert result["vouchers"][0]["code"] == "6014397834"
+
+
+@pytest.mark.asyncio
 async def test_create_vouchers_minimal_body(mock_settings, sample_voucher):
     """Optional limits stay out of the body when not requested."""
     client = _make_client({"data": [sample_voucher]})

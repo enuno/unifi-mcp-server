@@ -18,7 +18,7 @@ async def get_application_info(settings: Settings) -> dict:
 
     Example:
         >>> info = await get_application_info(settings)
-        >>> print(info["version"])
+        >>> print(info["application_version"])
     """
     async with UniFiClient(settings) as client:
         logger.info("Fetching application information")
@@ -27,8 +27,12 @@ async def get_application_info(settings: Settings) -> dict:
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Get application info
-        response = await client.get("/integration/v1/application/info")
+        # The documented route is /v1/info; /application/info does not exist
+        # and 404s on every controller. The documented response carries a
+        # single key, applicationVersion — the version/build/deploymentType/
+        # capabilities/systemInfo keys this tool used to report came from
+        # nowhere real and were always None.
+        response = await client.get(settings.get_integration_path("info"))
 
         # Extract data from response
         if isinstance(response, list):
@@ -37,10 +41,10 @@ async def get_application_info(settings: Settings) -> dict:
             _raw = response.get("data", response)
             data = _raw[0] if isinstance(_raw, list) else _raw
 
+        # Report the documented key under this server's snake_case convention
+        # and pass anything else through verbatim, so a future controller that
+        # says more is not silenced by an allowlist.
         return {
-            "version": data.get("version"),
-            "build": data.get("build"),
-            "deployment_type": data.get("deploymentType"),
-            "capabilities": data.get("capabilities", []),
-            "system_info": data.get("systemInfo", {}),
+            "application_version": data.get("applicationVersion"),
+            **{k: v for k, v in data.items() if k != "applicationVersion"},
         }

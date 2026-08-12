@@ -20,151 +20,83 @@ def mock_settings():
     settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
+    settings.get_integration_path = MagicMock(side_effect=lambda x: f"/integration/v1/{x}")
     return settings
 
 
+def _make_client(response, authenticated=True):
+    client = MagicMock()
+    client.is_authenticated = authenticated
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(return_value=response)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    return client
+
+
 # =============================================================================
-# get_application_info Tests - Task 18.1
+# get_application_info Tests
+#
+# The documented route is /v1/info and the documented response is a single
+# key: {"applicationVersion": "9.1.0"}. See issue #108 — the previous
+# /application/info path 404s everywhere, and the version/build/capabilities
+# shape it parsed came from nowhere real.
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_get_application_info_success(mock_settings):
-    """Test successful retrieval of application info."""
-    mock_response = {
-        "data": {
-            "version": "8.4.59",
-            "build": "atag_8.4.59_12345",
-            "deploymentType": "standalone",
-            "capabilities": ["network", "protect", "access"],
-            "systemInfo": {
-                "hostname": "unifi-controller",
-                "uptime": 123456,
-                "platform": "linux",
-            },
-        }
-    }
-
-    mock_client = MagicMock()
-    mock_client.is_authenticated = True
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+async def test_get_application_info_documented_payload(mock_settings):
+    """The documented single-key response resolves on the documented path."""
+    mock_client = _make_client({"applicationVersion": "9.1.0"})
 
     with patch.object(app_module, "UniFiClient", return_value=mock_client):
         result = await get_application_info(settings=mock_settings)
 
-    assert result["version"] == "8.4.59"
-    assert result["build"] == "atag_8.4.59_12345"
-    assert result["deployment_type"] == "standalone"
-    assert "network" in result["capabilities"]
-    assert result["system_info"]["hostname"] == "unifi-controller"
-    mock_client.get.assert_called_once_with("/integration/v1/application/info")
+    assert result["application_version"] == "9.1.0"
+    mock_client.get.assert_called_once_with("/integration/v1/info")
 
 
 @pytest.mark.asyncio
-async def test_get_application_info_response_format(mock_settings):
-    """Test application info returns correct response format."""
-    mock_response = {
-        "data": {
-            "version": "9.0.0",
-            "build": "build_9.0.0",
-            "deploymentType": "cloud",
-            "capabilities": ["zbf", "traffic-flows"],
-            "systemInfo": {"memory": "8GB", "cpu": "4 cores"},
-        }
-    }
-
-    mock_client = MagicMock()
-    mock_client.is_authenticated = True
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+async def test_get_application_info_data_wrapped(mock_settings):
+    """A data-wrapped variant of the same payload also resolves."""
+    mock_client = _make_client({"data": {"applicationVersion": "9.2.5"}})
 
     with patch.object(app_module, "UniFiClient", return_value=mock_client):
         result = await get_application_info(settings=mock_settings)
 
-    assert "version" in result
-    assert "build" in result
-    assert "deployment_type" in result
-    assert "capabilities" in result
-    assert "system_info" in result
-    assert isinstance(result["capabilities"], list)
-    assert isinstance(result["system_info"], dict)
+    assert result["application_version"] == "9.2.5"
 
 
 @pytest.mark.asyncio
 async def test_get_application_info_unauthenticated(mock_settings):
-    """Test application info with unauthenticated client triggers auth."""
-    mock_response = {
-        "data": {
-            "version": "8.5.0",
-            "build": "build_8.5.0",
-        }
-    }
-
-    mock_client = MagicMock()
-    mock_client.is_authenticated = False
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    """An unauthenticated client authenticates before the request."""
+    mock_client = _make_client({"applicationVersion": "9.1.0"}, authenticated=False)
 
     with patch.object(app_module, "UniFiClient", return_value=mock_client):
         result = await get_application_info(settings=mock_settings)
 
     mock_client.authenticate.assert_called_once()
-    assert result["version"] == "8.5.0"
+    assert result["application_version"] == "9.1.0"
 
 
 @pytest.mark.asyncio
-async def test_get_application_info_minimal_response(mock_settings):
-    """Test application info with minimal response data."""
-    mock_response = {
-        "version": "8.0.0",
-        "build": None,
-    }
-
-    mock_client = MagicMock()
-    mock_client.is_authenticated = True
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+async def test_get_application_info_passes_extra_keys_through(mock_settings):
+    """Undocumented keys a controller chooses to send are not dropped."""
+    mock_client = _make_client({"applicationVersion": "9.3.0", "deploymentType": "console"})
 
     with patch.object(app_module, "UniFiClient", return_value=mock_client):
         result = await get_application_info(settings=mock_settings)
 
-    assert result["version"] == "8.0.0"
-    assert result["build"] is None
-    assert result["capabilities"] == []
-    assert result["system_info"] == {}
+    assert result["application_version"] == "9.3.0"
+    assert result["deploymentType"] == "console"
 
 
 @pytest.mark.asyncio
-async def test_get_application_info_empty_capabilities(mock_settings):
-    """Test application info with empty capabilities."""
-    mock_response = {
-        "data": {
-            "version": "7.5.0",
-            "deploymentType": "udm",
-            "capabilities": [],
-            "systemInfo": {},
-        }
-    }
-
-    mock_client = MagicMock()
-    mock_client.is_authenticated = True
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+async def test_get_application_info_empty_response(mock_settings):
+    """An empty reply reports the promised key as None rather than raising."""
+    mock_client = _make_client({})
 
     with patch.object(app_module, "UniFiClient", return_value=mock_client):
         result = await get_application_info(settings=mock_settings)
 
-    assert result["capabilities"] == []
-    assert result["system_info"] == {}
-    assert result["deployment_type"] == "udm"
+    assert result == {"application_version": None}

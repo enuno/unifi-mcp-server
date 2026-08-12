@@ -1213,3 +1213,40 @@ async def test_set_device_port_overrides_allows_poe_only(mock_settings):
 
     sent = client.put.call_args[1]["json_data"]["port_overrides"]
     assert sent[0]["poe_mode"] == "off"
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_speed_only(mock_settings):
+    """A speed-only override is accepted without a profile reassignment."""
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 4, "speed": 1000}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 4, "speed": 100, "autoneg": False}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["speed"] == 100
+    assert sent[0]["autoneg"] is False
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_rejects_all_none_fields(mock_settings):
+    """port_idx plus only-None companions applies nothing and is rejected."""
+    with pytest.raises(ValidationError, match="sets no"):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 3, "name": None}],
+            settings=mock_settings,
+            confirm=True,
+        )

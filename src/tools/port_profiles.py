@@ -606,7 +606,11 @@ async def set_device_port_overrides(
     for override in port_overrides:
         if "port_idx" not in override:
             raise ValidationError("Each port override must include 'port_idx'")
-        if len(override) < 2:
+        # At least one field must actually be set: a bare port_idx or one
+        # whose only companions are None values would apply nothing. Keys
+        # are deliberately not whitelisted -- the controller accepts more
+        # override fields than this tool enumerates.
+        if not any(v is not None for k, v in override.items() if k != "port_idx"):
             raise ValidationError(
                 f"Port override for port_idx {override['port_idx']} sets no "
                 "fields. Include at least one of portconf_id, name, poe_mode, "

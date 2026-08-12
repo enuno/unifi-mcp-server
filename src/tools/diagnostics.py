@@ -1,5 +1,7 @@
 """Network diagnostics MCP tools."""
 
+import time
+from datetime import datetime, timezone
 from typing import Any
 
 from ..api import UniFiClient
@@ -108,28 +110,66 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
         return speed_test.model_dump()
 
 
-async def get_speed_test_history(site_id: str, settings: Settings) -> list[dict[str, Any]]:
+async def get_speed_test_history(
+    site_id: str, settings: Settings, hours: int = 168
+) -> list[dict[str, Any]]:
     """Get historical speed test results for a site.
+
+    Reads the ``stat/report/archive.speedtest`` report — the route the
+    controller actually stores results under. The previous
+    ``rest/speedtest`` resource does not exist and failed every call with
+    ``api.err.InvalidObject``.
 
     Args:
         site_id: Site identifier
         settings: Application settings
+        hours: How far back to look (default 168 = 7 days)
 
     Returns:
-        List of speed test result dictionaries
+        List of speed test result dictionaries, oldest first
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
+    end_ms = int(time.time() * 1000)
+    start_ms = end_ms - hours * 3600 * 1000
+
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/rest/speedtest")
+        response = await client.post(
+            f"/ea/sites/{site_id}/stat/report/archive.speedtest",
+            json_data={
+                "attrs": ["time", "xput_download", "xput_upload", "latency"],
+                "start": start_ms,
+                "end": end_ms,
+            },
+        )
         data = response.get("data", []) if isinstance(response, dict) else response
         if not isinstance(data, list):
             data = []
 
-        results = [SpeedTestResult(**item).model_dump() for item in data]
+        # Archive entries report xput_* in Mbps, latency in ms and time in
+        # epoch milliseconds; translate to this module's result shape.
+        results = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            ts = item.get("time")
+            results.append(
+                SpeedTestResult(
+                    id=item.get("_id"),
+                    download_speed_mbps=item.get("xput_download"),
+                    upload_speed_mbps=item.get("xput_upload"),
+                    ping_ms=item.get("latency"),
+                    timestamp=(
+                        datetime.fromtimestamp(ts / 1000, tz=timezone.utc).isoformat()
+                        if isinstance(ts, int | float)
+                        else None
+                    ),
+                ).model_dump(exclude_none=True)
+            )
+
         logger.info(
             sanitize_log_message(
                 f"Retrieved {len(results)} speed test results for site '{site_id}'"

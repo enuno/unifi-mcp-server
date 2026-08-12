@@ -331,6 +331,21 @@ async def list_firewall_zones_v2(
 
         zones = _extract_zone_list(response)
 
+        # A ZBF-enabled controller always carries its built-in zones
+        # (Internal, External, Gateway, VPN, Hotspot, DMZ), so an empty list
+        # here means the feature is off — the same condition the integration
+        # zones route reports as an explicit 400
+        # (api.firewall.zone-based-firewall-not-configured). Say so, rather
+        # than returning [] that reads as "no zones exist".
+        if not zones:
+            raise APIError(
+                "The v2 firewall zone route returned no zones. Zone-Based "
+                "Firewall does not appear to be configured on this "
+                "controller; a ZBF-enabled site always reports its built-in "
+                "zones. Legacy firewall rules are available via "
+                "list_firewall_rules."
+            )
+
         return [
             FirewallZoneV2Mapping(
                 internal_id=z.get("_id"),

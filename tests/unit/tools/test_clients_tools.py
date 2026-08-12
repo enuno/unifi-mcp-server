@@ -126,6 +126,37 @@ class TestWiredClientCounters:
             assert result[0]["tx_bytes"] == 1000000
             assert result[0]["rx_bytes"] == 2000000
 
+    @pytest.mark.asyncio
+    async def test_wireless_zero_is_not_replaced_by_stray_wired_keys(self, mock_settings):
+        """A wireless client's legitimate zero counter must stay zero.
+
+        The wired- fallback is gated on is_wired, so even a record that
+        somehow carries wired- keys cannot overwrite a wireless zero.
+        """
+        mac = "00:00:5e:00:53:07"
+        record = {
+            **make_client(mac=mac),
+            "tx_bytes": 0,
+            "rx_bytes": 0,
+            "wired-tx_bytes": 123456,
+            "wired-rx_bytes": 654321,
+        }
+        response = {"data": [record]}
+
+        with patch("src.tools.clients.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            stats = await get_client_statistics("site-1", mac, mock_settings)
+            assert stats["tx_bytes"] == 0
+            assert stats["rx_bytes"] == 0
+
+        with patch("src.tools.clients.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            listed = await list_active_clients("site-1", mock_settings)
+            assert listed[0]["tx_bytes"] == 0
+            assert listed[0]["rx_bytes"] == 0
+
 
 class TestGetClientDetails:
     @pytest.mark.asyncio

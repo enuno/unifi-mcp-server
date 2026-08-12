@@ -61,10 +61,15 @@ class Client(BaseModel):
         ``wired-rx_bytes``, ``wired-tx_packets`` and ``wired-rx_packets``;
         the plain keys are absent or zero for them. Without this, every
         wired client reports no traffic at all.
+
+        The fill is gated on ``is_wired`` so a wireless client whose plain
+        counter is a legitimate zero is never overwritten, even if a stray
+        ``wired-`` key appears in its record.
         """
-        if isinstance(data, dict):
+        if isinstance(data, dict) and data.get("is_wired") is True:
             for field in ("tx_bytes", "rx_bytes", "tx_packets", "rx_packets"):
-                if not data.get(field) and data.get(f"wired-{field}") is not None:
+                plain = data.get(field)
+                if (plain is None or plain == 0) and data.get(f"wired-{field}") is not None:
                     data = {**data, field: data[f"wired-{field}"]}
         return data
 

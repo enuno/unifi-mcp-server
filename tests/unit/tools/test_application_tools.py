@@ -20,7 +20,11 @@ def mock_settings():
     settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
-    settings.get_integration_path = MagicMock(side_effect=lambda x: f"/integration/v1/{x}")
+    # Mirror the real local-mode prefix so tests do not encode a path
+    # shape Settings.get_integration_path never produces.
+    settings.get_integration_path = MagicMock(
+        side_effect=lambda x: f"/proxy/network/integration/v1/{x}"
+    )
     return settings
 
 
@@ -53,7 +57,7 @@ async def test_get_application_info_documented_payload(mock_settings):
         result = await get_application_info(settings=mock_settings)
 
     assert result["application_version"] == "9.1.0"
-    mock_client.get.assert_called_once_with("/integration/v1/info")
+    mock_client.get.assert_called_once_with("/proxy/network/integration/v1/info")
 
 
 @pytest.mark.asyncio

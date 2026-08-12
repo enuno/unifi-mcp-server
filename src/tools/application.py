@@ -27,7 +27,10 @@ async def get_application_info(settings: Settings) -> dict:
         if not client.is_authenticated:
             await client.authenticate()
 
-        # The documented route is /v1/info; /application/info does not exist
+        # The documented resource is the Integration API's "info" route;
+        # its concrete path varies by API mode (get_integration_path adds
+        # the /v1, /integration/v1 or /proxy/network/integration/v1
+        # prefix). The previous "application/info" resource does not exist
         # and 404s on every controller. The documented response carries a
         # single key, applicationVersion — the version/build/deploymentType/
         # capabilities/systemInfo keys this tool used to report came from

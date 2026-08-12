@@ -217,13 +217,18 @@ async def create_dhcp_reservation(
                 break
 
         if existing is not None:
+            existing_id = existing.get("_id")
+            if not existing_id:
+                raise APIError(f"Existing user record for {mac} carries no _id; cannot merge")
             merge = {k: v for k, v in payload.items() if k != "mac"}
-            response = await client.put(_endpoint(site_id, existing["_id"]), json_data=merge)
+            response = await client.put(_endpoint(site_id, existing_id), json_data=merge)
+            method = "PUT"
         else:
             response = await client.post(_endpoint(site_id), json_data=payload)
+            method = "POST"
         items = _unwrap(response)
         if not items:
-            raise APIError(f"DHCP reservation POST returned no data for {mac}")
+            raise APIError(f"DHCP reservation {method} returned no data for {mac}")
         data = items[0]
 
         log_audit(

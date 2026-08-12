@@ -211,8 +211,11 @@ class TestCreateDhcpReservation:
 
         with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
             MockClient.return_value = client
+            # Different case than the stored record: matching must be
+            # case-insensitive, or a MAC typed in uppercase re-POSTs and
+            # fails with api.err.MacUsed.
             result = await dhcp.create_dhcp_reservation(
-                mac="aa:bb:cc:dd:ee:02",
+                mac="AA:BB:CC:DD:EE:02",
                 fixed_ip="192.168.10.200",
                 network_id="net-lan",
                 site_id="default",

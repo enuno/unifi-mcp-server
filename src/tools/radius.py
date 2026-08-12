@@ -4,7 +4,7 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import Settings
-from ..models.radius import GuestPortalConfig, HotspotPackage, RADIUSAccount, RADIUSProfile
+from ..models.radius import GuestPortalConfig, RADIUSAccount, RADIUSProfile
 from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
 
 logger = get_logger(__name__)
@@ -805,10 +805,10 @@ async def list_hotspot_packages(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/hotspot/packages")
+        response = await client.get(f"/ea/sites/{site_id}/rest/hotspotpackage")
         data = response if isinstance(response, list) else response.get("data", [])
 
-        return [HotspotPackage(**package).model_dump() for package in data]
+        return [dict(package) for package in data]
 
 
 async def create_hotspot_package(
@@ -816,10 +816,6 @@ async def create_hotspot_package(
     name: str,
     duration_minutes: int,
     settings: Settings,
-    download_limit_kbps: int | None = None,
-    upload_limit_kbps: int | None = None,
-    download_quota_mb: int | None = None,
-    upload_quota_mb: int | None = None,
     price: float | None = None,
     currency: str = "USD",
     confirm: bool | str = False,
@@ -827,17 +823,23 @@ async def create_hotspot_package(
 ) -> dict:
     """Create a new hotspot package.
 
+    Duration is hours-granular on the classic surface, so
+    ``duration_minutes`` is rounded up to whole hours. A controller with no
+    hotspot payment gateway configured refuses package creation with
+    ``api.err.Invalid``; with ``amount`` left at 0 it instead reports the
+    misleading ``api.err.InvalidHotspotPackageDuration``.
+
+    The earlier bandwidth/quota parameters are gone: the classic validator
+    never acknowledged them, and carrying parameters the controller ignores
+    misrepresents what the tool can do.
+
     Args:
         site_id: Site identifier
         name: Package name
-        duration_minutes: Duration in minutes
+        duration_minutes: Duration in minutes (stored as whole hours)
         settings: Application settings
-        download_limit_kbps: Download speed limit in kbps
-        upload_limit_kbps: Upload speed limit in kbps
-        download_quota_mb: Download quota in MB
-        upload_quota_mb: Upload quota in MB
-        price: Package price
-        currency: Currency code
+        price: Package price (``amount``)
+        currency: Currency code, sent alongside ``price``
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
@@ -852,24 +854,17 @@ async def create_hotspot_package(
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build request payload
+        # Build request payload from the fields the classic validator is
+        # known to read (it echoes amount, hours and trial_duration_minutes
+        # on rejection). Duration is hours-granular on this surface.
         payload: dict[str, Any] = {
             "name": name,
-            "duration_minutes": duration_minutes,
-            "currency": currency,
-            "enabled": True,
+            "hours": max(1, -(-duration_minutes // 60)),
         }
 
-        if download_limit_kbps is not None:
-            payload["download_limit_kbps"] = download_limit_kbps
-        if upload_limit_kbps is not None:
-            payload["upload_limit_kbps"] = upload_limit_kbps
-        if download_quota_mb is not None:
-            payload["download_quota_mb"] = download_quota_mb
-        if upload_quota_mb is not None:
-            payload["upload_quota_mb"] = upload_quota_mb
         if price is not None:
-            payload["price"] = price
+            payload["amount"] = price
+            payload["currency"] = currency
 
         if dry_run:
             logger.info(
@@ -879,9 +874,7 @@ async def create_hotspot_package(
             )
             return {"dry_run": True, "payload": payload}
 
-        response = await client.post(
-            f"/integration/v1/sites/{site_id}/hotspot/packages", json_data=payload
-        )
+        response = await client.post(f"/ea/sites/{site_id}/rest/hotspotpackage", json_data=payload)
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -896,7 +889,7 @@ async def create_hotspot_package(
             details={"name": name, "duration_minutes": duration_minutes},
         )
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def get_hotspot_package(
@@ -922,9 +915,7 @@ async def get_hotspot_package(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(
-            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}"
-        )
+        response = await client.get(f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}")
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -932,7 +923,7 @@ async def get_hotspot_package(
         if not data:
             return {}
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def update_hotspot_package(
@@ -941,31 +932,24 @@ async def update_hotspot_package(
     settings: Settings,
     name: str | None = None,
     duration_minutes: int | None = None,
-    download_limit_kbps: int | None = None,
-    upload_limit_kbps: int | None = None,
-    download_quota_mb: int | None = None,
-    upload_quota_mb: int | None = None,
     price: float | None = None,
     currency: str | None = None,
-    enabled: bool | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
     """Update an existing hotspot package.
+
+    Same field surface as :func:`create_hotspot_package`; see there for why
+    the bandwidth/quota/enabled parameters are gone and how duration rounds.
 
     Args:
         site_id: Site identifier
         package_id: Hotspot package ID
         settings: Application settings
         name: Package name
-        duration_minutes: Duration in minutes
-        download_limit_kbps: Download speed limit in kbps
-        upload_limit_kbps: Upload speed limit in kbps
-        download_quota_mb: Download quota in MB
-        upload_quota_mb: Upload quota in MB
-        price: Package price
+        duration_minutes: Duration in minutes (stored as whole hours)
+        price: Package price (``amount``)
         currency: Currency code
-        enabled: Package enabled status
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
@@ -979,21 +963,11 @@ async def update_hotspot_package(
     if name is not None:
         payload["name"] = name
     if duration_minutes is not None:
-        payload["duration_minutes"] = duration_minutes
-    if download_limit_kbps is not None:
-        payload["download_limit_kbps"] = download_limit_kbps
-    if upload_limit_kbps is not None:
-        payload["upload_limit_kbps"] = upload_limit_kbps
-    if download_quota_mb is not None:
-        payload["download_quota_mb"] = download_quota_mb
-    if upload_quota_mb is not None:
-        payload["upload_quota_mb"] = upload_quota_mb
+        payload["hours"] = max(1, -(-duration_minutes // 60))
     if price is not None:
-        payload["price"] = price
+        payload["amount"] = price
     if currency is not None:
         payload["currency"] = currency
-    if enabled is not None:
-        payload["enabled"] = enabled
 
     if not payload and not dry_run:
         raise ValueError("At least one field must be provided to update.")
@@ -1015,7 +989,7 @@ async def update_hotspot_package(
             return {"dry_run": True, "package_id": package_id, "payload": payload}
 
         response = await client.put(
-            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}", json_data=payload
+            f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}", json_data=payload
         )
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
@@ -1030,7 +1004,7 @@ async def update_hotspot_package(
             details=payload,
         )
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def delete_hotspot_package(
@@ -1068,7 +1042,7 @@ async def delete_hotspot_package(
             )
             return {"dry_run": True, "package_id": package_id}
 
-        await client.delete(f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}")
+        await client.delete(f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}")
 
         # Audit the action
         await audit_action(

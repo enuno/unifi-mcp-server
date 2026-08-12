@@ -564,32 +564,25 @@ async def test_create_hotspot_package_success(mock_settings):
             name="2 Hour Package",
             duration_minutes=120,
             settings=mock_settings,
-            download_limit_kbps=10000,
-            upload_limit_kbps=2000,
             price=4.99,
             confirm=True,
         )
 
-        assert result["id"] == "package-new"
+        assert result["_id"] == "package-new"
         assert result["name"] == "2 Hour Package"
-        assert result["price"] == 4.99
-        mock_client.post.assert_called_once()
+        payload = mock_client.post.call_args[1]["json_data"]
+        assert payload == {
+            "name": "2 Hour Package",
+            "hours": 2,
+            "amount": 4.99,
+            "currency": "USD",
+        }
 
 
 @pytest.mark.asyncio
-async def test_create_hotspot_package_with_quotas(mock_settings):
-    """Test creating hotspot package with data quotas."""
-    mock_response = {
-        "data": {
-            "_id": "package-quota",
-            "name": "Limited Data Package",
-            "duration_minutes": 1440,
-            "download_quota_mb": 1024,
-            "upload_quota_mb": 256,
-            "enabled": True,
-            "site_id": "default",
-        }
-    }
+async def test_create_hotspot_package_rounds_duration_up_to_hours(mock_settings):
+    """The classic surface stores whole hours; partial hours round up."""
+    mock_response = {"data": {"_id": "package-rounded", "name": "90 minutes", "hours": 2}}
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -602,16 +595,14 @@ async def test_create_hotspot_package_with_quotas(mock_settings):
 
         result = await create_hotspot_package(
             site_id="default",
-            name="Limited Data Package",
-            duration_minutes=1440,
+            name="90 minutes",
+            duration_minutes=90,
             settings=mock_settings,
-            download_quota_mb=1024,
-            upload_quota_mb=256,
             confirm=True,
         )
 
-        assert result["download_quota_mb"] == 1024
-        assert result["upload_quota_mb"] == 256
+        assert mock_client.post.call_args[1]["json_data"]["hours"] == 2
+        assert result["hours"] == 2
 
 
 @pytest.mark.asyncio
@@ -1316,22 +1307,18 @@ async def test_create_hotspot_package_dry_run(mock_settings):
             name="Test Package",
             duration_minutes=60,
             settings=mock_settings,
-            download_limit_kbps=5000,
-            upload_limit_kbps=1000,
-            download_quota_mb=1024,
-            upload_quota_mb=256,
             price=4.99,
             confirm=True,
             dry_run=True,
         )
 
         assert result["dry_run"] is True
-        assert result["payload"]["name"] == "Test Package"
-        assert result["payload"]["download_limit_kbps"] == 5000
-        assert result["payload"]["upload_limit_kbps"] == 1000
-        assert result["payload"]["download_quota_mb"] == 1024
-        assert result["payload"]["upload_quota_mb"] == 256
-        assert result["payload"]["price"] == 4.99
+        assert result["payload"] == {
+            "name": "Test Package",
+            "hours": 1,
+            "amount": 4.99,
+            "currency": "USD",
+        }
 
 
 @pytest.mark.asyncio
@@ -1727,9 +1714,7 @@ async def test_get_hotspot_package_success(mock_settings):
 
         assert result["name"] == "1 Hour"
         assert result["duration_minutes"] == 60
-        mock_client.get.assert_called_once_with(
-            "/integration/v1/sites/default/hotspot/packages/package-1"
-        )
+        mock_client.get.assert_called_once_with("/ea/sites/default/rest/hotspotpackage/package-1")
 
 
 @pytest.mark.asyncio
@@ -1802,21 +1787,9 @@ async def test_update_hotspot_package_name_only(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_update_hotspot_package_bandwidth_limits(mock_settings):
-    """Test update hotspot package with bandwidth limits."""
-    mock_response = {
-        "data": [
-            {
-                "_id": "package-1",
-                "name": "Limited",
-                "duration_minutes": 60,
-                "download_limit_kbps": 1024,
-                "upload_limit_kbps": 512,
-                "enabled": True,
-                "site_id": "default",
-            }
-        ]
-    }
+async def test_update_hotspot_package_price_and_duration(mock_settings):
+    """Updates map to the classic amount/hours fields."""
+    mock_response = {"data": [{"_id": "package-1", "name": "Limited", "hours": 2, "amount": 9.99}]}
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -1831,14 +1804,14 @@ async def test_update_hotspot_package_bandwidth_limits(mock_settings):
             site_id="default",
             package_id="package-1",
             settings=mock_settings,
-            download_limit_kbps=1024,
-            upload_limit_kbps=512,
+            duration_minutes=120,
+            price=9.99,
             confirm=True,
         )
 
-        assert result["download_limit_kbps"] == 1024
+        assert result["amount"] == 9.99
         call_kwargs = mock_client.put.call_args[1]["json_data"]
-        assert call_kwargs == {"download_limit_kbps": 1024, "upload_limit_kbps": 512}
+        assert call_kwargs == {"hours": 2, "amount": 9.99}
 
 
 @pytest.mark.asyncio
@@ -1878,7 +1851,7 @@ async def test_update_hotspot_package_dry_run(mock_settings):
         assert result["dry_run"] is True
         assert result["package_id"] == "package-1"
         assert result["payload"]["name"] == "Preview Name"
-        assert result["payload"]["duration_minutes"] == 30
+        assert result["payload"]["hours"] == 1
         mock_client.put.assert_not_called()
 
 
@@ -1896,21 +1869,15 @@ async def test_update_hotspot_package_no_fields_raises(mock_settings):
 
 @pytest.mark.asyncio
 async def test_update_hotspot_package_all_fields(mock_settings):
-    """Test update hotspot package with all optional fields."""
+    """Test update hotspot package with every supported field."""
     mock_response = {
         "data": [
             {
                 "_id": "package-1",
                 "name": "Full Package",
-                "duration_minutes": 120,
-                "download_limit_kbps": 2048,
-                "upload_limit_kbps": 1024,
-                "download_quota_mb": 500,
-                "upload_quota_mb": 200,
-                "price": 4.99,
+                "hours": 2,
+                "amount": 4.99,
                 "currency": "EUR",
-                "enabled": False,
-                "site_id": "default",
             }
         ]
     }
@@ -1930,25 +1897,19 @@ async def test_update_hotspot_package_all_fields(mock_settings):
             settings=mock_settings,
             name="Full Package",
             duration_minutes=120,
-            download_limit_kbps=2048,
-            upload_limit_kbps=1024,
-            download_quota_mb=500,
-            upload_quota_mb=200,
             price=4.99,
             currency="EUR",
-            enabled=False,
             confirm=True,
         )
 
         call_kwargs = mock_client.put.call_args[1]["json_data"]
-        assert call_kwargs["name"] == "Full Package"
-        assert call_kwargs["duration_minutes"] == 120
-        assert call_kwargs["download_quota_mb"] == 500
-        assert call_kwargs["upload_quota_mb"] == 200
-        assert call_kwargs["price"] == 4.99
-        assert call_kwargs["currency"] == "EUR"
-        assert call_kwargs["enabled"] is False
-        assert result["download_limit_kbps"] == 2048
+        assert call_kwargs == {
+            "name": "Full Package",
+            "hours": 2,
+            "amount": 4.99,
+            "currency": "EUR",
+        }
+        assert result["amount"] == 4.99
 
 
 @pytest.mark.asyncio

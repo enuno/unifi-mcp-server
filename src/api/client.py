@@ -645,8 +645,8 @@ class UniFiClient:
             List of backup metadata dictionaries
 
         Note:
-            For local API, use: /proxy/network/api/backup/list-backups
-            For cloud API, endpoint may differ
+            For local API: POST /proxy/network/api/s/{site}/cmd/backup
+            with body {"cmd": "list-backups"}
         """
         site_id = await self.resolve_site_id(site_id)
 
@@ -828,7 +828,7 @@ class UniFiClient:
         enabled: bool = True,
         retention_days: int = 30,
         max_backups: int = 10,
-        day_of_week: str | None = None,
+        day_of_week: str | int | None = None,
         day_of_month: int | None = None,
         cloud_backup_enabled: bool = False,
     ) -> dict[str, Any]:
@@ -842,7 +842,9 @@ class UniFiClient:
             enabled: Whether the schedule is active
             retention_days: Number of days to keep backups
             max_backups: Maximum number of backups to retain
-            day_of_week: Day of week for weekly schedules (e.g. "monday")
+            day_of_week: Day of week for weekly schedules; a day name
+                ("monday") or the tool layer's integer form (0=Monday
+                through 6=Sunday)
             day_of_month: Day of month for monthly schedules (1-28)
             cloud_backup_enabled: Whether to also push backups to cloud storage
 
@@ -850,8 +852,29 @@ class UniFiClient:
             Schedule configuration response
 
         Note:
-            For local API: PUT /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: PUT
+            /proxy/network/api/s/{site}/set/setting/auto_backup/{settings_id}
         """
+        # Translate the weekday into a cron day NAME before any network
+        # round-trip. The tool layer documents integers as
+        # 0=Monday..6=Sunday, which is not cron's numbering (cron counts
+        # 0=Sunday) -- and Monday's 0 is falsy, so a bare f-string default
+        # would silently turn Monday into the fallback. Names sidestep both
+        # traps.
+        cron_day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        if day_of_week is None:
+            cron_dow = "sun"
+        elif isinstance(day_of_week, int):
+            if not 0 <= day_of_week <= 6:
+                raise APIError(
+                    f"day_of_week must be 0 (Monday) through 6 (Sunday), got {day_of_week}"
+                )
+            cron_dow = cron_day_names[day_of_week]
+        else:
+            cron_dow = str(day_of_week).strip().lower()[:3]
+            if cron_dow not in cron_day_names:
+                raise APIError(f"day_of_week must be a weekday name, got {day_of_week!r}")
+
         site_id = await self.resolve_site_id(site_id)
 
         # The schedule lives in the auto_backup settings section; the
@@ -874,7 +897,7 @@ class UniFiClient:
         hour, _, minute = time_of_day.partition(":")
         cron_map = {
             "daily": f"{minute or 0} {hour or 0} * * *",
-            "weekly": f"{minute or 0} {hour or 0} * * {day_of_week or 'sun'}",
+            "weekly": f"{minute or 0} {hour or 0} * * {cron_dow}",
             "monthly": f"{minute or 0} {hour or 0} {day_of_month or 1} * *",
         }
         payload: dict[str, Any] = {
@@ -905,7 +928,8 @@ class UniFiClient:
             Backup schedule configuration, or empty dict if none is configured
 
         Note:
-            For local API: GET /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: GET
+            /proxy/network/api/s/{site}/get/setting/auto_backup
         """
         site_id = await self.resolve_site_id(site_id)
 
@@ -921,8 +945,17 @@ class UniFiClient:
 
         try:
             response = await self.get(endpoint)
-        except APIError:
-            return {}
+        except APIError as exc:
+            # Only the controller's "no such setting" answers mean absence;
+            # anything else (500s, validation failures) is a real error the
+            # caller must see, not a console-level-backups condition.
+            message = str(exc)
+            if any(
+                marker in message
+                for marker in ("api.err.Invalid", "api.err.NotFound", "api.err.NoSuchObject")
+            ):
+                return {}
+            raise
 
         items = response if isinstance(response, list) else response.get("data", [])
         if isinstance(items, list):

@@ -1,6 +1,0 @@
-sandbox_mode = "workspace-write"
-[mcp_servers.linear-server]
-url = "https://mcp.linear.app/mcp"
-
-[sandbox_workspace_write]
-network_access = true

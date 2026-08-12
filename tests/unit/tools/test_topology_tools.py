@@ -328,7 +328,15 @@ class TestGetPortMappings:
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
             mock_instance.settings = mock_settings
             mock_instance.logger = MagicMock()
-            mock_instance.get = AsyncMock(side_effect=[[], clients, [], legacy_clients])
+
+            def dispatch(url):
+                if "/integration/" in url and "/clients" in url:
+                    return clients
+                if url.endswith("/sta"):
+                    return legacy_clients
+                return []
+
+            mock_instance.get = AsyncMock(side_effect=dispatch)
 
             result = await get_port_mappings("default", "sw1", mock_settings)
 
@@ -823,3 +831,88 @@ class TestLegacyPortDetail:
         assert node["uplink_port"] is None
         # Falls back to the model when the legacy type code is unavailable.
         assert node["type_detail"] == node["model"]
+
+    @pytest.mark.asyncio
+    async def test_graph_survives_legacy_auth_refusal(self, mock_settings):
+        """401/403 on the legacy routes must degrade like any other refusal.
+
+        AuthenticationError is not an APIError subclass, so it needs its own
+        entry in the best-effort catch.
+        """
+        from src.tools.topology import get_network_topology
+        from src.utils.exceptions import AuthenticationError
+
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"}
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(
+                side_effect=[
+                    devices,
+                    [],
+                    {"data": devices[0]},
+                    AuthenticationError("legacy routes need a session"),
+                    AuthenticationError("legacy routes need a session"),
+                ]
+            )
+            result = await get_network_topology("default", mock_settings)
+
+        assert result["total_devices"] == 1
+        node = next(n for n in result["nodes"] if n["node_id"] == "sw1")
+        assert node["uplink_port"] is None
+
+    @pytest.mark.asyncio
+    async def test_half_duplex_link_is_reported_as_half(self, mock_settings):
+        """full_duplex=False is a half-duplex link, not missing detail."""
+        from src.tools.topology import get_network_topology
+
+        devices = [
+            {"id": "gw1", "name": "Gateway", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"},
+            {
+                "id": "sw1",
+                "name": "Switch",
+                "macAddress": "AA:BB:CC:00:00:02",
+                "state": "ONLINE",
+                "uplink": {"deviceId": "gw1"},
+            },
+        ]
+        legacy_devices = [
+            {
+                "mac": "aa:bb:cc:00:00:02",
+                "uplink": {
+                    "port_idx": 2,
+                    "uplink_remote_port": 7,
+                    "speed": 100,
+                    "full_duplex": False,
+                },
+            }
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+
+            def dispatch(url):
+                if "/devices/" in url:
+                    return {"data": next(d for d in devices if url.endswith(d["id"]))}
+                if "/integration/" in url and "/devices" in url:
+                    return devices
+                if "/ea/" in url and url.endswith("/devices"):
+                    return legacy_devices
+                return []
+
+            mock_instance.get = AsyncMock(side_effect=dispatch)
+            result = await get_network_topology("default", mock_settings)
+
+        conn = next(c for c in result["connections"] if c["source_node_id"] == "sw1")
+        assert conn["duplex"] == "half"
+        assert conn["speed_mbps"] == 100

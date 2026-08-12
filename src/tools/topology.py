@@ -71,7 +71,10 @@ async def _fetch_legacy_stats(
     async def by_mac(endpoint: str) -> dict[str, dict[str, Any]]:
         try:
             response = await client.get(endpoint)
-        except (APIError, NetworkError) as exc:
+        except (APIError, AuthenticationError, NetworkError) as exc:
+            # AuthenticationError is not an APIError subclass, and a
+            # controller may answer these legacy routes with 401/403 while
+            # the Integration API works fine -- that must degrade too.
             client.logger.debug(f"No legacy detail from {endpoint}: {exc}")
             return {}
         rows = response if isinstance(response, list) else response.get("data", [])
@@ -312,7 +315,12 @@ async def get_network_topology(
                     source_port=legacy_uplink.get("port_idx"),
                     target_port=legacy_uplink.get("uplink_remote_port"),
                     speed_mbps=legacy_uplink.get("speed"),
-                    duplex="full" if legacy_uplink.get("full_duplex") else None,
+                    # An explicit False is a half-duplex link, not unknown.
+                    duplex=(
+                        None
+                        if legacy_uplink.get("full_duplex") is None
+                        else ("full" if legacy_uplink.get("full_duplex") else "half")
+                    ),
                     is_uplink=True,
                     status="up" if is_online else "down",
                 )

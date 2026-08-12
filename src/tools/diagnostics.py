@@ -5,7 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.diagnostics import NetworkReference, SpeedTestResult
-from ..utils import get_logger, sanitize_log_message, validate_site_id
+from ..utils import get_logger, sanitize_log_message, validate_mac_address, validate_site_id
 
 
 async def get_network_references(
@@ -181,6 +181,10 @@ async def get_spectrum_scan(
         Dictionary with per-AP scan state and radio tables
     """
     site_id = validate_site_id(site_id)
+    if ap_mac is not None:
+        # Fail fast with a clear ValidationError rather than interpolating a
+        # malformed value into the request path.
+        ap_mac = validate_mac_address(ap_mac)
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
@@ -228,12 +232,14 @@ async def list_spectrum_interference(
                 continue
             for row in radio_scan.get("spectrum_table", []) or []:
                 if isinstance(row, dict):
+                    # Annotations come last so a controller-provided key of
+                    # the same name can never overwrite them.
                     entries.append(
                         {
+                            **row,
                             "ap_mac": ap.get("mac"),
                             "radio": radio_scan.get("radio"),
                             "radio_name": radio_scan.get("name"),
-                            **row,
                         }
                     )
 

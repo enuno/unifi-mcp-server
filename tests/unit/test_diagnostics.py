@@ -318,6 +318,12 @@ class TestGetSpectrumScan:
         with pytest.raises(ValidationError):
             await get_spectrum_scan("", mock_settings)
 
+    @pytest.mark.asyncio
+    async def test_get_spectrum_scan_rejects_malformed_mac(self, mock_settings):
+        """A malformed ap_mac fails fast instead of entering the path."""
+        with pytest.raises(ValidationError):
+            await get_spectrum_scan("site-1", mock_settings, ap_mac="not-a-mac")
+
 
 class TestListSpectrumInterference:
     @pytest.mark.asyncio
@@ -343,6 +349,28 @@ class TestListSpectrumInterference:
             assert result[0]["radio"] == "ng"
             assert result[0]["channel"] == 6
             assert result[0]["utilization"] == 41
+
+    @pytest.mark.asyncio
+    async def test_annotations_win_over_row_keys(self, mock_settings):
+        """A row carrying its own ap_mac/radio keys cannot mask the annotations."""
+        devices = {"data": [TestGetSpectrumScan._ap_device()]}
+        scan = {
+            "data": [
+                TestGetSpectrumScan._scan_entry(
+                    table=[{"channel": 11, "ap_mac": "00:00:5e:00:53:99", "radio": "bogus"}]
+                )
+            ]
+        }
+        mock_client = create_mock_client([devices, scan])
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = mock_client
+
+            result = await list_spectrum_interference("site-1", mock_settings)
+
+            assert result[0]["ap_mac"] == "00:00:5e:00:53:41"
+            assert result[0]["radio"] == "ng"
+            assert result[0]["channel"] == 11
 
     @pytest.mark.asyncio
     async def test_list_spectrum_interference_no_scans_run(self, mock_settings):

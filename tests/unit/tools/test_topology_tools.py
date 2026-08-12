@@ -697,7 +697,7 @@ def test_resolve_topology_node_unknown_raises():
     connected. "I do not know this device" is a different answer from "this
     device has no connections".
     """
-    with pytest.raises(ResourceNotFoundError):
+    with pytest.raises(ResourceNotFoundError, match="device"):
         topology_module._resolve_topology_node(
             TOPO_FIXTURE, "507f191e810c19729de860ea"  # pragma: allowlist secret
         )

@@ -336,7 +336,9 @@ def _resolve_topology_node(topology: dict[str, Any], device_id: str) -> str:
             if value and str(value).strip().lower() == wanted:
                 return str(node.get("node_id"))
 
-    raise ResourceNotFoundError("topology_node", device_id)
+    # Reported as "device": the public tools take a device_id, and the
+    # rest of the codebase raises device-not-found in those terms.
+    raise ResourceNotFoundError("device", device_id)
 
 
 async def get_device_connections(

@@ -650,15 +650,19 @@ class UniFiClient:
         """
         site_id = await self.resolve_site_id(site_id)
 
-        # For local API
+        # Backups are listed with the backup command, scoped to a site. The
+        # previous site-less GET /api/backup/list-backups had no site context,
+        # so the controller rejected it with api.err.NoSiteContext -- carried
+        # on an HTTP 401, which this client then reported as an
+        # authentication failure. Verified live on Network 10.5.67.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/backup/list-backups?site={site_name}"
+            endpoint = f"/proxy/network/api/s/{site_name}/cmd/backup"
         else:
             # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups"
+            endpoint = f"/ea/sites/{site_id}/cmd/backup"
 
-        response = await self.get(endpoint)
+        response = await self.post(endpoint, json_data={"cmd": "list-backups"})
 
         # Handle different response formats
         if isinstance(response, list):
@@ -850,25 +854,41 @@ class UniFiClient:
         """
         site_id = await self.resolve_site_id(site_id)
 
-        payload: dict[str, Any] = {
-            "enabled": enabled,
-            "backup_type": backup_type,
-            "frequency": frequency,
-            "time_of_day": time_of_day,
-            "retention_days": retention_days,
-            "max_backups": max_backups,
-            "cloud_backup_enabled": cloud_backup_enabled,
-        }
-        if day_of_week is not None:
-            payload["day_of_week"] = day_of_week
-        if day_of_month is not None:
-            payload["day_of_month"] = day_of_month
+        # The schedule lives in the auto_backup settings section; the
+        # rest/backup/schedule resource this method previously PUT to does
+        # not exist on any controller (api.err.InvalidObject). UniFi OS
+        # consoles do not carry the section at all -- their scheduled
+        # backups are managed at the console level -- so absence is reported
+        # as such rather than written into.
+        current = await self.get_backup_schedule(site_id)
+        settings_id = current.get("_id")
+        if not settings_id:
+            raise APIError(
+                "This controller has no auto_backup settings section, so the "
+                "backup schedule cannot be configured through the Network "
+                "API. UniFi OS consoles manage scheduled backups at the "
+                "console level (existing backups are still visible via "
+                "list_backups)."
+            )
 
+        hour, _, minute = time_of_day.partition(":")
+        cron_map = {
+            "daily": f"{minute or 0} {hour or 0} * * *",
+            "weekly": f"{minute or 0} {hour or 0} * * {day_of_week or 'sun'}",
+            "monthly": f"{minute or 0} {hour or 0} {day_of_month or 1} * *",
+        }
+        payload: dict[str, Any] = {
+            "auto_backup_enabled": enabled,
+            "auto_backup_cron_expr": cron_map.get(frequency, cron_map["daily"]),
+            "auto_backup_max_files": max_backups,
+            "auto_backup_days": retention_days,
+        }
+
+        site_name = self._site_uuid_to_name.get(site_id, site_id)
         if self.settings.api_type == APIType.LOCAL:
-            site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/set/setting/auto_backup/{settings_id}"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/set/setting/auto_backup/{settings_id}"
 
         return await self.put(endpoint, json_data=payload)
 
@@ -889,14 +909,25 @@ class UniFiClient:
         """
         site_id = await self.resolve_site_id(site_id)
 
+        # The schedule is the auto_backup settings section. Absence (or the
+        # api.err.Invalid a UniFi OS console answers with) means scheduled
+        # backups are managed at the console level, not through this API --
+        # report that as an empty dict and let callers decide how loud to be.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/get/setting/auto_backup"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/get/setting/auto_backup"
 
-        response = await self.get(endpoint)
+        try:
+            response = await self.get(endpoint)
+        except APIError:
+            return {}
 
-        if isinstance(response, list):
-            return response[0] if response else {}
-        return response if isinstance(response, dict) else {}
+        items = response if isinstance(response, list) else response.get("data", [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict) and item.get("key") == "auto_backup":
+                    return item
+            return items[0] if items and isinstance(items[0], dict) else {}
+        return items if isinstance(items, dict) else {}

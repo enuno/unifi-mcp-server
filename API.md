@@ -1968,14 +1968,19 @@ Get Deep Packet Inspection statistics for a site.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `time_range` (string, optional): Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
+
+The counters are lifetime totals read from the `stat/sitedpi` report; the
+endpoint accepts no time window. `app` and `cat` are the controller's
+numeric catalog ids — translate them with `list_dpi_applications` and
+`list_dpi_categories`. A controller that runs traffic identification
+through the flow engine reports empty lists plus a `note` pointing at
+`get_top_flows` / `get_flow_analytics`.
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("get_dpi_statistics", {
-    "site_id": "default",
-    "time_range": "24h"
+    "site_id": "default"
 })
 ```
 
@@ -1984,30 +1989,21 @@ result = await mcp.call_tool("get_dpi_statistics", {
 ```json
 {
   "site_id": "default",
-  "time_range": "24h",
   "applications": [
     {
-      "application": "Netflix",
-      "category": "Streaming",
+      "app": 194,
+      "cat": 4,
       "tx_bytes": 5120000000,
       "rx_bytes": 10240000000,
       "total_bytes": 15360000000
-    },
-    {
-      "application": "YouTube",
-      "category": "Streaming",
-      "tx_bytes": 2560000000,
-      "rx_bytes": 7680000000,
-      "total_bytes": 10240000000
     }
   ],
   "categories": [
     {
-      "category": "Streaming",
+      "cat": 4,
       "tx_bytes": 7680000000,
       "rx_bytes": 17920000000,
-      "total_bytes": 25600000000,
-      "application_count": 2
+      "total_bytes": 25600000000
     }
   ],
   "total_applications": 15,
@@ -2023,15 +2019,13 @@ List top applications by bandwidth usage.
 
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Number of top applications to return (default: 10)
-- `time_range` (string, optional): Time range for statistics (default: 24h)
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("list_top_applications", {
     "site_id": "default",
-    "limit": 5,
-    "time_range": "7d"
+    "limit": 5
 })
 ```
 
@@ -2040,8 +2034,8 @@ result = await mcp.call_tool("list_top_applications", {
 ```json
 [
   {
-    "application": "Netflix",
-    "category": "Streaming",
+    "app": 194,
+    "cat": 4,
     "tx_bytes": 5120000000,
     "rx_bytes": 10240000000,
     "total_bytes": 15360000000

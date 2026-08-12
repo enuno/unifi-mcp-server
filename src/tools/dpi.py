@@ -16,108 +16,90 @@ from ..utils import (
 async def get_dpi_statistics(
     site_id: str,
     settings: Settings,
-    time_range: str = "24h",
 ) -> dict[str, Any]:
-    """Get Deep Packet Inspection statistics.
+    """Get site-wide Deep Packet Inspection statistics.
+
+    Reads the ``stat/sitedpi`` report (``by_app`` and ``by_cat``), the
+    route that actually carries site DPI counters. The previous
+    ``stat/dpi`` path answers with nothing on current controllers, so the
+    tool always reported zero applications. The old ``time_range``
+    parameter is gone: the counters are lifetime totals, and no variant of
+    this endpoint accepts a window — the parameter changed nothing.
+
+    On current releases traffic identification is exposed through the
+    traffic-flow engine; a controller whose classic DPI counters are off
+    reports empty lists here, and the ``note`` field says where to look
+    instead.
 
     Args:
         site_id: Site identifier
         settings: Application settings
-        time_range: Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d)
 
     Returns:
-        DPI statistics dictionary
+        DPI statistics dictionary with per-application and per-category
+        byte counters (``app``/``cat`` are numeric DPI catalog ids —
+        translate with list_dpi_applications / list_dpi_categories)
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
-    # Validate time range
-    valid_ranges = ["1h", "6h", "12h", "24h", "7d", "30d"]
-    if time_range not in valid_ranges:
-        raise ValueError(f"Invalid time range '{time_range}'. Must be one of: {valid_ranges}")
-
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        # Get DPI statistics
-        response = await client.get(f"/ea/sites/{site_id}/stat/dpi")
-        # Handle both list and dict responses
-        dpi_data = response if isinstance(response, list) else response.get("data", [])
-
-        # Aggregate by application/category
-        app_stats = {}
-        category_stats = {}
-
-        for entry in dpi_data:
-            app = entry.get("app")
-            cat = entry.get("cat")
-            tx_bytes = entry.get("tx_bytes", 0)
-            rx_bytes = entry.get("rx_bytes", 0)
-            total_bytes = tx_bytes + rx_bytes
-
-            # Aggregate by application
-            if app:
-                if app not in app_stats:
-                    app_stats[app] = {
-                        "application": app,
-                        "category": cat,
-                        "tx_bytes": 0,
-                        "rx_bytes": 0,
-                        "total_bytes": 0,
-                    }
-                app_stats[app]["tx_bytes"] += tx_bytes
-                app_stats[app]["rx_bytes"] += rx_bytes
-                app_stats[app]["total_bytes"] += total_bytes
-
-            # Aggregate by category
-            if cat:
-                if cat not in category_stats:
-                    category_stats[cat] = {
-                        "category": cat,
-                        "tx_bytes": 0,
-                        "rx_bytes": 0,
-                        "total_bytes": 0,
-                        "application_count": 0,
-                    }
-                category_stats[cat]["tx_bytes"] += tx_bytes
-                category_stats[cat]["rx_bytes"] += rx_bytes
-                category_stats[cat]["total_bytes"] += total_bytes
-                if app:
-                    category_stats[cat]["application_count"] += 1
-
-        # Convert to lists and sort by total bytes
-        applications = sorted(app_stats.values(), key=lambda x: x["total_bytes"], reverse=True)
-        categories = sorted(category_stats.values(), key=lambda x: x["total_bytes"], reverse=True)
-
-        logger.info(
-            sanitize_log_message(
-                f"Retrieved DPI statistics for site '{site_id}' " f"(time range: {time_range})"
+        async def section(kind: str) -> list[dict[str, Any]]:
+            response = await client.post(
+                f"/ea/sites/{site_id}/stat/sitedpi", json_data={"type": kind}
             )
-        )
+            data = response if isinstance(response, list) else response.get("data", [])
+            first = data[0] if isinstance(data, list) and data else {}
+            rows = first.get(kind, []) if isinstance(first, dict) else []
+            return [row for row in rows if isinstance(row, dict)]
 
-        return {
+        def totalled(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            out = []
+            for row in rows:
+                tx = row.get("tx_bytes", 0) or 0
+                rx = row.get("rx_bytes", 0) or 0
+                out.append({**row, "total_bytes": tx + rx})
+            out.sort(key=lambda r: r["total_bytes"], reverse=True)
+            return out
+
+        applications = totalled(await section("by_app"))
+        categories = totalled(await section("by_cat"))
+
+        result: dict[str, Any] = {
             "site_id": site_id,
-            "time_range": time_range,
             "applications": applications,
             "categories": categories,
             "total_applications": len(applications),
             "total_categories": len(categories),
         }
+        if not applications and not categories:
+            result["note"] = (
+                "This controller reports no site DPI counters. Current "
+                "releases expose traffic identification through the "
+                "traffic-flow tools instead (get_top_flows, "
+                "get_flow_analytics)."
+            )
+
+        logger.info(sanitize_log_message(f"Retrieved DPI statistics for site '{site_id}'"))
+        return result
 
 
 async def list_top_applications(
     site_id: str,
     settings: Settings,
     limit: int = 10,
-    time_range: str = "24h",
 ) -> list[dict[str, Any]]:
     """List top applications by bandwidth usage.
+
+    See :func:`get_dpi_statistics` for the data source and for why the
+    old ``time_range`` parameter is gone.
 
     Args:
         site_id: Site identifier
         settings: Application settings
         limit: Number of top applications to return
-        time_range: Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d)
 
     Returns:
         List of top application dictionaries sorted by bandwidth
@@ -125,17 +107,12 @@ async def list_top_applications(
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
-    # Get full DPI statistics
-    dpi_stats = await get_dpi_statistics(site_id, settings, time_range)
+    dpi_stats = await get_dpi_statistics(site_id, settings)
 
-    # Get top N applications
     top_apps: list[dict[str, Any]] = dpi_stats["applications"][:limit]
 
     logger.info(
-        sanitize_log_message(
-            f"Retrieved top {len(top_apps)} applications for site '{site_id}' "
-            f"(time range: {time_range}"
-        )
+        sanitize_log_message(f"Retrieved top {len(top_apps)} applications for site '{site_id}'")
     )
 
     return top_apps

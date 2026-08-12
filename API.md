@@ -2627,6 +2627,13 @@ topology = await mcp.call_tool("get_network_topology", {
 
 Retrieve connection details for a specific device or all devices.
 
+Both `get_device_connections` and `get_port_mappings` accept a topology
+node id, a device MAC, or a device name as `device_id`. An identifier
+that matches none of them raises `ResourceNotFoundError` — distinct
+from a known device with no connections, which returns an empty
+result. `get_port_mappings` reports the resolved node id as
+`device_id` and echoes the caller's identifier as `requested_id`.
+
 **Example:**
 
 ```python

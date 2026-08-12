@@ -13,6 +13,7 @@ from src.utils.exceptions import (
     AuthenticationError,
     NetworkError,
     RateLimitError,
+    ResourceNotFoundError,
     ValidationError,
 )
 
@@ -312,6 +313,32 @@ async def get_network_topology(
         return diagram.model_dump()
 
 
+def _resolve_topology_node(topology: dict[str, Any], device_id: str) -> str:
+    """Map a caller's device identifier onto the node_id the topology uses.
+
+    The topology is built from the Integration API, whose device ids are UUIDs
+    like ``123e4567-...``. Every other device tool in this server speaks the
+    legacy controller ``_id`` (``507f191e...``) or a MAC, and passing one of
+    those here matched nothing -- so the port/connection lookups returned an
+    empty result that was indistinguishable from a device genuinely having no
+    connections. A switch with several hosts on it reported none, silently.
+
+    Accepts the node_id, the MAC, or the device name. Anything unrecognised
+    raises rather than returning empty, because "I do not know this device"
+    and "this device has no connections" are different answers.
+    """
+    wanted = device_id.strip().lower()
+    nodes = cast(list[dict[str, Any]], topology.get("nodes", []))
+
+    for field in ("node_id", "mac", "name"):
+        for node in nodes:
+            value = node.get(field)
+            if value and str(value).strip().lower() == wanted:
+                return str(node.get("node_id"))
+
+    raise ResourceNotFoundError("topology_node", device_id)
+
+
 async def get_device_connections(
     site_id: str,
     device_id: str | None,
@@ -341,11 +368,13 @@ async def get_device_connections(
     connections = cast(list[dict[str, Any]], topology.get("connections", []))
 
     if device_id:
-        # Filter connections for specific device
+        # Resolve first: the caller may hold a MAC or a legacy id rather than
+        # the topology's own node_id (see _resolve_topology_node).
+        node_id = _resolve_topology_node(topology, device_id)
         connections = [
             conn
             for conn in connections
-            if conn.get("source_node_id") == device_id or conn.get("target_node_id") == device_id
+            if conn.get("source_node_id") == node_id or conn.get("target_node_id") == node_id
         ]
 
     return connections
@@ -379,30 +408,35 @@ async def get_port_mappings(
 
     connections = topology.get("connections", [])
 
+    # Resolve first: a MAC or legacy controller id would otherwise match no
+    # node and yield an empty map, reading as "no connections" rather than
+    # "unknown device" (see _resolve_topology_node).
+    node_id = _resolve_topology_node(topology, device_id)
+
     # Build port mapping
     port_map = {}
 
     for conn in connections:
-        if conn.get("source_node_id") == device_id:
+        if conn.get("source_node_id") == node_id:
             port_num = conn.get("source_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("target_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
-        elif conn.get("target_node_id") == device_id:
+            peer_id = conn.get("target_node_id")
+        elif conn.get("target_node_id") == node_id:
             port_num = conn.get("target_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("source_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
+            peer_id = conn.get("source_node_id")
+        else:
+            continue
 
-    return {"device_id": device_id, "ports": port_map}
+        if port_num is not None:
+            port_map[port_num] = {
+                "connected_to": peer_id,
+                "connection_type": conn.get("connection_type"),
+                "speed_mbps": conn.get("speed_mbps"),
+                "status": conn.get("status"),
+            }
+
+    # Echo the resolved node_id, so a caller who passed a MAC can see which
+    # node answered rather than having to trust that it matched.
+    return {"device_id": node_id, "requested_id": device_id, "ports": port_map}
 
 
 async def export_topology(

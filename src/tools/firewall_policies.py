@@ -340,10 +340,9 @@ async def list_firewall_zones_v2(
         if not zones:
             raise APIError(
                 "The v2 firewall zone route returned no zones. Zone-Based "
-                "Firewall does not appear to be configured on this "
-                "controller; a ZBF-enabled site always reports its built-in "
-                "zones. Legacy firewall rules are available via "
-                "list_firewall_rules."
+                "Firewall does not appear to be configured on this site; a "
+                "ZBF-enabled site always reports its built-in zones. Legacy "
+                "firewall rules are available via list_firewall_rules."
             )
 
         return [

@@ -1607,8 +1607,12 @@ class TestListFirewallZonesV2:
                 mock_client.is_authenticated = True
                 mock_client.get.return_value = empty_response
 
-                with pytest.raises(APIError, match="Zone-Based Firewall"):
+                with pytest.raises(APIError, match="Zone-Based Firewall") as excinfo:
                     await list_firewall_zones_v2("default", local_settings)
+                # The message must keep pointing users at the legacy tools
+                # and speak in site scope, not controller scope.
+                assert "list_firewall_rules" in str(excinfo.value)
+                assert "site" in str(excinfo.value)
 
 
 class TestCreateFirewallPolicyConfirmCoercion:

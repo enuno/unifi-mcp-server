@@ -56,7 +56,12 @@ PLAYBOOK = PromptPlaybook(
             order=4,
             action="Generate or review guest vouchers for the access window.",
             tool="create_vouchers",
-            params={"site_id": "${site_id}", "count": 10, "duration_minutes": 1440},
+            params={
+                "site_id": "${site_id}",
+                "count": 10,
+                "name": "Guest access",
+                "time_limit_minutes": 1440,
+            },
             validation="Check the voucher count, validity window, and any reuse limits before handing them out.",
             fallback="If vouchers cannot be created, fall back to a manual access workflow and note the controller limitation.",
         ),

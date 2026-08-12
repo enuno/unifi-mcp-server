@@ -491,28 +491,16 @@ async def test_configure_guest_portal_dry_run(mock_settings):
 
 @pytest.mark.asyncio
 async def test_list_hotspot_packages_success(mock_settings):
-    """Test listing hotspot packages."""
+    """Listing reads the classic surface and passes its rows through."""
     mock_response = {
         "data": [
-            {
-                "_id": "package-1",
-                "name": "1 Hour Basic",
-                "duration_minutes": 60,
-                "download_limit_kbps": 5000,
-                "upload_limit_kbps": 1000,
-                "enabled": True,
-                "site_id": "default",
-            },
+            {"_id": "package-1", "name": "1 Hour Basic", "hours": 1},
             {
                 "_id": "package-2",
                 "name": "1 Day Premium",
-                "duration_minutes": 1440,
-                "download_limit_kbps": 50000,
-                "upload_limit_kbps": 10000,
-                "price": 9.99,
+                "hours": 24,
+                "amount": 9.99,
                 "currency": "USD",
-                "enabled": True,
-                "site_id": "default",
             },
         ]
     }
@@ -528,9 +516,10 @@ async def test_list_hotspot_packages_success(mock_settings):
 
         result = await list_hotspot_packages("default", mock_settings)
 
+        assert "/rest/hotspotpackage" in mock_client.get.call_args[0][0]
         assert len(result) == 2
         assert result[0]["name"] == "1 Hour Basic"
-        assert result[1]["price"] == 9.99
+        assert result[1]["amount"] == 9.99
 
 
 @pytest.mark.asyncio
@@ -540,13 +529,9 @@ async def test_create_hotspot_package_success(mock_settings):
         "data": {
             "_id": "package-new",
             "name": "2 Hour Package",
-            "duration_minutes": 120,
-            "download_limit_kbps": 10000,
-            "upload_limit_kbps": 2000,
-            "price": 4.99,
+            "hours": 2,
+            "amount": 4.99,
             "currency": "USD",
-            "enabled": True,
-            "site_id": "default",
         }
     }
 
@@ -577,6 +562,52 @@ async def test_create_hotspot_package_success(mock_settings):
             "amount": 4.99,
             "currency": "USD",
         }
+
+
+@pytest.mark.asyncio
+async def test_create_hotspot_package_rejects_nonpositive_duration(mock_settings):
+    """duration_minutes < 1 must be rejected, not rounded up to a paid hour."""
+    from src.utils.exceptions import ValidationError
+
+    for bad in (0, -30):
+        with pytest.raises(ValidationError, match="duration_minutes"):
+            await create_hotspot_package(
+                site_id="default",
+                name="Broken",
+                duration_minutes=bad,
+                settings=mock_settings,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_rejects_currency_without_price(mock_settings):
+    """currency rides alongside amount; alone it changes nothing."""
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="currency"):
+        await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            currency="EUR",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_hotspot_package_rejects_nonpositive_duration(mock_settings):
+    """duration_minutes < 1 must be rejected on update too."""
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="duration_minutes"):
+        await update_hotspot_package(
+            site_id="default",
+            package_id="package-1",
+            settings=mock_settings,
+            duration_minutes=0,
+            confirm=True,
+        )
 
 
 @pytest.mark.asyncio
@@ -1685,17 +1716,7 @@ async def test_update_radius_account_no_fields_raises(mock_settings):
 @pytest.mark.asyncio
 async def test_get_hotspot_package_success(mock_settings):
     """Test successful retrieval of a single hotspot package."""
-    mock_response = {
-        "data": [
-            {
-                "_id": "package-1",
-                "name": "1 Hour",
-                "duration_minutes": 60,
-                "enabled": True,
-                "site_id": "default",
-            }
-        ]
-    }
+    mock_response = {"data": [{"_id": "package-1", "name": "1 Hour", "hours": 1}]}
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -1713,7 +1734,7 @@ async def test_get_hotspot_package_success(mock_settings):
         )
 
         assert result["name"] == "1 Hour"
-        assert result["duration_minutes"] == 60
+        assert result["hours"] == 1
         mock_client.get.assert_called_once_with("/ea/sites/default/rest/hotspotpackage/package-1")
 
 

@@ -5,7 +5,13 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models.radius import GuestPortalConfig, RADIUSAccount, RADIUSProfile
-from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
+from ..utils import (
+    ValidationError,
+    audit_action,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+)
 
 logger = get_logger(__name__)
 
@@ -848,6 +854,11 @@ async def create_hotspot_package(
     """
     validate_confirmation(confirm, "create hotspot package", dry_run)
 
+    if duration_minutes < 1:
+        # Without this, 0 or a negative value would silently round up to a
+        # 1-hour paid package instead of being rejected.
+        raise ValidationError(f"duration_minutes must be at least 1, got {duration_minutes}")
+
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Creating hotspot package '{name}' for site {site_id}"))
 
@@ -859,7 +870,7 @@ async def create_hotspot_package(
         # on rejection). Duration is hours-granular on this surface.
         payload: dict[str, Any] = {
             "name": name,
-            "hours": max(1, -(-duration_minutes // 60)),
+            "hours": -(-duration_minutes // 60),
         }
 
         if price is not None:
@@ -958,12 +969,19 @@ async def update_hotspot_package(
     """
     validate_confirmation(confirm, "update hotspot package", dry_run)
 
+    if duration_minutes is not None and duration_minutes < 1:
+        raise ValidationError(f"duration_minutes must be at least 1, got {duration_minutes}")
+    if currency is not None and price is None:
+        # The classic validator reads currency only alongside amount; a
+        # currency-only update would send a request that changes nothing.
+        raise ValidationError("currency can only be set together with price")
+
     payload: dict[str, Any] = {}
 
     if name is not None:
         payload["name"] = name
     if duration_minutes is not None:
-        payload["hours"] = max(1, -(-duration_minutes // 60))
+        payload["hours"] = -(-duration_minutes // 60)
     if price is not None:
         payload["amount"] = price
     if currency is not None:

@@ -35,6 +35,9 @@ def mock_settings():
     settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
+    settings.get_integration_path = MagicMock(
+        side_effect=lambda e: f"/integration/v1/{e.lstrip('/')}"
+    )
     return settings
 
 
@@ -86,6 +89,55 @@ async def test_list_vouchers_success(mock_settings, sample_voucher):
     assert result[0]["id"] == VOUCHER_ID
     assert result[0]["code"] == 4861320975
     assert result[0]["time_limit_minutes"] == 1440
+
+
+@pytest.mark.asyncio
+async def test_list_vouchers_builds_path_per_api_mode(mock_settings, sample_voucher):
+    """Endpoints come from get_integration_path so every API mode works.
+
+    Cloud V1 serves the Integration surface under /v1/..., not
+    /integration/v1/..., so a hardcoded prefix would break that mode.
+    """
+    mock_settings.get_integration_path = MagicMock(side_effect=lambda e: f"/v1/{e.lstrip('/')}")
+    client = _make_client({"data": [sample_voucher]})
+
+    with patch.object(vouchers_module, "UniFiClient", return_value=client):
+        await list_vouchers("default", mock_settings)
+
+    assert client.get.call_args[0][0] == "/v1/sites/default/hotspot/vouchers"
+
+
+@pytest.mark.asyncio
+async def test_list_vouchers_authenticates_when_needed(mock_settings, sample_voucher):
+    """An unauthenticated client must authenticate before the call."""
+    client = _make_client({"data": [sample_voucher]})
+    client.is_authenticated = False
+
+    with patch.object(vouchers_module, "UniFiClient", return_value=client):
+        await list_vouchers("default", mock_settings)
+
+    client.authenticate.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_create_vouchers_rejects_out_of_bounds_limits(mock_settings):
+    """The documented parameter bounds fail fast instead of deferring to a 400."""
+    cases = [
+        {"time_limit_minutes": 1_000_001},
+        {"time_limit_minutes": 60, "authorized_guest_limit": 0},
+        {"time_limit_minutes": 60, "data_usage_limit_mb": 0},
+        {"time_limit_minutes": 60, "rx_rate_limit_kbps": 1},
+        {"time_limit_minutes": 60, "tx_rate_limit_kbps": 100_001},
+    ]
+    for kwargs in cases:
+        with pytest.raises(ValidationError):
+            await create_vouchers(
+                site_id="default",
+                name="Guest access",
+                settings=mock_settings,
+                confirm=True,
+                **kwargs,
+            )
 
 
 @pytest.mark.asyncio

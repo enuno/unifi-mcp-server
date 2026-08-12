@@ -90,12 +90,22 @@ async def get_client_statistics(
         for client_data in clients_data:
             if validate_mac_address(client_data.get("mac", "")) == client_mac:
                 # Extract statistics
+                # Wired clients report counters under the "wired-" keys;
+                # the plain keys are absent or zero for them.
                 stats = {
                     "mac": client_mac,
-                    "tx_bytes": client_data.get("tx_bytes", 0),
-                    "rx_bytes": client_data.get("rx_bytes", 0),
-                    "tx_packets": client_data.get("tx_packets", 0),
-                    "rx_packets": client_data.get("rx_packets", 0),
+                    "tx_bytes": client_data.get("tx_bytes")
+                    or client_data.get("wired-tx_bytes")
+                    or 0,
+                    "rx_bytes": client_data.get("rx_bytes")
+                    or client_data.get("wired-rx_bytes")
+                    or 0,
+                    "tx_packets": client_data.get("tx_packets")
+                    or client_data.get("wired-tx_packets")
+                    or 0,
+                    "rx_packets": client_data.get("rx_packets")
+                    or client_data.get("wired-rx_packets")
+                    or 0,
                     "tx_rate": client_data.get("tx_rate"),
                     "rx_rate": client_data.get("rx_rate"),
                     "signal": client_data.get("signal"),

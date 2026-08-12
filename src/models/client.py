@@ -1,6 +1,8 @@
 """Client data model."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class Client(BaseModel):
@@ -49,6 +51,22 @@ class Client(BaseModel):
     # VLAN
     vlan: int | None = Field(None, description="VLAN ID")
     network: str | None = Field(None, description="Network name")
+
+    @model_validator(mode="before")
+    @classmethod
+    def read_wired_counter_keys(cls, data: Any) -> Any:
+        """Fill the byte/packet counters from the ``wired-`` keys.
+
+        Wired clients report their counters as ``wired-tx_bytes``,
+        ``wired-rx_bytes``, ``wired-tx_packets`` and ``wired-rx_packets``;
+        the plain keys are absent or zero for them. Without this, every
+        wired client reports no traffic at all.
+        """
+        if isinstance(data, dict):
+            for field in ("tx_bytes", "rx_bytes", "tx_packets", "rx_packets"):
+                if not data.get(field) and data.get(f"wired-{field}") is not None:
+                    data = {**data, field: data[f"wired-{field}"]}
+        return data
 
     @field_validator("os_name", mode="before")
     @classmethod

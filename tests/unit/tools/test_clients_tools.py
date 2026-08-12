@@ -62,6 +62,71 @@ def make_client(
     }
 
 
+def make_wired_client(mac="00:00:5e:00:53:02", tx_bytes=5000000, rx_bytes=9000000):
+    """A wired client as the sta route reports it: counters under wired- keys."""
+    return {
+        "mac": mac,
+        "ip": "192.168.2.50",
+        "hostname": "wired-server",
+        "is_wired": True,
+        "wired-tx_bytes": tx_bytes,
+        "wired-rx_bytes": rx_bytes,
+        "wired-tx_packets": 4000,
+        "wired-rx_packets": 8000,
+        "uptime": 7200,
+    }
+
+
+class TestWiredClientCounters:
+    """Wired clients report counters ONLY under the wired- keys.
+
+    Regression: every wired client reported null/zero traffic because the
+    tools and the Client model read the plain tx_bytes/rx_bytes keys, which
+    the sta route omits for wired clients. Observed live: a hypervisor
+    moving gigabytes reported tx_bytes 0.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_client_statistics_reads_wired_keys(self, mock_settings):
+        mac = "00:00:5e:00:53:02"
+        response = {"data": [make_wired_client(mac=mac)]}
+
+        with patch("src.tools.clients.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await get_client_statistics("site-1", mac, mock_settings)
+
+            assert result["tx_bytes"] == 5000000
+            assert result["rx_bytes"] == 9000000
+            assert result["tx_packets"] == 4000
+            assert result["is_wired"] is True
+
+    @pytest.mark.asyncio
+    async def test_list_active_clients_reads_wired_keys(self, mock_settings):
+        response = {"data": [make_wired_client()]}
+
+        with patch("src.tools.clients.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await list_active_clients("site-1", mock_settings)
+
+            assert result[0]["tx_bytes"] == 5000000
+            assert result[0]["rx_bytes"] == 9000000
+
+    @pytest.mark.asyncio
+    async def test_wireless_counters_unaffected(self, mock_settings):
+        """A wireless client's plain keys keep winning."""
+        response = {"data": [make_client()]}
+
+        with patch("src.tools.clients.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await list_active_clients("site-1", mock_settings)
+
+            assert result[0]["tx_bytes"] == 1000000
+            assert result[0]["rx_bytes"] == 2000000
+
+
 class TestGetClientDetails:
     @pytest.mark.asyncio
     async def test_get_client_details_found_in_active(self, mock_settings):

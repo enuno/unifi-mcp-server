@@ -242,140 +242,118 @@ class TestGetSpeedTestHistory:
 
 
 class TestGetSpectrumScan:
-    @pytest.mark.asyncio
-    async def test_get_spectrum_scan_success(self, mock_settings):
-        """Test successful retrieval of spectrum scan."""
-        response = {
-            "data": [
-                {
-                    "device_id": "device-1",
-                    "device_name": "AP-LivingRoom",
-                    "frequency_band": "5",
-                    "channel": 36,
-                    "noise_floor_dbm": -95.0,
-                    "utilization_percent": 45.2,
-                    "timestamp": "2025-01-15T10:30:00Z",
-                    "scan_data": [{"freq": 5180, "noise": -92, "util": 40}],
-                }
-            ]
+    """Spectrum data is per AP: stat/spectrum-scan/{mac}.
+
+    Fixtures mirror the live shape on Network 10.5.67: per-AP entries with
+    a scans[] list per radio, each carrying a spectrum_table. The old
+    site-wide stat/spectrumscan path does not exist (404 on every call).
+    """
+
+    @staticmethod
+    def _ap_device(mac="00:00:5e:00:53:41"):
+        return {"mac": mac, "type": "uap", "name": "Test AP"}
+
+    @staticmethod
+    def _scan_entry(mac="00:00:5e:00:53:41", table=None):
+        return {
+            "mac": mac,
+            "spectrum_scanning": False,
+            "scans": [
+                {"name": "wifi0", "radio": "ng", "spectrum_table": table or []},
+                {"name": "wifi1", "radio": "na", "spectrum_table": []},
+            ],
         }
 
+    @pytest.mark.asyncio
+    async def test_get_spectrum_scan_enumerates_aps(self, mock_settings):
+        """Without ap_mac, each AP on the site is queried on its own route."""
+        devices = {"data": [self._ap_device(), {"mac": "00:00:5e:00:53:99", "type": "usw"}]}
+        scan = {"data": [self._scan_entry()]}
+
+        mock_client = create_mock_client([devices, scan])
+
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await get_spectrum_scan("site-1", mock_settings)
 
-            assert isinstance(result, dict)
-            assert result["device_id"] == "device-1"
-            assert result["device_name"] == "AP-LivingRoom"
-            assert result["frequency_band"] == "5"
-            assert result["channel"] == 36
+            urls = [c[0][0] for c in mock_client.get.call_args_list]
+            assert urls == [
+                "/ea/sites/site-1/devices",
+                "/ea/sites/site-1/stat/spectrum-scan/00:00:5e:00:53:41",
+            ]
+            assert len(result["aps"]) == 1
+            assert result["aps"][0]["mac"] == "00:00:5e:00:53:41"
+            assert result["aps"][0]["scans"][0]["radio"] == "ng"
 
     @pytest.mark.asyncio
-    async def test_get_spectrum_scan_list_response(self, mock_settings):
-        """Test spectrum scan with direct list response."""
-        response = [
-            {
-                "device_id": "device-1",
-                "device_name": "AP-LivingRoom",
-                "frequency_band": "2.4",
-                "channel": 6,
-                "noise_floor_dbm": -88.0,
-                "utilization_percent": 65.0,
-                "timestamp": "2025-01-15T10:30:00Z",
-            }
-        ]
+    async def test_get_spectrum_scan_explicit_ap(self, mock_settings):
+        """An explicit ap_mac skips device enumeration."""
+        scan = {"data": [self._scan_entry()]}
+        mock_client = create_mock_client([scan])
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
-            result = await get_spectrum_scan("site-1", mock_settings)
+            result = await get_spectrum_scan("site-1", mock_settings, ap_mac="00:00:5e:00:53:41")
 
-            assert result["device_id"] == "device-1"
-            assert result["frequency_band"] == "2.4"
+            urls = [c[0][0] for c in mock_client.get.call_args_list]
+            assert urls == ["/ea/sites/site-1/stat/spectrum-scan/00:00:5e:00:53:41"]
+            assert len(result["aps"]) == 1
 
     @pytest.mark.asyncio
-    async def test_get_spectrum_scan_empty(self, mock_settings):
-        """Test spectrum scan with empty response."""
-        response = {"data": []}
+    async def test_get_spectrum_scan_no_aps(self, mock_settings):
+        """A site with no APs reports an empty result, not an error."""
+        mock_client = create_mock_client([{"data": []}])
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await get_spectrum_scan("site-1", mock_settings)
 
-            assert result == {}
+            assert result["aps"] == []
 
     @pytest.mark.asyncio
     async def test_get_spectrum_scan_invalid_site_id(self, mock_settings):
-        """Test validation error for empty site_id."""
         with pytest.raises(ValidationError):
             await get_spectrum_scan("", mock_settings)
 
 
 class TestListSpectrumInterference:
     @pytest.mark.asyncio
-    async def test_list_spectrum_interference_success(self, mock_settings):
-        """Test successful retrieval of spectrum interference."""
-        response = {
+    async def test_list_spectrum_interference_flattens_tables(self, mock_settings):
+        """spectrum_table rows come back annotated with AP and radio."""
+        devices = {"data": [TestGetSpectrumScan._ap_device()]}
+        scan = {
             "data": [
-                {
-                    "device_id": "device-1",
-                    "device_name": "AP-LivingRoom",
-                    "frequency_band": "5",
-                    "scan_data": [
-                        {"channel": 36, "freq": 5180, "util": 80, "noise": -85},
-                        {"channel": 40, "freq": 5200, "util": 45, "noise": -92},
-                        {"channel": 44, "freq": 5220, "util": 90, "noise": -80},
-                    ],
-                }
+                TestGetSpectrumScan._scan_entry(
+                    table=[{"channel": 6, "utilization": 41, "interference": "none"}]
+                )
             ]
         }
+        mock_client = create_mock_client([devices, scan])
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await list_spectrum_interference("site-1", mock_settings)
 
-            assert isinstance(result, list)
-            assert len(result) == 3
-            assert result[0]["channel"] == 36
-            assert result[2]["channel"] == 44
+            assert len(result) == 1
+            assert result[0]["ap_mac"] == "00:00:5e:00:53:41"
+            assert result[0]["radio"] == "ng"
+            assert result[0]["channel"] == 6
+            assert result[0]["utilization"] == 41
 
     @pytest.mark.asyncio
-    async def test_list_spectrum_interference_empty(self, mock_settings):
-        """Test spectrum interference with empty scan data."""
-        response = {"data": []}
+    async def test_list_spectrum_interference_no_scans_run(self, mock_settings):
+        """APs that never ran an RF scan yield an empty list."""
+        devices = {"data": [TestGetSpectrumScan._ap_device()]}
+        scan = {"data": [TestGetSpectrumScan._scan_entry()]}
+        mock_client = create_mock_client([devices, scan])
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await list_spectrum_interference("site-1", mock_settings)
 
             assert result == []
-
-    @pytest.mark.asyncio
-    async def test_list_spectrum_interference_no_scan_data(self, mock_settings):
-        """Test spectrum interference with device but no scan_data field."""
-        response = {
-            "data": [
-                {
-                    "device_id": "device-1",
-                    "device_name": "AP-LivingRoom",
-                    "frequency_band": "5",
-                }
-            ]
-        }
-
-        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
-
-            result = await list_spectrum_interference("site-1", mock_settings)
-
-            assert result == []
-
-    @pytest.mark.asyncio
-    async def test_list_spectrum_interference_invalid_site_id(self, mock_settings):
-        """Test validation error for empty site_id."""
-        with pytest.raises(ValidationError):
-            await list_spectrum_interference("", mock_settings)

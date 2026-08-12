@@ -386,21 +386,34 @@ async def test_delete_radius_account_success(mock_settings):
 # =============================================================================
 # Guest Portal Tests
 # =============================================================================
+#
+# These tools read and write the legacy ``setting/guest_access`` section.
+# The fixtures mirror its real shape: a list under "data", auth="hotspot"
+# disambiguated by *_enabled flags, secrets in x_-prefixed fields.
+
+
+def _guest_access_section(**overrides):
+    section = {
+        "_id": "ga-settings-1",
+        "key": "guest_access",
+        "site_id": "site-1",
+        "portal_enabled": True,
+        "auth": "hotspot",
+        "password_enabled": False,
+        "voucher_enabled": True,
+        "radius_enabled": False,
+        "expire": 480,
+        "redirect_enabled": False,
+        "x_password": "test-placeholder",
+    }
+    section.update(overrides)
+    return section
 
 
 @pytest.mark.asyncio
 async def test_get_guest_portal_config_success(mock_settings):
-    """Test getting guest portal configuration."""
-    mock_response = {
-        "data": {
-            "site_id": "default",
-            "enabled": True,
-            "portal_title": "Guest WiFi",
-            "auth_method": "voucher",
-            "session_timeout": 480,
-            "redirect_enabled": False,
-        }
-    }
+    """Reads setting/guest_access and translates the section."""
+    mock_response = {"data": [_guest_access_section()]}
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -413,31 +426,48 @@ async def test_get_guest_portal_config_success(mock_settings):
 
         result = await get_guest_portal_config("default", mock_settings)
 
-        assert result["portal_title"] == "Guest WiFi"
+        mock_client.get.assert_called_once_with("/ea/sites/default/get/setting/guest_access")
+        assert result["portal_enabled"] is True
         assert result["auth_method"] == "voucher"
         assert result["session_timeout"] == 480
+        # Raw section is passed through for version-specific fields,
+        # but never with secrets in it.
+        assert result["raw"]["key"] == "guest_access"
+        assert "x_password" not in result["raw"]
 
 
 @pytest.mark.asyncio
-async def test_configure_guest_portal_success(mock_settings):
-    """Test configuring guest portal."""
-    mock_response = {
-        "data": {
-            "site_id": "default",
-            "enabled": True,
-            "portal_title": "Welcome!",
-            "auth_method": "password",
-            "session_timeout": 120,
-            "redirect_enabled": True,
-            "redirect_url": "https://example.com",
-        }
-    }
+async def test_get_guest_portal_config_missing_section(mock_settings):
+    """An empty data list must raise, not crash or fabricate defaults."""
+    from src.utils.exceptions import APIError
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
-        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.get = AsyncMock(return_value={"data": []})
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        # A bare AsyncMock() __aexit__ returns a truthy mock, which tells
+        # `async with` to SUPPRESS the exception under test.
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        with pytest.raises(APIError, match="guest_access"):
+            await get_guest_portal_config("default", mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_disable_portal(mock_settings):
+    """portal_enabled=False reaches the controller with the settings _id."""
+    current = _guest_access_section()
+    updated = _guest_access_section(portal_enabled=False)
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value={"data": [current]})
+        mock_client.put = AsyncMock(return_value={"data": [updated]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
@@ -445,27 +475,73 @@ async def test_configure_guest_portal_success(mock_settings):
         result = await configure_guest_portal(
             site_id="default",
             settings=mock_settings,
-            portal_title="Welcome!",
-            auth_method="password",
-            session_timeout=120,
-            redirect_enabled=True,
-            redirect_url="https://example.com",
+            portal_enabled=False,
             confirm=True,
         )
 
-        assert result["portal_title"] == "Welcome!"
+        mock_client.put.assert_called_once_with(
+            "/ea/sites/default/set/setting/guest_access/ga-settings-1",
+            json_data={"portal_enabled": False},
+        )
+        assert result["portal_enabled"] is False
+        assert result["skipped_fields"] == []
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_auth_method_clears_siblings(mock_settings):
+    """Choosing one hotspot method must clear the other method flags."""
+    current = _guest_access_section()
+    updated = _guest_access_section(password_enabled=True, voucher_enabled=False)
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = False
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value={"data": [current]})
+        mock_client.put = AsyncMock(return_value={"data": [updated]})
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock()
+        mock_client_class.return_value = mock_client
+
+        result = await configure_guest_portal(
+            site_id="default",
+            settings=mock_settings,
+            auth_method="password",
+            password="hunter2",
+            confirm=True,
+        )
+
+        payload = mock_client.put.call_args.kwargs["json_data"]
+        assert payload["auth"] == "hotspot"
+        assert payload["password_enabled"] is True
+        assert payload["voucher_enabled"] is False
+        assert payload["radius_enabled"] is False
+        assert payload["x_password"] == "hunter2"
         assert result["auth_method"] == "password"
-        assert result["redirect_url"] == "https://example.com"
-        mock_client.put.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_invalid_auth_method(mock_settings):
+    """Unknown auth_method is rejected before touching the controller."""
+    with pytest.raises(ValidationError, match="Invalid auth_method"):
+        await configure_guest_portal(
+            site_id="default",
+            settings=mock_settings,
+            auth_method="carrier-pigeon",
+            confirm=True,
+        )
 
 
 @pytest.mark.asyncio
 async def test_configure_guest_portal_dry_run(mock_settings):
-    """Test configure guest portal dry run."""
+    """Dry run previews the legacy-field payload with secrets redacted."""
+    current = _guest_access_section()
+
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
@@ -473,15 +549,17 @@ async def test_configure_guest_portal_dry_run(mock_settings):
         result = await configure_guest_portal(
             site_id="default",
             settings=mock_settings,
-            portal_title="Test Portal",
+            portal_enabled=False,
             password="test123",
             confirm=True,
             dry_run=True,
         )
 
         assert result["dry_run"] is True
-        assert result["payload"]["portal_title"] == "Test Portal"
-        assert result["payload"]["password"] == "***REDACTED***"
+        assert result["settings_id"] == "ga-settings-1"
+        assert result["payload"]["portal_enabled"] is False
+        assert result["payload"]["x_password"] == "***REDACTED***"
+        mock_client.put.assert_not_called()
 
 
 # =============================================================================
@@ -1188,48 +1266,17 @@ async def test_delete_radius_account_dry_run(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_get_guest_portal_config_list_response(mock_settings):
-    """Test getting portal config when API returns a list."""
-    mock_response = [
-        {
-            "site_id": "default",
-            "enabled": True,
-            "portal_title": "Direct List Portal",
-            "auth_method": "none",
-        }
-    ]
+async def test_configure_guest_portal_put_not_echoed(mock_settings):
+    """When PUT returns no body, re-read so the caller sees stored state."""
+    current = _guest_access_section()
+    stored = _guest_access_section(portal_enabled=False)
 
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
-        mock_client.get = AsyncMock(return_value=mock_response)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
-        mock_client_class.return_value = mock_client
-
-        result = await get_guest_portal_config("default", mock_settings)
-
-        assert result["portal_title"] == "Direct List Portal"
-
-
-@pytest.mark.asyncio
-async def test_configure_guest_portal_list_response(mock_settings):
-    """Test configure portal when API returns a list."""
-    mock_response = [
-        {
-            "site_id": "default",
-            "enabled": True,
-            "portal_title": "Updated Portal",
-            "auth_method": "password",
-        }
-    ]
-
-    with patch("src.tools.radius.UniFiClient") as mock_client_class:
-        mock_client = AsyncMock()
-        mock_client.is_authenticated = False
-        mock_client.authenticate = AsyncMock()
-        mock_client.put = AsyncMock(return_value=mock_response)
+        mock_client.get = AsyncMock(side_effect=[{"data": [current]}, {"data": [stored]}])
+        mock_client.put = AsyncMock(return_value={"data": []})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
@@ -1237,20 +1284,25 @@ async def test_configure_guest_portal_list_response(mock_settings):
         result = await configure_guest_portal(
             site_id="default",
             settings=mock_settings,
-            portal_title="Updated Portal",
+            portal_enabled=False,
             confirm=True,
         )
 
-        assert result["portal_title"] == "Updated Portal"
+        assert mock_client.get.call_count == 2
+        assert result["portal_enabled"] is False
 
 
 @pytest.mark.asyncio
-async def test_configure_guest_portal_dry_run_all_fields(mock_settings):
-    """Test configure portal dry run with all fields."""
+async def test_configure_guest_portal_versioned_fields(mock_settings):
+    """Title/ToS keys are written only when this controller reports them."""
+    # Controller knows portal_customized_title but not the ToS keys.
+    current = _guest_access_section(portal_customized_title="Old title")
+
     with patch("src.tools.radius.UniFiClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock()
         mock_client_class.return_value = mock_client
@@ -1258,28 +1310,26 @@ async def test_configure_guest_portal_dry_run_all_fields(mock_settings):
         result = await configure_guest_portal(
             site_id="default",
             settings=mock_settings,
-            portal_title="Test",
-            auth_method="password",
-            password="secret",
+            portal_title="New title",
+            terms_of_service_enabled=True,
+            terms_of_service_text="Accept these terms.",
             session_timeout=120,
             redirect_enabled=True,
             redirect_url="https://example.com",
-            terms_of_service_enabled=True,
-            terms_of_service_text="Accept these terms.",
             confirm=True,
             dry_run=True,
         )
 
-        assert result["dry_run"] is True
         payload = result["payload"]
-        assert payload["portal_title"] == "Test"
-        assert payload["auth_method"] == "password"
-        assert payload["password"] == "***REDACTED***"
-        assert payload["session_timeout"] == 120
+        assert payload["portal_customized_title"] == "New title"
+        assert payload["expire"] == 120
         assert payload["redirect_enabled"] is True
         assert payload["redirect_url"] == "https://example.com"
-        assert payload["terms_of_service_enabled"] is True
-        assert payload["terms_of_service_text"] == "Accept these terms."
+        assert "portal_customized_tos" not in payload
+        assert sorted(result["skipped_fields"]) == [
+            "portal_customized_tos",
+            "portal_customized_tos_enabled",
+        ]
 
 
 @pytest.mark.asyncio

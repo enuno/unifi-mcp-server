@@ -248,6 +248,28 @@ class TestGetSpeedTestHistory:
         with pytest.raises(ValidationError):
             await get_speed_test_history("", mock_settings)
 
+    @pytest.mark.asyncio
+    async def test_get_speed_test_history_sorted_oldest_first(self, mock_settings):
+        """The docstring promises oldest first regardless of report order."""
+        newer = {**self._archive_entry(), "_id": "st-2", "time": 1786093541000}
+        older = self._archive_entry()
+        mock_client = create_mock_client()
+        mock_client.post = AsyncMock(return_value={"data": [newer, older]})
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = mock_client
+
+            result = await get_speed_test_history("site-1", mock_settings)
+
+        assert [r["id"] for r in result] == ["st-1", "st-2"]
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_history_rejects_bad_hours(self, mock_settings):
+        """Zero, negative and non-numeric windows fail fast."""
+        for bad in (0, -24, "not-a-number"):
+            with pytest.raises(ValidationError):
+                await get_speed_test_history("site-1", mock_settings, hours=bad)
+
 
 class TestGetSpectrumScan:
     @pytest.mark.asyncio

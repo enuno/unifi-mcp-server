@@ -12,7 +12,7 @@ from ..models.diagnostics import (
     SpectrumScan,
     SpeedTestResult,
 )
-from ..utils import get_logger, sanitize_log_message, validate_site_id
+from ..utils import ValidationError, get_logger, sanitize_log_message, validate_site_id
 
 
 async def get_network_references(
@@ -131,6 +131,13 @@ async def get_speed_test_history(
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
+    try:
+        hours = int(hours)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(f"hours must be an integer, got {hours!r}") from exc
+    if hours < 1:
+        raise ValidationError(f"hours must be at least 1, got {hours}")
+
     end_ms = int(time.time() * 1000)
     start_ms = end_ms - hours * 3600 * 1000
 
@@ -151,10 +158,14 @@ async def get_speed_test_history(
 
         # Archive entries report xput_* in Mbps, latency in ms and time in
         # epoch milliseconds; translate to this module's result shape.
+        # Sort explicitly: the docstring promises oldest first, and the
+        # report's own ordering is not guaranteed.
+        rows = sorted(
+            (item for item in data if isinstance(item, dict)),
+            key=lambda item: item.get("time") or 0,
+        )
         results = []
-        for item in data:
-            if not isinstance(item, dict):
-                continue
+        for item in rows:
             ts = item.get("time")
             results.append(
                 SpeedTestResult(

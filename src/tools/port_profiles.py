@@ -31,7 +31,13 @@ def _first_item(response: Any) -> dict[str, Any]:
     write: the default only applies when the key is absent, not when the list
     is empty.
     """
-    items = response if isinstance(response, list) else response.get("data", [])
+    if isinstance(response, list):
+        items: Any = response
+    elif isinstance(response, dict):
+        items = response.get("data", [])
+    else:
+        # None or a scalar reply must not raise mid-parse.
+        return {}
     if not isinstance(items, list) or not items:
         return {}
     first = items[0]
@@ -51,13 +57,19 @@ def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) ->
         stored: Field values the controller echoed back
 
     Returns:
-        One human-readable warning per field that differs, empty if all match
+        One human-readable warning per field that differs or was dropped,
+        empty if everything was stored as requested
     """
-    return [
-        f"Controller stored {key}={stored[key]!r}, not the requested {value!r}"
-        for key, value in requested.items()
-        if key in stored and stored[key] != value
-    ]
+    warnings = []
+    for key, value in requested.items():
+        if key not in stored:
+            # A dropped field is the same silent-ignore this helper exists
+            # to expose; absence from the stored profile means the write
+            # cannot be confirmed.
+            warnings.append(f"Controller did not store {key} (requested {value!r})")
+        elif stored[key] != value:
+            warnings.append(f"Controller stored {key}={stored[key]!r}, not the requested {value!r}")
+    return warnings
 
 
 async def list_port_profiles(

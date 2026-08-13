@@ -1356,6 +1356,36 @@ async def test_update_port_profile_warns_when_tagged_vlan_mgmt_ignored(mock_sett
 
 
 @pytest.mark.asyncio
+async def test_update_port_profile_warns_when_field_is_dropped(mock_settings):
+    """A field the controller drops entirely is a silent ignore -- warn.
+
+    Only warning on stored-but-different missed the case where the
+    requested key never appears in the stored profile at all.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Access", "forward": "all"}]}
+    stored_without_field = {"data": [{"_id": "pp1", "name": "Access", "forward": "all"}]}
+    client = _make_client(get_return=existing, put_return=stored_without_field)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block_all",
+            confirm=True,
+        )
+
+    assert len(result["warnings"]) == 1
+    assert "did not store tagged_vlan_mgmt" in result["warnings"][0]
+
+
+def test_first_item_survives_non_dict_replies():
+    """None or a scalar reply yields {} instead of AttributeError."""
+    for odd in (None, "ok", 7, True):
+        assert port_profiles_module._first_item(odd) == {}
+
+
+@pytest.mark.asyncio
 async def test_update_port_profile_invalid_tagged_vlan_mgmt(mock_settings):
     """Test that an unknown tagged VLAN management mode is rejected on update."""
     with pytest.raises(ValidationError, match="Invalid tagged VLAN management"):

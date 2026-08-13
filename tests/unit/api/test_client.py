@@ -31,6 +31,7 @@ def mock_settings():
     settings.rate_limit_period = 60
     settings.max_retries = 3
     settings.retry_backoff_factor = 2
+    settings.retry_total_timeout = 60
     settings.log_api_requests = True
     settings.default_site = "default"
     settings.get_headers = MagicMock(return_value={"X-API-Key": "test-api-key"})
@@ -50,6 +51,7 @@ def mock_settings_local():
     settings.rate_limit_period = 60
     settings.max_retries = 3
     settings.retry_backoff_factor = 2
+    settings.retry_total_timeout = 60
     settings.log_api_requests = True
     settings.default_site = "default"
     settings.get_headers = MagicMock(return_value={"X-API-Key": "test-api-key"})
@@ -618,6 +620,62 @@ class TestUniFiClientErrorHandling:
             with pytest.raises(NetworkError, match="timeout"):
                 await client.get("/ea/sites")
 
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_budget_bounds_wall_clock(self, mock_settings):
+        """Retries stop when the time budget is spent, not just at max_retries.
+
+        Regression for #97: with a 30s request timeout, four attempts plus
+        backoff legitimately burn ~127s per request, and a tool that
+        authenticates first stacks two of those — a four-minute hang from the
+        caller's side. The budget converts that into a fast, explained
+        failure.
+        """
+        mock_settings.max_retries = 10
+        mock_settings.retry_backoff_factor = 100  # first backoff alone busts the budget
+        mock_settings.retry_total_timeout = 5
+        client = UniFiClient(mock_settings)
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.side_effect = httpx.TimeoutException("timeout")
+
+            with pytest.raises(NetworkError, match="retry budget"):
+                await client.get("/ea/sites")
+
+        # Attempt 1 fails, backoff 100**0=1s fits the 5s budget, attempt 2
+        # fails, backoff 100**1=100s busts it — the check runs BEFORE the
+        # sleep, so the test never actually waits.
+        assert mock_request.call_count == 2
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_budget_allows_fast_retries(self, mock_settings):
+        """Quick retries inside the budget still happen."""
+        mock_settings.max_retries = 2
+        mock_settings.retry_backoff_factor = 0.01
+        mock_settings.retry_total_timeout = 60
+        client = UniFiClient(mock_settings)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": []}'
+        mock_response.json = MagicMock(return_value={"data": []})
+
+        calls = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise httpx.TimeoutException("timeout")
+            return mock_response
+
+        with patch.object(client.client, "request", side_effect=side_effect):
+            result = await client.get("/ea/sites")
+
+        assert result == {"data": []}
+        assert calls == 3
         await client.close()
 
     @pytest.mark.asyncio

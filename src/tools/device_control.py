@@ -691,7 +691,9 @@ async def set_ap_radio_channel(
             log_audit(
                 operation="set_ap_radio_channel",
                 parameters=parameters,
-                result="success",
+                # The audit record must agree with the tool result: an
+                # unconfirmed or mismatched echo is not a success.
+                result="success" if not warnings else "unconfirmed",
                 site_id=site_id,
             )
 

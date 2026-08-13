@@ -708,7 +708,8 @@ async def test_set_radio_power_writes_config_record(mock_settings):
     assert put_url.endswith("/rest/device/ap-1")
     body = client.put.call_args[1]["json_data"]
     assert set(body.keys()) == {"radio_table"}
-    assert body["radio_table"][1]["tx_power"] == 23
+    na = next(e for e in body["radio_table"] if e.get("radio") == "na")
+    assert na["tx_power"] == 23
     assert result["success"] is True
     assert result["stored_tx_power"] == 23
     assert "warnings" not in result
@@ -766,3 +767,39 @@ async def test_set_radio_power_warns_on_unechoed_write(mock_settings):
 
     assert result["success"] is False
     assert any("could not be confirmed" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_write_audits_unconfirmed(mock_settings):
+    """The audit record must not claim success when the echo does not."""
+    from unittest.mock import ANY
+
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": []})
+
+    with (
+        patch.object(dc_module, "UniFiClient", return_value=client),
+        patch.object(dc_module, "log_audit") as audit,
+    ):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    audit.assert_called_once_with(
+        operation="set_ap_radio_channel",
+        parameters=ANY,
+        result="unconfirmed",
+        site_id="default",
+    )

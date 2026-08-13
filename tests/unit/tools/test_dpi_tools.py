@@ -27,105 +27,84 @@ def mock_settings():
 
 # =============================================================================
 # get_dpi_statistics Tests
+#
+# Site DPI counters come from POST stat/sitedpi with {"type": "by_app"} /
+# {"type": "by_cat"}: data[0] carries the rows under the type key, app/cat
+# as numeric catalog ids. Verified live on Network 10.5.67 (route answers;
+# counters empty there because traffic identification runs via flows).
 # =============================================================================
+
+
+def _sitedpi_client(by_app=None, by_cat=None):
+    async def post(url, json_data=None):
+        kind = (json_data or {}).get("type")
+        rows = {"by_app": by_app or [], "by_cat": by_cat or []}[kind]
+        return {"data": [{kind: rows}]}
+
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.post = AsyncMock(side_effect=post)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
 
 
 @pytest.mark.asyncio
 async def test_get_dpi_statistics_success(mock_settings):
-    """Test successful DPI statistics retrieval."""
-    mock_response = {
-        "data": [
-            {"app": "YouTube", "cat": "Streaming", "tx_bytes": 1000000, "rx_bytes": 5000000},
-            {"app": "Netflix", "cat": "Streaming", "tx_bytes": 500000, "rx_bytes": 3000000},
-            {"app": "Chrome", "cat": "Web", "tx_bytes": 200000, "rx_bytes": 800000},
-        ]
-    }
+    """Rows are totalled and sorted by traffic."""
+    client = _sitedpi_client(
+        by_app=[
+            {"app": 94, "cat": 4, "tx_bytes": 1000000, "rx_bytes": 5000000},
+            {"app": 133, "cat": 13, "tx_bytes": 200000, "rx_bytes": 800000},
+        ],
+        by_cat=[{"cat": 4, "tx_bytes": 1000000, "rx_bytes": 5000000}],
+    )
 
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await get_dpi_statistics("site-1", mock_settings)
 
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await get_dpi_statistics("default", mock_settings)
+    posted = [c[1]["json_data"]["type"] for c in client.post.call_args_list]
+    assert posted == ["by_app", "by_cat"]
+    urls = {c[0][0] for c in client.post.call_args_list}
+    assert urls == {"/ea/sites/site-1/stat/sitedpi"}
 
-    assert result["site_id"] == "default"
-    assert result["time_range"] == "24h"
-    assert len(result["applications"]) == 3
-    assert result["total_applications"] == 3
-    assert result["applications"][0]["application"] == "YouTube"
-
-
-@pytest.mark.asyncio
-async def test_get_dpi_statistics_time_ranges(mock_settings):
-    """Test DPI statistics with different time ranges."""
-    mock_response = {"data": []}
-
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        for time_range in ["1h", "6h", "12h", "24h", "7d", "30d"]:
-            result = await get_dpi_statistics("default", mock_settings, time_range=time_range)
-            assert result["time_range"] == time_range
+    assert result["total_applications"] == 2
+    assert result["applications"][0]["app"] == 94
+    assert result["applications"][0]["total_bytes"] == 6000000
+    assert result["categories"][0]["total_bytes"] == 6000000
+    assert "note" not in result
 
 
 @pytest.mark.asyncio
-async def test_get_dpi_statistics_invalid_time_range(mock_settings):
-    """Test DPI statistics with invalid time range."""
-    with pytest.raises(ValueError) as excinfo:
-        await get_dpi_statistics("default", mock_settings, time_range="invalid")
+async def test_get_dpi_statistics_empty_notes_flow_engine(mock_settings):
+    """A flow-based controller reports empty counters plus a pointer."""
+    client = _sitedpi_client()
 
-    assert "Invalid time range" in str(excinfo.value)
-
-
-@pytest.mark.asyncio
-async def test_get_dpi_statistics_empty(mock_settings):
-    """Test DPI statistics with empty response."""
-    mock_response = {"data": []}
-
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await get_dpi_statistics("default", mock_settings)
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await get_dpi_statistics("site-1", mock_settings)
 
     assert result["applications"] == []
     assert result["categories"] == []
-    assert result["total_applications"] == 0
+    assert "traffic-flow" in result["note"]
 
 
 @pytest.mark.asyncio
-async def test_get_dpi_statistics_category_aggregation(mock_settings):
-    """Test that DPI statistics aggregates by category."""
-    mock_response = {
-        "data": [
-            {"app": "YouTube", "cat": "Streaming", "tx_bytes": 1000, "rx_bytes": 2000},
-            {"app": "Netflix", "cat": "Streaming", "tx_bytes": 500, "rx_bytes": 1500},
-            {"app": "Chrome", "cat": "Web", "tx_bytes": 100, "rx_bytes": 200},
-        ]
-    }
+async def test_get_dpi_statistics_empty_object_row(mock_settings):
+    """The live empty shape is data: [{}] — no type key at all."""
 
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    async def post(url, json_data=None):
+        return {"data": [{}]}
 
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await get_dpi_statistics("default", mock_settings)
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.post = AsyncMock(side_effect=post)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
 
-    assert result["total_categories"] == 2
-    streaming_cat = next(c for c in result["categories"] if c["category"] == "Streaming")
-    assert streaming_cat["total_bytes"] == 5000
-    assert streaming_cat["application_count"] == 2
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await get_dpi_statistics("site-1", mock_settings)
+
+    assert result["total_applications"] == 0
 
 
 # =============================================================================
@@ -135,69 +114,40 @@ async def test_get_dpi_statistics_category_aggregation(mock_settings):
 
 @pytest.mark.asyncio
 async def test_list_top_applications_success(mock_settings):
-    """Test successful top applications listing."""
-    mock_response = {
-        "data": [
-            {"app": f"App{i}", "cat": "Cat", "tx_bytes": i * 1000, "rx_bytes": i * 2000}
-            for i in range(20, 0, -1)
+    client = _sitedpi_client(
+        by_app=[
+            {"app": 94, "cat": 4, "tx_bytes": 0, "rx_bytes": 500},
+            {"app": 7, "cat": 13, "tx_bytes": 0, "rx_bytes": 9000},
         ]
-    }
+    )
 
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await list_top_applications("site-1", mock_settings)
 
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await list_top_applications("default", mock_settings)
-
-    assert len(result) == 10
-    assert result[0]["total_bytes"] > result[9]["total_bytes"]
+    assert [r["app"] for r in result] == [7, 94]
 
 
 @pytest.mark.asyncio
 async def test_list_top_applications_with_limit(mock_settings):
-    """Test top applications with custom limit."""
-    mock_response = {
-        "data": [
-            {"app": f"App{i}", "cat": "Cat", "tx_bytes": i * 1000, "rx_bytes": i * 2000}
-            for i in range(10, 0, -1)
-        ]
-    }
+    client = _sitedpi_client(
+        by_app=[{"app": i, "tx_bytes": 0, "rx_bytes": i * 100} for i in range(1, 6)]
+    )
 
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await list_top_applications("site-1", mock_settings, limit=2)
 
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await list_top_applications("default", mock_settings, limit=5)
-
-    assert len(result) == 5
+    assert len(result) == 2
+    assert result[0]["app"] == 5
 
 
 @pytest.mark.asyncio
 async def test_list_top_applications_empty(mock_settings):
-    """Test top applications with no data."""
-    mock_response = {"data": []}
+    client = _sitedpi_client()
 
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.get = AsyncMock(return_value=mock_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
-        result = await list_top_applications("default", mock_settings)
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await list_top_applications("site-1", mock_settings)
 
     assert result == []
-
-
-# =============================================================================
-# get_client_dpi Tests
-# =============================================================================
 
 
 @pytest.mark.asyncio

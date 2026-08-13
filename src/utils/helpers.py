@@ -118,7 +118,14 @@ def first_response_item(response: Any) -> dict[str, Any]:
     Returns:
         The first item, or an empty dict when the payload carries none
     """
-    items = response if isinstance(response, list) else response.get("data", [])
+    if isinstance(response, list):
+        items: Any = response
+    elif isinstance(response, dict):
+        items = response.get("data", [])
+    else:
+        # None or a scalar (unexpected but possible on odd controller
+        # replies) must not raise mid-parse after the write already landed.
+        return {}
 
     if not isinstance(items, list) or not items:
         return {}

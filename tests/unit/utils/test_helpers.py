@@ -429,6 +429,11 @@ class TestFirstResponseItem:
         """Test that an empty bare list yields an empty dict."""
         assert first_response_item([]) == {}
 
+    def test_non_dict_scalars_yield_empty_dict(self):
+        """None or a scalar reply must not raise after the write landed."""
+        for odd in (None, "ok", 1, True):
+            assert first_response_item(odd) == {}
+
     def test_missing_data_key(self):
         """Test that a response with no data key yields an empty dict."""
         assert first_response_item({"meta": {"rc": "ok"}}) == {}

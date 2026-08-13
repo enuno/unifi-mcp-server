@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..config import APIType
@@ -27,7 +27,7 @@ class AuthContext:
 
     def is_expired(self) -> bool:
         """Return True when the authentication context has expired."""
-        return self.expiry is not None and datetime.now(tz=UTC) >= self.expiry
+        return self.expiry is not None and datetime.now(tz=timezone.utc) >= self.expiry
 
 
 class LocalAuthProvider:
@@ -70,7 +70,7 @@ class LocalAuthProvider:
 
     def _expiry_from_credentials(self, credentials: Mapping[str, Any]) -> datetime:
         expires_in = int(credentials.get("expires_in") or self.default_ttl_seconds)
-        return datetime.now(tz=UTC) + timedelta(seconds=max(1, expires_in))
+        return datetime.now(tz=timezone.utc) + timedelta(seconds=max(1, expires_in))
 
 
 class CloudAuthProvider:
@@ -118,7 +118,7 @@ class CloudAuthProvider:
 
     def _expiry_from_credentials(self, credentials: Mapping[str, Any]) -> datetime:
         expires_in = int(credentials.get("expires_in") or self.default_ttl_seconds)
-        return datetime.now(tz=UTC) + timedelta(seconds=max(1, expires_in))
+        return datetime.now(tz=timezone.utc) + timedelta(seconds=max(1, expires_in))
 
 
 class AuthManager:

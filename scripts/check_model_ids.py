@@ -34,7 +34,7 @@ API_VERSION = "2023-06-01"
 # product names such as claude-code-action or claude-desktop.
 MODEL_RE = re.compile(
     r"claude-(?:"
-    r"opus|sonnet|haiku"                 # claude-<family>-<version>
+    r"opus|sonnet|haiku"  # claude-<family>-<version>
     r")-[0-9][a-z0-9-]*"
     r"|claude-[0-9][a-z0-9-]*-(?:opus|sonnet|haiku)[a-z0-9-]*"  # legacy claude-3-7-sonnet-...
 )
@@ -81,6 +81,7 @@ def fetch_served_ids(credential: str, header: str) -> set[str]:
 
 
 def main() -> int:
+    """Run the check and return the process exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--offline",

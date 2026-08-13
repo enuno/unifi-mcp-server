@@ -1,7 +1,7 @@
 # Phase 3 Protect API Readiness Report
 
-**Repository:** UniFi MCP Server  
-**Assessment date:** 2026-07-19  
+**Repository:** UniFi MCP Server
+**Assessment date:** 2026-07-19
 **Scope:** current Phase 3 Protect readiness based on `DEVELOPMENT_PLAN.md`, `ROADMAP.md`, `GAP_REPORT.md`, `TODO.md`, and the Protect scaffold/tests in `src/` and `tests/`.
 
 ## Executive verdict

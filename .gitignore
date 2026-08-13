@@ -209,6 +209,10 @@ scripts/scraped-api-spec-*.json
 scripts/api-diff-*.json
 scripts/node_modules/
 scripts/package-lock.json
+node_modules/
+package-lock.json
+.codex/
+.omc/
 MagicMock/
 .mcpregistry_github_token
 .mcpregistry_registry_token

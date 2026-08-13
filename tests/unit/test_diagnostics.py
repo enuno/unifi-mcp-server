@@ -166,79 +166,109 @@ class TestGetSpeedTestStatus:
 
 
 class TestGetSpeedTestHistory:
+    """History comes from the stat/report/archive.speedtest report.
+
+    Fixtures mirror the live archive shape: xput_* in Mbps, latency in ms,
+    time in epoch milliseconds. The previous rest/speedtest resource does
+    not exist (api.err.InvalidObject on every call).
+    """
+
+    @staticmethod
+    def _archive_entry(ts=1786007141000, down=935.0, up=918.0, latency=12):
+        return {
+            "_id": "st-1",
+            "oid": "site-oid",
+            "o": "speedtest",
+            "time": ts,
+            "xput_download": down,
+            "xput_upload": up,
+            "latency": latency,
+        }
+
     @pytest.mark.asyncio
     async def test_get_speed_test_history_success(self, mock_settings):
-        """Test successful retrieval of speed test history."""
+        """The archive shape parses into the module's result shape."""
         response = {
             "data": [
-                {
-                    "id": "st-1",
-                    "status": "completed",
-                    "download_speed_mbps": 850.5,
-                    "upload_speed_mbps": 420.2,
-                    "ping_ms": 12.3,
-                    "timestamp": "2025-01-15T10:30:00Z",
-                },
-                {
-                    "id": "st-2",
-                    "status": "completed",
-                    "download_speed_mbps": 900.1,
-                    "upload_speed_mbps": 450.5,
-                    "ping_ms": 10.5,
-                    "timestamp": "2025-01-14T10:30:00Z",
-                },
+                self._archive_entry(),
+                {**self._archive_entry(), "_id": "st-2", "time": 1786093541000},
             ]
         }
 
+        mock_client = create_mock_client()
+        mock_client.post = AsyncMock(return_value=response)
+
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await get_speed_test_history("site-1", mock_settings)
 
-            assert isinstance(result, list)
+            called_url = mock_client.post.call_args[0][0]
+            assert called_url == "/ea/sites/site-1/stat/report/archive.speedtest"
+            body = mock_client.post.call_args[1]["json_data"]
+            assert body["attrs"] == ["time", "xput_download", "xput_upload", "latency"]
+            assert body["end"] > body["start"]
+
             assert len(result) == 2
-            assert result[0]["id"] == "st-1"
-            assert result[0]["download_speed_mbps"] == 850.5
-            assert result[1]["id"] == "st-2"
+            assert result[0]["download_speed_mbps"] == 935.0
+            assert result[0]["upload_speed_mbps"] == 918.0
+            assert result[0]["ping_ms"] == 12
+            assert result[0]["timestamp"].startswith("2026-")
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_history_window(self, mock_settings):
+        """The hours parameter sets the report window."""
+        mock_client = create_mock_client()
+        mock_client.post = AsyncMock(return_value={"data": []})
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = mock_client
+
+            await get_speed_test_history("site-1", mock_settings, hours=24)
+
+            body = mock_client.post.call_args[1]["json_data"]
+            assert body["end"] - body["start"] == 24 * 3600 * 1000
 
     @pytest.mark.asyncio
     async def test_get_speed_test_history_empty(self, mock_settings):
         """Test speed test history with empty response."""
-        response = {"data": []}
+        mock_client = create_mock_client()
+        mock_client.post = AsyncMock(return_value={"data": []})
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
+            mock_client_class.return_value = mock_client
 
             result = await get_speed_test_history("site-1", mock_settings)
 
             assert result == []
 
     @pytest.mark.asyncio
-    async def test_get_speed_test_history_list_response(self, mock_settings):
-        """Test speed test history with direct list response."""
-        response = [
-            {
-                "id": "st-1",
-                "status": "completed",
-                "download_speed_mbps": 500.0,
-                "upload_speed_mbps": 200.0,
-                "timestamp": "2025-01-15T10:30:00Z",
-            }
-        ]
-
-        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
-            mock_client_class.return_value = create_mock_client([response])
-
-            result = await get_speed_test_history("site-1", mock_settings)
-
-            assert len(result) == 1
-            assert result[0]["id"] == "st-1"
-
-    @pytest.mark.asyncio
     async def test_get_speed_test_history_invalid_site_id(self, mock_settings):
         """Test validation error for empty site_id."""
         with pytest.raises(ValidationError):
             await get_speed_test_history("", mock_settings)
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_history_sorted_oldest_first(self, mock_settings):
+        """The docstring promises oldest first regardless of report order."""
+        newer = {**self._archive_entry(), "_id": "st-2", "time": 1786093541000}
+        older = self._archive_entry()
+        mock_client = create_mock_client()
+        mock_client.post = AsyncMock(return_value={"data": [newer, older]})
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = mock_client
+
+            result = await get_speed_test_history("site-1", mock_settings)
+
+        assert [r["id"] for r in result] == ["st-1", "st-2"]
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_history_rejects_bad_hours(self, mock_settings):
+        """Zero, negative and non-numeric windows fail fast."""
+        for bad in (0, -24, "not-a-number"):
+            with pytest.raises(ValidationError):
+                await get_speed_test_history("site-1", mock_settings, hours=bad)
 
 
 class TestGetSpectrumScan:

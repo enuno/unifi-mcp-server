@@ -94,6 +94,19 @@ class PlaybookRegistry:
 DEFAULT_PLAYBOOK_REGISTRY = PlaybookRegistry.load_builtin()
 
 
+def _default_registry() -> PlaybookRegistry:
+    """Return the bundled registry, populating it on first use if it is empty.
+
+    ``src.a2a.playbooks`` imports this module, so importing that package first
+    builds the registry above while the package is still initializing and
+    ``PLAYBOOKS`` does not exist yet, leaving it empty.
+    """
+    if not DEFAULT_PLAYBOOK_REGISTRY.names():
+        for _, playbook in PlaybookRegistry.load_builtin().items():
+            DEFAULT_PLAYBOOK_REGISTRY.register(playbook)
+    return DEFAULT_PLAYBOOK_REGISTRY
+
+
 def _format_params(params: Mapping[str, Any] | None) -> str:
     if not params:
         return "{}"
@@ -115,7 +128,7 @@ def render_playbook(
     Returns:
         A prompt-ready string with steps, validation criteria, and fallbacks.
     """
-    active_registry = registry or DEFAULT_PLAYBOOK_REGISTRY
+    active_registry = registry or _default_registry()
     playbook = active_registry.get(playbook_name)
     context_data = dict(context or {})
 

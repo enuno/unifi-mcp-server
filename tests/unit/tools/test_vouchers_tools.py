@@ -394,3 +394,18 @@ async def test_bulk_delete_vouchers_reports_documented_count(mock_settings):
 async def test_bulk_delete_vouchers_requires_filter(mock_settings):
     with pytest.raises(ValidationError, match="filter"):
         await bulk_delete_vouchers("default", "", mock_settings, confirm=True)
+
+
+class TestVoucherItemsUnwrap:
+    """Close the codecov gaps reported on merged PR #122."""
+
+    def test_bare_list_filters_non_dict_items(self):
+        from src.tools.vouchers import _voucher_items
+
+        assert _voucher_items(["junk", {"id": "v1"}, 7]) == [{"id": "v1"}]
+
+    def test_scalar_reply_yields_empty_list(self):
+        from src.tools.vouchers import _voucher_items
+
+        assert _voucher_items("ok") == []
+        assert _voucher_items(None) == []

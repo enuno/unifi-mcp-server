@@ -1028,3 +1028,133 @@ class TestUniFiClientHelpers:
 
     def test_looks_like_uuid_empty(self):
         assert UniFiClient._looks_like_uuid("") is False
+
+
+class TestMergedPatchCoverage:
+    """Close the codecov gaps reported on merged PRs #124 and #126."""
+
+    @pytest.mark.asyncio
+    async def test_rate_limited_retry_succeeds_within_budget(self, mock_settings):
+        """A 429 with budget remaining sleeps and retries to success (#124)."""
+        mock_settings.max_retries = 2
+        mock_settings.retry_total_timeout = 300
+        client = UniFiClient(mock_settings)
+
+        limited = MagicMock()
+        limited.status_code = 429
+        limited.headers = {"Retry-After": "0"}
+        ok = MagicMock()
+        ok.status_code = 200
+        ok.text = '{"data": []}'
+        ok.json = MagicMock(return_value={"data": []})
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.side_effect = [limited, ok]
+            result = await client.get("/ea/sites")
+
+        assert result == {"data": []}
+        assert mock_request.call_count == 2
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_rate_limited_retry_gives_up_when_budget_spent(self, mock_settings):
+        """A 429 whose wait cannot fit the wall-clock budget raises (#124)."""
+        mock_settings.max_retries = 5
+        mock_settings.retry_total_timeout = 0
+        client = UniFiClient(mock_settings)
+
+        limited = MagicMock()
+        limited.status_code = 429
+        limited.headers = {"Retry-After": "30"}
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = limited
+            # The budget NetworkError is re-wrapped by the request
+            # catch-all, so it surfaces as APIError at the API boundary;
+            # the budget message survives the wrap.
+            with pytest.raises(APIError, match="retry budget"):
+                await client.get("/ea/sites")
+
+        assert mock_request.call_count == 1
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_list_backups_local_uses_site_scoped_cmd(self, mock_settings_local):
+        """Local mode lists backups via the site-scoped backup command (#126)."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '{"data": []}'
+        response.json = MagicMock(return_value={"data": [{"filename": "b.unf"}]})
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = response
+                result = await client.list_backups("default")
+
+        call = mock_req.call_args
+        assert "/proxy/network/api/s/default/cmd/backup" in call[1]["url"]
+        assert call[1]["json"] == {"cmd": "list-backups"}
+        assert result == [{"filename": "b.unf"}]
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_list_backups_cloud_uses_ea_route(self, mock_settings):
+        """Cloud mode lists backups via the /ea/ command route (#126)."""
+        client = UniFiClient(mock_settings)
+
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '{"data": []}'
+        response.json = MagicMock(return_value={"data": []})
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-1")):
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = response
+                await client.list_backups("site-1")
+
+        assert "/ea/sites/site-1/cmd/backup" in mock_req.call_args[1]["url"]
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_rejects_bad_weekday_name(self, mock_settings_local):
+        """A non-weekday string raises before any network traffic (#126)."""
+        client = UniFiClient(mock_settings_local)
+        with pytest.raises(APIError, match="weekday name"):
+            await client.configure_backup_schedule(
+                site_id="default",
+                backup_type="network",
+                frequency="weekly",
+                time_of_day="02:00",
+                enabled=True,
+                day_of_week="noday",
+            )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_cloud_endpoint(self, mock_settings):
+        """Cloud mode writes the schedule via the /ea/ settings route (#126)."""
+        client = UniFiClient(mock_settings)
+
+        schedule = {"_id": "ab-1", "key": "auto_backup"}
+        response = MagicMock()
+        response.status_code = 200
+        response.text = '{"data": []}'
+        response.json = MagicMock(return_value={"data": [schedule]})
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-1")):
+            with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                mock_req.return_value = response
+                await client.configure_backup_schedule(
+                    site_id="site-1",
+                    backup_type="network",
+                    frequency="daily",
+                    time_of_day="03:00",
+                    enabled=True,
+                )
+
+        put_call = mock_req.call_args_list[-1]
+        assert "/ea/sites/site-1/set/setting/auto_backup/ab-1" in put_call[1]["url"]
+        await client.close()

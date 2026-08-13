@@ -301,6 +301,35 @@ class UniFiClient:
 
         self.logger.info(f"Built site UUID mapping: {len(self._site_uuid_to_name)} sites")
 
+    def _retry_or_give_up(self, started_at: float, wait: float, reason: str) -> float:
+        """Decide whether another retry fits inside the wall-clock budget.
+
+        Retries used to be bounded only by attempt count, so one logical
+        request could legitimately burn ``(max_retries + 1) x request_timeout``
+        plus backoff — ~127s at the defaults — and a tool that authenticates
+        first stacks two of those, which is how issue #97's four-minute hangs
+        happen. The budget bounds elapsed time, not attempts.
+
+        Args:
+            started_at: ``time.monotonic()`` captured on the first attempt
+            wait: Seconds the caller intends to sleep before retrying
+            reason: What went wrong, for the giving-up message
+
+        Returns:
+            ``wait``, when the retry (including its sleep) fits the budget
+
+        Raises:
+            NetworkError: When the budget is already spent
+        """
+        budget = self.settings.retry_total_timeout
+        elapsed = time.monotonic() - started_at
+        if elapsed + wait >= budget:
+            raise NetworkError(
+                f"Giving up after {elapsed:.0f}s of retries ({reason}); "
+                f"retry budget is {budget}s (UNIFI_RETRY_TOTAL_TIMEOUT)"
+            )
+        return wait
+
     async def _request(
         self,
         method: str,
@@ -308,6 +337,7 @@ class UniFiClient:
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
         retry_count: int = 0,
+        started_at: float | None = None,
     ) -> dict[str, Any]:
         """Make an HTTP request with retries and error handling.
 
@@ -317,6 +347,8 @@ class UniFiClient:
             params: Query parameters
             json_data: JSON request body
             retry_count: Current retry attempt number
+            started_at: Monotonic timestamp of the first attempt, threaded
+                through retries so the total-elapsed budget survives recursion
 
         Returns:
             Response data as dictionary
@@ -326,6 +358,9 @@ class UniFiClient:
             RateLimitError: If rate limit is exceeded
             NetworkError: If network communication fails
         """
+        if started_at is None:
+            started_at = time.monotonic()
+
         # Apply rate limiting
         await self.rate_limiter.acquire()
 
@@ -380,9 +415,12 @@ class UniFiClient:
 
                 # Retry if we haven't exceeded max retries
                 if retry_count < self.settings.max_retries:
+                    self._retry_or_give_up(started_at, retry_after, "rate limited")
                     self.logger.warning(f"Rate limited, retrying after {retry_after}s")
                     await asyncio.sleep(retry_after)
-                    return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                    return await self._request(
+                        method, endpoint, params, json_data, retry_count + 1, started_at
+                    )
 
                 raise RateLimitError(retry_after=retry_after)
 
@@ -445,9 +483,12 @@ class UniFiClient:
             # Retry on timeout
             if retry_count < self.settings.max_retries:
                 backoff = self.settings.retry_backoff_factor**retry_count
+                self._retry_or_give_up(started_at, backoff, "request timeouts")
                 self.logger.warning(f"Request timeout, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
-                return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                return await self._request(
+                    method, endpoint, params, json_data, retry_count + 1, started_at
+                )
 
             raise NetworkError(f"Request timeout: {e}") from e
 
@@ -455,9 +496,12 @@ class UniFiClient:
             # Retry on network error
             if retry_count < self.settings.max_retries:
                 backoff = self.settings.retry_backoff_factor**retry_count
+                self._retry_or_give_up(started_at, backoff, "network errors")
                 self.logger.warning(f"Network error, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
-                return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                return await self._request(
+                    method, endpoint, params, json_data, retry_count + 1, started_at
+                )
 
             raise NetworkError(f"Network communication failed: {e}") from e
 

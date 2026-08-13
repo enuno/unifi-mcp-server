@@ -177,10 +177,10 @@ class TestMatchTarget:
         target = MatchTarget(
             zone_id="zone-123",
             matching_target=MatchingTarget.CLIENT,
-            client_macs=["bc:24:11:7d:bf:13"],
+            client_macs=["00:00:5e:00:53:01"],
         )
         assert target.matching_target == MatchingTarget.CLIENT
-        assert target.client_macs == ["bc:24:11:7d:bf:13"]
+        assert target.client_macs == ["00:00:5e:00:53:01"]
 
     def test_port_matching(self):
         """Should support port matching."""

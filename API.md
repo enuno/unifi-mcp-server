@@ -433,100 +433,95 @@ result = await mcp.call_tool("health_check", {})
 }
 ```
 
-### Protect Phase 3 Read Tools
+### Protect Phase 3 Tools
 
-The Protect profile now exposes read-only tools for the Phase 3 surfaces. Cameras and NVRs are already wired, and the new device, view, and event tools are now documented alongside them.
+Protect tools are exposed in **local API mode** and can be isolated with `UNIFI_PROFILE=protect`.
+The currently implemented Protect MCP resources are:
 
-#### `list_protect_cameras`
+- `protect://nvrs`
+- `protect://nvrs/{nvr_id}`
+- `protect://cameras`
+- `protect://cameras/{camera_id}`
 
-List Protect cameras.
+The currently implemented Protect MCP tools are grouped below.
 
-**Parameters:**
+#### Cameras
 
-- `limit` (integer, optional): Maximum results to return
-- `offset` (integer, optional): Pagination offset
-
-**Example:**
+- `list_protect_cameras(limit=None, offset=None)`
+- `get_protect_camera(camera_id)`
 
 ```python
 result = await mcp.call_tool("list_protect_cameras", {"limit": 10, "offset": 0})
+camera = await mcp.call_tool("get_protect_camera", {"camera_id": "cam-1"})
 ```
 
-#### `get_protect_camera`
+#### NVRs
 
-Get a single Protect camera by ID.
-
-**Parameters:**
-
-- `camera_id` (string, required): Protect camera identifier
-
-**Example:**
-
-```python
-result = await mcp.call_tool("get_protect_camera", {"camera_id": "cam-1"})
-```
-
-#### `list_protect_nvrs`
-
-List Protect NVRs.
-
-**Parameters:** None
-
-**Example:**
+- `list_protect_nvrs()`
+- `get_protect_nvr(nvr_id)`
 
 ```python
 result = await mcp.call_tool("list_protect_nvrs", {})
+nvr = await mcp.call_tool("get_protect_nvr", {"nvr_id": "nvr-1"})
 ```
 
-#### `get_protect_nvr`
+#### Devices, lights, sensors, and chimes
 
-Get a single Protect NVR by ID.
-
-**Parameters:**
-
-- `nvr_id` (string, required): Protect NVR identifier
-
-**Example:**
+- `list_protect_devices(limit=None, offset=None)`
+- `get_protect_device(device_id)`
+- `update_protect_device(device_id, ...)`
+- `list_protect_lights(limit=None, offset=None)`
+- `get_protect_light(light_id)`
+- `update_protect_light(light_id, ...)`
+- `list_protect_sensors(limit=None, offset=None)`
+- `get_protect_sensor(sensor_id)`
+- `update_protect_sensor(sensor_id, ...)`
+- `list_protect_chimes(limit=None, offset=None)`
+- `get_protect_chime(chime_id)`
+- `update_protect_chime(chime_id, ...)`
+- `list_protect_device_updates(limit=None, offset=None)` for device subscription messages
 
 ```python
-result = await mcp.call_tool("get_protect_nvr", {"nvr_id": "nvr-1"})
+device = await mcp.call_tool("get_protect_device", {"device_id": "device-1"})
+updates = await mcp.call_tool("list_protect_device_updates", {})
 ```
 
-#### `list_protect_devices`
+#### Views and viewers
 
-List Protect device update records surfaced through the read-only Phase 3 device module.
-
-**Parameters:** None
-
-**Example:**
+- `get_protect_meta_info()`
+- `list_protect_viewers(limit=None, offset=None)`
+- `get_protect_viewer(viewer_id)`
+- `update_protect_viewer(viewer_id, ...)`
+- `list_protect_live_views(limit=None, offset=None)`
+- `get_protect_live_view(live_view_id)`
+- `create_protect_live_view(live_view)`
+- `update_protect_live_view(live_view_id, ...)`
 
 ```python
-result = await mcp.call_tool("list_protect_devices", {})
+meta = await mcp.call_tool("get_protect_meta_info", {})
+viewers = await mcp.call_tool("list_protect_viewers", {})
 ```
 
-#### `list_protect_views`
+#### Events and alarm webhooks
 
-List Protect live views and viewer metadata exposed by the Phase 3 views module.
-
-**Parameters:** None
-
-**Example:**
+- `list_protect_events(limit=None, offset=None)`
+- `get_protect_subscribe_events(limit=None, offset=None)` compatibility alias
+- `get_protect_event_messages(limit=None, offset=None)` compatibility alias
+- `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
+- `get_protect_device_updates(limit=None, offset=None)` compatibility alias
+- `send_protect_alarm_webhook(webhook_id, payload=None)`
 
 ```python
-result = await mcp.call_tool("list_protect_views", {})
+events = await mcp.call_tool("list_protect_events", {})
+webhook = await mcp.call_tool(
+    "send_protect_alarm_webhook",
+    {"webhook_id": "webhook-1", "payload": {"event": "manual-trigger"}},
+)
 ```
 
-#### `list_protect_events`
+#### Still planned / not yet exposed
 
-List Protect event messages and alarm/event notifications from the Phase 3 events module.
-
-**Parameters:** None
-
-**Example:**
-
-```python
-result = await mcp.call_tool("list_protect_events", {})
-```
+Snapshot capture, media stream helpers, talkback, and PTZ operations remain roadmap work.
 
 ### Device Management Tools
 
@@ -3315,9 +3310,11 @@ The assistant uses `configure_guest_portal` to customize the captive portal expe
 
 Uses `list_radius_profiles` to display authentication server configurations.
 
-**Prompt:** "Create a hotspot package: '$5 for 24 hours with 5 GB data limit' for our café WiFi."
+**Prompt:** "Create a hotspot package: '$5 for 24 hours' for our café WiFi."
 
-The assistant uses `create_hotspot_package` to set up paid WiFi access with usage quotas.
+The assistant uses `create_hotspot_package` to set up paid WiFi access
+sold by duration — the controller prices packages by the hour; bandwidth
+and data quotas are not part of this API surface.
 
 ### Multi-Site Management
 

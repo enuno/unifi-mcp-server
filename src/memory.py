@@ -43,9 +43,7 @@ class MemoryClient:
             )
             self.enabled = False
         elif settings.supermemory_enabled and not settings.supermemory_api_key:
-            self.logger.warning(
-                "SUPERMEMORY_API_KEY not set. Memory storage is disabled."
-            )
+            self.logger.warning("SUPERMEMORY_API_KEY not set. Memory storage is disabled.")
             self.enabled = False
 
         if self.enabled:

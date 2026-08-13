@@ -54,8 +54,8 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Add live view / viewer tools (`src/tools/protect_views.py`)
 - [x] Add Protect events / webhook tools (`src/tools/protect_events.py`)
 - [x] Add Protect MCP resources (`src/resources/protect.py`) (nvrs, cameras resource URIs)
-- [ ] Build mocked integration tests for Protect
-- [ ] Update `API.md` and `UNIFI_API.md` with Protect coverage
+- [x] Build mocked integration tests for Protect (completed 2026-08-12)
+- [x] Update `API.md` and `UNIFI_API.md` with Protect coverage (completed 2026-08-12)
 - [x] Wire exports, runtime profile, and config helper for Protect (completed 2026-07-19)
 
 ### Phase 4 — Testing, polish, minor gaps, developer experience

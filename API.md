@@ -3315,9 +3315,11 @@ The assistant uses `configure_guest_portal` to customize the captive portal expe
 
 Uses `list_radius_profiles` to display authentication server configurations.
 
-**Prompt:** "Create a hotspot package: '$5 for 24 hours with 5 GB data limit' for our café WiFi."
+**Prompt:** "Create a hotspot package: '$5 for 24 hours' for our café WiFi."
 
-The assistant uses `create_hotspot_package` to set up paid WiFi access with usage quotas.
+The assistant uses `create_hotspot_package` to set up paid WiFi access
+sold by duration — the controller prices packages by the hour; bandwidth
+and data quotas are not part of this API surface.
 
 ### Multi-Site Management
 

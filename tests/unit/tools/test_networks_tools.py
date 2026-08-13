@@ -46,7 +46,7 @@ def make_network(
     return {
         "_id": network_id,
         "name": name,
-        "vlan_id": vlan_id,
+        "vlan": vlan_id,
         "ip_subnet": subnet,
         "dhcpd_enabled": dhcp_enabled,
         "dhcpd_start": "192.168.2.100",
@@ -60,13 +60,16 @@ def make_network(
     }
 
 
-def make_client_on_vlan(vlan_id, tx_bytes=1000, rx_bytes=2000):
-    return {
-        "mac": "00:11:22:33:44:55",
-        "vlan": vlan_id,
-        "tx_bytes": tx_bytes,
-        "rx_bytes": rx_bytes,
-    }
+def make_client_on_network(network_id, tx_bytes=1000, rx_bytes=2000, wired=False):
+    client = {"mac": "00:00:5e:00:53:01", "network_id": network_id}
+    if wired:
+        # Wired clients report counters under the "wired-" keys only.
+        client["wired-tx_bytes"] = tx_bytes
+        client["wired-rx_bytes"] = rx_bytes
+    else:
+        client["tx_bytes"] = tx_bytes
+        client["rx_bytes"] = rx_bytes
+    return client
 
 
 class TestGetNetworkDetails:
@@ -254,9 +257,9 @@ class TestGetNetworkStatistics:
         }
         clients_response = {
             "data": [
-                make_client_on_vlan(vlan_id=1, tx_bytes=1000, rx_bytes=2000),
-                make_client_on_vlan(vlan_id=1, tx_bytes=500, rx_bytes=1000),
-                make_client_on_vlan(vlan_id=100, tx_bytes=300, rx_bytes=600),
+                make_client_on_network("net-1", tx_bytes=1000, rx_bytes=2000),
+                make_client_on_network("net-1", tx_bytes=500, rx_bytes=1000, wired=True),
+                make_client_on_network("net-2", tx_bytes=300, rx_bytes=600),
             ]
         }
 
@@ -283,7 +286,7 @@ class TestGetNetworkStatistics:
     @pytest.mark.asyncio
     async def test_get_network_statistics_list_responses(self, mock_settings):
         networks_response = [make_network(network_id="net-1", vlan_id=1)]
-        clients_response = [make_client_on_vlan(vlan_id=1)]
+        clients_response = [make_client_on_network("net-1")]
 
         with patch("src.tools.networks.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(
@@ -294,6 +297,55 @@ class TestGetNetworkStatistics:
 
             assert len(result["networks"]) == 1
             assert result["networks"][0]["client_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_network_statistics_untagged_clients_do_not_leak(self, mock_settings):
+        """Untagged clients must not count against every VLAN-less network.
+
+        Regression: networks were matched to clients by VLAN, read from a
+        ``vlan_id`` key networkconf does not have — so every network's VLAN
+        was None, every untagged client's VLAN was None, and every row
+        reported the site-wide totals. Observed live: six networks, all
+        claiming an identical 43 clients and 331 GB.
+        """
+        networks_response = {
+            "data": [
+                make_network(network_id="net-1", name="LAN", vlan_id=None),
+                make_network(network_id="net-2", name="Mgmt", vlan_id=None),
+            ]
+        }
+        clients_response = {"data": [make_client_on_network("net-1")]}
+
+        with patch("src.tools.networks.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(
+                [networks_response, clients_response]
+            )
+
+            result = await get_network_statistics("site-1", mock_settings)
+
+            lan = next(n for n in result["networks"] if n["name"] == "LAN")
+            mgmt = next(n for n in result["networks"] if n["name"] == "Mgmt")
+            assert lan["client_count"] == 1
+            assert mgmt["client_count"] == 0
+            assert mgmt["total_bytes"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_network_statistics_counts_wired_bytes(self, mock_settings):
+        """Wired clients report counters under wired- keys; count them."""
+        networks_response = {"data": [make_network(network_id="net-1", name="LAN")]}
+        clients_response = {
+            "data": [make_client_on_network("net-1", tx_bytes=700, rx_bytes=300, wired=True)]
+        }
+
+        with patch("src.tools.networks.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(
+                [networks_response, clients_response]
+            )
+
+            result = await get_network_statistics("site-1", mock_settings)
+
+            assert result["networks"][0]["total_tx_bytes"] == 700
+            assert result["networks"][0]["total_rx_bytes"] == 300
 
     @pytest.mark.asyncio
     async def test_get_network_statistics_no_clients(self, mock_settings):

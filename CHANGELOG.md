@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Smart Queue management** (`get_smart_queue_status`, `configure_smart_queue`): read and set WAN Smart Queues (fq_codel) on the WAN network config. The public interface speaks Mbps; the controller's `wan_smartq_up_rate`/`wan_smartq_down_rate` fields are kilobits per second even though the UI shows Mbps, so the tools convert on both read and write — passing the UI's number through raw shapes the line to roughly a thousandth of the intended rate (verified live: an 840 write capped a ~940 Mbps line at 0.84 Mbps). A regression test pins the wire payload.
+
 ### Fixed
 
 - **`update_dhcp_reservation` never activated the reservation**: setting a `fixed_ip` wrote the address onto the client entry but omitted `use_fixedip=true`, so the controller stored the IP inertly — the reservation never took effect and never appeared in `list_dhcp_reservations` (which filters on `use_fixedip`). The return value also hard-coded `use_fixedip: true` regardless of the controller response, masking the failure. `update_dhcp_reservation` now sets `use_fixedip=true` whenever a `fixed_ip` is provided, and both `create_dhcp_reservation` and `update_dhcp_reservation` now report the controller's actual `use_fixedip` value — falling back to the requested/known reservation state (coerced via `coerce_bool`) instead of hard-coding `true`.

@@ -1178,29 +1178,31 @@ async def get_backup_schedule(
                 )
                 return {
                     "configured": False,
-                    "message": "No automated backup schedule configured for this site",
+                    "message": (
+                        "This controller has no auto_backup settings section. "
+                        "UniFi OS consoles manage scheduled backups at the "
+                        "console level; existing backups are still visible "
+                        "via list_backups."
+                    ),
                 }
 
+            # The schedule is the auto_backup settings section; report its
+            # real fields rather than a shape no controller returns.
             result = {
                 "configured": True,
-                "schedule_id": schedule_data.get("schedule_id", ""),
-                "enabled": schedule_data.get("enabled", False),
-                "backup_type": schedule_data.get("backup_type", ""),
-                "frequency": schedule_data.get("frequency", ""),
-                "time_of_day": schedule_data.get("time_of_day", ""),
-                "day_of_week": schedule_data.get("day_of_week", None),
-                "day_of_month": schedule_data.get("day_of_month", None),
-                "retention_days": schedule_data.get("retention_days", 30),
-                "max_backups": schedule_data.get("max_backups", 10),
-                "cloud_backup_enabled": schedule_data.get("cloud_backup_enabled", False),
-                "last_run": schedule_data.get("last_run", None),
-                "last_backup_id": schedule_data.get("last_backup_id", None),
-                "next_run": schedule_data.get("next_run", None),
+                "schedule_id": schedule_data.get("_id", ""),
+                "enabled": schedule_data.get("auto_backup_enabled", False),
+                "cron_expr": schedule_data.get("auto_backup_cron_expr"),
+                "timezone": schedule_data.get("auto_backup_timezone"),
+                "retention_days": schedule_data.get("auto_backup_days"),
+                "max_backups": schedule_data.get("auto_backup_max_files"),
             }
 
             logger.info(
-                f"Retrieved backup schedule for site '{site_id}': "
-                f"{result['frequency']} {result['backup_type']} at {result['time_of_day']}"
+                sanitize_log_message(
+                    f"Retrieved backup schedule for site '{site_id}': "
+                    f"cron {result['cron_expr']}, enabled={result['enabled']}"
+                )
             )
             return result
 

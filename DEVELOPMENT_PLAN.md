@@ -145,8 +145,8 @@ Describe how to execute the plan without losing sight of the current production 
 - Protect models under `src/models/protect_*.py`
 - Tool modules for cameras, devices, NVR, views, and events
 - Protect MCP resources for cameras and events
-- Integration tests with mocked NVR responses
-- API and UniFi endpoint docs updated for Protect
+- Integration tests with mocked Protect responses and client/tool/resource coverage (completed 2026-08-12)
+- API and UniFi endpoint docs updated for Protect (completed 2026-08-12)
 
 #### Scope
 

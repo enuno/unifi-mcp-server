@@ -301,6 +301,35 @@ class UniFiClient:
 
         self.logger.info(f"Built site UUID mapping: {len(self._site_uuid_to_name)} sites")
 
+    def _retry_or_give_up(self, started_at: float, wait: float, reason: str) -> float:
+        """Decide whether another retry fits inside the wall-clock budget.
+
+        Retries used to be bounded only by attempt count, so one logical
+        request could legitimately burn ``(max_retries + 1) x request_timeout``
+        plus backoff — ~127s at the defaults — and a tool that authenticates
+        first stacks two of those, which is how issue #97's four-minute hangs
+        happen. The budget bounds elapsed time, not attempts.
+
+        Args:
+            started_at: ``time.monotonic()`` captured on the first attempt
+            wait: Seconds the caller intends to sleep before retrying
+            reason: What went wrong, for the giving-up message
+
+        Returns:
+            ``wait``, when the retry (including its sleep) fits the budget
+
+        Raises:
+            NetworkError: When the budget is already spent
+        """
+        budget = self.settings.retry_total_timeout
+        elapsed = time.monotonic() - started_at
+        if elapsed + wait >= budget:
+            raise NetworkError(
+                f"Giving up after {elapsed:.0f}s of retries ({reason}); "
+                f"retry budget is {budget}s (UNIFI_RETRY_TOTAL_TIMEOUT)"
+            )
+        return wait
+
     async def _request(
         self,
         method: str,
@@ -308,6 +337,7 @@ class UniFiClient:
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
         retry_count: int = 0,
+        started_at: float | None = None,
     ) -> dict[str, Any]:
         """Make an HTTP request with retries and error handling.
 
@@ -317,6 +347,8 @@ class UniFiClient:
             params: Query parameters
             json_data: JSON request body
             retry_count: Current retry attempt number
+            started_at: Monotonic timestamp of the first attempt, threaded
+                through retries so the total-elapsed budget survives recursion
 
         Returns:
             Response data as dictionary
@@ -326,6 +358,9 @@ class UniFiClient:
             RateLimitError: If rate limit is exceeded
             NetworkError: If network communication fails
         """
+        if started_at is None:
+            started_at = time.monotonic()
+
         # Apply rate limiting
         await self.rate_limiter.acquire()
 
@@ -380,9 +415,12 @@ class UniFiClient:
 
                 # Retry if we haven't exceeded max retries
                 if retry_count < self.settings.max_retries:
+                    self._retry_or_give_up(started_at, retry_after, "rate limited")
                     self.logger.warning(f"Rate limited, retrying after {retry_after}s")
                     await asyncio.sleep(retry_after)
-                    return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                    return await self._request(
+                        method, endpoint, params, json_data, retry_count + 1, started_at
+                    )
 
                 raise RateLimitError(retry_after=retry_after)
 
@@ -445,9 +483,12 @@ class UniFiClient:
             # Retry on timeout
             if retry_count < self.settings.max_retries:
                 backoff = self.settings.retry_backoff_factor**retry_count
+                self._retry_or_give_up(started_at, backoff, "request timeouts")
                 self.logger.warning(f"Request timeout, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
-                return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                return await self._request(
+                    method, endpoint, params, json_data, retry_count + 1, started_at
+                )
 
             raise NetworkError(f"Request timeout: {e}") from e
 
@@ -455,9 +496,12 @@ class UniFiClient:
             # Retry on network error
             if retry_count < self.settings.max_retries:
                 backoff = self.settings.retry_backoff_factor**retry_count
+                self._retry_or_give_up(started_at, backoff, "network errors")
                 self.logger.warning(f"Network error, retrying in {backoff}s")
                 await asyncio.sleep(backoff)
-                return await self._request(method, endpoint, params, json_data, retry_count + 1)
+                return await self._request(
+                    method, endpoint, params, json_data, retry_count + 1, started_at
+                )
 
             raise NetworkError(f"Network communication failed: {e}") from e
 
@@ -645,20 +689,24 @@ class UniFiClient:
             List of backup metadata dictionaries
 
         Note:
-            For local API, use: /proxy/network/api/backup/list-backups
-            For cloud API, endpoint may differ
+            For local API: POST /proxy/network/api/s/{site}/cmd/backup
+            with body {"cmd": "list-backups"}
         """
         site_id = await self.resolve_site_id(site_id)
 
-        # For local API
+        # Backups are listed with the backup command, scoped to a site. The
+        # previous site-less GET /api/backup/list-backups had no site context,
+        # so the controller rejected it with api.err.NoSiteContext -- carried
+        # on an HTTP 401, which this client then reported as an
+        # authentication failure. Verified live on Network 10.5.67.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/backup/list-backups?site={site_name}"
+            endpoint = f"/proxy/network/api/s/{site_name}/cmd/backup"
         else:
             # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups"
+            endpoint = f"/ea/sites/{site_id}/cmd/backup"
 
-        response = await self.get(endpoint)
+        response = await self.post(endpoint, json_data={"cmd": "list-backups"})
 
         # Handle different response formats
         if isinstance(response, list):
@@ -824,7 +872,7 @@ class UniFiClient:
         enabled: bool = True,
         retention_days: int = 30,
         max_backups: int = 10,
-        day_of_week: str | None = None,
+        day_of_week: str | int | None = None,
         day_of_month: int | None = None,
         cloud_backup_enabled: bool = False,
     ) -> dict[str, Any]:
@@ -838,7 +886,9 @@ class UniFiClient:
             enabled: Whether the schedule is active
             retention_days: Number of days to keep backups
             max_backups: Maximum number of backups to retain
-            day_of_week: Day of week for weekly schedules (e.g. "monday")
+            day_of_week: Day of week for weekly schedules; a day name
+                ("monday") or the tool layer's integer form (0=Monday
+                through 6=Sunday)
             day_of_month: Day of month for monthly schedules (1-28)
             cloud_backup_enabled: Whether to also push backups to cloud storage
 
@@ -846,29 +896,66 @@ class UniFiClient:
             Schedule configuration response
 
         Note:
-            For local API: PUT /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: PUT
+            /proxy/network/api/s/{site}/set/setting/auto_backup/{settings_id}
         """
+        # Translate the weekday into a cron day NAME before any network
+        # round-trip. The tool layer documents integers as
+        # 0=Monday..6=Sunday, which is not cron's numbering (cron counts
+        # 0=Sunday) -- and Monday's 0 is falsy, so a bare f-string default
+        # would silently turn Monday into the fallback. Names sidestep both
+        # traps.
+        cron_day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        if day_of_week is None:
+            cron_dow = "sun"
+        elif isinstance(day_of_week, int):
+            if not 0 <= day_of_week <= 6:
+                raise APIError(
+                    f"day_of_week must be 0 (Monday) through 6 (Sunday), got {day_of_week}"
+                )
+            cron_dow = cron_day_names[day_of_week]
+        else:
+            cron_dow = str(day_of_week).strip().lower()[:3]
+            if cron_dow not in cron_day_names:
+                raise APIError(f"day_of_week must be a weekday name, got {day_of_week!r}")
+
         site_id = await self.resolve_site_id(site_id)
 
-        payload: dict[str, Any] = {
-            "enabled": enabled,
-            "backup_type": backup_type,
-            "frequency": frequency,
-            "time_of_day": time_of_day,
-            "retention_days": retention_days,
-            "max_backups": max_backups,
-            "cloud_backup_enabled": cloud_backup_enabled,
-        }
-        if day_of_week is not None:
-            payload["day_of_week"] = day_of_week
-        if day_of_month is not None:
-            payload["day_of_month"] = day_of_month
+        # The schedule lives in the auto_backup settings section; the
+        # rest/backup/schedule resource this method previously PUT to does
+        # not exist on any controller (api.err.InvalidObject). UniFi OS
+        # consoles do not carry the section at all -- their scheduled
+        # backups are managed at the console level -- so absence is reported
+        # as such rather than written into.
+        current = await self.get_backup_schedule(site_id)
+        settings_id = current.get("_id")
+        if not settings_id:
+            raise APIError(
+                "This controller has no auto_backup settings section, so the "
+                "backup schedule cannot be configured through the Network "
+                "API. UniFi OS consoles manage scheduled backups at the "
+                "console level (existing backups are still visible via "
+                "list_backups)."
+            )
 
+        hour, _, minute = time_of_day.partition(":")
+        cron_map = {
+            "daily": f"{minute or 0} {hour or 0} * * *",
+            "weekly": f"{minute or 0} {hour or 0} * * {cron_dow}",
+            "monthly": f"{minute or 0} {hour or 0} {day_of_month or 1} * *",
+        }
+        payload: dict[str, Any] = {
+            "auto_backup_enabled": enabled,
+            "auto_backup_cron_expr": cron_map.get(frequency, cron_map["daily"]),
+            "auto_backup_max_files": max_backups,
+            "auto_backup_days": retention_days,
+        }
+
+        site_name = self._site_uuid_to_name.get(site_id, site_id)
         if self.settings.api_type == APIType.LOCAL:
-            site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/set/setting/auto_backup/{settings_id}"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/set/setting/auto_backup/{settings_id}"
 
         return await self.put(endpoint, json_data=payload)
 
@@ -885,18 +972,39 @@ class UniFiClient:
             Backup schedule configuration, or empty dict if none is configured
 
         Note:
-            For local API: GET /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: GET
+            /proxy/network/api/s/{site}/get/setting/auto_backup
         """
         site_id = await self.resolve_site_id(site_id)
 
+        # The schedule is the auto_backup settings section. Absence (or the
+        # api.err.Invalid a UniFi OS console answers with) means scheduled
+        # backups are managed at the console level, not through this API --
+        # report that as an empty dict and let callers decide how loud to be.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/get/setting/auto_backup"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/get/setting/auto_backup"
 
-        response = await self.get(endpoint)
+        try:
+            response = await self.get(endpoint)
+        except APIError as exc:
+            # Only the controller's "no such setting" answers mean absence;
+            # anything else (500s, validation failures) is a real error the
+            # caller must see, not a console-level-backups condition.
+            message = str(exc)
+            if any(
+                marker in message
+                for marker in ("api.err.Invalid", "api.err.NotFound", "api.err.NoSuchObject")
+            ):
+                return {}
+            raise
 
-        if isinstance(response, list):
-            return response[0] if response else {}
-        return response if isinstance(response, dict) else {}
+        items = response if isinstance(response, list) else response.get("data", [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict) and item.get("key") == "auto_backup":
+                    return item
+            return items[0] if items and isinstance(items[0], dict) else {}
+        return items if isinstance(items, dict) else {}

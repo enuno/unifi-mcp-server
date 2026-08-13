@@ -412,12 +412,20 @@ class TestSearchDevices:
 
 
 class TestListPendingDevices:
+    """Pending devices come from the legacy stat route (see #101).
+
+    The Integration v1 API has no /devices/pending: the path matches
+    /devices/{deviceId} and 400s. Unadopted devices only appear on
+    ``stat/device``, flagged ``adopted: false``.
+    """
+
     @pytest.mark.asyncio
     async def test_list_pending_devices_success(self, mock_settings):
         mock_response = {
             "data": [
-                make_device("pending-1", "New AP"),
-                make_device("pending-2", "New Switch"),
+                {**make_device("pending-1", "New AP"), "adopted": False},
+                {**make_device("adopted-1", "Existing AP"), "adopted": True},
+                {**make_device("pending-2", "New Switch"), "adopted": False},
             ]
         }
 
@@ -428,7 +436,21 @@ class TestListPendingDevices:
             result = await list_pending_devices("site-1", mock_settings)
 
             assert len(result) == 2
-            mock_client.get.assert_called_once()
+            assert {d["name"] for d in result} == {"New AP", "New Switch"}
+            called_url = mock_client.get.call_args[0][0]
+            assert called_url == "/ea/sites/site-1/stat/device"
+
+    @pytest.mark.asyncio
+    async def test_list_pending_devices_all_adopted(self, mock_settings):
+        """A site with every device adopted has nothing pending."""
+        mock_response = {"data": [{**make_device(), "adopted": True}]}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(mock_response)
+
+            result = await list_pending_devices("site-1", mock_settings)
+
+            assert result == []
 
     @pytest.mark.asyncio
     async def test_list_pending_devices_empty(self, mock_settings):
@@ -443,30 +465,22 @@ class TestListPendingDevices:
 
     @pytest.mark.asyncio
     async def test_list_pending_devices_with_pagination(self, mock_settings):
-        mock_response = {"data": [make_device()]}
+        """Pagination is applied client-side, after the adopted filter."""
+        mock_response = {
+            "data": [
+                {**make_device(f"pending-{i}", f"Device {i}"), "adopted": False}
+                for i in range(1, 4)
+            ]
+        }
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client = create_mock_client(mock_response)
             mock_client_class.return_value = mock_client
 
-            await list_pending_devices("site-1", mock_settings, limit=10, offset=5)
+            result = await list_pending_devices("site-1", mock_settings, limit=1, offset=1)
 
-            call_args = mock_client.get.call_args
-            assert call_args[1]["params"]["limit"] == 10
-            assert call_args[1]["params"]["offset"] == 5
-
-    @pytest.mark.asyncio
-    async def test_list_pending_devices_limit_only(self, mock_settings):
-        mock_response = {"data": [make_device()]}
-
-        with patch("src.tools.devices.UniFiClient") as mock_client_class:
-            mock_client = create_mock_client(mock_response)
-            mock_client_class.return_value = mock_client
-
-            await list_pending_devices("site-1", mock_settings, limit=25)
-
-            call_args = mock_client.get.call_args
-            assert call_args[1]["params"]["limit"] == 25
+            assert len(result) == 1
+            assert result[0]["name"] == "Device 2"
 
 
 class TestAdoptDevice:

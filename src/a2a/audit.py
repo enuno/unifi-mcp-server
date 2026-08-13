@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Any
@@ -134,7 +134,7 @@ class AuditLogger:
         if value is None:
             return None
         if isinstance(value, datetime):
-            return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+            return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 

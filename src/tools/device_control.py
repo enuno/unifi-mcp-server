@@ -653,3 +653,65 @@ async def set_ap_radio_channel(
             site_id=site_id,
         )
         raise
+
+
+async def force_provision_device(
+    site_id: str,
+    device_id: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Push the stored configuration to a device now (force provision).
+
+    A direct config write (e.g. a radio_table change via rest/device) is
+    stored by the controller but not always pushed to the device;
+    observed live: a channel change that sat stored-but-not-applied for
+    minutes. Force provision closes that gap without a reboot -- the
+    device re-applies config with only a brief service pause.
+
+    Args:
+        site_id: Site identifier
+        device_id: Device ID or MAC address
+        settings: Application settings
+        confirm: Confirmation flag (required)
+        dry_run: If True, preview without provisioning
+
+    Returns:
+        Dictionary with the provision request status
+    """
+    site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "force provision", dry_run)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        # Resolve to a MAC: cmd/devmgr keys on it.
+        mac = device_id
+        if ":" not in device_id:
+            response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
+            devices = response if isinstance(response, list) else response.get("data", [])
+            found = next(
+                (d for d in devices if isinstance(d, dict) and d.get("_id") == device_id), None
+            )
+            if not found:
+                raise ResourceNotFoundError("device", device_id)
+            mac = found.get("mac", "")
+        mac = validate_mac_address(mac)
+
+        if dry_run:
+            return {"dry_run": True, "would_provision": mac}
+
+        await client.post(
+            settings.get_site_api_path(site_id, "cmd/devmgr"),
+            json_data={"cmd": "force-provision", "mac": mac},
+        )
+        log_audit(
+            operation="force_provision_device",
+            parameters={"site_id": site_id, "device_id": device_id},
+            result="success",
+            site_id=site_id,
+        )
+        logger.info(sanitize_log_message(f"Force provision requested for {mac}"))
+        return {"success": True, "mac": mac, "status": "provision requested"}

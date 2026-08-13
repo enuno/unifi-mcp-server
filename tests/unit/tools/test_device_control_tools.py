@@ -630,3 +630,124 @@ async def test_set_radio_channel_writes_and_unwraps_echo(mock_settings):
 
     client.put.assert_called_once()
     assert result["new_channel"] == 44
+
+
+# =============================================================================
+# force_provision_device Tests
+# =============================================================================
+
+
+def _provision_client(devices=None):
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(return_value={"data": devices or []})
+    client.post = AsyncMock(return_value={"meta": {"rc": "ok"}})
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    return client
+
+
+@pytest.mark.asyncio
+async def test_force_provision_by_mac(mock_settings):
+    """A MAC goes straight to cmd/devmgr with no device enumeration."""
+    from src.tools.device_control import force_provision_device
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _provision_client()
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await force_provision_device(
+            site_id="default",
+            device_id="00:00:5e:00:53:41",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    client.get.assert_not_called()
+    url = client.post.call_args[0][0]
+    assert url.endswith("/cmd/devmgr")
+    body = client.post.call_args[1]["json_data"]
+    assert body == {"cmd": "force-provision", "mac": "00:00:5e:00:53:41"}
+    assert result["success"] is True
+    assert result["mac"] == "00:00:5e:00:53:41"
+
+
+@pytest.mark.asyncio
+async def test_force_provision_resolves_id_to_mac(mock_settings):
+    """A device _id is resolved to its MAC via stat/device first."""
+    from src.tools.device_control import force_provision_device
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _provision_client(devices=[{"_id": "ap-1", "mac": "00:00:5e:00:53:41"}])
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await force_provision_device(
+            site_id="default",
+            device_id="ap-1",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert client.get.call_args[0][0].endswith("/stat/device")
+    body = client.post.call_args[1]["json_data"]
+    assert body == {"cmd": "force-provision", "mac": "00:00:5e:00:53:41"}
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_force_provision_unknown_id_raises(mock_settings):
+    """An _id absent from stat/device raises ResourceNotFoundError."""
+    from src.tools.device_control import force_provision_device
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _provision_client(devices=[{"_id": "other", "mac": "00:00:5e:00:53:99"}])
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        with pytest.raises(ResourceNotFoundError):
+            await force_provision_device(
+                site_id="default",
+                device_id="ap-1",
+                settings=mock_settings,
+                confirm=True,
+            )
+
+    client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_force_provision_dry_run(mock_settings):
+    """Dry run previews the target MAC without posting."""
+    from src.tools.device_control import force_provision_device
+
+    client = _provision_client()
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await force_provision_device(
+            site_id="default",
+            device_id="00:00:5e:00:53:41",
+            settings=mock_settings,
+            confirm=True,
+            dry_run=True,
+        )
+
+    assert result == {"dry_run": True, "would_provision": "00:00:5e:00:53:41"}
+    client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_force_provision_requires_confirm(mock_settings):
+    """The provision command is mutating and demands confirm=True."""
+    from src.tools.device_control import force_provision_device
+
+    with pytest.raises(ValidationError):
+        await force_provision_device(
+            site_id="default",
+            device_id="00:00:5e:00:53:41",
+            settings=mock_settings,
+        )

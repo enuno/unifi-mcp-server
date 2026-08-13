@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`force_provision_device`**: push the stored configuration to a device now (`cmd/devmgr` `force-provision`). A direct config write to `rest/device` is stored by the controller but not always provisioned to the device — observed live: a radio channel change that sat stored-but-not-applied for the better part of an hour. Force provision closes that gap without a reboot; accepts a device id or MAC, requires `confirm`, and supports `dry_run`.
+
 - **Smart Queue management** (`get_smart_queue_status`, `configure_smart_queue`): read and set WAN Smart Queues (fq_codel) on the WAN network config. The public interface speaks Mbps; the controller's `wan_smartq_up_rate`/`wan_smartq_down_rate` fields are kilobits per second even though the UI shows Mbps, so the tools convert on both read and write — passing the UI's number through raw shapes the line to roughly a thousandth of the intended rate (verified live: an 840 write capped a ~940 Mbps line at 0.84 Mbps). A regression test pins the wire payload.
 - **`tagged_vlan_mgmt` on port profiles**: current controllers drive tagged VLAN handling from `tagged_vlan_mgmt` and derive the legacy `forward` field from it, so sending only `forward` made it impossible to create an access port. Create/update and the `PortProfile` model now support `auto`/`block_all`/`custom` (`block_all` is the access-port case), `forward` is documented as legacy and derived, and the update path reports any field the controller stored differently from what was requested.
 

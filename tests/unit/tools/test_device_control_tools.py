@@ -630,3 +630,139 @@ async def test_set_radio_channel_writes_and_unwraps_echo(mock_settings):
 
     client.put.assert_called_once()
     assert result["new_channel"] == 44
+
+
+# =============================================================================
+# set_ap_radio_channel Tests
+# =============================================================================
+
+AP_CONFIG = {
+    "_id": "ap-1",
+    "mac": "00:00:5e:00:53:41",
+    "name": "Test AP",
+    "radio_table": [
+        {"radio": "ng", "channel": 11, "ht": 20, "tx_power_mode": "custom", "tx_power": 19},
+        {"radio": "na", "channel": 36, "ht": 80, "tx_power_mode": "custom", "tx_power": 26},
+    ],
+}
+
+
+def _radio_client(config_devices, put_return, config_get=None):
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    # First GET enumerates stat/device; second GET fetches the per-id
+    # config record (rest/device serves no collection GET).
+    responses = [
+        {"data": config_devices},
+        config_get if config_get is not None else {"data": [config_devices[0]]},
+    ]
+    client.get = AsyncMock(side_effect=responses)
+    client.put = AsyncMock(return_value=put_return)
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    return client
+
+
+def _stored(power=23, mode="custom"):
+    import copy
+
+    stored = copy.deepcopy(AP_CONFIG)
+    stored["radio_table"][1]["tx_power"] = power
+    stored["radio_table"][1]["tx_power_mode"] = mode
+    return stored
+
+
+@pytest.mark.asyncio
+async def test_set_radio_power_writes_config_record(mock_settings):
+    """The write reads rest/device config and PUTs only the radio_table.
+
+    Regression: the tool previously PUT the whole stat/device operational
+    blob back, which the controller answered with 200 while silently
+    dropping the radio change (a tx_power write observed live to not
+    stick).
+    """
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": [_stored()]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="00:00:5e:00:53:41",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    stat_url = client.get.call_args_list[0][0][0]
+    assert stat_url.endswith("/stat/device")
+    config_url = client.get.call_args_list[1][0][0]
+    assert config_url.endswith("/rest/device/ap-1")
+    put_url = client.put.call_args[0][0]
+    assert put_url.endswith("/rest/device/ap-1")
+    body = client.put.call_args[1]["json_data"]
+    assert set(body.keys()) == {"radio_table"}
+    assert body["radio_table"][1]["tx_power"] == 23
+    assert result["success"] is True
+    assert result["stored_tx_power"] == 23
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_set_radio_power_warns_when_not_stored(mock_settings):
+    """A 200 whose echo lacks the change must not report success."""
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    # Echo still carries the OLD power: the controller dropped the write.
+    client = _radio_client([AP_CONFIG], put_return={"data": [_stored(power=26)]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert any("tx_power" in w for w in result["warnings"])
+    assert result["stored_tx_power"] == 26
+
+
+@pytest.mark.asyncio
+async def test_set_radio_power_warns_on_unechoed_write(mock_settings):
+    """An empty echo is an unconfirmed change, not a success."""
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": []})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power=23,
+            tx_power_mode="custom",
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert any("could not be confirmed" in w for w in result["warnings"])

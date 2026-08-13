@@ -12,13 +12,7 @@ from fastmcp.resources.function_resource import FunctionResource
 from fastmcp.tools.function_tool import FunctionTool
 
 from ..config import APIType, Settings
-from .types import (
-    AgentCard,
-    AuthenticationMode,
-    ResourceURI,
-    SafetyRequirement,
-    Skill,
-)
+from .types import AgentCard, AuthenticationMode, ResourceURI, SafetyRequirement, Skill
 
 _DESTRUCTIVE_NAME_RE = re.compile(
     r"(?:^|_)(?:create|delete|remove|reset|restore|reboot|restart|disable|enable|update|patch|set|modify|purge|clear|flush|provision|deprovision|shutdown)(?:_|$)",

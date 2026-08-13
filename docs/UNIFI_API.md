@@ -3890,15 +3890,28 @@ curl -L -g -X PATCH "https://api.ui.com/v1/connector/consoles/{id}/*path" \-H "A
 
 *Added: 2026-01-24*
 
-### Protect Phase 3 read surfaces
+### Protect Phase 3 implemented surfaces
 
-| Surface | Endpoint(s) | MCP surface | Notes |
+These tools are currently wired for local Protect integration via the
+`/proxy/protect/integration/v1/...` path family and are available in the
+dedicated `protect` profile.
+
+| Surface | Endpoint(s) | MCP tools / resources | Notes |
 |---|---|---|---|
-| Cameras | `/proxy/protect/integration/v1/cameras`, `/proxy/protect/integration/v1/cameras/{id}` | `protect://cameras`, `list_protect_cameras`, `get_protect_camera` | Existing read path |
-| NVRs | `/proxy/protect/integration/v1/nvrs`, `/proxy/protect/integration/v1/nvrs/{id}` | `protect://nvrs`, `list_protect_nvrs`, `get_protect_nvr` | Existing read path |
-| Devices | `/proxy/protect/integration/v1/subscribe/devices` | `list_protect_devices` | Read-only device update messages |
-| Live views / viewers | `/proxy/protect/integration/v1/liveviews`, `/proxy/protect/integration/v1/viewers` | `list_protect_views` | Read-only metadata surface; write endpoints remain a roadmap item |
-| Events | `/proxy/protect/integration/v1/subscribe/events` | `list_protect_events` | Read-only event stream |
+| Cameras | `/proxy/protect/integration/v1/cameras`, `/proxy/protect/integration/v1/cameras/{id}` | `protect://cameras`, `protect://cameras/{camera_id}`, `list_protect_cameras`, `get_protect_camera` | Implemented |
+| NVRs | `/proxy/protect/integration/v1/nvrs`, `/proxy/protect/integration/v1/nvrs/{id}` | `protect://nvrs`, `protect://nvrs/{nvr_id}`, `list_protect_nvrs`, `get_protect_nvr` | Implemented |
+| Devices | `/proxy/protect/integration/v1/devices`, `/proxy/protect/integration/v1/devices/{id}` | `list_protect_devices`, `get_protect_device`, `update_protect_device` | Generic Protect device inventory and updates |
+| Lights | `/proxy/protect/integration/v1/lights`, `/proxy/protect/integration/v1/lights/{id}` | `list_protect_lights`, `get_protect_light`, `update_protect_light` | Implemented |
+| Sensors | `/proxy/protect/integration/v1/sensors`, `/proxy/protect/integration/v1/sensors/{id}` | `list_protect_sensors`, `get_protect_sensor`, `update_protect_sensor` | Implemented |
+| Chimes | `/proxy/protect/integration/v1/chimes`, `/proxy/protect/integration/v1/chimes/{id}` | `list_protect_chimes`, `get_protect_chime`, `update_protect_chime` | Implemented |
+| Device subscriptions | `/proxy/protect/integration/v1/subscribe/devices` | `list_protect_device_updates`, `get_protect_subscribe_devices`, `get_protect_device_updates` | Read-only subscription feed |
+| Protect metadata | `/proxy/protect/integration/v1/meta/info` | `get_protect_meta_info` | Implemented |
+| Viewers | `/proxy/protect/integration/v1/viewers`, `/proxy/protect/integration/v1/viewers/{id}` | `list_protect_viewers`, `get_protect_viewer`, `update_protect_viewer` | Implemented |
+| Live views | `/proxy/protect/integration/v1/liveviews`, `/proxy/protect/integration/v1/liveviews/{id}` | `list_protect_live_views`, `get_protect_live_view`, `create_protect_live_view`, `update_protect_live_view` | Implemented |
+| Events | `/proxy/protect/integration/v1/subscribe/events` | `list_protect_events`, `get_protect_subscribe_events`, `get_protect_event_messages` | Read-only event feed |
+| Alarm webhooks | `/proxy/protect/integration/v1/alarm-manager/webhook/{id}` | `send_protect_alarm_webhook` | Implemented |
+
+Snapshot helpers, media streams, talkback, and PTZ endpoints are still planned and should not be treated as live MCP tools yet.
 
 ### Connector - POST
 

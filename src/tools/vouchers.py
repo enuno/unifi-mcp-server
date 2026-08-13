@@ -1,13 +1,45 @@
-"""Hotspot voucher management tools."""
+"""Hotspot voucher management tools.
+
+Every route here is the documented Integration v1 hotspot surface,
+``/v1/sites/{siteId}/hotspot/vouchers`` (docs/UNIFI_API.md). An earlier
+version called ``/sites/{siteId}/vouchers`` — a path no controller serves —
+so none of these tools had ever succeeded (issue #108, item B1).
+"""
 
 from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..models import Voucher
-from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
+from ..utils import (
+    ValidationError,
+    audit_action,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+)
 
 logger = get_logger(__name__)
+
+
+def _voucher_items(response: Any) -> list[dict]:
+    """Unwrap a voucher response into a list of voucher objects.
+
+    Generation replies with the batch nested under a ``vouchers`` key —
+    ``{"vouchers": [...]}``, observed live on Network 10.5.67 — while reads
+    return the objects directly. Handle both, plus a ``data`` envelope.
+    """
+    if isinstance(response, list):
+        return [item for item in response if isinstance(item, dict)]
+    if isinstance(response, dict):
+        data = response.get("data", response)
+        if isinstance(data, dict) and isinstance(data.get("vouchers"), list):
+            data = data["vouchers"]
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        if isinstance(data, dict) and data:
+            return [data]
+    return []
 
 
 async def list_vouchers(
@@ -22,7 +54,7 @@ async def list_vouchers(
     Args:
         site_id: Site identifier
         settings: Application settings
-        limit: Maximum number of results
+        limit: Maximum number of results (API default 100, max 1000)
         offset: Starting position
         filter_expr: Filter expression
 
@@ -43,10 +75,13 @@ async def list_vouchers(
         if filter_expr:
             params["filter"] = filter_expr
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/vouchers", params=params)
-        data = response if isinstance(response, list) else response.get("data", [])
+        response = await client.get(
+            settings.get_integration_path(f"sites/{site_id}/hotspot/vouchers"), params=params
+        )
 
-        return [Voucher(**voucher).model_dump() for voucher in data]
+        return [
+            Voucher(**voucher).model_dump(exclude_none=True) for voucher in _voucher_items(response)
+        ]
 
 
 async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict:
@@ -54,7 +89,7 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
 
     Args:
         site_id: Site identifier
-        voucher_id: Voucher identifier
+        voucher_id: Voucher identifier (UUID)
         settings: Application settings
 
     Returns:
@@ -66,48 +101,69 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/vouchers/{voucher_id}")
-        if isinstance(response, list):
-            data = response[0] if response else {}
-        else:
-            _raw = response.get("data", response)
-            data = _raw[0] if isinstance(_raw, list) else _raw
+        response = await client.get(
+            settings.get_integration_path(f"sites/{site_id}/hotspot/vouchers/{voucher_id}")
+        )
+        items = _voucher_items(response)
+        data = items[0] if items else {}
 
-        return Voucher(**data).model_dump()
+        return Voucher(**data).model_dump(exclude_none=True)
 
 
 async def create_vouchers(
     site_id: str,
-    count: int,
-    duration: int,
+    name: str,
+    time_limit_minutes: int,
     settings: Settings,
-    upload_limit_kbps: int | None = None,
-    download_limit_kbps: int | None = None,
-    upload_quota_mb: int | None = None,
-    download_quota_mb: int | None = None,
-    note: str | None = None,
+    count: int = 1,
+    authorized_guest_limit: int | None = None,
+    data_usage_limit_mb: int | None = None,
+    rx_rate_limit_kbps: int | None = None,
+    tx_rate_limit_kbps: int | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
     """Create new hotspot vouchers.
 
+    The parameters mirror the documented request body: ``name`` (a note
+    duplicated across the batch) and ``time_limit_minutes`` are the two
+    fields the API requires. The previous signature sent ``duration`` in
+    seconds plus qos_* limits — a body the endpoint never accepted.
+
     Args:
         site_id: Site identifier
-        count: Number of vouchers to create
-        duration: Duration in seconds
+        name: Voucher note, duplicated across all generated vouchers
+        time_limit_minutes: Access duration in minutes (1-1000000)
         settings: Application settings
-        upload_limit_kbps: Upload speed limit in kbps
-        download_limit_kbps: Download speed limit in kbps
-        upload_quota_mb: Upload quota in MB
-        download_quota_mb: Download quota in MB
-        note: Admin notes
+        count: Number of vouchers to generate (1-1000, default 1)
+        authorized_guest_limit: Max guests per voucher (>= 1)
+        data_usage_limit_mb: Data usage limit in megabytes (1-1048576)
+        rx_rate_limit_kbps: Download rate limit in kbps (2-100000)
+        tx_rate_limit_kbps: Upload rate limit in kbps (2-100000)
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
     Returns:
-        Created voucher codes
+        Created vouchers, including their access codes
     """
     validate_confirmation(confirm, "create vouchers", dry_run)
+
+    if not name:
+        raise ValidationError("Voucher name is required")
+    if not 1 <= time_limit_minutes <= 1_000_000:
+        raise ValidationError("time_limit_minutes must be between 1 and 1000000")
+    if not 1 <= count <= 1000:
+        raise ValidationError("count must be between 1 and 1000")
+    if authorized_guest_limit is not None and authorized_guest_limit < 1:
+        raise ValidationError("authorized_guest_limit must be at least 1")
+    if data_usage_limit_mb is not None and not 1 <= data_usage_limit_mb <= 1_048_576:
+        raise ValidationError("data_usage_limit_mb must be between 1 and 1048576")
+    for label, value in (
+        ("rx_rate_limit_kbps", rx_rate_limit_kbps),
+        ("tx_rate_limit_kbps", tx_rate_limit_kbps),
+    ):
+        if value is not None and not 2 <= value <= 100_000:
+            raise ValidationError(f"{label} must be between 2 and 100000")
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Creating {count} vouchers for site {site_id}"))
@@ -115,22 +171,20 @@ async def create_vouchers(
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build request payload
         payload: dict[str, Any] = {
             "count": count,
-            "duration": duration,
+            "name": name,
+            "timeLimitMinutes": time_limit_minutes,
         }
 
-        if upload_limit_kbps is not None:
-            payload["uploadLimit"] = upload_limit_kbps
-        if download_limit_kbps is not None:
-            payload["downloadLimit"] = download_limit_kbps
-        if upload_quota_mb is not None:
-            payload["uploadQuota"] = upload_quota_mb
-        if download_quota_mb is not None:
-            payload["downloadQuota"] = download_quota_mb
-        if note:
-            payload["note"] = note
+        if authorized_guest_limit is not None:
+            payload["authorizedGuestLimit"] = authorized_guest_limit
+        if data_usage_limit_mb is not None:
+            payload["dataUsageLimitMBytes"] = data_usage_limit_mb
+        if rx_rate_limit_kbps is not None:
+            payload["rxRateLimitKbps"] = rx_rate_limit_kbps
+        if tx_rate_limit_kbps is not None:
+            payload["txRateLimitKbps"] = tx_rate_limit_kbps
 
         if dry_run:
             logger.info(
@@ -138,8 +192,12 @@ async def create_vouchers(
             )
             return {"dry_run": True, "payload": payload}
 
-        response = await client.post(f"/integration/v1/sites/{site_id}/vouchers", json_data=payload)
-        data = response if isinstance(response, list) else response.get("data", response)
+        response = await client.post(
+            settings.get_integration_path(f"sites/{site_id}/hotspot/vouchers"), json_data=payload
+        )
+        vouchers = [
+            Voucher(**voucher).model_dump(exclude_none=True) for voucher in _voucher_items(response)
+        ]
 
         # Audit the action
         await audit_action(
@@ -148,14 +206,10 @@ async def create_vouchers(
             resource_type="voucher",
             resource_id="bulk",
             site_id=site_id,
-            details={"count": count, "duration": duration},
+            details={"count": count, "time_limit_minutes": time_limit_minutes},
         )
 
-        return {
-            "success": True,
-            "count": count,
-            "vouchers": data if isinstance(data, list) else [data],
-        }
+        return {"success": True, "count": count, "vouchers": vouchers}
 
 
 async def delete_voucher(
@@ -169,7 +223,7 @@ async def delete_voucher(
 
     Args:
         site_id: Site identifier
-        voucher_id: Voucher identifier
+        voucher_id: Voucher identifier (UUID)
         settings: Application settings
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
@@ -189,7 +243,9 @@ async def delete_voucher(
             logger.info(sanitize_log_message(f"[DRY RUN] Would delete voucher {voucher_id}"))
             return {"dry_run": True, "voucher_id": voucher_id}
 
-        await client.delete(f"/integration/v1/sites/{site_id}/vouchers/{voucher_id}")
+        await client.delete(
+            settings.get_integration_path(f"sites/{site_id}/hotspot/vouchers/{voucher_id}")
+        )
 
         # Audit the action
         await audit_action(
@@ -215,15 +271,19 @@ async def bulk_delete_vouchers(
 
     Args:
         site_id: Site identifier
-        filter_expr: Filter expression to select vouchers
+        filter_expr: Filter expression selecting the vouchers (required by
+            the API — there is no delete-all)
         settings: Application settings
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
     Returns:
-        Deletion status
+        Deletion status with the controller's reported count
     """
     validate_confirmation(confirm, "bulk delete vouchers", dry_run)
+
+    if not filter_expr:
+        raise ValidationError("A filter expression is required for bulk deletion")
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Bulk deleting vouchers for site {site_id}"))
@@ -238,7 +298,9 @@ async def bulk_delete_vouchers(
             return {"dry_run": True, "filter": filter_expr}
 
         params = {"filter": filter_expr}
-        response = await client.delete(f"/integration/v1/sites/{site_id}/vouchers", params=params)
+        response = await client.delete(
+            settings.get_integration_path(f"sites/{site_id}/hotspot/vouchers"), params=params
+        )
 
         # Audit the action
         await audit_action(
@@ -250,10 +312,10 @@ async def bulk_delete_vouchers(
             details={"filter": filter_expr},
         )
 
+        # The documented response is {"vouchersDeleted": N}.
+        deleted = response.get("vouchersDeleted") if isinstance(response, dict) else None
         return {
             "success": True,
             "message": "Vouchers deleted successfully",
-            "deleted_count": (
-                response.get("data", {}).get("count", 0) if isinstance(response, dict) else 0
-            ),
+            "deleted_count": deleted if isinstance(deleted, int) else 0,
         }

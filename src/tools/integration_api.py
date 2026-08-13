@@ -23,12 +23,7 @@ from ..models import (
     IntegrationWAN,
     IntegrationWifiBroadcast,
 )
-from ..utils import (
-    get_logger,
-    sanitize_log_message,
-    validate_limit_offset,
-    validate_site_id,
-)
+from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
 
 # ---------------------------------------------------------------------------
 # Sites

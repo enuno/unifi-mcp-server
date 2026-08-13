@@ -87,15 +87,24 @@ async def get_client_statistics(
         response = await client.get(f"/ea/sites/{site_id}/sta")
         clients_data = response.get("data", []) if isinstance(response, dict) else response
 
+        # Wired clients report counters under the "wired-" keys; the plain
+        # keys are absent or zero for them. The fallback is gated on
+        # is_wired so a wireless client's legitimate zero is never replaced
+        # by a stray wired- value.
+        def counter(record: dict, field: str) -> int:
+            plain = record.get(field)
+            if record.get("is_wired") is True and not plain:
+                return record.get(f"wired-{field}") or 0
+            return plain or 0
+
         for client_data in clients_data:
             if validate_mac_address(client_data.get("mac", "")) == client_mac:
-                # Extract statistics
                 stats = {
                     "mac": client_mac,
-                    "tx_bytes": client_data.get("tx_bytes", 0),
-                    "rx_bytes": client_data.get("rx_bytes", 0),
-                    "tx_packets": client_data.get("tx_packets", 0),
-                    "rx_packets": client_data.get("rx_packets", 0),
+                    "tx_bytes": counter(client_data, "tx_bytes"),
+                    "rx_bytes": counter(client_data, "rx_bytes"),
+                    "tx_packets": counter(client_data, "tx_packets"),
+                    "rx_packets": counter(client_data, "rx_packets"),
                     "tx_rate": client_data.get("tx_rate"),
                     "rx_rate": client_data.get("rx_rate"),
                     "signal": client_data.get("signal"),

@@ -727,10 +727,15 @@ async def test_get_wlan_statistics_success(mock_settings):
 
     assert "wlans" in result
     assert len(result["wlans"]) == 2
+    # Regression: the old matcher accepted any wireless client for every
+    # WLAN, so Home WiFi claimed all three clients and their traffic here.
     home_wifi = next(w for w in result["wlans"] if w["name"] == "Home WiFi")
-    assert home_wifi["client_count"] == 3
-    assert home_wifi["total_tx_bytes"] == 3100000
-    assert home_wifi["total_rx_bytes"] == 1550000
+    assert home_wifi["client_count"] == 2
+    assert home_wifi["total_tx_bytes"] == 3000000
+    assert home_wifi["total_rx_bytes"] == 1500000
+    guest_wifi = next(w for w in result["wlans"] if w["name"] == "Guest WiFi")
+    assert guest_wifi["client_count"] == 1
+    assert guest_wifi["total_tx_bytes"] == 100000
 
 
 @pytest.mark.asyncio

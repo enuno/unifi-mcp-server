@@ -650,10 +650,11 @@ async def get_wlan_statistics(
             if wlan_id and wlan_identifier != wlan_id:
                 continue
 
-            # Count clients on this WLAN (match by essid/name)
-            clients_on_wlan = [
-                c for c in clients_data if c.get("essid") == wlan_name or c.get("is_wired") is False
-            ]
+            # Count clients on this WLAN by SSID. The old predicate also
+            # accepted any wireless client ("or is_wired is False"), which
+            # attributed every wireless client — and their combined traffic —
+            # to every WLAN, including disabled ones.
+            clients_on_wlan = [c for c in clients_data if c.get("essid") == wlan_name]
 
             # Calculate total bandwidth
             total_tx = sum(c.get("tx_bytes", 0) for c in clients_on_wlan)

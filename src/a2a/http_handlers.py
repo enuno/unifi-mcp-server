@@ -11,7 +11,7 @@ import importlib.metadata
 import json
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from ..config import APIType, Settings
@@ -162,7 +162,7 @@ async def delegate_handler(
     params = dict(payload.get("params") or payload.get("arguments") or {})
     auth_payload = dict(payload.get("auth") or payload.get("credentials") or {})
     agent_id = _agent_id_from_payload(payload)
-    started = datetime.now(tz=UTC)
+    started = datetime.now(tz=timezone.utc)
 
     if not tool_name:
         return {"status": "error", "error": "tool_name is required"}
@@ -210,10 +210,10 @@ async def delegate_handler(
         if hasattr(result, "__await__"):
             result = await result  # type: ignore[func-returns-value]
 
-    duration_ms = (datetime.now(tz=UTC) - started).total_seconds() * 1000.0
+    duration_ms = (datetime.now(tz=timezone.utc) - started).total_seconds() * 1000.0
     active_state.audit_logger.log_invocation(
         AuditLog(
-            timestamp=datetime.now(tz=UTC),
+            timestamp=datetime.now(tz=timezone.utc),
             agent_id=agent_id,
             tool_name=tool_name,
             params=params,

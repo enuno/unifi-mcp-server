@@ -117,7 +117,8 @@ async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> 
                     "network_id": network_id,
                     "name": network_data.get("name"),
                     "ip_subnet": network_data.get("ip_subnet"),
-                    "vlan_id": network_data.get("vlan_id"),
+                    # networkconf stores the VLAN under "vlan"
+                    "vlan_id": network_data.get("vlan"),
                     "dhcpd_enabled": network_data.get("dhcpd_enabled", False),
                     "dhcpd_start": network_data.get("dhcpd_start"),
                     "dhcpd_stop": network_data.get("dhcpd_stop"),
@@ -171,14 +172,25 @@ async def get_network_statistics(site_id: str, settings: Settings) -> dict[str, 
         network_stats = []
         for network in networks_data:
             network_id = network.get("_id")
-            vlan_id = network.get("vlan_id")
+            # networkconf stores the VLAN under "vlan"; reading the
+            # non-existent "vlan_id" made every network's VLAN None, and the
+            # old vlan-based client match then paired None == None — every
+            # untagged client counted against every network, so each row
+            # reported the site total. Match on network_id, which both the
+            # networkconf and the sta records actually carry.
+            vlan_id = network.get("vlan")
 
-            # Count clients on this network
-            clients_on_network = [c for c in clients_data if c.get("vlan") == vlan_id]
+            clients_on_network = [c for c in clients_data if c.get("network_id") == network_id]
 
-            # Calculate total bandwidth
-            total_tx = sum(c.get("tx_bytes", 0) for c in clients_on_network)
-            total_rx = sum(c.get("rx_bytes", 0) for c in clients_on_network)
+            # Wired clients report their counters under the "wired-" keys,
+            # not tx_bytes/rx_bytes — without the fallback a network of
+            # servers reports zero traffic.
+            total_tx = sum(
+                c.get("tx_bytes") or c.get("wired-tx_bytes") or 0 for c in clients_on_network
+            )
+            total_rx = sum(
+                c.get("rx_bytes") or c.get("wired-rx_bytes") or 0 for c in clients_on_network
+            )
 
             network_stats.append(
                 {

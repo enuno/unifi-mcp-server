@@ -438,9 +438,17 @@ class TestFirstResponseItem:
         """Test that a response with no data key yields an empty dict."""
         assert first_response_item({"meta": {"rc": "ok"}}) == {}
 
-    def test_data_not_a_list(self):
-        """Test that a non-list data value yields an empty dict."""
-        assert first_response_item({"data": {"_id": "abc"}}) == {}
+    def test_dict_data_is_the_item(self):
+        """A single-object data wrapper yields that object.
+
+        Some routes wrap one object rather than a list of one; treating
+        it as malformed dropped the echo of a write that landed.
+        """
+        assert first_response_item({"data": {"_id": "abc"}}) == {"_id": "abc"}
+
+    def test_scalar_data_yields_empty_dict(self):
+        """A scalar data value still yields an empty dict."""
+        assert first_response_item({"data": "ok"}) == {}
 
     def test_non_dict_item(self):
         """Test that a non-dict first item yields an empty dict."""

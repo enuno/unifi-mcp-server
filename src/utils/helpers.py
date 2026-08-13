@@ -113,7 +113,9 @@ def first_response_item(response: Any) -> dict[str, Any]:
     list.
 
     Args:
-        response: Raw response, either a bare list or a ``data``-wrapped dict
+        response: Raw response — a bare list, a ``data``-wrapped dict
+            (where ``data`` may be a list or, on some routes, a single
+            object), or any non-dict reply
 
     Returns:
         The first item, or an empty dict when the payload carries none
@@ -122,6 +124,9 @@ def first_response_item(response: Any) -> dict[str, Any]:
         items: Any = response
     elif isinstance(response, dict):
         items = response.get("data", [])
+        if isinstance(items, dict):
+            # Some routes wrap a single object rather than a list of one.
+            return items
     else:
         # None or a scalar (unexpected but possible on odd controller
         # replies) must not raise mid-parse after the write already landed.

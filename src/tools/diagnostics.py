@@ -113,7 +113,9 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/devices")
+        # stat/device is the record that carries speedtest-status --
+        # matching the docstring and the route verified live.
+        response = await client.get(f"/ea/sites/{site_id}/stat/device")
         devices = response.get("data", []) if isinstance(response, dict) else response
 
         gateway = None

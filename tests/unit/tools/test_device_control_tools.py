@@ -751,3 +751,54 @@ async def test_force_provision_requires_confirm(mock_settings):
             device_id="00:00:5e:00:53:41",
             settings=mock_settings,
         )
+
+
+@pytest.mark.asyncio
+async def test_force_provision_separatorless_mac(mock_settings):
+    """A 12-hex MAC without separators is a MAC, not a device id."""
+    from src.tools.device_control import force_provision_device
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _provision_client()
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await force_provision_device(
+            site_id="default",
+            device_id="00005e005341",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    client.get.assert_not_called()
+    body = client.post.call_args[1]["json_data"]
+    assert body == {"cmd": "force-provision", "mac": "00:00:5e:00:53:41"}
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_force_provision_failure_audits_failed(mock_settings):
+    """A failed provision POST audits result=failed and re-raises."""
+    from src.tools.device_control import force_provision_device
+    from src.utils.exceptions import APIError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _provision_client()
+    client.post = AsyncMock(side_effect=APIError("boom"))
+
+    with (
+        patch.object(dc_module, "UniFiClient", return_value=client),
+        patch.object(dc_module, "log_audit") as audit,
+    ):
+        with pytest.raises(APIError):
+            await force_provision_device(
+                site_id="default",
+                device_id="00:00:5e:00:53:41",
+                settings=mock_settings,
+                confirm=True,
+            )
+
+    assert audit.call_args[1]["result"] == "failed"

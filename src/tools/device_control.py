@@ -7,6 +7,7 @@ from ..config import Settings
 from ..utils import (
     ResourceNotFoundError,
     ValidationError,
+    coerce_bool,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -672,7 +673,7 @@ async def force_provision_device(
 
     Args:
         site_id: Site identifier
-        device_id: Device ID or MAC address
+        device_id: Device ID or MAC address (any common MAC format)
         settings: Application settings
         confirm: Confirmation flag (required)
         dry_run: If True, preview without provisioning
@@ -682,36 +683,65 @@ async def force_provision_device(
     """
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "force provision", dry_run)
+    dry_run = coerce_bool(dry_run)
     logger = get_logger(__name__, settings.log_level)
+    parameters = {"site_id": site_id, "device_id": device_id}
 
-    async with UniFiClient(settings) as client:
-        await client.authenticate()
+    # cmd/devmgr keys on the MAC. Try MAC validation first: it accepts
+    # every common format including separator-less 12-hex, which a
+    # substring test would misroute into the id lookup.
+    try:
+        mac: str | None = validate_mac_address(device_id)
+    except ValidationError:
+        mac = None
 
-        # Resolve to a MAC: cmd/devmgr keys on it.
-        mac = device_id
-        if ":" not in device_id:
-            response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
-            devices = response if isinstance(response, list) else response.get("data", [])
-            found = next(
-                (d for d in devices if isinstance(d, dict) and d.get("_id") == device_id), None
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
+
+            if mac is None:
+                response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
+                devices = response if isinstance(response, list) else response.get("data", [])
+                found = next(
+                    (d for d in devices if isinstance(d, dict) and d.get("_id") == device_id),
+                    None,
+                )
+                if not found:
+                    raise ResourceNotFoundError("device", device_id)
+                mac = validate_mac_address(found.get("mac", ""))
+
+            if dry_run:
+                log_audit(
+                    operation="force_provision_device",
+                    parameters=parameters,
+                    result="dry_run",
+                    site_id=site_id,
+                    dry_run=True,
+                )
+                return {
+                    "dry_run": True,
+                    "would_provision": mac,
+                }
+
+            await client.post(
+                settings.get_site_api_path(site_id, "cmd/devmgr"),
+                json_data={"cmd": "force-provision", "mac": mac},
             )
-            if not found:
-                raise ResourceNotFoundError("device", device_id)
-            mac = found.get("mac", "")
-        mac = validate_mac_address(mac)
+            log_audit(
+                operation="force_provision_device",
+                parameters=parameters,
+                result="success",
+                site_id=site_id,
+            )
+            logger.info(sanitize_log_message(f"Force provision requested for {mac}"))
+            return {"success": True, "mac": mac, "status": "provision requested"}
 
-        if dry_run:
-            return {"dry_run": True, "would_provision": mac}
-
-        await client.post(
-            settings.get_site_api_path(site_id, "cmd/devmgr"),
-            json_data={"cmd": "force-provision", "mac": mac},
-        )
+    except Exception as e:
+        logger.error(sanitize_log_message(f"Failed to force provision '{device_id}': {e}"))
         log_audit(
             operation="force_provision_device",
-            parameters={"site_id": site_id, "device_id": device_id},
-            result="success",
+            parameters=parameters,
+            result="failed",
             site_id=site_id,
         )
-        logger.info(sanitize_log_message(f"Force provision requested for {mac}"))
-        return {"success": True, "mac": mac, "status": "provision requested"}
+        raise

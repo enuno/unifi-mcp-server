@@ -86,7 +86,7 @@ async def test_list_radius_profiles_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_radius_profiles("default", mock_settings)
@@ -120,7 +120,7 @@ async def test_get_radius_profile_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_profile("default", "profile-1", mock_settings)
@@ -150,7 +150,7 @@ async def test_create_radius_profile_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_profile(
@@ -175,7 +175,7 @@ async def test_create_radius_profile_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_profile(
@@ -229,7 +229,7 @@ async def test_update_radius_profile_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_profile(
@@ -255,7 +255,7 @@ async def test_delete_radius_profile_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.delete = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_radius_profile(
@@ -300,7 +300,7 @@ async def test_list_radius_accounts_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_radius_accounts("default", mock_settings)
@@ -333,7 +333,7 @@ async def test_create_radius_account_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_account(
@@ -372,7 +372,7 @@ async def test_delete_radius_account_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.delete = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_radius_account(
@@ -421,7 +421,7 @@ async def test_get_guest_portal_config_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_guest_portal_config("default", mock_settings)
@@ -469,7 +469,7 @@ async def test_configure_guest_portal_disable_portal(mock_settings):
         mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.put = AsyncMock(return_value={"data": [updated]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await configure_guest_portal(
@@ -500,7 +500,7 @@ async def test_configure_guest_portal_auth_method_clears_siblings(mock_settings)
         mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.put = AsyncMock(return_value={"data": [updated]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await configure_guest_portal(
@@ -533,6 +533,64 @@ async def test_configure_guest_portal_invalid_auth_method(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_configure_guest_portal_password_with_other_method_rejected(mock_settings):
+    """A password alongside a non-password method would be written unused."""
+    with pytest.raises(ValidationError, match="auth_method='password'"):
+        await configure_guest_portal(
+            site_id="default",
+            settings=mock_settings,
+            auth_method="voucher",
+            password="hunter2",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_password_switch_needs_a_password(mock_settings):
+    """Switching to password auth with nothing stored and nothing given fails."""
+    current = _guest_access_section()
+    current.pop("x_password", None)
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.get = AsyncMock(return_value={"data": [current]})
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        with pytest.raises(ValidationError, match="requires a password"):
+            await configure_guest_portal(
+                site_id="default",
+                settings=mock_settings,
+                auth_method="password",
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_password_without_method_change_rejected(mock_settings):
+    """A new password while the portal is on another method needs the switch."""
+    current = _guest_access_section(voucher_enabled=True, password_enabled=False)
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.is_authenticated = True
+        mock_client.get = AsyncMock(return_value={"data": [current]})
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        with pytest.raises(ValidationError, match="pass\\s+auth_method='password'"):
+            await configure_guest_portal(
+                site_id="default",
+                settings=mock_settings,
+                password="hunter2",
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
 async def test_configure_guest_portal_dry_run(mock_settings):
     """Dry run previews the legacy-field payload with secrets redacted."""
     current = _guest_access_section()
@@ -543,13 +601,14 @@ async def test_configure_guest_portal_dry_run(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await configure_guest_portal(
             site_id="default",
             settings=mock_settings,
             portal_enabled=False,
+            auth_method="password",
             password="test123",
             confirm=True,
             dry_run=True,
@@ -589,7 +648,7 @@ async def test_list_hotspot_packages_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_hotspot_packages("default", mock_settings)
@@ -619,7 +678,7 @@ async def test_create_hotspot_package_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_hotspot_package(
@@ -699,7 +758,7 @@ async def test_create_hotspot_package_rounds_duration_up_to_hours(mock_settings)
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_hotspot_package(
@@ -723,7 +782,7 @@ async def test_delete_hotspot_package_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.delete = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_hotspot_package(
@@ -759,7 +818,7 @@ async def test_list_radius_profiles_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_radius_profiles("default", mock_settings)
@@ -787,7 +846,7 @@ async def test_get_radius_profile_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_profile("default", "profile-1", mock_settings)
@@ -804,7 +863,7 @@ async def test_get_radius_profile_empty_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=[])
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         # Empty list should still be processed (may raise validation error)
@@ -833,7 +892,7 @@ async def test_create_radius_profile_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_profile(
@@ -869,7 +928,7 @@ async def test_create_radius_profile_with_acct_server(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         await create_radius_profile(
@@ -898,7 +957,7 @@ async def test_create_radius_profile_dry_run_with_acct(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_profile(
@@ -937,7 +996,7 @@ async def test_update_radius_profile_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_profile(
@@ -959,7 +1018,7 @@ async def test_update_radius_profile_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_profile(
@@ -1012,7 +1071,7 @@ async def test_update_radius_profile_with_all_fields(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         await update_radius_profile(
@@ -1065,7 +1124,7 @@ async def test_delete_radius_profile_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_radius_profile(
@@ -1099,7 +1158,7 @@ async def test_list_radius_accounts_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_radius_accounts("default", mock_settings)
@@ -1116,7 +1175,7 @@ async def test_create_radius_account_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_account(
@@ -1152,7 +1211,7 @@ async def test_create_radius_account_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_radius_account(
@@ -1176,6 +1235,7 @@ async def test_create_radius_account_without_vlan(mock_settings):
             "name": "newuser",
             "x_password": "newpass",
             "tunnel_type": 13,
+            "site_id": "default",
         }
     }
 
@@ -1185,7 +1245,7 @@ async def test_create_radius_account_without_vlan(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         await create_radius_account(
@@ -1215,6 +1275,7 @@ async def test_create_radius_account_with_note(mock_settings):
             "name": "newuser",
             "x_password": "newpass",
             "note": "Test note",
+            "site_id": "default",
         }
     }
 
@@ -1224,7 +1285,7 @@ async def test_create_radius_account_with_note(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         await create_radius_account(
@@ -1249,7 +1310,7 @@ async def test_delete_radius_account_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_radius_account(
@@ -1278,7 +1339,7 @@ async def test_configure_guest_portal_put_not_echoed(mock_settings):
         mock_client.get = AsyncMock(side_effect=[{"data": [current]}, {"data": [stored]}])
         mock_client.put = AsyncMock(return_value={"data": []})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await configure_guest_portal(
@@ -1304,7 +1365,7 @@ async def test_configure_guest_portal_versioned_fields(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value={"data": [current]})
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await configure_guest_portal(
@@ -1363,7 +1424,7 @@ async def test_list_hotspot_packages_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await list_hotspot_packages("default", mock_settings)
@@ -1380,7 +1441,7 @@ async def test_create_hotspot_package_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_hotspot_package(
@@ -1421,7 +1482,7 @@ async def test_create_hotspot_package_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.post = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await create_hotspot_package(
@@ -1456,7 +1517,7 @@ async def test_delete_hotspot_package_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await delete_hotspot_package(
@@ -1510,7 +1571,7 @@ async def test_get_radius_account_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_account(
@@ -1543,7 +1604,7 @@ async def test_get_radius_account_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_account(
@@ -1567,7 +1628,7 @@ async def test_get_radius_account_empty_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_account(
@@ -1600,7 +1661,7 @@ async def test_update_radius_account_username_only(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -1638,7 +1699,7 @@ async def test_update_radius_account_vlan(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -1675,7 +1736,7 @@ async def test_update_radius_account_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -1720,7 +1781,7 @@ async def test_update_radius_account_all_fields(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -1774,7 +1835,7 @@ async def test_get_hotspot_package_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_hotspot_package(
@@ -1807,7 +1868,7 @@ async def test_get_hotspot_package_list_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_hotspot_package(
@@ -1841,7 +1902,7 @@ async def test_update_hotspot_package_name_only(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(
@@ -1868,7 +1929,7 @@ async def test_update_hotspot_package_price_and_duration(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(
@@ -1906,7 +1967,7 @@ async def test_update_hotspot_package_dry_run(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(
@@ -1959,7 +2020,7 @@ async def test_update_hotspot_package_all_fields(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(
@@ -1994,7 +2055,7 @@ async def test_get_hotspot_package_empty_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_hotspot_package(
@@ -2028,7 +2089,7 @@ async def test_get_radius_account_already_authenticated(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_radius_account(
@@ -2047,7 +2108,7 @@ async def test_update_radius_account_dry_run_no_password(mock_settings):
         mock_client.is_authenticated = False
         mock_client.authenticate = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -2080,7 +2141,7 @@ async def test_update_radius_account_already_auth_dict_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_radius_account(
@@ -2113,7 +2174,7 @@ async def test_get_hotspot_package_already_authenticated(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await get_hotspot_package(
@@ -2142,7 +2203,7 @@ async def test_update_hotspot_package_already_auth_dict_response(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.put = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client_class.return_value = mock_client
 
         result = await update_hotspot_package(

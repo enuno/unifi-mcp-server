@@ -663,7 +663,13 @@ def _first_item(response: Any) -> dict[str, Any]:
     write: the default only applies when the key is absent, not when the list
     is empty.
     """
-    items = response if isinstance(response, list) else response.get("data", [])
+    if isinstance(response, list):
+        items: Any = response
+    elif isinstance(response, dict):
+        items = response.get("data", [])
+    else:
+        # None or a scalar reply must not raise mid-parse.
+        return {}
     if not isinstance(items, list) or not items:
         return {}
     first = items[0]
@@ -675,6 +681,13 @@ def _translate_guest_access(section: dict[str, Any]) -> dict[str, Any]:
 
     ``auth`` alone does not identify the method: ``"hotspot"`` covers
     password, voucher and RADIUS, distinguished by their ``*_enabled`` flags.
+
+    A section reporting ``auth="hotspot"`` with none of those flags set is an
+    ambiguous controller state; it is reported faithfully as
+    ``auth_method="hotspot"`` — an output-only value that
+    :func:`configure_guest_portal` deliberately rejects as input. Remapping it
+    to a configurable value would misstate what the controller holds; the raw
+    section accompanies the translation as ground truth.
     """
     auth = section.get("auth", "none")
     if auth == "hotspot":
@@ -803,6 +816,10 @@ async def configure_guest_portal(
             f"Invalid auth_method '{auth_method}'. "
             f"Must be one of: {', '.join(VALID_PORTAL_AUTH_METHODS)}"
         )
+    if password is not None and auth_method is not None and auth_method != "password":
+        raise ValidationError(
+            f"password only applies when auth_method='password', not '{auth_method}'"
+        )
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Configuring guest portal for site {site_id}"))
@@ -815,6 +832,25 @@ async def configure_guest_portal(
         settings_id = current.get("_id")
         if not settings_id:
             raise APIError("guest_access settings section not found in controller response")
+
+        # Switching to password auth needs a password from somewhere: either
+        # this call or one already stored on the section. Without one the
+        # controller would be left demanding a password nobody set.
+        if auth_method == "password" and password is None and not current.get("x_password"):
+            raise ValidationError(
+                "auth_method='password' requires a password: none was provided "
+                "and the section has none stored"
+            )
+        # Likewise a password sent while the section stays on a non-password
+        # method would be written and never used; require the method change.
+        if password is not None and auth_method is None:
+            translated = _translate_guest_access(current)
+            if translated.get("auth_method") != "password":
+                raise ValidationError(
+                    "password was provided but the portal's auth method is "
+                    f"'{translated.get('auth_method')}'; pass "
+                    "auth_method='password' to switch"
+                )
 
         payload: dict[str, Any] = {}
 

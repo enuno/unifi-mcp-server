@@ -778,11 +778,12 @@ class TestUniFiClientBackupMethods:
         client = UniFiClient(mock_settings_local)
         client._site_uuid_to_name = {"default": "default"}
 
+        schedule = {"_id": "ab-1", "key": "auto_backup", "auto_backup_enabled": False}
         with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.text = '{"data": {"schedule_id": "sched-1"}}'
-            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-1"}})
+            mock_response.text = '{"data": [{"_id": "ab-1"}]}'
+            mock_response.json = MagicMock(return_value={"data": [schedule]})
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
@@ -796,9 +797,69 @@ class TestUniFiClientBackupMethods:
                     max_backups=10,
                 )
 
-        assert mock_req.called
-        call_kwargs = mock_req.call_args
-        assert "/proxy/network/api/s/default/rest/backup/schedule" in call_kwargs[1]["url"]
+        # Read of the section, then the settings write onto its _id.
+        put_call = mock_req.call_args_list[-1]
+        assert "/proxy/network/api/s/default/set/setting/auto_backup/ab-1" in put_call[1]["url"]
+        body = put_call[1]["json"]
+        assert body["auto_backup_enabled"] is True
+        assert body["auto_backup_cron_expr"] == "00 02 * * *"
+        assert body["auto_backup_max_files"] == 10
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_weekly_day_mapping(self, mock_settings_local):
+        """Weekly schedules translate 0=Monday..6=Sunday into cron day names.
+
+        Regression: the cron expression used the integer directly, where 0 is
+        both falsy (Monday silently became the fallback day) and, in cron's
+        own numbering, Sunday.
+        """
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        schedule = {"_id": "ab-1", "key": "auto_backup", "auto_backup_enabled": False}
+        for day, expected in [(0, "mon"), (5, "sat"), (6, "sun"), ("Monday", "mon")]:
+            with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                mock_response.text = '{"data": [{"_id": "ab-1"}]}'
+                mock_response.json = MagicMock(return_value={"data": [schedule]})
+
+                with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                    mock_req.return_value = mock_response
+                    await client.configure_backup_schedule(
+                        site_id="default",
+                        frequency="weekly",
+                        time_of_day="03:30",
+                        day_of_week=day,
+                    )
+
+            body = mock_req.call_args_list[-1][1]["json"]
+            assert body["auto_backup_cron_expr"] == f"30 03 * * {expected}"
+
+        with pytest.raises(APIError, match="day_of_week"):
+            await client.configure_backup_schedule(
+                site_id="default", frequency="weekly", day_of_week=7
+            )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_reraises_real_errors(self, mock_settings_local):
+        """Only not-found style APIErrors mean absence; others must surface."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client, "get", new=AsyncMock(side_effect=APIError("api.err.Invalid"))
+            ):
+                assert await client.get_backup_schedule("default") == {}
+
+            with patch.object(
+                client, "get", new=AsyncMock(side_effect=APIError("HTTP 500: server exploded"))
+            ):
+                with pytest.raises(APIError, match="500"):
+                    await client.get_backup_schedule("default")
         await client.close()
 
     @pytest.mark.asyncio
@@ -809,25 +870,26 @@ class TestUniFiClientBackupMethods:
         with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.text = '{"data": {"schedule_id": "sched-2"}}'
-            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-2"}})
+            mock_response.text = '{"data": []}'
+            mock_response.json = MagicMock(return_value={"data": []})
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
-                await client.configure_backup_schedule(
-                    site_id="site-uuid",
-                    backup_type="network",
-                    frequency="weekly",
-                    time_of_day="03:00",
-                    enabled=True,
-                    retention_days=14,
-                    max_backups=5,
-                    day_of_week="monday",
-                )
+                with pytest.raises(APIError, match="auto_backup"):
+                    await client.configure_backup_schedule(
+                        site_id="site-uuid",
+                        backup_type="network",
+                        frequency="weekly",
+                        time_of_day="03:00",
+                        enabled=True,
+                        retention_days=14,
+                        max_backups=5,
+                        day_of_week="monday",
+                    )
 
-        assert mock_req.called
-        call_kwargs = mock_req.call_args
-        assert "/ea/sites/site-uuid/backup/schedule" in call_kwargs[1]["url"]
+        # A controller with no auto_backup section (UniFi OS consoles) is
+        # told so; nothing is written.
+        assert mock_req.call_count == 1
         await client.close()
 
     @pytest.mark.asyncio

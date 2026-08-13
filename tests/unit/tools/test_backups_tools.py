@@ -724,18 +724,16 @@ async def test_schedule_backups_monthly_missing_day(mock_settings):
 
 @pytest.mark.asyncio
 async def test_get_backup_schedule_configured(mock_settings):
+    # The schedule is the auto_backup settings section as self-hosted
+    # controllers report it; the old shape came from nowhere real.
     mock_schedule = {
-        "schedule_id": "schedule_daily_network",
-        "enabled": True,
-        "backup_type": "network",
-        "frequency": "daily",
-        "time_of_day": "03:00",
-        "retention_days": 30,
-        "max_backups": 10,
-        "cloud_backup_enabled": True,
-        "last_run": "2026-01-24T03:00:00Z",
-        "last_backup_id": "backup-123",
-        "next_run": "2026-01-25T03:00:00Z",
+        "_id": "ab-1",
+        "key": "auto_backup",
+        "auto_backup_enabled": True,
+        "auto_backup_cron_expr": "0 3 * * *",
+        "auto_backup_timezone": "UTC",
+        "auto_backup_days": 30,
+        "auto_backup_max_files": 10,
     }
 
     mock_client = MagicMock()
@@ -749,9 +747,9 @@ async def test_get_backup_schedule_configured(mock_settings):
 
         assert result["configured"] is True
         assert result["enabled"] is True
-        assert result["frequency"] == "daily"
-        assert result["time_of_day"] == "03:00"
-        assert result["next_run"] == "2026-01-25T03:00:00Z"
+        assert result["cron_expr"] == "0 3 * * *"
+        assert result["retention_days"] == 30
+        assert result["max_backups"] == 10
         mock_client.get_backup_schedule.assert_called_once_with(site_id="default")
 
 
@@ -767,7 +765,7 @@ async def test_get_backup_schedule_not_configured(mock_settings):
         result = await get_backup_schedule("default", mock_settings)
 
         assert result["configured"] is False
-        assert "No automated backup schedule" in result["message"]
+        assert "console level" in result["message"]
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,8 @@
 # UniFi MCP Server — Multi-Agent Work Plan
 
-**Date:** 2026-07-19  
-**Repository:** ~/projects/unifi-mcp-server  
-**Status:** Wave 1 complete, Wave 2 complete (Protect wired and verified). Wave 3 launched; docs update pending.  
+**Date:** 2026-07-19
+**Repository:** ~/projects/unifi-mcp-server
+**Status:** Wave 1 complete, Wave 2 complete (Protect wired and verified). Wave 3 launched; docs update pending.
 
 ## Wave 1: discovery and audit (complete)
 

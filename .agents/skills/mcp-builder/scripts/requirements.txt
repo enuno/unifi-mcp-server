@@ -1,0 +1,2 @@
+anthropic>=0.39.0
+mcp>=1.25.0  # Updated to fix CVE-2025-66416, CVE-2025-53365, CVE-2025-53366

@@ -1,42 +1,50 @@
-"""Hotspot voucher models."""
+"""Hotspot voucher models.
 
-from datetime import datetime
+The shape mirrors the documented Integration v1 voucher
+(``/v1/sites/{siteId}/hotspot/vouchers``, docs/UNIFI_API.md): camelCase
+keys, an integer ``code``, and no ``site_id``/``status``/``duration``/
+``create_time`` at all. Only ``id`` is required — ``activatedAt`` is absent
+until a voucher is first used, so nothing else can be counted on. Dump with
+``exclude_none=True`` so an absent key means "not reported" rather than
+"empty" (the convention settled in #103).
+"""
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class Voucher(BaseModel):
-    """Hotspot voucher model."""
+    """Hotspot voucher as the Integration v1 API reports it."""
 
-    id: str = Field(..., alias="_id", description="Voucher identifier")
-    site_id: str = Field(..., description="Site identifier")
-    code: str = Field(..., description="Voucher code")
+    id: str = Field(..., description="Voucher ID (UUID)")
 
-    # Usage status
-    status: str = Field(..., description="Voucher status (unused/used/expired)")
-    used: int = Field(0, description="Number of times used")
-    quota: int = Field(1, description="Number of times voucher can be used")
+    created_at: str | None = Field(None, alias="createdAt", description="Creation timestamp")
+    name: str | None = Field(None, description="Voucher note")
+    code: int | str | None = Field(None, description="Voucher access code")
 
-    # Time configuration
-    duration: int = Field(..., description="Duration in seconds")
-    start_time: datetime | None = Field(None, description="When voucher was first used")
-    end_time: datetime | None = Field(None, description="When voucher expires")
-    create_time: datetime = Field(..., description="When voucher was created")
-
-    # Bandwidth limits
-    upload_limit_kbps: int | None = Field(
-        None, alias="qos_rate_max_up", description="Upload speed limit in kbps"
+    authorized_guest_limit: int | None = Field(
+        None, alias="authorizedGuestLimit", description="Max guests allowed on one voucher"
     )
-    download_limit_kbps: int | None = Field(
-        None, alias="qos_rate_max_down", description="Download speed limit in kbps"
+    authorized_guest_count: int | None = Field(
+        None, alias="authorizedGuestCount", description="Guests currently using the voucher"
     )
-    upload_quota_mb: int | None = Field(
-        None, alias="qos_usage_quota", description="Upload quota in MB"
-    )
-    download_quota_mb: int | None = Field(None, description="Download quota in MB")
 
-    # Additional metadata
-    note: str | None = Field(None, description="Admin notes")
-    admin_name: str | None = Field(None, description="Admin who created voucher")
+    activated_at: str | None = Field(
+        None, alias="activatedAt", description="First-use timestamp; absent until used"
+    )
+    expires_at: str | None = Field(None, alias="expiresAt", description="Expiration timestamp")
+    expired: bool | None = Field(None, description="Whether the voucher has expired")
+
+    time_limit_minutes: int | None = Field(
+        None, alias="timeLimitMinutes", description="Access duration in minutes"
+    )
+    data_usage_limit_mb: int | None = Field(
+        None, alias="dataUsageLimitMBytes", description="Data usage limit in megabytes"
+    )
+    rx_rate_limit_kbps: int | None = Field(
+        None, alias="rxRateLimitKbps", description="Download rate limit in kbps"
+    )
+    tx_rate_limit_kbps: int | None = Field(
+        None, alias="txRateLimitKbps", description="Upload rate limit in kbps"
+    )
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")

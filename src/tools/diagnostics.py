@@ -6,13 +6,14 @@ from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
-from ..models.diagnostics import (
-    NetworkReference,
-    SpectrumInterference,
-    SpectrumScan,
-    SpeedTestResult,
+from ..models.diagnostics import NetworkReference, SpeedTestResult
+from ..utils import (
+    ValidationError,
+    get_logger,
+    sanitize_log_message,
+    validate_mac_address,
+    validate_site_id,
 )
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_site_id
 
 
 async def get_network_references(
@@ -189,73 +190,117 @@ async def get_speed_test_history(
         return results
 
 
-async def get_spectrum_scan(site_id: str, settings: Settings) -> dict[str, Any]:
-    """Get RF spectrum scan results for a site.
+async def _spectrum_scan_targets(
+    client: UniFiClient, site_id: str, ap_mac: str | None
+) -> list[str]:
+    """Resolve which access points to query for spectrum data.
+
+    Args:
+        client: Authenticated API client
+        site_id: Site identifier
+        ap_mac: Explicit AP MAC, or None to enumerate the site's APs
+
+    Returns:
+        List of AP MAC addresses
+    """
+    if ap_mac:
+        return [ap_mac]
+    response = await client.get(f"/ea/sites/{site_id}/devices")
+    devices = response.get("data", []) if isinstance(response, dict) else response
+    if not isinstance(devices, list):
+        return []
+    return [
+        d.get("mac")
+        for d in devices
+        if isinstance(d, dict) and d.get("type") == "uap" and d.get("mac")
+    ]
+
+
+async def get_spectrum_scan(
+    site_id: str, settings: Settings, ap_mac: str | None = None
+) -> dict[str, Any]:
+    """Get RF spectrum scan state and results.
+
+    Spectrum data is per access point: the route is
+    ``stat/spectrum-scan/{ap_mac}``. The previous site-wide
+    ``stat/spectrumscan`` path does not exist and 404'd on every call.
+    Without ``ap_mac``, every AP on the site is queried.
+
+    An AP that has never run an RF scan reports empty ``spectrum_table``
+    lists — run a scan from the controller first if results are expected.
 
     Args:
         site_id: Site identifier
         settings: Application settings
+        ap_mac: Optional single AP to query
 
     Returns:
-        Dictionary with spectrum scan information
+        Dictionary with per-AP scan state and radio tables
     """
     site_id = validate_site_id(site_id)
+    if ap_mac is not None:
+        # Fail fast with a clear ValidationError rather than interpolating a
+        # malformed value into the request path.
+        ap_mac = validate_mac_address(ap_mac)
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/stat/spectrumscan")
-        data = response.get("data", []) if isinstance(response, dict) else response
-        if not isinstance(data, list):
-            data = []
-
-        if not data:
-            logger.info(sanitize_log_message(f"No spectrum scan data for site '{site_id}'"))
-            return {}
-
-        scan = SpectrumScan(**data[0])
-        logger.info(sanitize_log_message(f"Retrieved spectrum scan for site '{site_id}'"))
-        return scan.model_dump()
-
-
-async def list_spectrum_interference(site_id: str, settings: Settings) -> list[dict[str, Any]]:
-    """List spectrum interference data from RF scans.
-
-    Args:
-        site_id: Site identifier
-        settings: Application settings
-
-    Returns:
-        List of interference dictionaries per channel
-    """
-    site_id = validate_site_id(site_id)
-    logger = get_logger(__name__, settings.log_level)
-
-    async with UniFiClient(settings) as client:
-        await client.authenticate()
-
-        response = await client.get(f"/ea/sites/{site_id}/stat/spectrumscan")
-        data = response.get("data", []) if isinstance(response, dict) else response
-        if not isinstance(data, list):
-            data = []
-
-        interference_list: list[dict[str, Any]] = []
-        for scan_data in data:
-            device_id = scan_data.get("device_id", "")
-            for entry in scan_data.get("scan_data", []):
-                interference = SpectrumInterference(
-                    channel=entry.get("channel", 0),
-                    frequency_mhz=entry.get("freq"),
-                    utilization_percent=entry.get("util"),
-                    noise_floor_dbm=entry.get("noise"),
-                    device_id=device_id,
-                )
-                interference_list.append(interference.model_dump())
+        aps: list[dict[str, Any]] = []
+        for mac in await _spectrum_scan_targets(client, site_id, ap_mac):
+            response = await client.get(f"/ea/sites/{site_id}/stat/spectrum-scan/{mac}")
+            data = response.get("data", []) if isinstance(response, dict) else response
+            for entry in data if isinstance(data, list) else []:
+                if isinstance(entry, dict):
+                    aps.append(entry)
 
         logger.info(
-            sanitize_log_message(
-                f"Retrieved {len(interference_list)} interference entries for site '{site_id}'"
-            )
+            sanitize_log_message(f"Retrieved spectrum state for {len(aps)} APs in '{site_id}'")
         )
-        return interference_list
+        return {"site_id": site_id, "aps": aps}
+
+
+async def list_spectrum_interference(
+    site_id: str, settings: Settings, ap_mac: str | None = None
+) -> list[dict[str, Any]]:
+    """List spectrum interference entries from RF scans.
+
+    Flattens each AP radio's ``spectrum_table`` (see
+    :func:`get_spectrum_scan` for the route story). Entries are passed
+    through as the controller reports them, annotated with the AP MAC and
+    radio; an empty list usually means no RF scan has been run.
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        ap_mac: Optional single AP to query
+
+    Returns:
+        List of interference entries across all queried APs
+    """
+    scan = await get_spectrum_scan(site_id, settings, ap_mac=ap_mac)
+
+    logger = get_logger(__name__, settings.log_level)
+    entries: list[dict[str, Any]] = []
+    for ap in scan.get("aps", []):
+        for radio_scan in ap.get("scans", []) or []:
+            if not isinstance(radio_scan, dict):
+                continue
+            for row in radio_scan.get("spectrum_table", []) or []:
+                if isinstance(row, dict):
+                    # Annotations come last so a controller-provided key of
+                    # the same name can never overwrite them.
+                    entries.append(
+                        {
+                            **row,
+                            "ap_mac": ap.get("mac"),
+                            "radio": radio_scan.get("radio"),
+                            "radio_name": radio_scan.get("name"),
+                        }
+                    )
+
+    logger.info(
+        sanitize_log_message(f"Retrieved {len(entries)} interference entries for '{site_id}'")
+    )
+    return entries

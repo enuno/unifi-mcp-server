@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import src.tools.topology as topology_module
 from src.utils.exceptions import AuthenticationError, RateLimitError, ResourceNotFoundError
 
 
@@ -672,7 +671,9 @@ TOPO_FIXTURE = {
 
 def test_resolve_topology_node_by_node_id():
     """The topology's own id resolves to itself."""
-    assert topology_module._resolve_topology_node(TOPO_FIXTURE, "uuid-sw1") == "uuid-sw1"
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "uuid-sw1") == "uuid-sw1"
 
 
 def test_resolve_topology_node_by_mac():
@@ -681,12 +682,16 @@ def test_resolve_topology_node_by_mac():
     Every other device tool in this server speaks MACs and legacy controller
     ids; the topology speaks Integration API UUIDs.
     """
-    assert topology_module._resolve_topology_node(TOPO_FIXTURE, "00:00:5E:00:53:10") == "uuid-sw1"
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "00:00:5E:00:53:10") == "uuid-sw1"
 
 
 def test_resolve_topology_node_by_name():
     """A device name resolves."""
-    assert topology_module._resolve_topology_node(TOPO_FIXTURE, "Switch A") == "uuid-sw1"
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "Switch A") == "uuid-sw1"
 
 
 def test_resolve_topology_node_unknown_raises():
@@ -697,19 +702,19 @@ def test_resolve_topology_node_unknown_raises():
     connected. "I do not know this device" is a different answer from "this
     device has no connections".
     """
+    from src.tools.topology import _resolve_topology_node
+
     with pytest.raises(ResourceNotFoundError, match="device"):
-        topology_module._resolve_topology_node(
-            TOPO_FIXTURE, "507f191e810c19729de860ea"  # pragma: allowlist secret
-        )
+        _resolve_topology_node(TOPO_FIXTURE, "507f191e810c19729de860ea")  # pragma: allowlist secret
 
 
 @pytest.mark.asyncio
 async def test_get_port_mappings_accepts_a_mac(mock_settings):
     """Port mappings resolve a MAC and report which node answered."""
-    with patch.object(topology_module, "get_network_topology", return_value=TOPO_FIXTURE):
-        result = await topology_module.get_port_mappings(
-            "default", "00:00:5e:00:53:10", mock_settings
-        )
+    from src.tools.topology import get_port_mappings
+
+    with patch("src.tools.topology.get_network_topology", return_value=TOPO_FIXTURE):
+        result = await get_port_mappings("default", "00:00:5e:00:53:10", mock_settings)
 
     assert result["device_id"] == "uuid-sw1"
     assert result["requested_id"] == "00:00:5e:00:53:10"
@@ -720,9 +725,9 @@ async def test_get_port_mappings_accepts_a_mac(mock_settings):
 @pytest.mark.asyncio
 async def test_get_device_connections_accepts_a_mac(mock_settings):
     """Connections resolve a MAC instead of silently returning nothing."""
-    with patch.object(topology_module, "get_network_topology", return_value=TOPO_FIXTURE):
-        result = await topology_module.get_device_connections(
-            "default", "00:00:5e:00:53:10", mock_settings
-        )
+    from src.tools.topology import get_device_connections
+
+    with patch("src.tools.topology.get_network_topology", return_value=TOPO_FIXTURE):
+        result = await get_device_connections("default", "00:00:5e:00:53:10", mock_settings)
 
     assert len(result) == 2

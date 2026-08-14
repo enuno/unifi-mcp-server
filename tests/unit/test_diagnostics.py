@@ -216,6 +216,27 @@ class TestGetSpeedTestStatus:
                 await get_speed_test_status("site-1", mock_settings)
 
     @pytest.mark.asyncio
+    async def test_get_speed_test_status_finds_ugw_gateway(self, mock_settings):
+        """A USG reports ``type="ugw"`` -- the spelling the rest of the code uses.
+
+        ``sites.py`` counts gateways as ``("ugw", "udm", "uxg")``; ``"usg"`` is a
+        model-string token (``helpers.py``), never a device ``type``. A gateway
+        that has not run a speed test carries no ``speedtest-status`` key, so
+        the type check is the only thing that can find it.
+        """
+        gateway = self._gateway()
+        gateway["type"] = "ugw"
+        del gateway["speedtest-status"]
+        response = {"data": [self._ap(), gateway]}
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await get_speed_test_status("site-1", mock_settings)
+
+        assert result["status"] == "no_result"
+
+    @pytest.mark.asyncio
     async def test_get_speed_test_status_invalid_site_id(self, mock_settings):
         """Test validation error for empty site_id."""
         with pytest.raises(ValidationError):

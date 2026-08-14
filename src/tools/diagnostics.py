@@ -122,7 +122,11 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
         for device in devices if isinstance(devices, list) else []:
             if not isinstance(device, dict):
                 continue
-            if "speedtest-status" in device or device.get("type") in ("udm", "usg", "uxg"):
+            # Gateways report type "ugw"/"udm"/"uxg" -- the same set sites.py
+            # counts. "usg" is a model-string token (helpers.py), never a
+            # device type, so it matched nothing while a real USG went unfound
+            # whenever it had no speedtest-status key to fall back on.
+            if "speedtest-status" in device or device.get("type") in ("ugw", "udm", "uxg"):
                 gateway = device
                 break
         if gateway is None:

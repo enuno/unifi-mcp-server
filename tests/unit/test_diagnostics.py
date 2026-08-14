@@ -472,3 +472,23 @@ class TestListSpectrumInterference:
             result = await list_spectrum_interference("site-1", mock_settings)
 
             assert result == []
+
+
+class TestSpeedTestStatusGuards:
+    @pytest.mark.asyncio
+    async def test_speed_test_status_skips_non_dict_devices(self, mock_settings):
+        """Junk entries in the device list are skipped while finding the gateway."""
+        gateway = {
+            "mac": "00:00:5e:00:53:01",
+            "type": "udm",
+            "speedtest-status": {"xput_download": 900.0, "xput_upload": 500.0, "latency": 9},
+            "speedtest-pending-interfaces": [],
+            "uplink": {"speedtest_status": "Success"},
+        }
+        client = create_mock_client([{"data": ["junk", 42, None, gateway]}])
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_speed_test_status("site-1", mock_settings)
+
+        assert result["download_speed_mbps"] == 900.0
+        assert result["status"] == "Success"

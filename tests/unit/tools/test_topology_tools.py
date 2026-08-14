@@ -916,3 +916,24 @@ class TestLegacyPortDetail:
         conn = next(c for c in result["connections"] if c["source_node_id"] == "sw1")
         assert conn["duplex"] == "half"
         assert conn["speed_mbps"] == 100
+
+
+@pytest.mark.asyncio
+async def test_legacy_rows_skip_non_dict_entries(mock_settings):
+    """Junk rows in a legacy response are skipped, not indexed."""
+    from src.tools.topology import _fetch_legacy_stats
+
+    client = MagicMock()
+    client.logger = MagicMock()
+    client.get = AsyncMock(
+        side_effect=[
+            {"data": ["junk", 7, {"mac": "00:00:5E:00:53:41", "port_idx": 3}, {}]},
+            {"data": [None, {"mac": "00:00:5E:00:53:07", "sw_port": 5}]},
+        ]
+    )
+
+    devices, clients = await _fetch_legacy_stats(client, "default")
+
+    assert list(devices) == ["00:00:5e:00:53:41"]
+    assert devices["00:00:5e:00:53:41"]["port_idx"] == 3
+    assert list(clients) == ["00:00:5e:00:53:07"]

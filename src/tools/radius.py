@@ -795,7 +795,9 @@ async def configure_guest_portal(
         settings: Application settings
         portal_enabled: Enable/disable the captive portal itself
         portal_title: Portal page title
-        auth_method: Authentication method (none/password/voucher/radius/external)
+        auth_method: Authentication method (none/password/voucher/radius/external).
+            Not ``"hotspot"`` -- get_guest_portal_config may report that for an
+            ambiguous controller state, but it is output-only and rejected here.
         password: Portal password (if auth_method=password)
         session_timeout: Session timeout in minutes
         redirect_enabled: Enable redirect after authentication
@@ -811,6 +813,19 @@ async def configure_guest_portal(
     """
     validate_confirmation(confirm, "configure guest portal", dry_run)
 
+    if auth_method == "hotspot":
+        # get_guest_portal_config emits this for the ambiguous controller
+        # state, so a read-modify-write caller hands it straight back. Saying
+        # only "must be one of" leaves them unable to tell where the value
+        # came from or what to send instead.
+        raise ValidationError(
+            "auth_method 'hotspot' is output-only: get_guest_portal_config "
+            "reports it when the controller has Hotspot auth enabled with no "
+            "method flag set, which is an ambiguous state rather than a "
+            "setting. Choose a concrete method "
+            f"({', '.join(VALID_PORTAL_AUTH_METHODS)}); the read tool's 'raw' "
+            "section shows what the controller currently holds."
+        )
     if auth_method is not None and auth_method not in VALID_PORTAL_AUTH_METHODS:
         raise ValidationError(
             f"Invalid auth_method '{auth_method}'. "

@@ -533,6 +533,24 @@ async def test_configure_guest_portal_invalid_auth_method(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_configure_guest_portal_rejects_hotspot_with_guidance(mock_settings):
+    """``hotspot`` is output-only, and the rejection has to say so.
+
+    :func:`get_guest_portal_config` returns ``auth_method="hotspot"`` for the
+    ambiguous controller state, so a read-modify-write caller hands it straight
+    back. The generic "must be one of" list leaves them with no way to tell
+    where the value came from or what to send instead.
+    """
+    with pytest.raises(ValidationError, match="output-only"):
+        await configure_guest_portal(
+            site_id="default",
+            settings=mock_settings,
+            auth_method="hotspot",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
 async def test_configure_guest_portal_password_with_other_method_rejected(mock_settings):
     """A password alongside a non-password method would be written unused."""
     with pytest.raises(ValidationError, match="auth_method='password'"):

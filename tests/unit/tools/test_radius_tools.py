@@ -2216,3 +2216,121 @@ async def test_update_hotspot_package_already_auth_dict_response(mock_settings):
 
         mock_client.authenticate.assert_not_called()
         assert result["name"] == "Updated"
+
+
+# ---------------------------------------------------------------------------
+# Guest portal: translation and write branches codecov flagged as uncovered.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_guest_portal_config_radius_method(mock_settings):
+    """auth=hotspot with radius_enabled translates to auth_method=radius."""
+    section = _guest_access_section(
+        password_enabled=False, voucher_enabled=False, radius_enabled=True
+    )
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        client = MagicMock()
+        client.is_authenticated = True
+        client.get = AsyncMock(return_value={"data": [section]})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = client
+
+        result = await get_guest_portal_config("site-1", mock_settings)
+
+    assert result["auth_method"] == "radius"
+
+
+@pytest.mark.asyncio
+async def test_get_guest_portal_config_ambiguous_hotspot(mock_settings):
+    """auth=hotspot with no method flag is reported faithfully, not remapped."""
+    section = _guest_access_section(
+        password_enabled=False, voucher_enabled=False, radius_enabled=False
+    )
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        client = MagicMock()
+        client.is_authenticated = True
+        client.get = AsyncMock(return_value={"data": [section]})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = client
+
+        result = await get_guest_portal_config("site-1", mock_settings)
+
+    assert result["auth_method"] == "hotspot"
+
+
+@pytest.mark.asyncio
+async def test_get_guest_portal_config_external_and_none(mock_settings):
+    """auth=custom maps to external; anything else maps to none."""
+    for auth, expected in (("custom", "external"), ("none", "none"), ("", "none")):
+        section = _guest_access_section(auth=auth)
+        with patch("src.tools.radius.UniFiClient") as mock_client_class:
+            client = MagicMock()
+            client.is_authenticated = True
+            client.get = AsyncMock(return_value={"data": [section]})
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = client
+
+            result = await get_guest_portal_config("site-1", mock_settings)
+
+        assert result["auth_method"] == expected, auth
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_missing_section_raises(mock_settings):
+    """A response with no settings id cannot be written to."""
+    from src.utils.exceptions import APIError
+
+    with patch("src.tools.radius.UniFiClient") as mock_client_class:
+        client = MagicMock()
+        client.is_authenticated = True
+        client.get = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = client
+
+        with pytest.raises(APIError, match="guest_access settings section"):
+            await configure_guest_portal(
+                site_id="site-1",
+                settings=mock_settings,
+                portal_enabled=True,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_configure_guest_portal_external_and_none_payloads(mock_settings):
+    """external writes auth=custom; none writes auth=none."""
+    for method, expected in (("external", "custom"), ("none", "none")):
+        with patch("src.tools.radius.UniFiClient") as mock_client_class:
+            client = MagicMock()
+            client.is_authenticated = True
+            client.get = AsyncMock(return_value={"data": [_guest_access_section()]})
+            client.put = AsyncMock(return_value={"data": [_guest_access_section()]})
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = client
+
+            with patch("src.tools.radius.audit_action", new_callable=AsyncMock):
+                await configure_guest_portal(
+                    site_id="site-1",
+                    settings=mock_settings,
+                    auth_method=method,
+                    confirm=True,
+                )
+
+        payload = client.put.call_args[1]["json_data"]
+        assert payload["auth"] == expected, method
+
+
+def test_first_item_handles_bare_list_and_scalars():
+    """The unwrap helper accepts a bare list and refuses scalars."""
+    from src.tools.radius import _first_item
+
+    assert _first_item([{"_id": "a"}]) == {"_id": "a"}
+    assert _first_item([]) == {}
+    assert _first_item("nonsense") == {}
+    assert _first_item(None) == {}

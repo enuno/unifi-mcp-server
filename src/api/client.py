@@ -211,7 +211,11 @@ class UniFiClient:
             sites_path, site_id, rest = match.groups()
             site_uuid = self._site_name_to_uuid.get(site_id, site_id)
             if site_id != site_uuid:
-                self.logger.debug(f"Translated integration site ID: {site_id} -> {site_uuid}")
+                # Log that a translation happened, not the identifiers
+                # themselves: sanitize_log_message masks MACs and IPs but
+                # not site UUIDs, and controller-identifying data does not
+                # belong in logs.
+                self.logger.debug("Translated integration site ID to its UUID form")
             return f"/proxy/network{sites_path}{site_uuid}{rest or ''}"
 
         # If no pattern matches, check if it's already a local endpoint

@@ -803,3 +803,97 @@ async def test_unconfirmed_write_audits_unconfirmed(mock_settings):
         result="unconfirmed",
         site_id="default",
     )
+
+
+@pytest.mark.asyncio
+async def test_set_radio_falls_back_to_stat_record_on_config_error(mock_settings):
+    """A refused per-id config GET falls back to the stat record.
+
+    Older surfaces do not serve rest/device/{id}; the stat record's
+    radio_table mirrors applied config and the write sends only that
+    table, so the change must still land.
+    """
+    from src.tools.device_control import set_ap_radio_channel
+    from src.utils.exceptions import APIError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(side_effect=[{"data": [AP_CONFIG]}, APIError("no such resource")])
+    client.put = AsyncMock(return_value={"data": [_stored()]})
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    body = client.put.call_args[1]["json_data"]
+    assert set(body.keys()) == {"radio_table"}
+    assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_radio_falls_back_when_config_record_is_empty(mock_settings):
+    """An empty config payload is treated the same as a refusal."""
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": [_stored()]}, config_get={"data": []})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    assert result["success"] is True
+    assert client.put.call_args[1]["json_data"]["radio_table"]
+
+
+@pytest.mark.asyncio
+async def test_set_radio_verifies_channel_width_echo(mock_settings):
+    """A requested width is verified against the echo like the other fields."""
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    # The controller stores the channel but leaves the width at 80.
+    stored = _stored()
+    stored["radio_table"][1]["ht"] = 80
+    client = _radio_client([AP_CONFIG], put_return={"data": [stored]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=36,
+            settings=mock_settings,
+            ht="40",
+            tx_power_mode="custom",
+            tx_power=23,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert any("ht" in w for w in result["warnings"])

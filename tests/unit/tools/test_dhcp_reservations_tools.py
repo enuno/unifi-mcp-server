@@ -419,3 +419,44 @@ class TestRemoveDhcpReservation:
         )
         assert result["status"] == "dry_run"
         assert result["action"] == "forget_client"
+
+
+@pytest.mark.asyncio
+async def test_merge_without_id_raises(local_settings: MagicMock) -> None:
+    """A malformed existing record cannot be merged into."""
+    from src.utils.exceptions import APIError
+
+    client = _mock_client({"data": [{"mac": "aa:bb:cc:dd:ee:02", "name": "no id"}]})
+
+    with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+        MockClient.return_value = client
+        with pytest.raises(APIError, match="carries no _id"):
+            await dhcp.create_dhcp_reservation(
+                mac="aa:bb:cc:dd:ee:02",
+                fixed_ip="192.168.10.200",
+                network_id="net-lan",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )
+
+
+@pytest.mark.asyncio
+async def test_unechoed_write_names_the_method(local_settings: MagicMock) -> None:
+    """An accepted-but-unechoed write reports which verb was used."""
+    from src.utils.exceptions import APIError
+
+    client = _mock_client({"data": []})
+    client.post.return_value = {"data": []}
+
+    with patch("src.tools.dhcp_reservations.UniFiClient") as MockClient:
+        MockClient.return_value = client
+        with pytest.raises(APIError, match="POST returned no data"):
+            await dhcp.create_dhcp_reservation(
+                mac="aa:bb:cc:dd:ee:99",
+                fixed_ip="192.168.10.201",
+                network_id="net-lan",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )

@@ -48,7 +48,7 @@ PLAYBOOK = PromptPlaybook(
             order=3,
             action="Configure the guest portal and voucher policy for user access.",
             tool="configure_guest_portal",
-            params={"site_id": "${site_id}", "enabled": True, "voucher_enabled": True},
+            params={"site_id": "${site_id}", "portal_enabled": True, "auth_method": "voucher"},
             validation="Confirm the portal is enabled and voucher authentication is available for guest onboarding.",
             fallback="If guest portal configuration fails, keep the WLAN isolated and route access through vouchers only after a manual review.",
         ),

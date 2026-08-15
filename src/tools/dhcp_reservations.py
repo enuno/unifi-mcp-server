@@ -150,8 +150,9 @@ async def create_dhcp_reservation(
     """Create a DHCP reservation (fixed IP) for a client MAC.
 
     If the MAC already exists in the controller's known-clients table, the
-    controller merges the reservation into the existing entry. If it's a
-    new MAC, a new user entry is created.
+    reservation is merged onto that entry with a PUT; posting it instead
+    fails with ``api.err.MacUsed``. If it's a new MAC, a new user entry is
+    created.
 
     Args:
         mac: Client MAC address (e.g. ``"aa:bb:cc:dd:ee:ff"``)
@@ -205,10 +206,29 @@ async def create_dhcp_reservation(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.post(_endpoint(site_id), json_data=payload)
+        # A POST for a MAC the controller already knows fails with
+        # api.err.MacUsed rather than merging, so look the MAC up first and
+        # PUT onto the existing user entry when one exists.
+        existing = None
+        lookup = await client.get(_endpoint(site_id))
+        for user in _unwrap(lookup):
+            if (user.get("mac") or "").lower() == mac.lower():
+                existing = user
+                break
+
+        if existing is not None:
+            existing_id = existing.get("_id")
+            if not existing_id:
+                raise APIError(f"Existing user record for {mac} carries no _id; cannot merge")
+            merge = {k: v for k, v in payload.items() if k != "mac"}
+            response = await client.put(_endpoint(site_id, existing_id), json_data=merge)
+            method = "PUT"
+        else:
+            response = await client.post(_endpoint(site_id), json_data=payload)
+            method = "POST"
         items = _unwrap(response)
         if not items:
-            raise APIError(f"DHCP reservation POST returned no data for {mac}")
+            raise APIError(f"DHCP reservation {method} returned no data for {mac}")
         data = items[0]
 
         log_audit(

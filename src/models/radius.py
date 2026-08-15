@@ -1,7 +1,5 @@
 """RADIUS profile data models."""
 
-from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -75,40 +73,6 @@ class RADIUSAccount(BaseModel):
     # Metadata
     site_id: str = Field(..., description="Site ID")
     note: str | None = Field(None, description="Admin notes")
-
-    model_config = ConfigDict(populate_by_name=True)
-
-
-class GuestPortalConfig(BaseModel):
-    """Guest portal customization configuration."""
-
-    site_id: str = Field(..., description="Site ID")
-
-    # Portal settings
-    enabled: bool = Field(True, description="Guest portal enabled")
-    portal_title: str = Field("Guest WiFi", description="Portal page title")
-    redirect_enabled: bool = Field(False, description="Redirect after authentication")
-    redirect_url: str | None = Field(None, description="Redirect URL")
-
-    # Authentication method
-    auth_method: Literal["none", "password", "voucher", "radius", "external"] = Field(
-        "voucher", description="Authentication method"
-    )
-    password: str | None = Field(None, description="Portal password (if auth_method=password)")
-
-    # Terms of service
-    terms_of_service_enabled: bool = Field(False, description="Require ToS acceptance")
-    terms_of_service_text: str | None = Field(None, description="Terms of service text")
-
-    # Session limits
-    session_timeout: int = Field(480, description="Session timeout in minutes (0=unlimited)")
-    download_limit_kbps: int | None = Field(None, description="Download speed limit in kbps")
-    upload_limit_kbps: int | None = Field(None, description="Upload speed limit in kbps")
-
-    # Customization
-    background_image_url: str | None = Field(None, description="Background image URL")
-    logo_url: str | None = Field(None, description="Logo image URL")
-    custom_css: str | None = Field(None, description="Custom CSS")
 
     model_config = ConfigDict(populate_by_name=True)
 

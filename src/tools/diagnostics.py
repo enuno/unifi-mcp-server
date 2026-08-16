@@ -8,6 +8,7 @@ from ..api import UniFiClient
 from ..config import Settings
 from ..models.diagnostics import NetworkReference, SpeedTestResult
 from ..utils import (
+    APIError,
     ValidationError,
     get_logger,
     sanitize_log_message,
@@ -88,12 +89,23 @@ async def run_speed_test(site_id: str, settings: Settings) -> dict[str, Any]:
 async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, Any]:
     """Get the current status of a running or completed speed test.
 
+    The state lives on the gateway's ``stat/device`` record: a
+    ``speedtest-status`` object carries the last result
+    (``xput_download``/``xput_upload`` in Mbps, ``latency`` in ms,
+    ``rundate`` in epoch seconds, per-phase ``status_*`` codes), the
+    ``uplink`` object carries the outcome string, and
+    ``speedtest-pending-interfaces`` is non-empty while a test runs —
+    verified live on Network 10.5.67. The
+    ``cmd/devmgr/speedtest-status`` resource this tool previously GETed
+    does not exist on any controller, so every call 404'd.
+
     Args:
         site_id: Site identifier
         settings: Application settings
 
     Returns:
-        Dictionary with speed test status and results
+        Dictionary with speed test status and results; fields the gateway
+        does not report are omitted
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
@@ -101,14 +113,56 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/cmd/devmgr/speedtest-status")
-        data = response.get("data", {}) if isinstance(response, dict) else response
-        if not isinstance(data, dict):
-            data = {}
+        # stat/device is the record that carries speedtest-status --
+        # matching the docstring and the route verified live.
+        response = await client.get(f"/ea/sites/{site_id}/stat/device")
+        devices = response.get("data", []) if isinstance(response, dict) else response
 
-        speed_test = SpeedTestResult(**data)
+        gateway = None
+        for device in devices if isinstance(devices, list) else []:
+            if not isinstance(device, dict):
+                continue
+            # Gateways report type "ugw"/"udm"/"uxg" -- the same set sites.py
+            # counts. "usg" is a model-string token (helpers.py), never a
+            # device type, so it matched nothing while a real USG went unfound
+            # whenever it had no speedtest-status key to fall back on.
+            if "speedtest-status" in device or device.get("type") in ("ugw", "udm", "uxg"):
+                gateway = device
+                break
+        if gateway is None:
+            raise APIError(
+                "No gateway device on this site reports speed test state; "
+                "speed tests run on the gateway."
+            )
+
+        status_obj = gateway.get("speedtest-status")
+        if not isinstance(status_obj, dict) or not status_obj:
+            logger.info(sanitize_log_message(f"No speed test recorded yet for site '{site_id}'"))
+            return {
+                "status": "no_result",
+                "message": "The gateway has not recorded a speed test yet. "
+                "Start one with run_speed_test.",
+            }
+
+        uplink = gateway.get("uplink") or {}
+        running = bool(gateway.get("speedtest-pending-interfaces"))
+        rundate = status_obj.get("rundate")
+        server = status_obj.get("server") or {}
+
+        speed_test = SpeedTestResult(
+            status="running" if running else (uplink.get("speedtest_status") or "unknown"),
+            download_speed_mbps=status_obj.get("xput_download"),
+            upload_speed_mbps=status_obj.get("xput_upload"),
+            ping_ms=status_obj.get("latency"),
+            timestamp=(
+                datetime.fromtimestamp(rundate, tz=timezone.utc).isoformat()
+                if isinstance(rundate, int | float)
+                else None
+            ),
+            server_name=server.get("provider"),
+        )
         logger.info(sanitize_log_message(f"Retrieved speed test status for site '{site_id}'"))
-        return speed_test.model_dump()
+        return speed_test.model_dump(exclude_none=True)
 
 
 async def get_speed_test_history(

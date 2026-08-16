@@ -121,35 +121,64 @@ class TestRunSpeedTest:
 
 
 class TestGetSpeedTestStatus:
+    """Status lives on the gateway's stat/device record.
+
+    The record carries a ``speedtest-status`` object with the last result,
+    the outcome string on ``uplink.speedtest_status``, and a
+    ``speedtest-pending-interfaces`` list that is non-empty while a test
+    runs. The ``cmd/devmgr/speedtest-status`` resource the old code GETed
+    does not exist on any controller.
+    """
+
+    @staticmethod
+    def _gateway(pending=None, **status_overrides):
+        status = {
+            "latency": 12,
+            "rundate": 1735689600,
+            "runtime": 14,
+            "server": {"cc": "US", "city": "Anytown", "provider": "Example ISP"},
+            "status_download": 2,
+            "status_ping": 2,
+            "status_summary": 2,
+            "status_upload": 2,
+            "xput_download": 850.5,
+            "xput_upload": 420.2,
+        }
+        status.update(status_overrides)
+        return {
+            "mac": "00:00:5e:00:53:01",
+            "type": "udm",
+            "name": "Gateway",
+            "speedtest-status": status,
+            "speedtest-pending-interfaces": pending or [],
+            "uplink": {"speedtest_status": "Success", "speedtest_ping": 12},
+        }
+
+    @staticmethod
+    def _ap():
+        return {"mac": "00:00:5e:00:53:41", "type": "uap", "name": "Test AP"}
+
     @pytest.mark.asyncio
     async def test_get_speed_test_status_success(self, mock_settings):
-        """Test successful retrieval of speed test status."""
-        response = {
-            "data": {
-                "status": "completed",
-                "download_speed_mbps": 850.5,
-                "upload_speed_mbps": 420.2,
-                "ping_ms": 12.3,
-                "jitter_ms": 2.1,
-                "timestamp": "2025-01-15T10:30:00Z",
-            }
-        }
+        """The gateway record's last result maps into the tool shape."""
+        response = {"data": [self._ap(), self._gateway()]}
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client([response])
 
             result = await get_speed_test_status("site-1", mock_settings)
 
-            assert isinstance(result, dict)
-            assert result["status"] == "completed"
+            assert result["status"] == "Success"
             assert result["download_speed_mbps"] == 850.5
             assert result["upload_speed_mbps"] == 420.2
-            assert result["ping_ms"] == 12.3
+            assert result["ping_ms"] == 12
+            assert result["timestamp"].startswith("2025-01-01")
+            assert result["server_name"] == "Example ISP"
 
     @pytest.mark.asyncio
     async def test_get_speed_test_status_running(self, mock_settings):
-        """Test speed test status when still running."""
-        response = {"data": {"status": "running"}}
+        """A non-empty pending-interfaces list means a test is in flight."""
+        response = {"data": [self._gateway(pending=["eth4"])]}
 
         with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client([response])
@@ -157,6 +186,55 @@ class TestGetSpeedTestStatus:
             result = await get_speed_test_status("site-1", mock_settings)
 
             assert result["status"] == "running"
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_status_never_run(self, mock_settings):
+        """A gateway with no recorded test reports that honestly."""
+        gateway = self._gateway()
+        del gateway["speedtest-status"]
+        response = {"data": [gateway]}
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await get_speed_test_status("site-1", mock_settings)
+
+            assert result["status"] == "no_result"
+            assert "run_speed_test" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_status_no_gateway(self, mock_settings):
+        """A site with no gateway device raises instead of guessing."""
+        from src.utils.exceptions import APIError
+
+        response = {"data": [self._ap()]}
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            with pytest.raises(APIError, match="gateway"):
+                await get_speed_test_status("site-1", mock_settings)
+
+    @pytest.mark.asyncio
+    async def test_get_speed_test_status_finds_ugw_gateway(self, mock_settings):
+        """A USG reports ``type="ugw"`` -- the spelling the rest of the code uses.
+
+        ``sites.py`` counts gateways as ``("ugw", "udm", "uxg")``; ``"usg"`` is a
+        model-string token (``helpers.py``), never a device ``type``. A gateway
+        that has not run a speed test carries no ``speedtest-status`` key, so
+        the type check is the only thing that can find it.
+        """
+        gateway = self._gateway()
+        gateway["type"] = "ugw"
+        del gateway["speedtest-status"]
+        response = {"data": [self._ap(), gateway]}
+
+        with patch("src.tools.diagnostics.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client([response])
+
+            result = await get_speed_test_status("site-1", mock_settings)
+
+        assert result["status"] == "no_result"
 
     @pytest.mark.asyncio
     async def test_get_speed_test_status_invalid_site_id(self, mock_settings):
@@ -415,3 +493,23 @@ class TestListSpectrumInterference:
             result = await list_spectrum_interference("site-1", mock_settings)
 
             assert result == []
+
+
+class TestSpeedTestStatusGuards:
+    @pytest.mark.asyncio
+    async def test_speed_test_status_skips_non_dict_devices(self, mock_settings):
+        """Junk entries in the device list are skipped while finding the gateway."""
+        gateway = {
+            "mac": "00:00:5e:00:53:01",
+            "type": "udm",
+            "speedtest-status": {"xput_download": 900.0, "xput_upload": 500.0, "latency": 9},
+            "speedtest-pending-interfaces": [],
+            "uplink": {"speedtest_status": "Success"},
+        }
+        client = create_mock_client([{"data": ["junk", 42, None, gateway]}])
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_speed_test_status("site-1", mock_settings)
+
+        assert result["download_speed_mbps"] == 900.0
+        assert result["status"] == "Success"

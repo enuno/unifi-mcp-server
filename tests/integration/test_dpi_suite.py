@@ -28,7 +28,6 @@ async def test_get_dpi_statistics(settings, env: TestEnvironment) -> dict[str, A
         result = await dpi.get_dpi_statistics(
             site_id=env.site_id,
             settings=settings,
-            time_range="24h",
         )
 
         # Validate response structure
@@ -46,7 +45,6 @@ async def test_get_dpi_statistics(settings, env: TestEnvironment) -> dict[str, A
             "details": {
                 "application_count": app_count,
                 "category_count": cat_count,
-                "time_range": result.get("time_range", "24h"),
             },
         }
 
@@ -57,75 +55,42 @@ async def test_get_dpi_statistics(settings, env: TestEnvironment) -> dict[str, A
 
 
 @pytest.mark.integration
-async def test_get_dpi_statistics_time_ranges(settings, env: TestEnvironment) -> dict[str, Any]:
-    """Test get_dpi_statistics with different time ranges."""
+async def test_get_dpi_statistics_empty_carries_note(
+    settings, env: TestEnvironment
+) -> dict[str, Any]:
+    """A flow-engine controller must report empty counters with a note.
+
+    Current releases run traffic identification through the flow engine, so
+    stat/sitedpi legitimately answers with no counters; the tool then points
+    at the flow tools instead of returning a silent empty.
+    """
     if env.api_type in ["cloud-v1", "cloud-ea"]:
         return {"status": "SKIP", "message": "Cloud APIs do not support DPI statistics"}
 
     try:
-        # Test multiple time ranges
-        valid_ranges = ["1h", "6h", "12h", "24h", "7d", "30d"]
-        results = {}
+        result = await dpi.get_dpi_statistics(
+            site_id=env.site_id,
+            settings=settings,
+        )
 
-        for time_range in valid_ranges[:3]:  # Test first 3 ranges
-            result = await dpi.get_dpi_statistics(
-                site_id=env.site_id,
-                settings=settings,
-                time_range=time_range,
-            )
-            assert isinstance(result, dict), f"Result for {time_range} must be a dictionary"
-            assert result.get("time_range") == time_range, "Time range must match"
-            results[time_range] = len(result.get("applications", []))
+        if result.get("applications") or result.get("categories"):
+            return {
+                "status": "SKIP",
+                "message": "Controller reports classic DPI counters; note not applicable",
+            }
+
+        assert "note" in result, "Empty counters must carry an explanatory note"
+        assert "get_top_flows" in result["note"], "Note must point at the flow tools"
 
         return {
             "status": "PASS",
-            "message": "DPI statistics work across time ranges",
-            "details": {
-                "tested_ranges": list(results.keys()),
-                "application_counts": results,
-            },
+            "message": "Empty DPI counters carry the flow-engine note",
         }
 
     except AssertionError as e:
         return {"status": "FAIL", "message": str(e)}
     except Exception as e:
         return {"status": "ERROR", "message": f"{type(e).__name__}: {str(e)}"}
-
-
-@pytest.mark.integration
-async def test_get_dpi_statistics_invalid_time_range(
-    settings, env: TestEnvironment
-) -> dict[str, Any]:
-    """Test get_dpi_statistics with invalid time range (should fail)."""
-    if env.api_type in ["cloud-v1", "cloud-ea"]:
-        return {"status": "SKIP", "message": "Cloud APIs do not support DPI statistics"}
-
-    try:
-        await dpi.get_dpi_statistics(
-            site_id=env.site_id,
-            settings=settings,
-            time_range="invalid",  # Invalid time range
-        )
-
-        # If we get here, validation failed
-        return {
-            "status": "FAIL",
-            "message": "Expected ValueError for invalid time range but got result",
-        }
-
-    except ValueError as e:
-        # Expected validation error
-        if "Invalid time range" in str(e):
-            return {
-                "status": "PASS",
-                "message": "Correctly raised ValueError for invalid time range",
-            }
-        return {"status": "FAIL", "message": f"Unexpected ValueError: {str(e)}"}
-    except Exception as e:
-        return {
-            "status": "ERROR",
-            "message": f"Unexpected error type: {type(e).__name__}: {str(e)}",
-        }
 
 
 @pytest.mark.integration
@@ -139,7 +104,6 @@ async def test_list_top_applications(settings, env: TestEnvironment) -> dict[str
             site_id=env.site_id,
             settings=settings,
             limit=5,
-            time_range="24h",
         )
 
         # Validate response structure
@@ -148,13 +112,14 @@ async def test_list_top_applications(settings, env: TestEnvironment) -> dict[str
         if not result:
             return {
                 "status": "SKIP",
-                "message": "No application data found (network may have no traffic)",
+                "message": "No application data found (flow-engine controller or no traffic)",
             }
 
-        # Validate application structure
+        # Rows are the controller's own sitedpi entries: numeric catalog ids
+        # plus byte counters and the computed total.
         app = result[0]
-        assert "application" in app, "Application must have 'application' field"
-        assert "total_bytes" in app, "Application must have 'total_bytes' field"
+        assert "app" in app, "Application row must carry the 'app' catalog id"
+        assert "total_bytes" in app, "Application row must have 'total_bytes'"
 
         # Verify limit is respected
         assert len(result) <= 5, "Result should respect limit parameter"
@@ -163,7 +128,7 @@ async def test_list_top_applications(settings, env: TestEnvironment) -> dict[str
             "status": "PASS",
             "message": f"Retrieved top {len(result)} applications",
             "details": {
-                "top_app": app.get("application", "unknown"),
+                "top_app_id": app.get("app"),
                 "top_app_bytes": app.get("total_bytes", 0),
             },
         }
@@ -235,8 +200,7 @@ def create_dpi_suite() -> TestSuite:
         description="DPI (Deep Packet Inspection) Tools - statistics, top applications, client DPI data",
         tests=[
             test_get_dpi_statistics,
-            test_get_dpi_statistics_time_ranges,
-            test_get_dpi_statistics_invalid_time_range,
+            test_get_dpi_statistics_empty_carries_note,
             test_list_top_applications,
             test_get_client_dpi,
         ],

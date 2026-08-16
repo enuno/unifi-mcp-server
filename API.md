@@ -433,100 +433,95 @@ result = await mcp.call_tool("health_check", {})
 }
 ```
 
-### Protect Phase 3 Read Tools
+### Protect Phase 3 Tools
 
-The Protect profile now exposes read-only tools for the Phase 3 surfaces. Cameras and NVRs are already wired, and the new device, view, and event tools are now documented alongside them.
+Protect tools are exposed in **local API mode** and can be isolated with `UNIFI_PROFILE=protect`.
+The currently implemented Protect MCP resources are:
 
-#### `list_protect_cameras`
+- `protect://nvrs`
+- `protect://nvrs/{nvr_id}`
+- `protect://cameras`
+- `protect://cameras/{camera_id}`
 
-List Protect cameras.
+The currently implemented Protect MCP tools are grouped below.
 
-**Parameters:**
+#### Cameras
 
-- `limit` (integer, optional): Maximum results to return
-- `offset` (integer, optional): Pagination offset
-
-**Example:**
+- `list_protect_cameras(limit=None, offset=None)`
+- `get_protect_camera(camera_id)`
 
 ```python
 result = await mcp.call_tool("list_protect_cameras", {"limit": 10, "offset": 0})
+camera = await mcp.call_tool("get_protect_camera", {"camera_id": "cam-1"})
 ```
 
-#### `get_protect_camera`
+#### NVRs
 
-Get a single Protect camera by ID.
-
-**Parameters:**
-
-- `camera_id` (string, required): Protect camera identifier
-
-**Example:**
-
-```python
-result = await mcp.call_tool("get_protect_camera", {"camera_id": "cam-1"})
-```
-
-#### `list_protect_nvrs`
-
-List Protect NVRs.
-
-**Parameters:** None
-
-**Example:**
+- `list_protect_nvrs()`
+- `get_protect_nvr(nvr_id)`
 
 ```python
 result = await mcp.call_tool("list_protect_nvrs", {})
+nvr = await mcp.call_tool("get_protect_nvr", {"nvr_id": "nvr-1"})
 ```
 
-#### `get_protect_nvr`
+#### Devices, lights, sensors, and chimes
 
-Get a single Protect NVR by ID.
-
-**Parameters:**
-
-- `nvr_id` (string, required): Protect NVR identifier
-
-**Example:**
+- `list_protect_devices(limit=None, offset=None)`
+- `get_protect_device(device_id)`
+- `update_protect_device(device_id, ...)`
+- `list_protect_lights(limit=None, offset=None)`
+- `get_protect_light(light_id)`
+- `update_protect_light(light_id, ...)`
+- `list_protect_sensors(limit=None, offset=None)`
+- `get_protect_sensor(sensor_id)`
+- `update_protect_sensor(sensor_id, ...)`
+- `list_protect_chimes(limit=None, offset=None)`
+- `get_protect_chime(chime_id)`
+- `update_protect_chime(chime_id, ...)`
+- `list_protect_device_updates(limit=None, offset=None)` for device subscription messages
 
 ```python
-result = await mcp.call_tool("get_protect_nvr", {"nvr_id": "nvr-1"})
+device = await mcp.call_tool("get_protect_device", {"device_id": "device-1"})
+updates = await mcp.call_tool("list_protect_device_updates", {})
 ```
 
-#### `list_protect_devices`
+#### Views and viewers
 
-List Protect device update records surfaced through the read-only Phase 3 device module.
-
-**Parameters:** None
-
-**Example:**
+- `get_protect_meta_info()`
+- `list_protect_viewers(limit=None, offset=None)`
+- `get_protect_viewer(viewer_id)`
+- `update_protect_viewer(viewer_id, ...)`
+- `list_protect_live_views(limit=None, offset=None)`
+- `get_protect_live_view(live_view_id)`
+- `create_protect_live_view(live_view)`
+- `update_protect_live_view(live_view_id, ...)`
 
 ```python
-result = await mcp.call_tool("list_protect_devices", {})
+meta = await mcp.call_tool("get_protect_meta_info", {})
+viewers = await mcp.call_tool("list_protect_viewers", {})
 ```
 
-#### `list_protect_views`
+#### Events and alarm webhooks
 
-List Protect live views and viewer metadata exposed by the Phase 3 views module.
-
-**Parameters:** None
-
-**Example:**
+- `list_protect_events(limit=None, offset=None)`
+- `get_protect_subscribe_events(limit=None, offset=None)` compatibility alias
+- `get_protect_event_messages(limit=None, offset=None)` compatibility alias
+- `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
+- `get_protect_device_updates(limit=None, offset=None)` compatibility alias
+- `send_protect_alarm_webhook(webhook_id, payload=None)`
 
 ```python
-result = await mcp.call_tool("list_protect_views", {})
+events = await mcp.call_tool("list_protect_events", {})
+webhook = await mcp.call_tool(
+    "send_protect_alarm_webhook",
+    {"webhook_id": "webhook-1", "payload": {"event": "manual-trigger"}},
+)
 ```
 
-#### `list_protect_events`
+#### Still planned / not yet exposed
 
-List Protect event messages and alarm/event notifications from the Phase 3 events module.
-
-**Parameters:** None
-
-**Example:**
-
-```python
-result = await mcp.call_tool("list_protect_events", {})
-```
+Snapshot capture, media stream helpers, talkback, and PTZ operations remain roadmap work.
 
 ### Device Management Tools
 
@@ -1968,14 +1963,19 @@ Get Deep Packet Inspection statistics for a site.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `time_range` (string, optional): Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
+
+The counters are lifetime totals read from the `stat/sitedpi` report; the
+endpoint accepts no time window. `app` and `cat` are the controller's
+numeric catalog ids — translate them with `list_dpi_applications` and
+`list_dpi_categories`. A controller that runs traffic identification
+through the flow engine reports empty lists plus a `note` pointing at
+`get_top_flows` / `get_flow_analytics`.
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("get_dpi_statistics", {
-    "site_id": "default",
-    "time_range": "24h"
+    "site_id": "default"
 })
 ```
 
@@ -1984,30 +1984,21 @@ result = await mcp.call_tool("get_dpi_statistics", {
 ```json
 {
   "site_id": "default",
-  "time_range": "24h",
   "applications": [
     {
-      "application": "Netflix",
-      "category": "Streaming",
+      "app": 194,
+      "cat": 4,
       "tx_bytes": 5120000000,
       "rx_bytes": 10240000000,
       "total_bytes": 15360000000
-    },
-    {
-      "application": "YouTube",
-      "category": "Streaming",
-      "tx_bytes": 2560000000,
-      "rx_bytes": 7680000000,
-      "total_bytes": 10240000000
     }
   ],
   "categories": [
     {
-      "category": "Streaming",
+      "cat": 4,
       "tx_bytes": 7680000000,
       "rx_bytes": 17920000000,
-      "total_bytes": 25600000000,
-      "application_count": 2
+      "total_bytes": 25600000000
     }
   ],
   "total_applications": 15,
@@ -2023,15 +2014,13 @@ List top applications by bandwidth usage.
 
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Number of top applications to return (default: 10)
-- `time_range` (string, optional): Time range for statistics (default: 24h)
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("list_top_applications", {
     "site_id": "default",
-    "limit": 5,
-    "time_range": "7d"
+    "limit": 5
 })
 ```
 
@@ -2040,8 +2029,8 @@ result = await mcp.call_tool("list_top_applications", {
 ```json
 [
   {
-    "application": "Netflix",
-    "category": "Streaming",
+    "app": 194,
+    "cat": 4,
     "tx_bytes": 5120000000,
     "rx_bytes": 10240000000,
     "total_bytes": 15360000000
@@ -2638,6 +2627,13 @@ topology = await mcp.call_tool("get_network_topology", {
 
 Retrieve connection details for a specific device or all devices.
 
+Both `get_device_connections` and `get_port_mappings` accept a topology
+node id, a device MAC, or a device name as `device_id`. An identifier
+that matches none of them raises `ResourceNotFoundError` — distinct
+from a known device with no connections, which returns an empty
+result. `get_port_mappings` reports the resolved node id as
+`device_id` and echoes the caller's identifier as `requested_id`.
+
 **Example:**
 
 ```python
@@ -2658,6 +2654,10 @@ all_connections = await mcp.call_tool("get_device_connections", {
 
 Get detailed port-level connection mapping for a device.
 
+Each port maps to a **list** of peers: one physical port routinely
+carries several hosts — a virtualization host bridging its guests, or a
+downstream unmanaged switch.
+
 **Example:**
 
 ```python
@@ -2673,24 +2673,31 @@ port_map = await mcp.call_tool("get_port_mappings", {
 {
   "device_id": "switch_001",
   "ports": {
-    "1": {
-      "connected_to": "gateway_001",
-      "connection_type": "uplink",
-      "speed_mbps": 10000,
-      "status": "up"
-    },
-    "5": {
-      "connected_to": "ap_001",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    },
-    "10": {
-      "connected_to": "client_002",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    }
+    "1": [
+      {
+        "connected_to": "gateway_001",
+        "connected_name": "Gateway",
+        "connection_type": "uplink",
+        "speed_mbps": 10000,
+        "status": "up"
+      }
+    ],
+    "10": [
+      {
+        "connected_to": "client_002",
+        "connected_name": "Hypervisor",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      },
+      {
+        "connected_to": "client_003",
+        "connected_name": "VM guest",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      }
+    ]
   }
 }
 ```
@@ -3315,9 +3322,11 @@ The assistant uses `configure_guest_portal` to customize the captive portal expe
 
 Uses `list_radius_profiles` to display authentication server configurations.
 
-**Prompt:** "Create a hotspot package: '$5 for 24 hours with 5 GB data limit' for our café WiFi."
+**Prompt:** "Create a hotspot package: '$5 for 24 hours' for our café WiFi."
 
-The assistant uses `create_hotspot_package` to set up paid WiFi access with usage quotas.
+The assistant uses `create_hotspot_package` to set up paid WiFi access
+sold by duration — the controller prices packages by the hour; bandwidth
+and data quotas are not part of this API surface.
 
 ### Multi-Site Management
 

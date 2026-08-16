@@ -116,6 +116,17 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_RETRY_BACKOFF_FACTOR",
     )
 
+    retry_total_timeout: int = Field(
+        default=60,
+        description=(
+            "Wall-clock budget in seconds for one request including all "
+            "retries and backoff waits. Attempt-count limits alone let a "
+            "single request burn (max_retries+1) x request_timeout; tools "
+            "that authenticate first then stack two of those (issue #97)."
+        ),
+        validation_alias="UNIFI_RETRY_TOTAL_TIMEOUT",
+    )
+
     # Timeout Configuration
     request_timeout: int = Field(
         default=30,

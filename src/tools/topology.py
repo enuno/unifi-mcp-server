@@ -13,6 +13,7 @@ from src.utils.exceptions import (
     AuthenticationError,
     NetworkError,
     RateLimitError,
+    ResourceNotFoundError,
     ValidationError,
 )
 
@@ -43,6 +44,55 @@ def _extract_device_detail(response: Any) -> dict[str, Any] | None:
             return data[0] if data and isinstance(data[0], dict) else None
         return response
     return None
+
+
+async def _fetch_legacy_stats(
+    client: UniFiClient, site_id: str
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """Fetch the legacy stat records that carry port and link-speed detail.
+
+    The integration API's uplink object is only ``{"deviceId": ...}``: it names
+    the parent but reports neither the ports a link lands on nor its negotiated
+    speed, so a graph built from it alone has edges with no properties. The
+    legacy ``stat/device`` and ``stat/sta`` routes do carry that detail
+    (``port_idx``, ``uplink_remote_port``, ``speed``, ``sw_port``,
+    ``wired_rate_mbps``), so fetch each once and join on MAC.
+
+    Best-effort by design: a controller that refuses these routes yields empty
+    maps, degrading to a graph without port detail rather than no graph at all.
+
+    Args:
+        client: Authenticated API client
+        site_id: Resolved site identifier
+
+    Returns:
+        ``(devices_by_mac, clients_by_mac)``, both keyed by lowercased MAC
+    """
+
+    async def by_mac(endpoint: str) -> dict[str, dict[str, Any]]:
+        try:
+            response = await client.get(endpoint)
+        except (APIError, AuthenticationError, NetworkError) as exc:
+            # AuthenticationError is not an APIError subclass, and a
+            # controller may answer these legacy routes with 401/403 while
+            # the Integration API works fine -- that must degrade too.
+            client.logger.debug(f"No legacy detail from {endpoint}: {exc}")
+            return {}
+        rows = response if isinstance(response, list) else response.get("data", [])
+        indexed: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            mac = (row.get("mac") or "").lower()
+            if mac:
+                indexed[mac] = row
+        return indexed
+
+    devices, clients = await asyncio.gather(
+        by_mac(f"/ea/sites/{site_id}/devices"),
+        by_mac(f"/ea/sites/{site_id}/sta"),
+    )
+    return devices, clients
 
 
 async def _merge_device_uplinks(
@@ -209,6 +259,9 @@ async def get_network_topology(
         # graph would contain client edges only, with every device a root.
         await _merge_device_uplinks(client, devices_endpoint, device_nodes)
 
+        # Ports and link speeds live only on the legacy stat routes.
+        legacy_devices, legacy_clients = await _fetch_legacy_stats(client, actual_site_id)
+
         # Convert devices to topology nodes
         nodes = []
         connections = []
@@ -230,6 +283,9 @@ async def get_network_topology(
             uplink_device_id = uplink_info.get("deviceId")
             is_online = device.get("state") in _ONLINE_DEVICE_STATES
 
+            legacy_device = legacy_devices.get((device.get("macAddress") or "").lower(), {})
+            legacy_uplink = legacy_device.get("uplink") or {}
+
             _resolve_depth(device_id, uplinks, depth_map)
 
             node = TopologyNode(
@@ -239,9 +295,11 @@ async def get_network_topology(
                 mac=device.get("macAddress"),
                 ip=device.get("ipAddress"),
                 model=device.get("model"),
-                type_detail=device.get("model"),
+                # Legacy carries the short type code (usw/uap/udm); the
+                # integration API has no equivalent, so fall back to the model.
+                type_detail=legacy_device.get("type") or device.get("model"),
                 uplink_device_id=uplink_device_id,
-                uplink_port=uplink_info.get("portIndex"),
+                uplink_port=legacy_uplink.get("port_idx"),
                 uplink_depth=depth_map.get(device_id, 0),
                 state=1 if is_online else 0,
                 adopted=True,  # All returned devices are adopted
@@ -255,8 +313,15 @@ async def get_network_topology(
                     source_node_id=device_id,
                     target_node_id=uplink_device_id,
                     connection_type="uplink",
-                    source_port=uplink_info.get("portIndex"),
-                    speed_mbps=uplink_info.get("speedMbps"),
+                    source_port=legacy_uplink.get("port_idx"),
+                    target_port=legacy_uplink.get("uplink_remote_port"),
+                    speed_mbps=legacy_uplink.get("speed"),
+                    # An explicit False is a half-duplex link, not unknown.
+                    duplex=(
+                        None
+                        if legacy_uplink.get("full_duplex") is None
+                        else ("full" if legacy_uplink.get("full_duplex") else "half")
+                    ),
                     is_uplink=True,
                     status="up" if is_online else "down",
                 )
@@ -281,11 +346,27 @@ async def get_network_topology(
             # Create connection for client
             if uplink_device_id:
                 conn_type = "wired" if client_type == "WIRED" else "wireless"
+                legacy_client = legacy_clients.get(
+                    (client_data.get("macAddress") or "").lower(), {}
+                )
+                target_port = None
+                speed_mbps = None
+                if conn_type == "wired":
+                    target_port = legacy_client.get("sw_port")
+                    speed_mbps = legacy_client.get("wired_rate_mbps")
+                else:
+                    # Wireless negotiated rate is reported in kbps.
+                    tx_rate_kbps = legacy_client.get("tx_rate")
+                    if tx_rate_kbps:
+                        speed_mbps = int(tx_rate_kbps) // 1000 or None
+
                 conn = TopologyConnection(
                     connection_id=f"conn_client_{client_id}",
                     source_node_id=client_id,
                     target_node_id=uplink_device_id,
                     connection_type=conn_type,
+                    target_port=target_port,
+                    speed_mbps=speed_mbps,
                     is_uplink=False,
                     status="up",
                 )
@@ -310,6 +391,34 @@ async def get_network_topology(
         )
 
         return diagram.model_dump()
+
+
+def _resolve_topology_node(topology: dict[str, Any], device_id: str) -> str:
+    """Map a caller's device identifier onto the node_id the topology uses.
+
+    The topology is built from the Integration API, whose device ids are UUIDs
+    like ``123e4567-...``. Every other device tool in this server speaks the
+    legacy controller ``_id`` (``507f191e...``) or a MAC, and passing one of
+    those here matched nothing -- so the port/connection lookups returned an
+    empty result that was indistinguishable from a device genuinely having no
+    connections. A switch with several hosts on it reported none, silently.
+
+    Accepts the node_id, the MAC, or the device name. Anything unrecognised
+    raises rather than returning empty, because "I do not know this device"
+    and "this device has no connections" are different answers.
+    """
+    wanted = device_id.strip().lower()
+    nodes = cast(list[dict[str, Any]], topology.get("nodes", []))
+
+    for field in ("node_id", "mac", "name"):
+        for node in nodes:
+            value = node.get(field)
+            if value and str(value).strip().lower() == wanted:
+                return str(node.get("node_id"))
+
+    # Reported as "device": the public tools take a device_id, and the
+    # rest of the codebase raises device-not-found in those terms.
+    raise ResourceNotFoundError("device", device_id)
 
 
 async def get_device_connections(
@@ -341,11 +450,13 @@ async def get_device_connections(
     connections = cast(list[dict[str, Any]], topology.get("connections", []))
 
     if device_id:
-        # Filter connections for specific device
+        # Resolve first: the caller may hold a MAC or a legacy id rather than
+        # the topology's own node_id (see _resolve_topology_node).
+        node_id = _resolve_topology_node(topology, device_id)
         connections = [
             conn
             for conn in connections
-            if conn.get("source_node_id") == device_id or conn.get("target_node_id") == device_id
+            if conn.get("source_node_id") == node_id or conn.get("target_node_id") == node_id
         ]
 
     return connections
@@ -366,43 +477,58 @@ async def get_port_mappings(
         settings: Application settings
 
     Returns:
-        Dictionary with device_id and port mapping information
+        Dictionary with device_id and port mapping information. Each port maps
+        to a *list* of peers: one physical port routinely carries many hosts —
+        a virtualization host bridging its guests, or a downstream unmanaged
+        switch — and reporting only one of them hides the rest.
 
     Example:
         ```python
         ports = await get_port_mappings("default", "switch_001", settings)
-        for port_num, connected_device in ports['ports'].items():
-            print(f"Port {port_num}: {connected_device}")
+        for port_num, peers in ports['ports'].items():
+            for peer in peers:
+                print(f"Port {port_num}: {peer['connected_name']}")
         ```
     """
     topology = await get_network_topology(site_id, settings)
 
     connections = topology.get("connections", [])
+    names = {node.get("node_id"): node.get("name") for node in topology.get("nodes", [])}
+
+    # Resolve first: a MAC or legacy controller id would otherwise match no
+    # node and yield an empty map, reading as "no connections" rather than
+    # "unknown device" (see _resolve_topology_node).
+    node_id = _resolve_topology_node(topology, device_id)
 
     # Build port mapping
-    port_map = {}
+    port_map: dict[Any, list[dict[str, Any]]] = {}
 
     for conn in connections:
-        if conn.get("source_node_id") == device_id:
+        if conn.get("source_node_id") == node_id:
             port_num = conn.get("source_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("target_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
-        elif conn.get("target_node_id") == device_id:
+            peer_id = conn.get("target_node_id")
+        elif conn.get("target_node_id") == node_id:
             port_num = conn.get("target_port")
-            if port_num is not None:
-                port_map[port_num] = {
-                    "connected_to": conn.get("source_node_id"),
-                    "connection_type": conn.get("connection_type"),
-                    "speed_mbps": conn.get("speed_mbps"),
-                    "status": conn.get("status"),
-                }
+            peer_id = conn.get("source_node_id")
+        else:
+            continue
 
-    return {"device_id": device_id, "ports": port_map}
+        if port_num is None:
+            continue
+
+        port_map.setdefault(port_num, []).append(
+            {
+                "connected_to": peer_id,
+                "connected_name": names.get(peer_id),
+                "connection_type": conn.get("connection_type"),
+                "speed_mbps": conn.get("speed_mbps"),
+                "status": conn.get("status"),
+            }
+        )
+
+    # Echo the resolved node_id, so a caller who passed a MAC can see which
+    # node answered rather than having to trust that it matched.
+    return {"device_id": node_id, "requested_id": device_id, "ports": port_map}
 
 
 async def export_topology(

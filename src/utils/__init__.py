@@ -15,6 +15,7 @@ from .exceptions import (
 )
 from .helpers import (
     build_uri,
+    first_response_item,
     format_bytes,
     format_percentage,
     format_uptime,
@@ -89,4 +90,5 @@ __all__ = [
     "merge_dicts",
     "parse_device_type",
     "build_uri",
+    "first_response_item",
 ]

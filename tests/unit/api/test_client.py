@@ -31,6 +31,7 @@ def mock_settings():
     settings.rate_limit_period = 60
     settings.max_retries = 3
     settings.retry_backoff_factor = 2
+    settings.retry_total_timeout = 60
     settings.log_api_requests = True
     settings.default_site = "default"
     settings.get_headers = MagicMock(return_value={"X-API-Key": "test-api-key"})
@@ -50,6 +51,7 @@ def mock_settings_local():
     settings.rate_limit_period = 60
     settings.max_retries = 3
     settings.retry_backoff_factor = 2
+    settings.retry_total_timeout = 60
     settings.log_api_requests = True
     settings.default_site = "default"
     settings.get_headers = MagicMock(return_value={"X-API-Key": "test-api-key"})
@@ -225,15 +227,72 @@ class TestUniFiClientEndpointTranslation:
         await client.close()
 
     @pytest.mark.asyncio
-    async def test_translate_non_v2_proxy_path_unchanged(self, mock_settings_local):
-        """Only the v2 site pattern is rewritten; other local paths pass through."""
+    async def test_translate_integration_unknown_site_passes_through(self, mock_settings_local):
+        """An unmapped integration site id is left alone for the API to reject."""
         client = UniFiClient(mock_settings_local)
-        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+        client._site_name_to_uuid = {}
 
         result = client._translate_endpoint(
             "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
         )
         assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_site_name_to_uuid(self, mock_settings_local):
+        """The Integration API rejects short names, so they map to the UUID."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites/default/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_site_name_when_already_prefixed(self, mock_settings_local):
+        """A path that already carries /proxy/network must not gain a second one."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/proxy/network/integration/v1/sites/default/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_nested_path_is_preserved(self, mock_settings_local):
+        """Everything after the site segment must survive the rewrite intact."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint(
+            "/integration/v1/sites/default/devices/dev-1/statistics"
+        )
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/devices/dev-1/statistics"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_uuid_is_idempotent(self, mock_settings_local):
+        """Callers that already hold the UUID must not be broken by the rewrite."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites/abc-123-uuid/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_sites_root_unchanged(self, mock_settings_local):
+        """The site listing itself has no site segment to translate."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites")
+        assert result == "/proxy/network/integration/v1/sites"
 
         await client.close()
 
@@ -332,6 +391,32 @@ class TestUniFiClientAuthentication:
 
         assert client._site_uuid_to_name["uuid-1"] == "default"
         assert client._site_uuid_to_name["uuid-2"] == "office"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_build_site_uuid_map_builds_reverse_mapping(self, mock_settings_local):
+        """The Integration API needs name -> UUID, the inverse of the legacy map."""
+        client = UniFiClient(mock_settings_local)
+
+        sites = [
+            {"id": "uuid-1", "internalReference": "default"},
+            {"id": "uuid-2", "internalReference": "office"},
+        ]
+
+        client._build_site_uuid_map(sites)
+
+        assert client._site_name_to_uuid == {"default": "uuid-1", "office": "uuid-2"}
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_build_site_uuid_map_clears_stale_reverse_entries(self, mock_settings_local):
+        """Rebuilding must not leave a previous run's sites behind."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"stale": "uuid-gone"}
+
+        client._build_site_uuid_map([{"id": "uuid-1", "internalReference": "default"}])
+
+        assert client._site_name_to_uuid == {"default": "uuid-1"}
         await client.close()
 
     @pytest.mark.asyncio
@@ -621,6 +706,62 @@ class TestUniFiClientErrorHandling:
         await client.close()
 
     @pytest.mark.asyncio
+    async def test_retry_budget_bounds_wall_clock(self, mock_settings):
+        """Retries stop when the time budget is spent, not just at max_retries.
+
+        Regression for #97: with a 30s request timeout, four attempts plus
+        backoff legitimately burn ~127s per request, and a tool that
+        authenticates first stacks two of those — a four-minute hang from the
+        caller's side. The budget converts that into a fast, explained
+        failure.
+        """
+        mock_settings.max_retries = 10
+        mock_settings.retry_backoff_factor = 100  # first backoff alone busts the budget
+        mock_settings.retry_total_timeout = 5
+        client = UniFiClient(mock_settings)
+
+        with patch.object(client.client, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.side_effect = httpx.TimeoutException("timeout")
+
+            with pytest.raises(NetworkError, match="retry budget"):
+                await client.get("/ea/sites")
+
+        # Attempt 1 fails, backoff 100**0=1s fits the 5s budget, attempt 2
+        # fails, backoff 100**1=100s busts it — the check runs BEFORE the
+        # sleep, so the test never actually waits.
+        assert mock_request.call_count == 2
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_retry_budget_allows_fast_retries(self, mock_settings):
+        """Quick retries inside the budget still happen."""
+        mock_settings.max_retries = 2
+        mock_settings.retry_backoff_factor = 0.01
+        mock_settings.retry_total_timeout = 60
+        client = UniFiClient(mock_settings)
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = '{"data": []}'
+        mock_response.json = MagicMock(return_value={"data": []})
+
+        calls = 0
+
+        async def side_effect(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls < 3:
+                raise httpx.TimeoutException("timeout")
+            return mock_response
+
+        with patch.object(client.client, "request", side_effect=side_effect):
+            result = await client.get("/ea/sites")
+
+        assert result == {"data": []}
+        assert calls == 3
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_network_error_retry(self, mock_settings):
         mock_settings.max_retries = 2
         mock_settings.retry_backoff_factor = 0.01
@@ -720,11 +861,12 @@ class TestUniFiClientBackupMethods:
         client = UniFiClient(mock_settings_local)
         client._site_uuid_to_name = {"default": "default"}
 
+        schedule = {"_id": "ab-1", "key": "auto_backup", "auto_backup_enabled": False}
         with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.text = '{"data": {"schedule_id": "sched-1"}}'
-            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-1"}})
+            mock_response.text = '{"data": [{"_id": "ab-1"}]}'
+            mock_response.json = MagicMock(return_value={"data": [schedule]})
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
@@ -738,9 +880,69 @@ class TestUniFiClientBackupMethods:
                     max_backups=10,
                 )
 
-        assert mock_req.called
-        call_kwargs = mock_req.call_args
-        assert "/proxy/network/api/s/default/rest/backup/schedule" in call_kwargs[1]["url"]
+        # Read of the section, then the settings write onto its _id.
+        put_call = mock_req.call_args_list[-1]
+        assert "/proxy/network/api/s/default/set/setting/auto_backup/ab-1" in put_call[1]["url"]
+        body = put_call[1]["json"]
+        assert body["auto_backup_enabled"] is True
+        assert body["auto_backup_cron_expr"] == "00 02 * * *"
+        assert body["auto_backup_max_files"] == 10
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_configure_backup_schedule_weekly_day_mapping(self, mock_settings_local):
+        """Weekly schedules translate 0=Monday..6=Sunday into cron day names.
+
+        Regression: the cron expression used the integer directly, where 0 is
+        both falsy (Monday silently became the fallback day) and, in cron's
+        own numbering, Sunday.
+        """
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        schedule = {"_id": "ab-1", "key": "auto_backup", "auto_backup_enabled": False}
+        for day, expected in [(0, "mon"), (5, "sat"), (6, "sun"), ("Monday", "mon")]:
+            with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+                mock_response = MagicMock()
+                mock_response.status_code = 200
+                mock_response.text = '{"data": [{"_id": "ab-1"}]}'
+                mock_response.json = MagicMock(return_value={"data": [schedule]})
+
+                with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
+                    mock_req.return_value = mock_response
+                    await client.configure_backup_schedule(
+                        site_id="default",
+                        frequency="weekly",
+                        time_of_day="03:30",
+                        day_of_week=day,
+                    )
+
+            body = mock_req.call_args_list[-1][1]["json"]
+            assert body["auto_backup_cron_expr"] == f"30 03 * * {expected}"
+
+        with pytest.raises(APIError, match="day_of_week"):
+            await client.configure_backup_schedule(
+                site_id="default", frequency="weekly", day_of_week=7
+            )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_reraises_real_errors(self, mock_settings_local):
+        """Only not-found style APIErrors mean absence; others must surface."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client, "get", new=AsyncMock(side_effect=APIError("api.err.Invalid"))
+            ):
+                assert await client.get_backup_schedule("default") == {}
+
+            with patch.object(
+                client, "get", new=AsyncMock(side_effect=APIError("HTTP 500: server exploded"))
+            ):
+                with pytest.raises(APIError, match="500"):
+                    await client.get_backup_schedule("default")
         await client.close()
 
     @pytest.mark.asyncio
@@ -751,25 +953,26 @@ class TestUniFiClientBackupMethods:
         with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
             mock_response = MagicMock()
             mock_response.status_code = 200
-            mock_response.text = '{"data": {"schedule_id": "sched-2"}}'
-            mock_response.json = MagicMock(return_value={"data": {"schedule_id": "sched-2"}})
+            mock_response.text = '{"data": []}'
+            mock_response.json = MagicMock(return_value={"data": []})
 
             with patch.object(client.client, "request", new_callable=AsyncMock) as mock_req:
                 mock_req.return_value = mock_response
-                await client.configure_backup_schedule(
-                    site_id="site-uuid",
-                    backup_type="network",
-                    frequency="weekly",
-                    time_of_day="03:00",
-                    enabled=True,
-                    retention_days=14,
-                    max_backups=5,
-                    day_of_week="monday",
-                )
+                with pytest.raises(APIError, match="auto_backup"):
+                    await client.configure_backup_schedule(
+                        site_id="site-uuid",
+                        backup_type="network",
+                        frequency="weekly",
+                        time_of_day="03:00",
+                        enabled=True,
+                        retention_days=14,
+                        max_backups=5,
+                        day_of_week="monday",
+                    )
 
-        assert mock_req.called
-        call_kwargs = mock_req.call_args
-        assert "/ea/sites/site-uuid/backup/schedule" in call_kwargs[1]["url"]
+        # A controller with no auto_backup section (UniFi OS consoles) is
+        # told so; nothing is written.
+        assert mock_req.call_count == 1
         await client.close()
 
     @pytest.mark.asyncio

@@ -272,19 +272,19 @@ async def list_pending_devices(
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        params = {}
-        if limit is not None:
-            params["limit"] = limit
-        if offset is not None:
-            params["offset"] = offset
-
-        response = await client.get(
-            f"/integration/v1/sites/{site_id}/devices/pending", params=params
-        )
+        # The Integration v1 API has no pending-devices route: a request to
+        # /devices/pending matches /devices/{deviceId} and is rejected with
+        # "'pending' is not a valid 'deviceId' value". Unadopted devices are
+        # only visible on the legacy stat route, as entries with adopted=false.
+        response = await client.get(f"/ea/sites/{site_id}/stat/device")
         devices_data = response if isinstance(response, list) else response.get("data", [])
 
-        # Parse into Device models
-        devices = [Device(**d).model_dump() for d in devices_data]
+        pending = [d for d in devices_data if d.get("adopted") is False]
+        paginated = pending[offset : offset + limit]
+
+        # The legacy payload is what the legacy Device model describes, so no
+        # shape mismatch here (unlike the Integration v1 routes, see #109).
+        devices = [Device(**d).model_dump() for d in paginated]
 
         logger.info(
             sanitize_log_message(f"Retrieved {len(devices)} pending devices for site '{site_id}'")

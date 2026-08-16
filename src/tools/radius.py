@@ -4,8 +4,15 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import Settings
-from ..models.radius import GuestPortalConfig, HotspotPackage, RADIUSAccount, RADIUSProfile
-from ..utils import audit_action, get_logger, sanitize_log_message, validate_confirmation
+from ..models.radius import RADIUSAccount, RADIUSProfile
+from ..utils import (
+    APIError,
+    ValidationError,
+    audit_action,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+)
 
 logger = get_logger(__name__)
 
@@ -649,18 +656,88 @@ async def delete_radius_account(
 # =============================================================================
 
 
+def _first_item(response: Any) -> dict[str, Any]:
+    """First object from a controller response, ``{}`` when nothing came back.
+
+    ``response.get("data", [{}])[0]`` does not survive an accepted-but-unechoed
+    write: the default only applies when the key is absent, not when the list
+    is empty.
+    """
+    if isinstance(response, list):
+        items: Any = response
+    elif isinstance(response, dict):
+        items = response.get("data", [])
+    else:
+        # None or a scalar reply must not raise mid-parse.
+        return {}
+    if not isinstance(items, list) or not items:
+        return {}
+    first = items[0]
+    return first if isinstance(first, dict) else {}
+
+
+def _translate_guest_access(section: dict[str, Any]) -> dict[str, Any]:
+    """Map the ``guest_access`` settings section to this tool's public shape.
+
+    ``auth`` alone does not identify the method: ``"hotspot"`` covers
+    password, voucher and RADIUS, distinguished by their ``*_enabled`` flags.
+
+    A section reporting ``auth="hotspot"`` with none of those flags set is an
+    ambiguous controller state; it is reported faithfully as
+    ``auth_method="hotspot"`` — an output-only value that
+    :func:`configure_guest_portal` deliberately rejects as input. Remapping it
+    to a configurable value would misstate what the controller holds; the raw
+    section accompanies the translation as ground truth.
+    """
+    auth = section.get("auth", "none")
+    if auth == "hotspot":
+        if section.get("password_enabled"):
+            auth_method = "password"
+        elif section.get("voucher_enabled"):
+            auth_method = "voucher"
+        elif section.get("radius_enabled"):
+            auth_method = "radius"
+        else:
+            auth_method = "hotspot"
+    elif auth == "custom":
+        auth_method = "external"
+    else:
+        auth_method = "none"
+
+    return {
+        "id": section.get("_id"),
+        "portal_enabled": section.get("portal_enabled", False),
+        "auth_method": auth_method,
+        "session_timeout": section.get("expire"),
+        "redirect_enabled": section.get("redirect_enabled", False),
+        "redirect_url": section.get("redirect_url"),
+    }
+
+
+def _scrub_secrets(section: dict[str, Any]) -> dict[str, Any]:
+    """Drop ``x_``-prefixed fields (controller convention for secrets)."""
+    return {k: v for k, v in section.items() if not k.startswith("x_")}
+
+
 async def get_guest_portal_config(
     site_id: str,
     settings: Settings,
 ) -> dict:
-    """Get guest portal configuration for a site.
+    """Get guest portal (hotspot) configuration for a site.
+
+    Reads the legacy ``setting/guest_access`` section, which is where this
+    configuration actually lives. An earlier version called
+    ``/integration/v1/sites/{site}/guest-portal/config``, an endpoint no
+    known Network version serves — it returned 404 everywhere.
 
     Args:
         site_id: Site identifier
         settings: Application settings
 
     Returns:
-        Guest portal configuration
+        Translated portal settings plus the raw section (secrets removed)
+        under ``"raw"``, since field names in this section vary across
+        Network versions and callers may need ground truth.
     """
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting guest portal config for site {site_id}"))
@@ -668,17 +745,30 @@ async def get_guest_portal_config(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/guest-portal/config")
-        data = response if isinstance(response, list) else response.get("data", response)
-        if isinstance(data, list):
-            data = data[0] if data else {}
+        response = await client.get(f"/ea/sites/{site_id}/get/setting/guest_access")
+        section = _first_item(response)
+        if not section:
+            raise APIError("guest_access settings section not found in controller response")
 
-        return GuestPortalConfig(**data).model_dump()
+        return {**_translate_guest_access(section), "raw": _scrub_secrets(section)}
+
+
+VALID_PORTAL_AUTH_METHODS = ["none", "password", "voucher", "radius", "external"]
+
+# The Hotspot portal's auth is stored as auth="hotspot" plus per-method
+# *_enabled flags, so selecting one method must clear the other two or the
+# controller keeps whichever was set before.
+_HOTSPOT_METHOD_FLAGS = {
+    "password": "password_enabled",  # pragma: allowlist secret
+    "voucher": "voucher_enabled",
+    "radius": "radius_enabled",
+}
 
 
 async def configure_guest_portal(
     site_id: str,
     settings: Settings,
+    portal_enabled: bool | None = None,
     portal_title: str | None = None,
     auth_method: str | None = None,
     password: str | None = None,
@@ -690,13 +780,24 @@ async def configure_guest_portal(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
-    """Configure guest portal settings.
+    """Configure guest portal (hotspot) settings.
+
+    Writes the legacy ``setting/guest_access`` section — see
+    :func:`get_guest_portal_config` for why the integration endpoint this
+    tool previously used could never work.
+
+    ``portal_enabled=False`` turns the captive portal off entirely. Networks
+    with purpose ``guest`` keep their guest policies (client isolation from
+    private subnets); clients just stop being intercepted for authorization.
 
     Args:
         site_id: Site identifier
         settings: Application settings
+        portal_enabled: Enable/disable the captive portal itself
         portal_title: Portal page title
-        auth_method: Authentication method (none/password/voucher/radius/external)
+        auth_method: Authentication method (none/password/voucher/radius/external).
+            Not ``"hotspot"`` -- get_guest_portal_config may report that for an
+            ambiguous controller state, but it is output-only and rejected here.
         password: Portal password (if auth_method=password)
         session_timeout: Session timeout in minutes
         redirect_enabled: Enable redirect after authentication
@@ -707,9 +808,33 @@ async def configure_guest_portal(
         dry_run: If True, validate but don't execute
 
     Returns:
-        Updated guest portal configuration
+        Updated portal settings; ``skipped_fields`` lists requested fields
+        this controller version has no key for (see below).
     """
     validate_confirmation(confirm, "configure guest portal", dry_run)
+
+    if auth_method == "hotspot":
+        # get_guest_portal_config emits this for the ambiguous controller
+        # state, so a read-modify-write caller hands it straight back. Saying
+        # only "must be one of" leaves them unable to tell where the value
+        # came from or what to send instead.
+        raise ValidationError(
+            "auth_method 'hotspot' is output-only: get_guest_portal_config "
+            "reports it when the controller has Hotspot auth enabled with no "
+            "method flag set, which is an ambiguous state rather than a "
+            "setting. Choose a concrete method "
+            f"({', '.join(VALID_PORTAL_AUTH_METHODS)}); the read tool's 'raw' "
+            "section shows what the controller currently holds."
+        )
+    if auth_method is not None and auth_method not in VALID_PORTAL_AUTH_METHODS:
+        raise ValidationError(
+            f"Invalid auth_method '{auth_method}'. "
+            f"Must be one of: {', '.join(VALID_PORTAL_AUTH_METHODS)}"
+        )
+    if password is not None and auth_method is not None and auth_method != "password":
+        raise ValidationError(
+            f"password only applies when auth_method='password', not '{auth_method}'"
+        )
 
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Configuring guest portal for site {site_id}"))
@@ -717,68 +842,107 @@ async def configure_guest_portal(
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build update payload
+        current_response = await client.get(f"/ea/sites/{site_id}/get/setting/guest_access")
+        current = _first_item(current_response)
+        settings_id = current.get("_id")
+        if not settings_id:
+            raise APIError("guest_access settings section not found in controller response")
+
+        # Switching to password auth needs a password from somewhere: either
+        # this call or one already stored on the section. Without one the
+        # controller would be left demanding a password nobody set.
+        if auth_method == "password" and password is None and not current.get("x_password"):
+            raise ValidationError(
+                "auth_method='password' requires a password: none was provided "
+                "and the section has none stored"
+            )
+        # Likewise a password sent while the section stays on a non-password
+        # method would be written and never used; require the method change.
+        if password is not None and auth_method is None:
+            translated = _translate_guest_access(current)
+            if translated.get("auth_method") != "password":
+                raise ValidationError(
+                    "password was provided but the portal's auth method is "
+                    f"'{translated.get('auth_method')}'; pass "
+                    "auth_method='password' to switch"
+                )
+
         payload: dict[str, Any] = {}
 
-        if portal_title is not None:
-            payload["portal_title"] = portal_title
+        if portal_enabled is not None:
+            payload["portal_enabled"] = portal_enabled
         if auth_method is not None:
-            payload["auth_method"] = auth_method
+            if auth_method in _HOTSPOT_METHOD_FLAGS:
+                payload["auth"] = "hotspot"
+                for method, flag in _HOTSPOT_METHOD_FLAGS.items():
+                    payload[flag] = method == auth_method
+            elif auth_method == "external":
+                payload["auth"] = "custom"
+            else:
+                payload["auth"] = "none"
         if password is not None:
-            payload["password"] = password
+            payload["x_password"] = password
         if session_timeout is not None:
-            payload["session_timeout"] = session_timeout
+            payload["expire"] = session_timeout
         if redirect_enabled is not None:
             payload["redirect_enabled"] = redirect_enabled
         if redirect_url is not None:
             payload["redirect_url"] = redirect_url
-        if terms_of_service_enabled is not None:
-            payload["terms_of_service_enabled"] = terms_of_service_enabled
-        if terms_of_service_text is not None:
-            payload["terms_of_service_text"] = terms_of_service_text
+
+        # Portal-customization key names (title, ToS) vary across Network
+        # versions. Only write keys this controller already reports, and name
+        # what was skipped rather than inventing schema the controller would
+        # silently drop or reject.
+        skipped_fields: list[str] = []
+        versioned = {
+            "portal_customized_title": portal_title,
+            "portal_customized_tos_enabled": terms_of_service_enabled,
+            "portal_customized_tos": terms_of_service_text,
+        }
+        for key, value in versioned.items():
+            if value is None:
+                continue
+            if key in current:
+                payload[key] = value
+            else:
+                skipped_fields.append(key)
+
+        payload_safe = {
+            k: ("***REDACTED***" if k.startswith("x_") else v) for k, v in payload.items()
+        }
 
         if dry_run:
-            # Build safe payload without secrets for logging
-            payload_safe: dict[str, Any] = {}
-            if portal_title is not None:
-                payload_safe["portal_title"] = portal_title
-            if auth_method is not None:
-                payload_safe["auth_method"] = auth_method
-            if password is not None:
-                payload_safe["password"] = "***REDACTED***"
-            if session_timeout is not None:
-                payload_safe["session_timeout"] = session_timeout
-            if redirect_enabled is not None:
-                payload_safe["redirect_enabled"] = redirect_enabled
-            if redirect_url is not None:
-                payload_safe["redirect_url"] = redirect_url
-            if terms_of_service_enabled is not None:
-                payload_safe["terms_of_service_enabled"] = terms_of_service_enabled
-            if terms_of_service_text is not None:
-                payload_safe["terms_of_service_text"] = terms_of_service_text
             logger.info(
                 sanitize_log_message(f"[DRY RUN] Would configure guest portal for site {site_id}")
             )
-            return {"dry_run": True, "payload": payload_safe}
+            return {
+                "dry_run": True,
+                "settings_id": settings_id,
+                "payload": payload_safe,
+                "skipped_fields": skipped_fields,
+            }
 
         response = await client.put(
-            f"/integration/v1/sites/{site_id}/guest-portal/config", json_data=payload
+            f"/ea/sites/{site_id}/set/setting/guest_access/{settings_id}",
+            json_data=payload,
         )
-        data = response if isinstance(response, list) else response.get("data", response)
-        if isinstance(data, list):
-            data = data[0] if data else {}
+        updated = _first_item(response)
+        if not updated:
+            # Not every version echoes the updated section on PUT; re-read so
+            # the caller sees stored state, not their own input reflected back.
+            updated = _first_item(await client.get(f"/ea/sites/{site_id}/get/setting/guest_access"))
 
         # Audit the action
         await audit_action(
             settings,
             action_type="configure_guest_portal",
             resource_type="guest_portal_config",
-            resource_id=site_id,
+            resource_id=settings_id,
             site_id=site_id,
-            details=payload,
+            details=payload_safe,
         )
 
-        return GuestPortalConfig(**data).model_dump()
+        return {**_translate_guest_access(updated), "skipped_fields": skipped_fields}
 
 
 # =============================================================================
@@ -805,10 +969,10 @@ async def list_hotspot_packages(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/integration/v1/sites/{site_id}/hotspot/packages")
+        response = await client.get(f"/ea/sites/{site_id}/rest/hotspotpackage")
         data = response if isinstance(response, list) else response.get("data", [])
 
-        return [HotspotPackage(**package).model_dump() for package in data]
+        return [dict(package) for package in data]
 
 
 async def create_hotspot_package(
@@ -816,10 +980,6 @@ async def create_hotspot_package(
     name: str,
     duration_minutes: int,
     settings: Settings,
-    download_limit_kbps: int | None = None,
-    upload_limit_kbps: int | None = None,
-    download_quota_mb: int | None = None,
-    upload_quota_mb: int | None = None,
     price: float | None = None,
     currency: str = "USD",
     confirm: bool | str = False,
@@ -827,17 +987,23 @@ async def create_hotspot_package(
 ) -> dict:
     """Create a new hotspot package.
 
+    Duration is hours-granular on the classic surface, so
+    ``duration_minutes`` is rounded up to whole hours. A controller with no
+    hotspot payment gateway configured refuses package creation with
+    ``api.err.Invalid``; with ``amount`` left at 0 it instead reports the
+    misleading ``api.err.InvalidHotspotPackageDuration``.
+
+    The earlier bandwidth/quota parameters are gone: the classic validator
+    never acknowledged them, and carrying parameters the controller ignores
+    misrepresents what the tool can do.
+
     Args:
         site_id: Site identifier
         name: Package name
-        duration_minutes: Duration in minutes
+        duration_minutes: Duration in minutes (stored as whole hours)
         settings: Application settings
-        download_limit_kbps: Download speed limit in kbps
-        upload_limit_kbps: Upload speed limit in kbps
-        download_quota_mb: Download quota in MB
-        upload_quota_mb: Upload quota in MB
-        price: Package price
-        currency: Currency code
+        price: Package price (``amount``)
+        currency: Currency code, sent alongside ``price``
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
@@ -846,30 +1012,28 @@ async def create_hotspot_package(
     """
     validate_confirmation(confirm, "create hotspot package", dry_run)
 
+    if duration_minutes < 1:
+        # Without this, 0 or a negative value would silently round up to a
+        # 1-hour paid package instead of being rejected.
+        raise ValidationError(f"duration_minutes must be at least 1, got {duration_minutes}")
+
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Creating hotspot package '{name}' for site {site_id}"))
 
         if not client.is_authenticated:
             await client.authenticate()
 
-        # Build request payload
+        # Build request payload from the fields the classic validator is
+        # known to read (it echoes amount, hours and trial_duration_minutes
+        # on rejection). Duration is hours-granular on this surface.
         payload: dict[str, Any] = {
             "name": name,
-            "duration_minutes": duration_minutes,
-            "currency": currency,
-            "enabled": True,
+            "hours": -(-duration_minutes // 60),
         }
 
-        if download_limit_kbps is not None:
-            payload["download_limit_kbps"] = download_limit_kbps
-        if upload_limit_kbps is not None:
-            payload["upload_limit_kbps"] = upload_limit_kbps
-        if download_quota_mb is not None:
-            payload["download_quota_mb"] = download_quota_mb
-        if upload_quota_mb is not None:
-            payload["upload_quota_mb"] = upload_quota_mb
         if price is not None:
-            payload["price"] = price
+            payload["amount"] = price
+            payload["currency"] = currency
 
         if dry_run:
             logger.info(
@@ -879,9 +1043,7 @@ async def create_hotspot_package(
             )
             return {"dry_run": True, "payload": payload}
 
-        response = await client.post(
-            f"/integration/v1/sites/{site_id}/hotspot/packages", json_data=payload
-        )
+        response = await client.post(f"/ea/sites/{site_id}/rest/hotspotpackage", json_data=payload)
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -896,7 +1058,7 @@ async def create_hotspot_package(
             details={"name": name, "duration_minutes": duration_minutes},
         )
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def get_hotspot_package(
@@ -922,9 +1084,7 @@ async def get_hotspot_package(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(
-            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}"
-        )
+        response = await client.get(f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}")
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
             data = data[0] if data else {}
@@ -932,7 +1092,7 @@ async def get_hotspot_package(
         if not data:
             return {}
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def update_hotspot_package(
@@ -941,31 +1101,24 @@ async def update_hotspot_package(
     settings: Settings,
     name: str | None = None,
     duration_minutes: int | None = None,
-    download_limit_kbps: int | None = None,
-    upload_limit_kbps: int | None = None,
-    download_quota_mb: int | None = None,
-    upload_quota_mb: int | None = None,
     price: float | None = None,
     currency: str | None = None,
-    enabled: bool | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict:
     """Update an existing hotspot package.
+
+    Same field surface as :func:`create_hotspot_package`; see there for why
+    the bandwidth/quota/enabled parameters are gone and how duration rounds.
 
     Args:
         site_id: Site identifier
         package_id: Hotspot package ID
         settings: Application settings
         name: Package name
-        duration_minutes: Duration in minutes
-        download_limit_kbps: Download speed limit in kbps
-        upload_limit_kbps: Upload speed limit in kbps
-        download_quota_mb: Download quota in MB
-        upload_quota_mb: Upload quota in MB
-        price: Package price
+        duration_minutes: Duration in minutes (stored as whole hours)
+        price: Package price (``amount``)
         currency: Currency code
-        enabled: Package enabled status
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
@@ -974,26 +1127,23 @@ async def update_hotspot_package(
     """
     validate_confirmation(confirm, "update hotspot package", dry_run)
 
+    if duration_minutes is not None and duration_minutes < 1:
+        raise ValidationError(f"duration_minutes must be at least 1, got {duration_minutes}")
+    if currency is not None and price is None:
+        # The classic validator reads currency only alongside amount; a
+        # currency-only update would send a request that changes nothing.
+        raise ValidationError("currency can only be set together with price")
+
     payload: dict[str, Any] = {}
 
     if name is not None:
         payload["name"] = name
     if duration_minutes is not None:
-        payload["duration_minutes"] = duration_minutes
-    if download_limit_kbps is not None:
-        payload["download_limit_kbps"] = download_limit_kbps
-    if upload_limit_kbps is not None:
-        payload["upload_limit_kbps"] = upload_limit_kbps
-    if download_quota_mb is not None:
-        payload["download_quota_mb"] = download_quota_mb
-    if upload_quota_mb is not None:
-        payload["upload_quota_mb"] = upload_quota_mb
+        payload["hours"] = -(-duration_minutes // 60)
     if price is not None:
-        payload["price"] = price
+        payload["amount"] = price
     if currency is not None:
         payload["currency"] = currency
-    if enabled is not None:
-        payload["enabled"] = enabled
 
     if not payload and not dry_run:
         raise ValueError("At least one field must be provided to update.")
@@ -1015,7 +1165,7 @@ async def update_hotspot_package(
             return {"dry_run": True, "package_id": package_id, "payload": payload}
 
         response = await client.put(
-            f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}", json_data=payload
+            f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}", json_data=payload
         )
         data = response if isinstance(response, list) else response.get("data", response)
         if isinstance(data, list):
@@ -1030,7 +1180,7 @@ async def update_hotspot_package(
             details=payload,
         )
 
-        return HotspotPackage(**data).model_dump()
+        return dict(data)
 
 
 async def delete_hotspot_package(
@@ -1068,7 +1218,7 @@ async def delete_hotspot_package(
             )
             return {"dry_run": True, "package_id": package_id}
 
-        await client.delete(f"/integration/v1/sites/{site_id}/hotspot/packages/{package_id}")
+        await client.delete(f"/ea/sites/{site_id}/rest/hotspotpackage/{package_id}")
 
         # Audit the action
         await audit_action(

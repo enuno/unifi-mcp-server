@@ -23,7 +23,7 @@ class A2AJSONEncoder(JSONEncoder):
             return asdict(o)
         if isinstance(o, Enum):
             return o.value
-        if isinstance(o, (datetime, date)):
+        if isinstance(o, datetime | date):
             return o.isoformat()
         if isinstance(o, Path):
             return str(o)

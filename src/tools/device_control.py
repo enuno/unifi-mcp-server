@@ -615,11 +615,7 @@ async def set_ap_radio_channel(
             # PUT the full device back
             resolved_id = device["_id"]
             endpoint = settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
-            response = await client.put(endpoint, json_data=device)
-            if isinstance(response, list):
-                response[0] if response else {}
-            else:
-                response.get("data", [{}])[0]
+            await client.put(endpoint, json_data=device)
 
             logger.info(
                 sanitize_log_message(

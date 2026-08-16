@@ -1963,14 +1963,19 @@ Get Deep Packet Inspection statistics for a site.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `time_range` (string, optional): Time range for statistics (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
+
+The counters are lifetime totals read from the `stat/sitedpi` report; the
+endpoint accepts no time window. `app` and `cat` are the controller's
+numeric catalog ids — translate them with `list_dpi_applications` and
+`list_dpi_categories`. A controller that runs traffic identification
+through the flow engine reports empty lists plus a `note` pointing at
+`get_top_flows` / `get_flow_analytics`.
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("get_dpi_statistics", {
-    "site_id": "default",
-    "time_range": "24h"
+    "site_id": "default"
 })
 ```
 
@@ -1979,30 +1984,21 @@ result = await mcp.call_tool("get_dpi_statistics", {
 ```json
 {
   "site_id": "default",
-  "time_range": "24h",
   "applications": [
     {
-      "application": "Netflix",
-      "category": "Streaming",
+      "app": 194,
+      "cat": 4,
       "tx_bytes": 5120000000,
       "rx_bytes": 10240000000,
       "total_bytes": 15360000000
-    },
-    {
-      "application": "YouTube",
-      "category": "Streaming",
-      "tx_bytes": 2560000000,
-      "rx_bytes": 7680000000,
-      "total_bytes": 10240000000
     }
   ],
   "categories": [
     {
-      "category": "Streaming",
+      "cat": 4,
       "tx_bytes": 7680000000,
       "rx_bytes": 17920000000,
-      "total_bytes": 25600000000,
-      "application_count": 2
+      "total_bytes": 25600000000
     }
   ],
   "total_applications": 15,
@@ -2018,15 +2014,13 @@ List top applications by bandwidth usage.
 
 - `site_id` (string, required): Site identifier
 - `limit` (integer, optional): Number of top applications to return (default: 10)
-- `time_range` (string, optional): Time range for statistics (default: 24h)
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("list_top_applications", {
     "site_id": "default",
-    "limit": 5,
-    "time_range": "7d"
+    "limit": 5
 })
 ```
 
@@ -2035,8 +2029,8 @@ result = await mcp.call_tool("list_top_applications", {
 ```json
 [
   {
-    "application": "Netflix",
-    "category": "Streaming",
+    "app": 194,
+    "cat": 4,
     "tx_bytes": 5120000000,
     "rx_bytes": 10240000000,
     "total_bytes": 15360000000
@@ -2633,6 +2627,13 @@ topology = await mcp.call_tool("get_network_topology", {
 
 Retrieve connection details for a specific device or all devices.
 
+Both `get_device_connections` and `get_port_mappings` accept a topology
+node id, a device MAC, or a device name as `device_id`. An identifier
+that matches none of them raises `ResourceNotFoundError` — distinct
+from a known device with no connections, which returns an empty
+result. `get_port_mappings` reports the resolved node id as
+`device_id` and echoes the caller's identifier as `requested_id`.
+
 **Example:**
 
 ```python
@@ -2653,6 +2654,10 @@ all_connections = await mcp.call_tool("get_device_connections", {
 
 Get detailed port-level connection mapping for a device.
 
+Each port maps to a **list** of peers: one physical port routinely
+carries several hosts — a virtualization host bridging its guests, or a
+downstream unmanaged switch.
+
 **Example:**
 
 ```python
@@ -2668,24 +2673,31 @@ port_map = await mcp.call_tool("get_port_mappings", {
 {
   "device_id": "switch_001",
   "ports": {
-    "1": {
-      "connected_to": "gateway_001",
-      "connection_type": "uplink",
-      "speed_mbps": 10000,
-      "status": "up"
-    },
-    "5": {
-      "connected_to": "ap_001",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    },
-    "10": {
-      "connected_to": "client_002",
-      "connection_type": "wired",
-      "speed_mbps": 1000,
-      "status": "up"
-    }
+    "1": [
+      {
+        "connected_to": "gateway_001",
+        "connected_name": "Gateway",
+        "connection_type": "uplink",
+        "speed_mbps": 10000,
+        "status": "up"
+      }
+    ],
+    "10": [
+      {
+        "connected_to": "client_002",
+        "connected_name": "Hypervisor",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      },
+      {
+        "connected_to": "client_003",
+        "connected_name": "VM guest",
+        "connection_type": "wired",
+        "speed_mbps": 1000,
+        "status": "up"
+      }
+    ]
   }
 }
 ```

@@ -89,6 +89,8 @@ class UniFiClient:
         self._site_id_cache: dict[str, str] = {}
         # Cache for site UUID -> internalReference mapping (needed for local API)
         self._site_uuid_to_name: dict[str, str] = {}
+        # Reverse mapping, for endpoints that key off the UUID instead
+        self._site_name_to_uuid: dict[str, str] = {}
 
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
@@ -193,6 +195,29 @@ class UniFiClient:
                 self.logger.debug(f"Translated v2 site ID: {site_id} -> {site_name}")
             return f"{prefix}{site_name}{rest or ''}"
 
+        # Pattern: /integration/v1/sites/{site_id}/{rest}, with or without the
+        # /proxy/network prefix already applied.
+        #
+        # This is the mirror image of the v2 case above: the Integration API
+        # keys off the site UUID and rejects short names with
+        # {"code":"api.request.argument-type-mismatch"}, while the legacy and v2
+        # APIs reject the UUID. Callers hold whichever ID they happened to get
+        # from list_sites, so translate centrally rather than making each tool
+        # remember which ID space its endpoint wants. The lookup is idempotent
+        # -- a UUID maps to itself -- so callers already passing the UUID are
+        # unaffected.
+        match = re.match(r"^(?:/proxy/network)?(/integration/v\d+/sites/)([^/]+)(/.*)?$", endpoint)
+        if match:
+            sites_path, site_id, rest = match.groups()
+            site_uuid = self._site_name_to_uuid.get(site_id, site_id)
+            if site_id != site_uuid:
+                # Log that a translation happened, not the identifiers
+                # themselves: sanitize_log_message masks MACs and IPs but
+                # not site UUIDs, and controller-identifying data does not
+                # belong in logs.
+                self.logger.debug("Translated integration site ID to its UUID form")
+            return f"/proxy/network{sites_path}{site_uuid}{rest or ''}"
+
         # If no pattern matches, check if it's already a local endpoint
         if endpoint.startswith("/proxy/network/"):
             return endpoint
@@ -279,17 +304,20 @@ class UniFiClient:
         return None
 
     def _build_site_uuid_map(self, sites: list[Any]) -> None:
-        """Build a mapping of site UUIDs to internal reference names.
+        """Build the site UUID <-> internal reference name mappings.
 
-        This is required for local API, which uses site names (e.g., 'default')
-        instead of UUIDs in endpoint paths. Entries are validated through
-        :class:`SiteReference`; one malformed entry is skipped rather than
-        failing authentication for every other site.
+        Both directions are required for the local API, because its endpoint
+        families disagree on which ID space they accept: the legacy and v2 APIs
+        use site names (e.g. 'default'), while the Integration API uses UUIDs.
+        Entries are validated through :class:`SiteReference`; one malformed
+        entry is skipped rather than failing authentication for every other
+        site.
 
         Args:
             sites: List of site objects from /ea/sites endpoint
         """
         self._site_uuid_to_name.clear()
+        self._site_name_to_uuid.clear()
         for site in sites:
             try:
                 reference = SiteReference.model_validate(site)
@@ -298,6 +326,7 @@ class UniFiClient:
                 continue
             if reference.internal_reference:
                 self._site_uuid_to_name[reference.id] = reference.internal_reference
+                self._site_name_to_uuid[reference.internal_reference] = reference.id
 
         self.logger.info(f"Built site UUID mapping: {len(self._site_uuid_to_name)} sites")
 
@@ -689,20 +718,24 @@ class UniFiClient:
             List of backup metadata dictionaries
 
         Note:
-            For local API, use: /proxy/network/api/backup/list-backups
-            For cloud API, endpoint may differ
+            For local API: POST /proxy/network/api/s/{site}/cmd/backup
+            with body {"cmd": "list-backups"}
         """
         site_id = await self.resolve_site_id(site_id)
 
-        # For local API
+        # Backups are listed with the backup command, scoped to a site. The
+        # previous site-less GET /api/backup/list-backups had no site context,
+        # so the controller rejected it with api.err.NoSiteContext -- carried
+        # on an HTTP 401, which this client then reported as an
+        # authentication failure. Verified live on Network 10.5.67.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/backup/list-backups?site={site_name}"
+            endpoint = f"/proxy/network/api/s/{site_name}/cmd/backup"
         else:
             # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups"
+            endpoint = f"/ea/sites/{site_id}/cmd/backup"
 
-        response = await self.get(endpoint)
+        response = await self.post(endpoint, json_data={"cmd": "list-backups"})
 
         # Handle different response formats
         if isinstance(response, list):
@@ -868,7 +901,7 @@ class UniFiClient:
         enabled: bool = True,
         retention_days: int = 30,
         max_backups: int = 10,
-        day_of_week: str | None = None,
+        day_of_week: str | int | None = None,
         day_of_month: int | None = None,
         cloud_backup_enabled: bool = False,
     ) -> dict[str, Any]:
@@ -882,7 +915,9 @@ class UniFiClient:
             enabled: Whether the schedule is active
             retention_days: Number of days to keep backups
             max_backups: Maximum number of backups to retain
-            day_of_week: Day of week for weekly schedules (e.g. "monday")
+            day_of_week: Day of week for weekly schedules; a day name
+                ("monday") or the tool layer's integer form (0=Monday
+                through 6=Sunday)
             day_of_month: Day of month for monthly schedules (1-28)
             cloud_backup_enabled: Whether to also push backups to cloud storage
 
@@ -890,29 +925,66 @@ class UniFiClient:
             Schedule configuration response
 
         Note:
-            For local API: PUT /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: PUT
+            /proxy/network/api/s/{site}/set/setting/auto_backup/{settings_id}
         """
+        # Translate the weekday into a cron day NAME before any network
+        # round-trip. The tool layer documents integers as
+        # 0=Monday..6=Sunday, which is not cron's numbering (cron counts
+        # 0=Sunday) -- and Monday's 0 is falsy, so a bare f-string default
+        # would silently turn Monday into the fallback. Names sidestep both
+        # traps.
+        cron_day_names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        if day_of_week is None:
+            cron_dow = "sun"
+        elif isinstance(day_of_week, int):
+            if not 0 <= day_of_week <= 6:
+                raise APIError(
+                    f"day_of_week must be 0 (Monday) through 6 (Sunday), got {day_of_week}"
+                )
+            cron_dow = cron_day_names[day_of_week]
+        else:
+            cron_dow = str(day_of_week).strip().lower()[:3]
+            if cron_dow not in cron_day_names:
+                raise APIError(f"day_of_week must be a weekday name, got {day_of_week!r}")
+
         site_id = await self.resolve_site_id(site_id)
 
-        payload: dict[str, Any] = {
-            "enabled": enabled,
-            "backup_type": backup_type,
-            "frequency": frequency,
-            "time_of_day": time_of_day,
-            "retention_days": retention_days,
-            "max_backups": max_backups,
-            "cloud_backup_enabled": cloud_backup_enabled,
-        }
-        if day_of_week is not None:
-            payload["day_of_week"] = day_of_week
-        if day_of_month is not None:
-            payload["day_of_month"] = day_of_month
+        # The schedule lives in the auto_backup settings section; the
+        # rest/backup/schedule resource this method previously PUT to does
+        # not exist on any controller (api.err.InvalidObject). UniFi OS
+        # consoles do not carry the section at all -- their scheduled
+        # backups are managed at the console level -- so absence is reported
+        # as such rather than written into.
+        current = await self.get_backup_schedule(site_id)
+        settings_id = current.get("_id")
+        if not settings_id:
+            raise APIError(
+                "This controller has no auto_backup settings section, so the "
+                "backup schedule cannot be configured through the Network "
+                "API. UniFi OS consoles manage scheduled backups at the "
+                "console level (existing backups are still visible via "
+                "list_backups)."
+            )
 
+        hour, _, minute = time_of_day.partition(":")
+        cron_map = {
+            "daily": f"{minute or 0} {hour or 0} * * *",
+            "weekly": f"{minute or 0} {hour or 0} * * {cron_dow}",
+            "monthly": f"{minute or 0} {hour or 0} {day_of_month or 1} * *",
+        }
+        payload: dict[str, Any] = {
+            "auto_backup_enabled": enabled,
+            "auto_backup_cron_expr": cron_map.get(frequency, cron_map["daily"]),
+            "auto_backup_max_files": max_backups,
+            "auto_backup_days": retention_days,
+        }
+
+        site_name = self._site_uuid_to_name.get(site_id, site_id)
         if self.settings.api_type == APIType.LOCAL:
-            site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/set/setting/auto_backup/{settings_id}"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/set/setting/auto_backup/{settings_id}"
 
         return await self.put(endpoint, json_data=payload)
 
@@ -929,18 +1001,39 @@ class UniFiClient:
             Backup schedule configuration, or empty dict if none is configured
 
         Note:
-            For local API: GET /proxy/network/api/s/{site}/rest/backup/schedule
+            For local API: GET
+            /proxy/network/api/s/{site}/get/setting/auto_backup
         """
         site_id = await self.resolve_site_id(site_id)
 
+        # The schedule is the auto_backup settings section. Absence (or the
+        # api.err.Invalid a UniFi OS console answers with) means scheduled
+        # backups are managed at the console level, not through this API --
+        # report that as an empty dict and let callers decide how loud to be.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
-            endpoint = f"/proxy/network/api/s/{site_name}/rest/backup/schedule"
+            endpoint = f"/proxy/network/api/s/{site_name}/get/setting/auto_backup"
         else:
-            endpoint = f"/ea/sites/{site_id}/backup/schedule"
+            endpoint = f"/ea/sites/{site_id}/get/setting/auto_backup"
 
-        response = await self.get(endpoint)
+        try:
+            response = await self.get(endpoint)
+        except APIError as exc:
+            # Only the controller's "no such setting" answers mean absence;
+            # anything else (500s, validation failures) is a real error the
+            # caller must see, not a console-level-backups condition.
+            message = str(exc)
+            if any(
+                marker in message
+                for marker in ("api.err.Invalid", "api.err.NotFound", "api.err.NoSuchObject")
+            ):
+                return {}
+            raise
 
-        if isinstance(response, list):
-            return response[0] if response else {}
-        return response if isinstance(response, dict) else {}
+        items = response if isinstance(response, list) else response.get("data", [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict) and item.get("key") == "auto_backup":
+                    return item
+            return items[0] if items and isinstance(items[0], dict) else {}
+        return items if isinstance(items, dict) else {}

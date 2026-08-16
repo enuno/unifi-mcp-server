@@ -1585,19 +1585,34 @@ class TestListFirewallZonesV2:
             assert called_endpoint.endswith("/firewall/zone")
 
     @pytest.mark.asyncio
-    async def test_list_firewall_zones_v2_handles_none_data(self, local_settings: Settings) -> None:
-        """UniFiClient can return ``{"data": None}`` for empty responses;
-        the tool must not raise ``TypeError: 'NoneType' is not iterable``."""
+    async def test_list_firewall_zones_v2_empty_means_zbf_unconfigured(
+        self, local_settings: Settings
+    ) -> None:
+        """An empty zone list raises a clear error instead of returning [].
+
+        A ZBF-enabled controller always reports its built-in zones, so empty
+        means the feature is off — the condition the integration zones route
+        reports as api.firewall.zone-based-firewall-not-configured. Returning
+        [] made "feature disabled" indistinguishable from "no zones exist".
+        ``{"data": None}`` (how UniFiClient surfaces an empty reply) must
+        take this path too, not raise TypeError.
+        """
         from src.tools.firewall_policies import list_firewall_zones_v2
+        from src.utils.exceptions import APIError
 
-        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
-            mock_client = AsyncMock()
-            MockClient.return_value.__aenter__.return_value = mock_client
-            mock_client.is_authenticated = True
-            mock_client.get.return_value = {"data": None}
+        for empty_response in ({"data": None}, {"data": []}, []):
+            with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+                mock_client = AsyncMock()
+                MockClient.return_value.__aenter__.return_value = mock_client
+                mock_client.is_authenticated = True
+                mock_client.get.return_value = empty_response
 
-            result = await list_firewall_zones_v2("default", local_settings)
-            assert result == []
+                with pytest.raises(APIError, match="Zone-Based Firewall") as excinfo:
+                    await list_firewall_zones_v2("default", local_settings)
+                # The message must keep pointing users at the legacy tools
+                # and speak in site scope, not controller scope.
+                assert "list_firewall_rules" in str(excinfo.value)
+                assert "site" in str(excinfo.value)
 
 
 class TestCreateFirewallPolicyConfirmCoercion:

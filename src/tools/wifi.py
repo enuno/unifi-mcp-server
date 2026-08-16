@@ -7,6 +7,7 @@ from ..config import Settings
 from ..utils import (
     ResourceNotFoundError,
     ValidationError,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -278,10 +279,7 @@ async def create_wlan(
             await client.authenticate()
 
             response = await client.post(f"/ea/sites/{site_id}/rest/wlanconf", json_data=wlan_data)
-            if isinstance(response, list):
-                created_wlan: dict[str, Any] = response[0] if response else {}
-            else:
-                created_wlan = response.get("data", [{}])[0]
+            created_wlan = first_response_item(response)
 
             logger.info(sanitize_log_message(f"Created WLAN '{name}' in site '{site_id}'"))
             log_audit(
@@ -499,10 +497,7 @@ async def update_wlan(
             response = await client.put(
                 f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}", json_data=update_data
             )
-            if isinstance(response, list):
-                updated_wlan: dict[str, Any] = response[0] if response else {}
-            else:
-                updated_wlan = response.get("data", [{}])[0]
+            updated_wlan = first_response_item(response)
 
             logger.info(sanitize_log_message(f"Updated WLAN '{wlan_id}' in site '{site_id}'"))
             log_audit(

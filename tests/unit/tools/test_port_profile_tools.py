@@ -1164,8 +1164,81 @@ async def test_set_device_port_overrides_list_response(mock_settings):
 
 
 # =============================================================================
-# Update flow: re-read, normalization warnings
+# Controller normalization / empty-echo regression tests
 # =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_empty_response_does_not_raise(mock_settings):
+    """Test that a create accepted without an echoed object returns cleanly.
+
+    Regression: parsing used ``response.get("data", [{}])[0]``, whose default
+    only applies when the key is absent. A ``{"data": []}`` reply raised
+    IndexError after the POST had already been sent. A fully empty echo means
+    the controller did not confirm any requested field, so every one of them
+    is reported as a dropped-field warning rather than silently ignored.
+    """
+    client = _make_client(get_return={"data": []}, post_return={"data": []})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert len(result["warnings"]) == 2
+    assert any("name" in w for w in result["warnings"])
+    assert any("forward" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_warns_when_forward_normalized(mock_settings):
+    """Test that a controller-rewritten forward mode is surfaced, not hidden.
+
+    The controller may store ``customize`` regardless of the value sent, which
+    changes whether the port is an access port or a trunk.
+    """
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "customize"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["forward"] == "customize"
+    assert len(result["warnings"]) == 1
+    assert "forward" in result["warnings"][0]
+    assert "'native'" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_no_warnings_when_stored_as_requested(mock_settings):
+    """Test that a faithful create carries no warnings key."""
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "native"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert "warnings" not in result
 
 
 @pytest.mark.asyncio
@@ -1380,12 +1453,6 @@ async def test_update_port_profile_warns_when_field_is_dropped(mock_settings):
 
     assert len(result["warnings"]) == 1
     assert "did not store tagged_vlan_mgmt" in result["warnings"][0]
-
-
-def test_first_item_survives_non_dict_replies():
-    """None or a scalar reply yields {} instead of AttributeError."""
-    for odd in (None, "ok", 7, True):
-        assert port_profiles_module._first_item(odd) == {}
 
 
 @pytest.mark.asyncio

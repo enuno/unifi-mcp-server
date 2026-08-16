@@ -9,6 +9,7 @@ from ..utils import (
     DuplicateResourceError,
     ResourceNotFoundError,
     ValidationError,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -22,26 +23,6 @@ from ..utils import (
 # derive the legacy `forward` field from it. "block_all" is the access-port
 # case: native network untagged, no tagged VLANs carried.
 VALID_TAGGED_VLAN_MGMT = ["auto", "block_all", "custom"]
-
-
-def _first_item(response: Any) -> dict[str, Any]:
-    """First object from a controller response, ``{}`` when nothing came back.
-
-    ``response.get("data", [{}])[0]`` does not survive an accepted-but-unechoed
-    write: the default only applies when the key is absent, not when the list
-    is empty.
-    """
-    if isinstance(response, list):
-        items: Any = response
-    elif isinstance(response, dict):
-        items = response.get("data", [])
-    else:
-        # None or a scalar reply must not raise mid-parse.
-        return {}
-    if not isinstance(items, list) or not items:
-        return {}
-    first = items[0]
-    return first if isinstance(first, dict) else {}
 
 
 def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) -> list[str]:
@@ -289,10 +270,13 @@ async def create_port_profile(
             response = await client.post(
                 f"/ea/sites/{site_id}/rest/portconf", json_data=profile_data
             )
-            if isinstance(response, list):
-                created: dict[str, Any] = response[0] if response else {}
-            else:
-                created = response.get("data", [{}])[0]
+            created = first_response_item(response)
+
+            warnings = _stored_value_warnings(profile_data, created)
+            if warnings:
+                for warning in warnings:
+                    logger.warning(sanitize_log_message(warning))
+                created = {**created, "warnings": warnings}
 
             logger.info(sanitize_log_message(f"Created port profile '{name}' in site '{site_id}'"))
             log_audit(
@@ -456,13 +440,13 @@ async def update_port_profile(
                 f"/ea/sites/{site_id}/rest/portconf/{profile_id}",
                 json_data=update_data,
             )
-            updated = _first_item(response)
+            updated = first_response_item(response)
 
             # An accepted write is not always echoed back. Re-read rather than
             # returning an empty dict, so the caller sees what is actually
             # stored and the comparison below has something to check against.
             if not updated:
-                updated = _first_item(
+                updated = first_response_item(
                     await client.get(f"/ea/sites/{site_id}/rest/portconf/{profile_id}")
                 )
 
@@ -771,10 +755,7 @@ async def set_device_port_overrides(
                 endpoint,
                 json_data=device,
             )
-            if isinstance(response, list):
-                updated_device: dict[str, Any] = response[0] if response else {}
-            else:
-                updated_device = response.get("data", [{}])[0]
+            updated_device = first_response_item(response)
 
             logger.info(
                 f"Set {len(final_overrides)} port overrides on device "

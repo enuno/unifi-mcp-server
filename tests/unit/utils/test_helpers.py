@@ -2,6 +2,7 @@
 
 from src.utils.helpers import (
     build_uri,
+    first_response_item,
     format_bytes,
     format_percentage,
     format_uptime,
@@ -398,3 +399,57 @@ class TestBuildUri:
         result = build_uri("sites", "default", query={"limit": None, "offset": None})
         assert result == "sites://default"
         assert "?" not in result
+
+
+class TestFirstResponseItem:
+    """Tests for first_response_item function."""
+
+    def test_data_wrapped_object(self):
+        """Test extracting the object from a data-wrapped response."""
+        assert first_response_item({"data": [{"_id": "abc"}]}) == {"_id": "abc"}
+
+    def test_bare_list(self):
+        """Test extracting the object when the response is a bare list."""
+        assert first_response_item([{"_id": "abc"}]) == {"_id": "abc"}
+
+    def test_returns_first_of_many(self):
+        """Test that only the first item is returned."""
+        assert first_response_item({"data": [{"n": 1}, {"n": 2}]}) == {"n": 1}
+
+    def test_empty_data_list(self):
+        """Test that an empty data list yields an empty dict, not IndexError.
+
+        This is the regression case: an accepted write that is not echoed back
+        used to raise IndexError while parsing the reply, leaving the caller
+        unable to tell whether the write landed.
+        """
+        assert first_response_item({"data": []}) == {}
+
+    def test_empty_bare_list(self):
+        """Test that an empty bare list yields an empty dict."""
+        assert first_response_item([]) == {}
+
+    def test_non_dict_scalars_yield_empty_dict(self):
+        """None or a scalar reply must not raise after the write landed."""
+        for odd in (None, "ok", 1, True):
+            assert first_response_item(odd) == {}
+
+    def test_missing_data_key(self):
+        """Test that a response with no data key yields an empty dict."""
+        assert first_response_item({"meta": {"rc": "ok"}}) == {}
+
+    def test_dict_data_is_the_item(self):
+        """A single-object data wrapper yields that object.
+
+        Some routes wrap one object rather than a list of one; treating
+        it as malformed dropped the echo of a write that landed.
+        """
+        assert first_response_item({"data": {"_id": "abc"}}) == {"_id": "abc"}
+
+    def test_scalar_data_yields_empty_dict(self):
+        """A scalar data value still yields an empty dict."""
+        assert first_response_item({"data": "ok"}) == {}
+
+    def test_non_dict_item(self):
+        """Test that a non-dict first item yields an empty dict."""
+        assert first_response_item({"data": ["not-an-object"]}) == {}

@@ -21,6 +21,7 @@ from ..utils import (
     ValidationError,
     audit_action,
     coerce_bool,
+    first_response_item,
     get_logger,
     sanitize_log_message,
     validate_confirmation,
@@ -33,21 +34,6 @@ logger = get_logger(__name__)
 # ============================================================================
 # Traffic Route Management (4 tools)
 # ============================================================================
-
-
-def _first_item(response: object) -> dict:
-    """Unwrap the first item of a UniFi list response, else {}.
-
-    Local copy of the shared helper proposed in the empty-response-parsing
-    PR; collapse onto it once that lands.
-    """
-    data = response.get("data") if isinstance(response, dict) else response
-    if isinstance(data, dict):
-        # Some routes wrap a single object rather than a list of one.
-        return data
-    if isinstance(data, list) and data and isinstance(data[0], dict):
-        return data[0]
-    return {}
 
 
 async def list_traffic_routes(
@@ -506,12 +492,12 @@ async def configure_smart_queue(
         response = await client.put(
             f"/ea/sites/{site_id}/rest/networkconf/{wan_id}", json_data=payload
         )
-        stored = _first_item(response)
+        stored = first_response_item(response)
         if not stored:
             # The controller accepted the write without echoing it; re-read
             # so the caller sees stored state rather than their own input.
             refetched = await client.get(f"/ea/sites/{site_id}/rest/networkconf/{wan_id}")
-            stored = _first_item(refetched)
+            stored = first_response_item(refetched)
 
         await audit_action(
             settings,

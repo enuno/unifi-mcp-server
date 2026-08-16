@@ -307,6 +307,9 @@ class TestGetPortMappings:
         """
         from src.tools.topology import get_port_mappings
 
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:00", "state": "ONLINE"}
+        ]
         clients = [
             {
                 "id": f"c{i}",
@@ -330,6 +333,12 @@ class TestGetPortMappings:
             mock_instance.logger = MagicMock()
 
             def dispatch(url):
+                # "sw1" must resolve as a real node (see _resolve_topology_node),
+                # not just appear as an uplinkDeviceId string on the clients.
+                if "/devices/" in url:
+                    return {"data": devices[0]}
+                if "/integration/" in url and "/devices" in url:
+                    return devices
                 if "/integration/" in url and "/clients" in url:
                     return clients
                 if url.endswith("/sta"):
@@ -683,6 +692,107 @@ class TestDeviceUplinkResolution:
 
         device_nodes = [n for n in result["nodes"] if n["node_type"] == "device"]
         assert device_nodes[0]["state"] == 1
+
+
+# =============================================================================
+# Device identifier resolution (two id namespaces)
+# =============================================================================
+
+TOPO_FIXTURE = {
+    "nodes": [
+        {"node_id": "uuid-sw1", "name": "Switch A", "mac": "00:00:5e:00:53:10"},
+        {"node_id": "uuid-sw2", "name": "Switch B", "mac": "00:00:5e:00:53:20"},
+        {"node_id": "uuid-client", "name": "Media Player", "mac": "00:00:5e:00:53:30"},
+    ],
+    "connections": [
+        {
+            "source_node_id": "uuid-sw1",
+            "target_node_id": "uuid-sw2",
+            "source_port": 8,
+            "target_port": 6,
+            "connection_type": "uplink",
+            "speed_mbps": 1000,
+            "status": "up",
+        },
+        {
+            "source_node_id": "uuid-client",
+            "target_node_id": "uuid-sw1",
+            "target_port": 1,
+            "connection_type": "wired",
+            "speed_mbps": 1000,
+            "status": "up",
+        },
+    ],
+}
+
+
+def test_resolve_topology_node_by_node_id():
+    """The topology's own id resolves to itself."""
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "uuid-sw1") == "uuid-sw1"
+
+
+def test_resolve_topology_node_by_mac():
+    """A MAC resolves, case-insensitively.
+
+    Every other device tool in this server speaks MACs and legacy controller
+    ids; the topology speaks Integration API UUIDs.
+    """
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "00:00:5E:00:53:10") == "uuid-sw1"
+
+
+def test_resolve_topology_node_by_name():
+    """A device name resolves."""
+    from src.tools.topology import _resolve_topology_node
+
+    assert _resolve_topology_node(TOPO_FIXTURE, "Switch A") == "uuid-sw1"
+
+
+def test_resolve_topology_node_unknown_raises():
+    """An unrecognised id raises rather than yielding an empty result.
+
+    Regression: a legacy controller _id matched no node, so the port lookup
+    returned {} -- indistinguishable from a switch that genuinely had nothing
+    connected. "I do not know this device" is a different answer from "this
+    device has no connections".
+    """
+    from src.tools.topology import _resolve_topology_node
+
+    with pytest.raises(ResourceNotFoundError, match="device"):
+        _resolve_topology_node(TOPO_FIXTURE, "507f191e810c19729de860ea")  # pragma: allowlist secret
+
+
+@pytest.mark.asyncio
+async def test_get_port_mappings_accepts_a_mac(mock_settings):
+    """Port mappings resolve a MAC and report which node answered.
+
+    Each port maps to a *list* of peers (see TestLegacyPortDetail /
+    "report every host behind a switch port"), so a single-peer port still
+    reports as a one-element list.
+    """
+    from src.tools.topology import get_port_mappings
+
+    with patch("src.tools.topology.get_network_topology", return_value=TOPO_FIXTURE):
+        result = await get_port_mappings("default", "00:00:5e:00:53:10", mock_settings)
+
+    assert result["device_id"] == "uuid-sw1"
+    assert result["requested_id"] == "00:00:5e:00:53:10"
+    assert result["ports"][8][0]["connected_to"] == "uuid-sw2"
+    assert result["ports"][1][0]["connected_to"] == "uuid-client"
+
+
+@pytest.mark.asyncio
+async def test_get_device_connections_accepts_a_mac(mock_settings):
+    """Connections resolve a MAC instead of silently returning nothing."""
+    from src.tools.topology import get_device_connections
+
+    with patch("src.tools.topology.get_network_topology", return_value=TOPO_FIXTURE):
+        result = await get_device_connections("default", "00:00:5e:00:53:10", mock_settings)
+
+    assert len(result) == 2
 
 
 class TestLegacyPortDetail:

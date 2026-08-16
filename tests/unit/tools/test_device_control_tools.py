@@ -587,3 +587,46 @@ async def test_devices_response_list_format(mock_settings):
         )
 
     assert result["success"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_radio_channel_writes_and_unwraps_echo(mock_settings):
+    """The radio write survives an accepted-but-unechoed reply.
+
+    Regression for the shared unwrap helper: an empty ``data`` list used
+    to raise IndexError while parsing the reply to a write that had
+    already landed.
+    """
+    from src.tools.device_control import set_ap_radio_channel
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    device = {
+        "_id": "ap-1",
+        "mac": "00:00:5e:00:53:41",
+        "name": "Test AP",
+        "radio_table": [
+            {"radio": "ng", "channel": 6, "ht": 20},
+            {"radio": "na", "channel": 36, "ht": 80},
+        ],
+    }
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(return_value={"data": [device]})
+    client.put = AsyncMock(return_value={"data": []})
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_radio_channel(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            channel=44,
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    client.put.assert_called_once()
+    assert result["new_channel"] == 44

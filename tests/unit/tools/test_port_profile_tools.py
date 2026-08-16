@@ -821,9 +821,12 @@ async def test_set_device_port_overrides_missing_port_idx(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_set_device_port_overrides_missing_portconf_id(mock_settings):
-    """Test setting overrides with missing portconf_id."""
-    with pytest.raises(ValidationError, match="portconf_id"):
+async def test_set_device_port_overrides_rejects_empty_override(mock_settings):
+    """Test that an override setting no fields at all is rejected.
+
+    port_idx alone says which port to change without saying what to change.
+    """
+    with pytest.raises(ValidationError, match="sets no fields"):
         await set_device_port_overrides(
             site_id="default",
             device_id="dev1",
@@ -1158,3 +1161,397 @@ async def test_set_device_port_overrides_list_response(mock_settings):
         )
 
     assert result["device_id"] == "dev1"
+
+
+# =============================================================================
+# Controller normalization / empty-echo regression tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_empty_response_does_not_raise(mock_settings):
+    """Test that a create accepted without an echoed object returns cleanly.
+
+    Regression: parsing used ``response.get("data", [{}])[0]``, whose default
+    only applies when the key is absent. A ``{"data": []}`` reply raised
+    IndexError after the POST had already been sent. A fully empty echo means
+    the controller did not confirm any requested field, so every one of them
+    is reported as a dropped-field warning rather than silently ignored.
+    """
+    client = _make_client(get_return={"data": []}, post_return={"data": []})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert len(result["warnings"]) == 2
+    assert any("name" in w for w in result["warnings"])
+    assert any("forward" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_warns_when_forward_normalized(mock_settings):
+    """Test that a controller-rewritten forward mode is surfaced, not hidden.
+
+    The controller may store ``customize`` regardless of the value sent, which
+    changes whether the port is an access port or a trunk.
+    """
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "customize"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["forward"] == "customize"
+    assert len(result["warnings"]) == 1
+    assert "forward" in result["warnings"][0]
+    assert "'native'" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_no_warnings_when_stored_as_requested(mock_settings):
+    """Test that a faithful create carries no warnings key."""
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Test", "forward": "native"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Test",
+            forward="native",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_refetches_when_put_not_echoed(mock_settings):
+    """Test that an un-echoed update is re-read instead of returning nothing.
+
+    Regression: this reply raised IndexError while parsing, so the caller could
+    not tell whether the PUT had landed.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    refetched = {"data": [{"_id": "pp1", "name": "Updated", "forward": "native"}]}
+    client = _make_client(put_return={"data": []})
+    client.get = AsyncMock(side_effect=[existing, refetched])
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            forward="native",
+            confirm=True,
+        )
+
+    assert client.get.await_count == 2
+    assert result["name"] == "Updated"
+    assert result["forward"] == "native"
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_warns_when_refetch_shows_normalization(mock_settings):
+    """Test that a silently-normalized update is reported after the re-read."""
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    refetched = {"data": [{"_id": "pp1", "name": "Original", "forward": "customize"}]}
+    client = _make_client(put_return={"data": []})
+    client.get = AsyncMock(side_effect=[existing, refetched])
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            forward="native",
+            confirm=True,
+        )
+
+    assert result["forward"] == "customize"
+    assert len(result["warnings"]) == 1
+    assert "'native'" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_ignores_untouched_fields(mock_settings):
+    """Test that only caller-provided fields are compared after the write.
+
+    Fields the caller never mentioned must not produce warnings just because
+    the stored profile carries different values.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Original", "forward": "all"}]}
+    updated = {"data": [{"_id": "pp1", "name": "Updated", "forward": "all", "poe_mode": "auto"}]}
+    client = _make_client(get_return=existing, put_return=updated)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            name="Updated",
+            confirm=True,
+        )
+
+    assert "warnings" not in result
+
+
+# =============================================================================
+# tagged_vlan_mgmt tests
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_sends_tagged_vlan_mgmt(mock_settings):
+    """Test that tagged_vlan_mgmt reaches the controller.
+
+    Current controllers derive the legacy ``forward`` field from
+    ``tagged_vlan_mgmt``. Omitting it leaves the profile on the controller
+    default regardless of what ``forward`` is set to.
+    """
+    client = _make_client(
+        get_return={"data": []},
+        post_return={
+            "data": [
+                {
+                    "_id": "pp1",
+                    "name": "Access",
+                    "forward": "native",
+                    "tagged_vlan_mgmt": "block_all",
+                }
+            ]
+        },
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await create_port_profile(
+            site_id="default",
+            name="Access",
+            forward="native",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block_all",
+            confirm=True,
+        )
+
+    post_data = client.post.call_args[1]["json_data"]
+    assert post_data["tagged_vlan_mgmt"] == "block_all"
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_omits_tagged_vlan_mgmt_when_unset(mock_settings):
+    """Test that the field is not sent when the caller does not ask for it."""
+    client = _make_client(
+        get_return={"data": []},
+        post_return={"data": [{"_id": "pp1", "name": "Access", "forward": "all"}]},
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await create_port_profile(
+            site_id="default",
+            name="Access",
+            forward="all",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert "tagged_vlan_mgmt" not in client.post.call_args[1]["json_data"]
+
+
+@pytest.mark.asyncio
+async def test_create_port_profile_invalid_tagged_vlan_mgmt(mock_settings):
+    """Test that an unknown tagged VLAN management mode is rejected."""
+    with pytest.raises(ValidationError, match="Invalid tagged VLAN management"):
+        await create_port_profile(
+            site_id="default",
+            name="Access",
+            forward="native",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block-all",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_sends_tagged_vlan_mgmt(mock_settings):
+    """Test that an update can change tagged VLAN management."""
+    existing = {"data": [{"_id": "pp1", "name": "Access", "tagged_vlan_mgmt": "custom"}]}
+    updated = {"data": [{"_id": "pp1", "name": "Access", "tagged_vlan_mgmt": "block_all"}]}
+    client = _make_client(get_return=existing, put_return=updated)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block_all",
+            confirm=True,
+        )
+
+    assert client.put.call_args[1]["json_data"]["tagged_vlan_mgmt"] == "block_all"
+    assert result["tagged_vlan_mgmt"] == "block_all"
+    assert "warnings" not in result
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_warns_when_tagged_vlan_mgmt_ignored(mock_settings):
+    """Test that a controller refusing the requested mode is reported."""
+    existing = {"data": [{"_id": "pp1", "name": "Access", "tagged_vlan_mgmt": "custom"}]}
+    unchanged = {"data": [{"_id": "pp1", "name": "Access", "tagged_vlan_mgmt": "custom"}]}
+    client = _make_client(get_return=existing, put_return=unchanged)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block_all",
+            confirm=True,
+        )
+
+    assert len(result["warnings"]) == 1
+    assert "tagged_vlan_mgmt" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_warns_when_field_is_dropped(mock_settings):
+    """A field the controller drops entirely is a silent ignore -- warn.
+
+    Only warning on stored-but-different missed the case where the
+    requested key never appears in the stored profile at all.
+    """
+    existing = {"data": [{"_id": "pp1", "name": "Access", "forward": "all"}]}
+    stored_without_field = {"data": [{"_id": "pp1", "name": "Access", "forward": "all"}]}
+    client = _make_client(get_return=existing, put_return=stored_without_field)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            tagged_vlan_mgmt="block_all",
+            confirm=True,
+        )
+
+    assert len(result["warnings"]) == 1
+    assert "did not store tagged_vlan_mgmt" in result["warnings"][0]
+
+
+@pytest.mark.asyncio
+async def test_update_port_profile_invalid_tagged_vlan_mgmt(mock_settings):
+    """Test that an unknown tagged VLAN management mode is rejected on update."""
+    with pytest.raises(ValidationError, match="Invalid tagged VLAN management"):
+        await update_port_profile(
+            site_id="default",
+            profile_id="pp1",
+            settings=mock_settings,
+            tagged_vlan_mgmt="blockall",
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_name_only(mock_settings):
+    """Test that renaming a port does not require reassigning its profile.
+
+    A port with no portconf_id inherits the site default. Requiring one made
+    it impossible to rename a port or turn its PoE off without also moving it
+    onto some profile.
+    """
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 6, "name": "Port 6"}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 6, "name": "Port 6-Uplink"}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["name"] == "Port 6-Uplink"
+    assert "portconf_id" not in sent[0]
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_poe_only(mock_settings):
+    """Test that a PoE-only override is accepted."""
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 2, "poe_mode": "auto"}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 2, "poe_mode": "off"}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["poe_mode"] == "off"
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_allows_speed_only(mock_settings):
+    """A speed-only override is accepted without a profile reassignment."""
+    device = {
+        "_id": "dev1",
+        "mac": "00:11:22:33:44:55",
+        "port_overrides": [{"port_idx": 4, "speed": 1000}],
+    }
+    client = _make_client(get_return={"data": [device]}, put_return={"data": [device]})
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 4, "speed": 100, "autoneg": False}],
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    sent = client.put.call_args[1]["json_data"]["port_overrides"]
+    assert sent[0]["speed"] == 100
+    assert sent[0]["autoneg"] is False
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_rejects_all_none_fields(mock_settings):
+    """port_idx plus only-None companions applies nothing and is rejected."""
+    with pytest.raises(ValidationError, match="sets no"):
+        await set_device_port_overrides(
+            site_id="default",
+            device_id="dev1",
+            port_overrides=[{"port_idx": 3, "name": None}],
+            settings=mock_settings,
+            confirm=True,
+        )

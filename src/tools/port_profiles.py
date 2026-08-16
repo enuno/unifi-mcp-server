@@ -19,6 +19,11 @@ from ..utils import (
     validate_site_id,
 )
 
+# Current controllers drive tagged VLAN handling from tagged_vlan_mgmt and
+# derive the legacy `forward` field from it. "block_all" is the access-port
+# case: native network untagged, no tagged VLANs carried.
+VALID_TAGGED_VLAN_MGMT = ["auto", "block_all", "custom"]
+
 
 def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) -> list[str]:
     """Report requested fields the controller did not store as asked.
@@ -33,13 +38,19 @@ def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) ->
         stored: Field values the controller echoed back
 
     Returns:
-        One human-readable warning per field that differs, empty if all match
+        One human-readable warning per field that differs or was dropped,
+        empty if everything was stored as requested
     """
-    return [
-        f"Controller stored {key}={stored[key]!r}, not the requested {value!r}"
-        for key, value in requested.items()
-        if key in stored and stored[key] != value
-    ]
+    warnings = []
+    for key, value in requested.items():
+        if key not in stored:
+            # A dropped field is the same silent-ignore this helper exists
+            # to expose; absence from the stored profile means the write
+            # cannot be confirmed.
+            warnings.append(f"Controller did not store {key} (requested {value!r})")
+        elif stored[key] != value:
+            warnings.append(f"Controller stored {key}={stored[key]!r}, not the requested {value!r}")
+    return warnings
 
 
 async def list_port_profiles(
@@ -133,6 +144,7 @@ async def create_port_profile(
     native_networkconf_id: str | None = None,
     excluded_networkconf_ids: list[str] | None = None,
     tagged_networkconf_ids: list[str] | None = None,
+    tagged_vlan_mgmt: str | None = None,
     poe_mode: str | None = None,
     speed: int | None = None,
     full_duplex: bool | None = None,
@@ -147,11 +159,17 @@ async def create_port_profile(
     Args:
         site_id: Site identifier
         name: Profile name
-        forward: Forwarding mode (all, native, customize, disabled)
+        forward: Legacy forwarding mode (all, native, customize, disabled).
+            On current controllers this is derived from tagged_vlan_mgmt rather
+            than honoured directly -- sending forward alone leaves the profile
+            on the controller's default. Set tagged_vlan_mgmt to choose.
         settings: Application settings
         native_networkconf_id: Native network configuration ID
         excluded_networkconf_ids: Excluded network configuration IDs
         tagged_networkconf_ids: Tagged network configuration IDs
+        tagged_vlan_mgmt: Tagged VLAN management (auto, block_all, custom).
+            block_all makes the port carry only its native network untagged,
+            which is what an access port needs.
         poe_mode: PoE mode (auto, off, pasv24, passthrough)
         speed: Port speed in Mbps
         full_duplex: Full duplex mode
@@ -177,6 +195,12 @@ async def create_port_profile(
     if forward not in valid_forwards:
         raise ValidationError(f"Invalid forward mode '{forward}'. Must be one of: {valid_forwards}")
 
+    if tagged_vlan_mgmt is not None and tagged_vlan_mgmt not in VALID_TAGGED_VLAN_MGMT:
+        raise ValidationError(
+            f"Invalid tagged VLAN management '{tagged_vlan_mgmt}'. "
+            f"Must be one of: {VALID_TAGGED_VLAN_MGMT}"
+        )
+
     # Build profile data
     profile_data: dict[str, Any] = {
         "name": name,
@@ -189,6 +213,8 @@ async def create_port_profile(
         profile_data["excluded_networkconf_ids"] = excluded_networkconf_ids
     if tagged_networkconf_ids is not None:
         profile_data["tagged_networkconf_ids"] = tagged_networkconf_ids
+    if tagged_vlan_mgmt is not None:
+        profile_data["tagged_vlan_mgmt"] = tagged_vlan_mgmt
     if poe_mode is not None:
         profile_data["poe_mode"] = poe_mode
     if speed is not None:
@@ -284,6 +310,7 @@ async def update_port_profile(
     native_networkconf_id: str | None = None,
     excluded_networkconf_ids: list[str] | None = None,
     tagged_networkconf_ids: list[str] | None = None,
+    tagged_vlan_mgmt: str | None = None,
     poe_mode: str | None = None,
     speed: int | None = None,
     full_duplex: bool | None = None,
@@ -300,10 +327,13 @@ async def update_port_profile(
         profile_id: Port profile ID
         settings: Application settings
         name: New profile name
-        forward: New forwarding mode (all, native, customize, disabled)
+        forward: New legacy forwarding mode (all, native, customize, disabled).
+            Derived from tagged_vlan_mgmt on current controllers; set that
+            instead to change how tagged VLANs are handled.
         native_networkconf_id: New native network configuration ID
         excluded_networkconf_ids: New excluded network configuration IDs
         tagged_networkconf_ids: New tagged network configuration IDs
+        tagged_vlan_mgmt: New tagged VLAN management (auto, block_all, custom)
         poe_mode: New PoE mode
         speed: New port speed in Mbps
         full_duplex: New full duplex mode
@@ -334,6 +364,12 @@ async def update_port_profile(
             raise ValidationError(
                 f"Invalid forward mode '{forward}'. Must be one of: {valid_forwards}"
             )
+
+    if tagged_vlan_mgmt is not None and tagged_vlan_mgmt not in VALID_TAGGED_VLAN_MGMT:
+        raise ValidationError(
+            f"Invalid tagged VLAN management '{tagged_vlan_mgmt}'. "
+            f"Must be one of: {VALID_TAGGED_VLAN_MGMT}"
+        )
 
     parameters = {
         "site_id": site_id,
@@ -383,6 +419,8 @@ async def update_port_profile(
                 changes["excluded_networkconf_ids"] = excluded_networkconf_ids
             if tagged_networkconf_ids is not None:
                 changes["tagged_networkconf_ids"] = tagged_networkconf_ids
+            if tagged_vlan_mgmt is not None:
+                changes["tagged_vlan_mgmt"] = tagged_vlan_mgmt
             if poe_mode is not None:
                 changes["poe_mode"] = poe_mode
             if speed is not None:
@@ -637,11 +675,24 @@ async def set_device_port_overrides(
     if not port_overrides:
         raise ValidationError("port_overrides cannot be empty")
 
+    # port_idx identifies the port and is genuinely required. portconf_id is
+    # not: a port with no profile inherits the site default, and overrides that
+    # only set a name, PoE mode or speed are both valid and common. Demanding
+    # it made it impossible to rename a port or disable its PoE without also
+    # reassigning its profile.
     for override in port_overrides:
         if "port_idx" not in override:
             raise ValidationError("Each port override must include 'port_idx'")
-        if "portconf_id" not in override:
-            raise ValidationError("Each port override must include 'portconf_id'")
+        # At least one field must actually be set: a bare port_idx or one
+        # whose only companions are None values would apply nothing. Keys
+        # are deliberately not whitelisted -- the controller accepts more
+        # override fields than this tool enumerates.
+        if not any(v is not None for k, v in override.items() if k != "port_idx"):
+            raise ValidationError(
+                f"Port override for port_idx {override['port_idx']} sets no "
+                "fields. Include at least one of portconf_id, name, poe_mode, "
+                "speed, autoneg, full_duplex."
+            )
 
     parameters = {
         "site_id": site_id,

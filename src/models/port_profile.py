@@ -20,6 +20,15 @@ class PortProfile(BaseModel):
     tagged_networkconf_ids: list[str] = Field(
         default_factory=list, description="Tagged network configuration IDs"
     )
+    tagged_vlan_mgmt: str | None = Field(
+        None,
+        description=(
+            "Tagged VLAN management (auto, block_all, custom). Current "
+            "controllers drive tagged VLAN handling from this field and derive "
+            "'forward' from it, so reading 'forward' alone hides how the port "
+            "is actually configured."
+        ),
+    )
     poe_mode: str | None = Field(None, description="PoE mode (auto, off, pasv24, passthrough)")
     speed: int | None = Field(None, description="Port speed in Mbps")
     full_duplex: bool | None = Field(None, description="Full duplex mode")

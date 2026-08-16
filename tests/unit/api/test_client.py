@@ -227,15 +227,72 @@ class TestUniFiClientEndpointTranslation:
         await client.close()
 
     @pytest.mark.asyncio
-    async def test_translate_non_v2_proxy_path_unchanged(self, mock_settings_local):
-        """Only the v2 site pattern is rewritten; other local paths pass through."""
+    async def test_translate_integration_unknown_site_passes_through(self, mock_settings_local):
+        """An unmapped integration site id is left alone for the API to reject."""
         client = UniFiClient(mock_settings_local)
-        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+        client._site_name_to_uuid = {}
 
         result = client._translate_endpoint(
             "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
         )
         assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/devices"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_site_name_to_uuid(self, mock_settings_local):
+        """The Integration API rejects short names, so they map to the UUID."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites/default/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_site_name_when_already_prefixed(self, mock_settings_local):
+        """A path that already carries /proxy/network must not gain a second one."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/proxy/network/integration/v1/sites/default/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_nested_path_is_preserved(self, mock_settings_local):
+        """Everything after the site segment must survive the rewrite intact."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint(
+            "/integration/v1/sites/default/devices/dev-1/statistics"
+        )
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/devices/dev-1/statistics"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_uuid_is_idempotent(self, mock_settings_local):
+        """Callers that already hold the UUID must not be broken by the rewrite."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites/abc-123-uuid/wans")
+        assert result == "/proxy/network/integration/v1/sites/abc-123-uuid/wans"
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_integration_sites_root_unchanged(self, mock_settings_local):
+        """The site listing itself has no site segment to translate."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"default": "abc-123-uuid"}
+
+        result = client._translate_endpoint("/integration/v1/sites")
+        assert result == "/proxy/network/integration/v1/sites"
 
         await client.close()
 
@@ -334,6 +391,32 @@ class TestUniFiClientAuthentication:
 
         assert client._site_uuid_to_name["uuid-1"] == "default"
         assert client._site_uuid_to_name["uuid-2"] == "office"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_build_site_uuid_map_builds_reverse_mapping(self, mock_settings_local):
+        """The Integration API needs name -> UUID, the inverse of the legacy map."""
+        client = UniFiClient(mock_settings_local)
+
+        sites = [
+            {"id": "uuid-1", "internalReference": "default"},
+            {"id": "uuid-2", "internalReference": "office"},
+        ]
+
+        client._build_site_uuid_map(sites)
+
+        assert client._site_name_to_uuid == {"default": "uuid-1", "office": "uuid-2"}
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_build_site_uuid_map_clears_stale_reverse_entries(self, mock_settings_local):
+        """Rebuilding must not leave a previous run's sites behind."""
+        client = UniFiClient(mock_settings_local)
+        client._site_name_to_uuid = {"stale": "uuid-gone"}
+
+        client._build_site_uuid_map([{"id": "uuid-1", "internalReference": "default"}])
+
+        assert client._site_name_to_uuid == {"default": "uuid-1"}
         await client.close()
 
     @pytest.mark.asyncio

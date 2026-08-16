@@ -299,6 +299,52 @@ class TestGetPortMappings:
             assert result["device_id"] == "switch_001"
             assert "ports" in result
 
+    @pytest.mark.asyncio
+    async def test_one_port_reports_every_host_behind_it(self, mock_settings):
+        """A virtualization host bridges many guests onto a single switch port.
+
+        Keying one peer per port silently dropped all but the last of them.
+        """
+        from src.tools.topology import get_port_mappings
+
+        clients = [
+            {
+                "id": f"c{i}",
+                "name": name,
+                "macAddress": f"AA:BB:CC:00:00:0{i}",
+                "type": "WIRED",
+                "uplinkDeviceId": "sw1",
+            }
+            for i, name in enumerate(["vm-alpha", "vm-beta", "vm-gamma"], start=1)
+        ]
+        legacy_clients = [
+            {"mac": f"aa:bb:cc:00:00:0{i}", "sw_port": 5, "wired_rate_mbps": 1000}
+            for i in range(1, 4)
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+
+            def dispatch(url):
+                if "/integration/" in url and "/clients" in url:
+                    return clients
+                if url.endswith("/sta"):
+                    return legacy_clients
+                return []
+
+            mock_instance.get = AsyncMock(side_effect=dispatch)
+
+            result = await get_port_mappings("default", "sw1", mock_settings)
+
+        peers = result["ports"][5]
+        assert len(peers) == 3
+        assert {p["connected_name"] for p in peers} == {"vm-alpha", "vm-beta", "vm-gamma"}
+        assert all(p["speed_mbps"] == 1000 for p in peers)
+
 
 class TestExportTopology:
     """Tests for export_topology tool."""
@@ -629,7 +675,9 @@ class TestDeviceUplinkResolution:
             mock_instance.resolve_site_id = AsyncMock(return_value="default")
             mock_instance.settings = mock_settings
             mock_instance.logger = MagicMock()
-            mock_instance.get = AsyncMock(side_effect=[devices, [], {"data": devices[0]}])
+            # devices list, clients list, uplink detail, then the two legacy
+            # stat routes _fetch_legacy_stats joins on.
+            mock_instance.get = AsyncMock(side_effect=[devices, [], {"data": devices[0]}, [], []])
 
             result = await get_network_topology("default", mock_settings)
 
@@ -710,7 +758,12 @@ def test_resolve_topology_node_unknown_raises():
 
 @pytest.mark.asyncio
 async def test_get_port_mappings_accepts_a_mac(mock_settings):
-    """Port mappings resolve a MAC and report which node answered."""
+    """Port mappings resolve a MAC and report which node answered.
+
+    Each port maps to a *list* of peers (see TestLegacyPortDetail /
+    "report every host behind a switch port"), so a single-peer port still
+    reports as a one-element list.
+    """
     from src.tools.topology import get_port_mappings
 
     with patch("src.tools.topology.get_network_topology", return_value=TOPO_FIXTURE):
@@ -718,8 +771,8 @@ async def test_get_port_mappings_accepts_a_mac(mock_settings):
 
     assert result["device_id"] == "uuid-sw1"
     assert result["requested_id"] == "00:00:5e:00:53:10"
-    assert result["ports"][8]["connected_to"] == "uuid-sw2"
-    assert result["ports"][1]["connected_to"] == "uuid-client"
+    assert result["ports"][8][0]["connected_to"] == "uuid-sw2"
+    assert result["ports"][1][0]["connected_to"] == "uuid-client"
 
 
 @pytest.mark.asyncio
@@ -731,3 +784,257 @@ async def test_get_device_connections_accepts_a_mac(mock_settings):
         result = await get_device_connections("default", "00:00:5e:00:53:10", mock_settings)
 
     assert len(result) == 2
+
+
+class TestLegacyPortDetail:
+    """Port and link-speed detail comes only from the legacy stat routes.
+
+    The Integration API's uplink object is just ``{"deviceId": ...}``, so
+    without this join every edge in the graph has null ports and null speed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_device_uplink_gains_ports_and_speed(self, mock_settings):
+        from src.tools.topology import get_network_topology
+
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"},
+        ]
+        legacy_devices = [
+            {
+                "mac": "aa:bb:cc:00:00:01",
+                "type": "usw",
+                "uplink": {
+                    "port_idx": 9,
+                    "uplink_remote_port": 3,
+                    "speed": 2500,
+                    "full_duplex": True,
+                },
+            }
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(
+                side_effect=[
+                    devices,
+                    [],
+                    {"data": {**devices[0], "uplink": {"deviceId": "gw1"}}},
+                    legacy_devices,
+                    [],
+                ]
+            )
+            result = await get_network_topology("default", mock_settings)
+
+        node = next(n for n in result["nodes"] if n["node_id"] == "sw1")
+        assert node["uplink_port"] == 9
+        assert node["type_detail"] == "usw"
+
+        conn = next(c for c in result["connections"] if c["is_uplink"])
+        assert conn["source_port"] == 9
+        assert conn["target_port"] == 3
+        assert conn["speed_mbps"] == 2500
+        assert conn["duplex"] == "full"
+
+    @pytest.mark.asyncio
+    async def test_wired_client_gains_switch_port_and_rate(self, mock_settings):
+        from src.tools.topology import get_network_topology
+
+        clients = [
+            {
+                "id": "c1",
+                "macAddress": "AA:BB:CC:00:00:09",
+                "type": "WIRED",
+                "uplinkDeviceId": "sw1",
+            }
+        ]
+        legacy_clients = [{"mac": "aa:bb:cc:00:00:09", "sw_port": 5, "wired_rate_mbps": 1000}]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            # No devices, so _merge_device_uplinks makes no detail call:
+            # devices list, clients list, then the two legacy routes.
+            mock_instance.get = AsyncMock(side_effect=[[], clients, [], legacy_clients])
+            result = await get_network_topology("default", mock_settings)
+
+        conn = result["connections"][0]
+        assert conn["connection_type"] == "wired"
+        assert conn["target_port"] == 5
+        assert conn["speed_mbps"] == 1000
+
+    @pytest.mark.asyncio
+    async def test_wireless_client_rate_is_converted_from_kbps(self, mock_settings):
+        from src.tools.topology import get_network_topology
+
+        clients = [
+            {
+                "id": "c1",
+                "macAddress": "AA:BB:CC:00:00:0A",
+                "type": "WIRELESS",
+                "uplinkDeviceId": "ap1",
+            }
+        ]
+        legacy_clients = [{"mac": "aa:bb:cc:00:00:0a", "tx_rate": 1201000}]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            # No devices, so _merge_device_uplinks makes no detail call:
+            # devices list, clients list, then the two legacy routes.
+            mock_instance.get = AsyncMock(side_effect=[[], clients, [], legacy_clients])
+            result = await get_network_topology("default", mock_settings)
+
+        conn = result["connections"][0]
+        assert conn["connection_type"] == "wireless"
+        assert conn["speed_mbps"] == 1201
+        assert conn["target_port"] is None
+
+    @pytest.mark.asyncio
+    async def test_graph_survives_legacy_route_failure(self, mock_settings):
+        """A controller refusing the legacy routes must degrade, not fail."""
+        from src.tools.topology import get_network_topology
+        from src.utils.exceptions import APIError
+
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"}
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(
+                side_effect=[
+                    devices,
+                    [],
+                    {"data": devices[0]},
+                    APIError("legacy route disabled"),
+                    APIError("legacy route disabled"),
+                ]
+            )
+            result = await get_network_topology("default", mock_settings)
+
+        assert result["total_devices"] == 1
+        node = next(n for n in result["nodes"] if n["node_id"] == "sw1")
+        assert node["uplink_port"] is None
+        # Falls back to the model when the legacy type code is unavailable.
+        assert node["type_detail"] == node["model"]
+
+    @pytest.mark.asyncio
+    async def test_graph_survives_legacy_auth_refusal(self, mock_settings):
+        """401/403 on the legacy routes must degrade like any other refusal.
+
+        AuthenticationError is not an APIError subclass, so it needs its own
+        entry in the best-effort catch.
+        """
+        from src.tools.topology import get_network_topology
+        from src.utils.exceptions import AuthenticationError
+
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"}
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+            mock_instance.get = AsyncMock(
+                side_effect=[
+                    devices,
+                    [],
+                    {"data": devices[0]},
+                    AuthenticationError("legacy routes need a session"),
+                    AuthenticationError("legacy routes need a session"),
+                ]
+            )
+            result = await get_network_topology("default", mock_settings)
+
+        assert result["total_devices"] == 1
+        node = next(n for n in result["nodes"] if n["node_id"] == "sw1")
+        assert node["uplink_port"] is None
+
+    @pytest.mark.asyncio
+    async def test_half_duplex_link_is_reported_as_half(self, mock_settings):
+        """full_duplex=False is a half-duplex link, not missing detail."""
+        from src.tools.topology import get_network_topology
+
+        devices = [
+            {"id": "gw1", "name": "Gateway", "macAddress": "AA:BB:CC:00:00:01", "state": "ONLINE"},
+            {
+                "id": "sw1",
+                "name": "Switch",
+                "macAddress": "AA:BB:CC:00:00:02",
+                "state": "ONLINE",
+                "uplink": {"deviceId": "gw1"},
+            },
+        ]
+        legacy_devices = [
+            {
+                "mac": "aa:bb:cc:00:00:02",
+                "uplink": {
+                    "port_idx": 2,
+                    "uplink_remote_port": 7,
+                    "speed": 100,
+                    "full_duplex": False,
+                },
+            }
+        ]
+
+        with patch("src.tools.topology.UniFiClient") as mock_client:
+            mock_instance = mock_client.return_value.__aenter__.return_value
+            mock_instance.is_authenticated = True
+            mock_instance.resolve_site_id = AsyncMock(return_value="default")
+            mock_instance.settings = mock_settings
+            mock_instance.logger = MagicMock()
+
+            def dispatch(url):
+                if "/devices/" in url:
+                    return {"data": next(d for d in devices if url.endswith(d["id"]))}
+                if "/integration/" in url and "/devices" in url:
+                    return devices
+                if "/ea/" in url and url.endswith("/devices"):
+                    return legacy_devices
+                return []
+
+            mock_instance.get = AsyncMock(side_effect=dispatch)
+            result = await get_network_topology("default", mock_settings)
+
+        conn = next(c for c in result["connections"] if c["source_node_id"] == "sw1")
+        assert conn["duplex"] == "half"
+        assert conn["speed_mbps"] == 100
+
+
+@pytest.mark.asyncio
+async def test_legacy_rows_skip_non_dict_entries(mock_settings):
+    """Junk rows in a legacy response are skipped, not indexed."""
+    from src.tools.topology import _fetch_legacy_stats
+
+    client = MagicMock()
+    client.logger = MagicMock()
+    client.get = AsyncMock(
+        side_effect=[
+            {"data": ["junk", 7, {"mac": "00:00:5E:00:53:41", "port_idx": 3}, {}]},
+            {"data": [None, {"mac": "00:00:5E:00:53:07", "sw_port": 5}]},
+        ]
+    )
+
+    devices, clients = await _fetch_legacy_stats(client, "default")
+
+    assert list(devices) == ["00:00:5e:00:53:41"]
+    assert devices["00:00:5e:00:53:41"]["port_idx"] == 3
+    assert list(clients) == ["00:00:5e:00:53:07"]

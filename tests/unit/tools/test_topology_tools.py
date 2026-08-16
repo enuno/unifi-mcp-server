@@ -307,6 +307,9 @@ class TestGetPortMappings:
         """
         from src.tools.topology import get_port_mappings
 
+        devices = [
+            {"id": "sw1", "name": "Switch", "macAddress": "AA:BB:CC:00:00:00", "state": "ONLINE"}
+        ]
         clients = [
             {
                 "id": f"c{i}",
@@ -330,6 +333,12 @@ class TestGetPortMappings:
             mock_instance.logger = MagicMock()
 
             def dispatch(url):
+                # "sw1" must resolve as a real node (see _resolve_topology_node),
+                # not just appear as an uplinkDeviceId string on the clients.
+                if "/devices/" in url:
+                    return {"data": devices[0]}
+                if "/integration/" in url and "/devices" in url:
+                    return devices
                 if "/integration/" in url and "/clients" in url:
                     return clients
                 if url.endswith("/sta"):

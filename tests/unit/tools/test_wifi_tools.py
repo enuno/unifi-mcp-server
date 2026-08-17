@@ -1042,3 +1042,80 @@ async def test_create_wlan_wpa3_mode_also_sets_transition_and_pmf_defaults(mock_
     assert (
         payload.get("pmf_mode") == "required"
     ), "wpa_mode='wpa3' must default pmf_mode='required' (WPA3 mandates PMF)"
+
+
+@pytest.mark.asyncio
+async def test_update_wlan_roaming_assistant(mock_settings):
+    """Roaming assistant maps to the na fields the controller stores."""
+    existing_wlan = {"_id": "wlan1", "name": "Home WiFi", "security": "wpapsk"}
+    stored = {
+        "_id": "wlan1",
+        "name": "Home WiFi",
+        "roaming_assistant_na_enabled": True,
+        "roaming_assistant_na_rssi": -75,
+    }
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value={"data": [existing_wlan]})
+    mock_client.put = AsyncMock(return_value={"data": [stored]})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        result = await update_wlan(
+            site_id="default",
+            wlan_id="wlan1",
+            settings=mock_settings,
+            roaming_assistant_enabled=True,
+            roaming_assistant_rssi=-75,
+            confirm=True,
+        )
+
+    json_data = mock_client.put.call_args[1]["json_data"]
+    assert json_data["roaming_assistant_na_enabled"] is True
+    assert json_data["roaming_assistant_na_rssi"] == -75
+    assert result["roaming_assistant_na_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_update_wlan_roaming_rssi_bounds(mock_settings):
+    """An out-of-range roaming threshold fails before any network call."""
+    from src.utils.exceptions import ValidationError
+
+    with patch.object(wifi_module, "UniFiClient") as client_cls:
+        for bad in (-95, -50, 0):
+            with pytest.raises(ValidationError, match="roaming_assistant_rssi"):
+                await update_wlan(
+                    site_id="default",
+                    wlan_id="wlan1",
+                    settings=mock_settings,
+                    roaming_assistant_rssi=bad,
+                    confirm=True,
+                )
+    # Rejection happens strictly before any HTTP client exists.
+    client_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_wlan_roaming_rssi_boundaries_accepted(mock_settings):
+    """The documented edges of the controller range (-90, -60) are valid."""
+    for edge in (-90, -60):
+        existing = {"_id": "wlan1", "name": "Home WiFi", "security": "wpapsk"}
+        stored = {"_id": "wlan1", "roaming_assistant_na_rssi": edge}
+        mock_client = MagicMock()
+        mock_client.authenticate = AsyncMock()
+        mock_client.get = AsyncMock(return_value={"data": [existing]})
+        mock_client.put = AsyncMock(return_value={"data": [stored]})
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+            await update_wlan(
+                site_id="default",
+                wlan_id="wlan1",
+                settings=mock_settings,
+                roaming_assistant_rssi=edge,
+                confirm=True,
+            )
+
+        assert mock_client.put.call_args[1]["json_data"]["roaming_assistant_na_rssi"] == edge

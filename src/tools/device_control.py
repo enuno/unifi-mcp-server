@@ -8,6 +8,7 @@ from ..utils import (
     APIError,
     ResourceNotFoundError,
     ValidationError,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -15,19 +16,6 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
-
-
-def _first_item(response: object) -> dict[str, Any]:
-    """Unwrap the first item of a UniFi list response, else {}.
-
-    Local copy of the shared helper proposed in the empty-response-parsing
-    PR; collapse onto it once that lands.
-    """
-    data = response.get("data") if isinstance(response, dict) else response
-    if isinstance(data, list) and data and isinstance(data[0], dict):
-        return data[0]
-    return {}
-
 
 # Radio identifiers: UniFi uses "ng" for 2.4GHz, "na" for 5GHz, "6e" for 6GHz
 RADIO_BAND_MAP = {
@@ -598,7 +586,7 @@ async def set_ap_radio_channel(
                 config_response = await client.get(
                     settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
                 )
-                device = _first_item(config_response)
+                device = first_response_item(config_response)
             except APIError:
                 device = {}
             if not device:
@@ -650,7 +638,7 @@ async def set_ap_radio_channel(
             endpoint = settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
             put_response = await client.put(endpoint, json_data={"radio_table": radio_table})
 
-            stored_device = _first_item(put_response)
+            stored_device = first_response_item(put_response)
             stored_entry: dict[str, Any] = {}
             for entry in stored_device.get("radio_table", []) or []:
                 if isinstance(entry, dict) and (

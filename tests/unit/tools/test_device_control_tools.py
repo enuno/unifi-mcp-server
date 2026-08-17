@@ -804,7 +804,6 @@ async def test_force_provision_failure_audits_failed(mock_settings):
     assert audit.call_args[1]["result"] == "failed"
 
 
-
 # =============================================================================
 # set_ap_radio_channel Tests
 # =============================================================================

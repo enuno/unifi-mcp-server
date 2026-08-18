@@ -10,8 +10,11 @@ from ..models.diagnostics import NetworkReference, SpeedTestResult
 from ..utils import (
     APIError,
     ValidationError,
+    coerce_bool,
     get_logger,
+    log_audit,
     sanitize_log_message,
+    validate_confirmation,
     validate_mac_address,
     validate_site_id,
 )
@@ -358,3 +361,171 @@ async def list_spectrum_interference(
         sanitize_log_message(f"Retrieved {len(entries)} interference entries for '{site_id}'")
     )
     return entries
+
+
+# Report archive intervals and subjects the controller maintains. Attrs
+# differ by subject; "time" is always required for a usable series.
+REPORT_INTERVALS = ("5minutes", "hourly", "daily", "monthly")
+REPORT_SUBJECTS = ("site", "ap", "user", "gw")
+
+_DEFAULT_REPORT_ATTRS: dict[str, list[str]] = {
+    "site": [
+        "time",
+        "bytes",
+        "wlan_bytes",
+        "num_sta",
+        "wlan-num_sta",
+        "wan-tx_bytes",
+        "wan-rx_bytes",
+    ],
+    # Airtime attrs are band-prefixed in the archives ("ng-"/"na-"); the
+    # bare "cu_total" family exists in live stat/device blobs but comes
+    # back empty from stat/report (verified live on Network 10.5).
+    "ap": [
+        "time",
+        "bytes",
+        "num_sta",
+        "ng-cu_total",
+        "ng-cu_self_rx",
+        "ng-cu_self_tx",
+        "na-cu_total",
+        "na-cu_self_rx",
+        "na-cu_self_tx",
+    ],
+    "user": ["time", "rx_bytes", "tx_bytes", "signal"],
+    # Gateway latency is not archived on stat/report (verified live on
+    # Network 10.5) — read it from live monitoring surfaces instead.
+    "gw": ["time", "mem", "cpu", "wan-rx_bytes", "wan-tx_bytes"],
+}
+
+
+async def get_historical_stats(
+    site_id: str,
+    settings: Settings,
+    subject: str = "ap",
+    interval: str = "hourly",
+    hours: int = 24,
+    macs: list[str] | str | None = None,
+    attrs: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Read archived time-series statistics from the controller.
+
+    The controller keeps rollup archives on
+    ``stat/report/{interval}.{subject}`` — the only place historical
+    airtime, per-client signal, and gateway latency live. Instantaneous
+    tools answer "now"; this answers "since when" and "how often".
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        subject: What the series describes — "site", "ap" (per-AP
+            airtime/clients), "user" (per-client traffic/signal), or
+            "gw" (gateway cpu/mem/WAN latency)
+        interval: Rollup granularity — "5minutes", "hourly", "daily",
+            or "monthly" (5-minute archives are retained briefly;
+            hourly/daily reach back much further)
+        hours: Window ending now (default 24)
+        macs: Optional MAC or list of MACs to filter to specific
+            devices/clients (required in practice for "user" series)
+        attrs: Report attributes to request; defaults per subject.
+            "time" is always included
+
+    Returns:
+        List of samples, oldest first, each carrying epoch-ms ``time``
+    """
+    site_id = validate_site_id(site_id)
+    if interval not in REPORT_INTERVALS:
+        raise ValidationError(f"interval must be one of {REPORT_INTERVALS}, got '{interval}'")
+    if subject not in REPORT_SUBJECTS:
+        raise ValidationError(f"subject must be one of {REPORT_SUBJECTS}, got '{subject}'")
+    if not 1 <= hours <= 2160:
+        raise ValidationError(f"hours must be between 1 and 2160, got {hours}")
+    if isinstance(macs, str):
+        macs = [macs]
+    if macs is not None:
+        macs = [validate_mac_address(m) for m in macs]
+    logger = get_logger(__name__, settings.log_level)
+
+    requested = list(attrs) if attrs else list(_DEFAULT_REPORT_ATTRS[subject])
+    if "time" not in requested:
+        requested.insert(0, "time")
+
+    now_ms = int(time.time() * 1000)
+    body: dict[str, Any] = {
+        "attrs": requested,
+        "start": now_ms - hours * 3600 * 1000,
+        "end": now_ms,
+    }
+    if macs:
+        body["macs"] = macs
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        response = await client.post(
+            f"/ea/sites/{site_id}/stat/report/{interval}.{subject}",
+            json_data=body,
+        )
+        data = response.get("data", []) if isinstance(response, dict) else response
+        samples = [s for s in (data if isinstance(data, list) else []) if isinstance(s, dict)]
+        samples.sort(key=lambda s: s.get("time") or 0)
+
+        logger.info(
+            sanitize_log_message(
+                f"Retrieved {len(samples)} {interval}.{subject} samples for '{site_id}' "
+                f"(last {hours}h)"
+            )
+        )
+        return samples
+
+
+async def start_spectrum_scan(
+    site_id: str,
+    settings: Settings,
+    ap_mac: str = "",
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Start an RF spectrum scan on an access point.
+
+    DISRUPTIVE: the AP takes its radios offline for the duration of the
+    scan (typically 5-10 minutes) and every client on it is dropped —
+    they must roam elsewhere or wait. Run during a quiet window. Read
+    results with :func:`get_spectrum_scan` /
+    :func:`list_spectrum_interference`; the scan state reports
+    ``spectrum_scanning`` true until the scan completes.
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        ap_mac: MAC address of the AP to scan
+        confirm: Confirmation flag (required — clients will drop)
+        dry_run: If True, preview without starting the scan
+
+    Returns:
+        Dictionary with the scan request status
+    """
+    site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "spectrum scan", dry_run)
+    dry_run = coerce_bool(dry_run)
+    ap_mac = validate_mac_address(ap_mac)
+    logger = get_logger(__name__, settings.log_level)
+
+    if dry_run:
+        return {"dry_run": True, "would_scan": ap_mac, "warning": "clients on this AP will drop"}
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        await client.post(
+            f"/ea/sites/{site_id}/cmd/devmgr",
+            json_data={"cmd": "spectrum-scan", "mac": ap_mac},
+        )
+        log_audit(
+            operation="start_spectrum_scan",
+            parameters={"site_id": site_id, "ap_mac": ap_mac},
+            result="success",
+            site_id=site_id,
+        )
+        logger.info(sanitize_log_message(f"Spectrum scan started on {ap_mac}"))
+        return {"success": True, "ap_mac": ap_mac, "status": "scan started"}

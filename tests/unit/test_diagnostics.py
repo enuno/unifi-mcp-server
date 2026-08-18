@@ -5,12 +5,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.tools.diagnostics import (
+    get_historical_stats,
     get_network_references,
     get_spectrum_scan,
     get_speed_test_history,
     get_speed_test_status,
     list_spectrum_interference,
     run_speed_test,
+    start_spectrum_scan,
 )
 from src.utils.exceptions import ValidationError
 
@@ -513,3 +515,126 @@ class TestSpeedTestStatusGuards:
 
         assert result["download_speed_mbps"] == 900.0
         assert result["status"] == "Success"
+
+
+class TestGetHistoricalStats:
+    @pytest.mark.asyncio
+    async def test_posts_window_attrs_and_sorts_by_time(self, mock_settings):
+        """The report body carries attrs + epoch-ms window; samples sort oldest first."""
+        samples = [
+            {"time": 2000, "cu_total": 30},
+            {"time": 1000, "cu_total": 25},
+        ]
+        client = create_mock_client()
+        client.post = AsyncMock(return_value={"data": samples})
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_historical_stats(
+                "default", mock_settings, subject="ap", interval="hourly", hours=48
+            )
+
+        url = client.post.call_args[0][0]
+        assert url == "/ea/sites/default/stat/report/hourly.ap"
+        body = client.post.call_args[1]["json_data"]
+        assert body["attrs"][0] == "time"
+        # Archive airtime attrs are band-prefixed; bare cu_total is dead there.
+        assert "ng-cu_total" in body["attrs"]
+        assert "cu_total" not in body["attrs"]
+        assert body["end"] - body["start"] == 48 * 3600 * 1000
+        assert "macs" not in body
+        assert [s["time"] for s in result] == [1000, 2000]
+
+    @pytest.mark.asyncio
+    async def test_mac_filter_and_custom_attrs_get_time_added(self, mock_settings):
+        """A single MAC becomes a list; custom attrs always gain "time"."""
+        client = create_mock_client()
+        client.post = AsyncMock(return_value={"data": []})
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            await get_historical_stats(
+                "default",
+                mock_settings,
+                subject="user",
+                interval="5minutes",
+                macs="00:00:5e:00:53:07",
+                attrs=["signal"],
+            )
+
+        body = client.post.call_args[1]["json_data"]
+        assert body["macs"] == ["00:00:5e:00:53:07"]
+        assert body["attrs"] == ["time", "signal"]
+
+    @pytest.mark.asyncio
+    async def test_rejects_bad_interval_subject_and_window(self, mock_settings):
+        with pytest.raises(ValidationError, match="interval"):
+            await get_historical_stats("default", mock_settings, interval="weekly")
+        with pytest.raises(ValidationError, match="subject"):
+            await get_historical_stats("default", mock_settings, subject="switch")
+        with pytest.raises(ValidationError, match="hours"):
+            await get_historical_stats("default", mock_settings, hours=0)
+
+
+class TestStartSpectrumScan:
+    @pytest.mark.asyncio
+    async def test_posts_devmgr_spectrum_scan(self, mock_settings):
+        client = create_mock_client()
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await start_spectrum_scan(
+                "default", mock_settings, ap_mac="00:00:5e:00:53:41", confirm=True
+            )
+
+        url = client.post.call_args[0][0]
+        assert url == "/ea/sites/default/cmd/devmgr"
+        body = client.post.call_args[1]["json_data"]
+        assert body == {"cmd": "spectrum-scan", "mac": "00:00:5e:00:53:41"}
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_dry_run_warns_and_does_not_post(self, mock_settings):
+        client = create_mock_client()
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await start_spectrum_scan(
+                "default", mock_settings, ap_mac="00:00:5e:00:53:41", confirm=True, dry_run=True
+            )
+
+        assert result["dry_run"] is True
+        assert result["would_scan"] == "00:00:5e:00:53:41"
+        client.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_requires_confirm(self, mock_settings):
+        with pytest.raises(ValidationError):
+            await start_spectrum_scan("default", mock_settings, ap_mac="00:00:5e:00:53:41")
+
+
+class TestReviewFollowUps:
+    @pytest.mark.asyncio
+    async def test_gw_defaults_omit_the_unarchived_latency(self, mock_settings):
+        """Gateway latency is not archived; the defaults must not ask for it."""
+        client = create_mock_client()
+        client.post = AsyncMock(return_value={"data": []})
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            await get_historical_stats("default", mock_settings, subject="gw")
+
+        body = client.post.call_args[1]["json_data"]
+        assert "latency" not in body["attrs"]
+
+    @pytest.mark.asyncio
+    async def test_scan_string_false_dry_run_still_posts(self, mock_settings):
+        """The JSON-RPC string "false" must not downgrade a scan to a preview."""
+        client = create_mock_client()
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await start_spectrum_scan(
+                "default",
+                mock_settings,
+                ap_mac="00:00:5e:00:53:41",
+                confirm=True,
+                dry_run="false",
+            )
+
+        client.post.assert_called_once()
+        assert result["success"] is True

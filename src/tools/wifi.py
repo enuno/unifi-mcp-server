@@ -323,6 +323,8 @@ async def update_wlan(
     minrate_ng_data_rate_kbps: int | None = None,
     hide_ssid: bool | None = None,
     client_isolation: bool | None = None,
+    roaming_assistant_enabled: bool | None = None,
+    roaming_assistant_rssi: int | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -350,6 +352,12 @@ async def update_wlan(
         minrate_ng_data_rate_kbps: Minimum 2.4GHz data rate in kbps (e.g. 6000-12000)
         hide_ssid: Hide/show SSID from broadcast
         client_isolation: Enable/disable client device isolation
+        roaming_assistant_enabled: Enable/disable the 5GHz roaming
+            assistant, which nudges clients holding a weaker signal than
+            the threshold toward a better AP (maps to
+            ``roaming_assistant_na_enabled``)
+        roaming_assistant_rssi: 5GHz roaming threshold in dBm, -90..-60
+            (maps to ``roaming_assistant_na_rssi``)
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't update the WLAN
 
@@ -362,6 +370,12 @@ async def update_wlan(
     """
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "wifi operation", dry_run)
+
+    if roaming_assistant_rssi is not None and not -90 <= roaming_assistant_rssi <= -60:
+        raise ValidationError(
+            f"roaming_assistant_rssi must be between -90 and -60 dBm, "
+            f"got {roaming_assistant_rssi}"
+        )
     logger = get_logger(__name__, settings.log_level)
 
     # Validate security type if provided
@@ -493,6 +507,11 @@ async def update_wlan(
                 update_data["hide_ssid"] = hide_ssid
             if client_isolation is not None:
                 update_data["l2_isolation"] = client_isolation
+
+            if roaming_assistant_enabled is not None:
+                update_data["roaming_assistant_na_enabled"] = roaming_assistant_enabled
+            if roaming_assistant_rssi is not None:
+                update_data["roaming_assistant_na_rssi"] = roaming_assistant_rssi
 
             response = await client.put(
                 f"/ea/sites/{site_id}/rest/wlanconf/{wlan_id}", json_data=update_data

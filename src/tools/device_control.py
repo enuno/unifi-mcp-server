@@ -5,8 +5,11 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
+    APIError,
     ResourceNotFoundError,
     ValidationError,
+    coerce_bool,
+    first_response_item,
     get_logger,
     log_audit,
     sanitize_log_message,
@@ -560,19 +563,38 @@ async def set_ap_radio_channel(
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            # Fetch full device object via stat/device
+            # Enumerate on stat/device (rest/device serves no collection GET
+            # on current controllers -- verified live: the list URL answers
+            # NotFound), then fetch the CONFIG record by id. Writing the
+            # stat/device operational blob back is answered with HTTP 200
+            # while the radio change is silently dropped; observed live
+            # when a tx_power write did not stick.
             response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
             all_devices: list[dict[str, Any]] = (
                 response if isinstance(response, list) else response.get("data", [])
             )
 
-            device = next(
+            stat_device = next(
                 (d for d in all_devices if d.get("_id") == device_id or d.get("mac") == device_id),
                 None,
             )
 
-            if not device:
+            if not stat_device:
                 raise ResourceNotFoundError("device", device_id)
+
+            resolved_id = stat_device["_id"]
+            try:
+                config_response = await client.get(
+                    settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
+                )
+                device = first_response_item(config_response)
+            except APIError:
+                device = {}
+            if not device:
+                # Older surfaces may not serve the per-id config GET either;
+                # the stat record's radio_table mirrors applied config and
+                # the write below sends only that table.
+                device = stat_device
 
             radio_table = device.get("radio_table", [])
             if not radio_table:
@@ -612,10 +634,42 @@ async def set_ap_radio_channel(
             if tx_power is not None:
                 target["tx_power"] = tx_power
 
-            # PUT the full device back
-            resolved_id = device["_id"]
+            # PUT only the radio_table, and verify the echo: a 200 alone
+            # does not prove the controller stored the change.
             endpoint = settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
-            await client.put(endpoint, json_data=device)
+            put_response = await client.put(endpoint, json_data={"radio_table": radio_table})
+
+            stored_device = first_response_item(put_response)
+            stored_entry: dict[str, Any] = {}
+            for entry in stored_device.get("radio_table", []) or []:
+                if isinstance(entry, dict) and (
+                    entry.get("radio") == radio or entry.get("name") == radio
+                ):
+                    stored_entry = entry
+                    break
+
+            warnings: list[str] = []
+            if stored_entry:
+                checks: list[tuple[str, Any]] = []
+                if not is_auto:
+                    checks.append(("channel", channel))
+                if ht is not None:
+                    checks.append(("ht", ht))
+                if tx_power_mode is not None:
+                    checks.append(("tx_power_mode", tx_power_mode))
+                if tx_power is not None:
+                    checks.append(("tx_power", tx_power))
+                for key, requested_value in checks:
+                    stored_value = stored_entry.get(key)
+                    if str(stored_value) != str(requested_value):
+                        warnings.append(
+                            f"Controller stored {key}={stored_value!r}, "
+                            f"not the requested {requested_value!r}"
+                        )
+            else:
+                warnings.append(
+                    "Controller did not echo the radio table; the change " "could not be confirmed"
+                )
 
             logger.info(
                 sanitize_log_message(
@@ -626,12 +680,14 @@ async def set_ap_radio_channel(
             log_audit(
                 operation="set_ap_radio_channel",
                 parameters=parameters,
-                result="success",
+                # The audit record must agree with the tool result: an
+                # unconfirmed or mismatched echo is not a success.
+                result="success" if not warnings else "unconfirmed",
                 site_id=site_id,
             )
 
-            return {
-                "success": True,
+            result: dict[str, Any] = {
+                "success": not warnings,
                 "device_id": resolved_id,
                 "device_name": device.get("name"),
                 "radio": radio,
@@ -640,7 +696,14 @@ async def set_ap_radio_channel(
                 "new_channel": "auto" if is_auto else channel,
                 "old_ht": old_ht,
                 "new_ht": ht if ht is not None else old_ht,
+                "stored_tx_power": stored_entry.get("tx_power"),
+                "stored_tx_power_mode": stored_entry.get("tx_power_mode"),
             }
+            if warnings:
+                for warning in warnings:
+                    logger.warning(sanitize_log_message(warning))
+                result["warnings"] = warnings
+            return result
 
     except Exception as e:
         logger.error(
@@ -648,6 +711,97 @@ async def set_ap_radio_channel(
         )
         log_audit(
             operation="set_ap_radio_channel",
+            parameters=parameters,
+            result="failed",
+            site_id=site_id,
+        )
+        raise
+
+
+async def force_provision_device(
+    site_id: str,
+    device_id: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Push the stored configuration to a device now (force provision).
+
+    A direct config write (e.g. a radio_table change via rest/device) is
+    stored by the controller but not always pushed to the device;
+    observed live: a channel change that sat stored-but-not-applied for
+    minutes. Force provision closes that gap without a reboot -- the
+    device re-applies config with only a brief service pause.
+
+    Args:
+        site_id: Site identifier
+        device_id: Device ID or MAC address (any common MAC format)
+        settings: Application settings
+        confirm: Confirmation flag (required)
+        dry_run: If True, preview without provisioning
+
+    Returns:
+        Dictionary with the provision request status
+    """
+    site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "force provision", dry_run)
+    dry_run = coerce_bool(dry_run)
+    logger = get_logger(__name__, settings.log_level)
+    parameters = {"site_id": site_id, "device_id": device_id}
+
+    # cmd/devmgr keys on the MAC. Try MAC validation first: it accepts
+    # every common format including separator-less 12-hex, which a
+    # substring test would misroute into the id lookup.
+    try:
+        mac: str | None = validate_mac_address(device_id)
+    except ValidationError:
+        mac = None
+
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
+
+            if mac is None:
+                response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
+                devices = response if isinstance(response, list) else response.get("data", [])
+                found = next(
+                    (d for d in devices if isinstance(d, dict) and d.get("_id") == device_id),
+                    None,
+                )
+                if not found:
+                    raise ResourceNotFoundError("device", device_id)
+                mac = validate_mac_address(found.get("mac", ""))
+
+            if dry_run:
+                log_audit(
+                    operation="force_provision_device",
+                    parameters=parameters,
+                    result="dry_run",
+                    site_id=site_id,
+                    dry_run=True,
+                )
+                return {
+                    "dry_run": True,
+                    "would_provision": mac,
+                }
+
+            await client.post(
+                settings.get_site_api_path(site_id, "cmd/devmgr"),
+                json_data={"cmd": "force-provision", "mac": mac},
+            )
+            log_audit(
+                operation="force_provision_device",
+                parameters=parameters,
+                result="success",
+                site_id=site_id,
+            )
+            logger.info(sanitize_log_message(f"Force provision requested for {mac}"))
+            return {"success": True, "mac": mac, "status": "provision requested"}
+
+    except Exception as e:
+        logger.error(sanitize_log_message(f"Failed to force provision '{device_id}': {e}"))
+        log_audit(
+            operation="force_provision_device",
             parameters=parameters,
             result="failed",
             site_id=site_id,

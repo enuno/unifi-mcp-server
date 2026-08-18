@@ -58,6 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+- **Patch-coverage follow-up for merged PRs #122/#124/#126/#128**: covers the lines codecov flagged after merge — the voucher unwrap's bare-list filter and scalar fallback, the 429 rate-limit retry path (both the within-budget retry and budget-exhausted give-up, which surfaces as `APIError` via the request catch-all), both `list_backups` endpoint modes, the weekday-name validation and cloud endpoint in `configure_backup_schedule`, and the spectrum tools' malformed-payload guards.
+
 - Corrected `test_update_ip` to assert the PUT body enables `use_fixedip`, and added `test_update_name_only_does_not_enable_fixedip` to ensure metadata-only updates don't flip the flag.
 - **Fixture MAC moved to the RFC 7042 documentation range**: `test_firewall_policy.py` used a sample client MAC whose OUI belongs to Proxmox/QEMU — a real VM's address from someone's network rather than a synthetic value. Replaced with `00:00:5e:00:53:01` from the range RFC 7042 reserves for documentation; the value is opaque to every assertion that reads it.
 

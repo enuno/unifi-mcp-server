@@ -517,6 +517,45 @@ class TestSpeedTestStatusGuards:
         assert result["status"] == "Success"
 
 
+class TestSpectrumEdgeCoverage:
+    """Close the codecov gaps reported on merged PR #128."""
+
+    @pytest.mark.asyncio
+    async def test_non_list_device_payload_yields_no_targets(self, mock_settings):
+        """A malformed device list produces an empty scan, not an error."""
+        client = create_mock_client([{"data": "garbage"}])
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_spectrum_scan("site-1", mock_settings)
+
+        assert result == {"site_id": "site-1", "aps": []}
+        client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_non_dict_radio_scan_entries_are_skipped(self, mock_settings):
+        """Junk in the scans list is skipped rather than raising."""
+        entry = {
+            "mac": "00:00:5e:00:53:41",
+            "scans": [
+                "junk",
+                {"radio": "ng", "name": "wifi0", "spectrum_table": [{"channel": 6}]},
+            ],
+        }
+        client = create_mock_client(
+            [
+                {"data": [{"mac": "00:00:5e:00:53:41", "type": "uap"}]},
+                {"data": [entry]},
+            ]
+        )
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await list_spectrum_interference("site-1", mock_settings)
+
+        assert len(result) == 1
+        assert result[0]["channel"] == 6
+        assert result[0]["radio"] == "ng"
+
+
 class TestGetHistoricalStats:
     @pytest.mark.asyncio
     async def test_posts_window_attrs_and_sorts_by_time(self, mock_settings):

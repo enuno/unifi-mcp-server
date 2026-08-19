@@ -228,3 +228,76 @@ async def search_clients(
             )
         )
         return clients
+
+
+async def list_client_rf_health(
+    site_id: str,
+    settings: Settings,
+    min_retry_pct: float | None = None,
+) -> list[dict[str, Any]]:
+    """Per-client RF health: signal, rates, and retry percentages.
+
+    Retries are the leading indicator of airtime trouble -- they climb
+    before latency degrades and before satisfaction drops. The sta
+    route carries lifetime retry/packet counters per association; this
+    tool passes them through with a computed transmit retry percentage,
+    wireless clients only, worst first.
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        min_retry_pct: Optional floor; clients retrying less than this
+            percentage are dropped (e.g. 5 to see only strugglers)
+
+    Returns:
+        List of wireless-client health dictionaries, highest transmit
+        retry percentage first
+    """
+    site_id = validate_site_id(site_id)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        response = await client.get(f"/ea/sites/{site_id}/sta")
+        raw = response.get("data", []) if isinstance(response, dict) else response
+
+        rows: list[dict[str, Any]] = []
+        for c in raw if isinstance(raw, list) else []:
+            if not isinstance(c, dict) or c.get("is_wired") or not c.get("radio"):
+                continue
+            tx_packets = c.get("tx_packets") or 0
+            tx_retries = c.get("tx_retries") or 0
+            attempts = tx_packets + tx_retries
+            retry_pct = round(100.0 * tx_retries / attempts, 1) if attempts else None
+            rows.append(
+                {
+                    "mac": c.get("mac"),
+                    "name": c.get("name") or c.get("hostname"),
+                    "ap_mac": c.get("ap_mac"),
+                    "radio": c.get("radio"),
+                    "channel": c.get("channel"),
+                    "signal": c.get("signal"),
+                    "tx_rate": c.get("tx_rate"),
+                    "rx_rate": c.get("rx_rate"),
+                    "tx_packets": tx_packets,
+                    "tx_retries": tx_retries,
+                    "tx_retry_pct": retry_pct,
+                    "rx_packets": c.get("rx_packets"),
+                    "satisfaction": c.get("satisfaction"),
+                    "uptime": c.get("uptime"),
+                }
+            )
+
+        if min_retry_pct is not None:
+            rows = [r for r in rows if (r["tx_retry_pct"] or 0) >= min_retry_pct]
+
+        rows.sort(
+            key=lambda r: r["tx_retry_pct"] if r["tx_retry_pct"] is not None else -1.0, reverse=True
+        )
+        # The site is the caller's own argument and adds nothing to the
+        # log line, while including it trips CodeQL's clear-text-logging
+        # rule on new code (sanitize_log_message masks MACs and IPs, not
+        # site identifiers, and masking does not break a taint path).
+        logger.info(sanitize_log_message(f"RF health for {len(rows)} wireless clients"))
+        return rows

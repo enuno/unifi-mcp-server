@@ -157,14 +157,15 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 - ✅ **No port required**: Runs as a subprocess of the MCP client
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=stdio` (default)
 
-### SSE (Server-Sent Events) 🌐
+### SSE (Server-Sent Events) 🌐 ⚠️ Deprecated
 
-**Network-accessible HTTP server** — Best for MCP gateways and consolidating multiple MCPs.
+**Network-accessible HTTP server** — legacy transport, kept for backward compatibility.
 
+- ⚠️ **Known issue**: client proxies such as `mcp-remote` can send the first tool call before the SSE `initialize` handshake finishes, which the MCP SDK rejects with `Received request before initialization was complete` (see [#96](https://github.com/enuno/unifi-mcp-server/issues/96)). This is a timing issue in the SSE transport itself (upstream in the `mcp` SDK / client proxy, not this server's tool logic), so it cannot be fixed from this codebase.
 - ✅ **Network access**: Connect from any MCP client over HTTP
 - ✅ **MCP gateway compatible**: Works with MCP gateways that consolidate servers
-- ✅ **Real-time streaming**: Long-lived connections for continuous communication
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=sse` + `MCP_SERVER_PORT=3000`
+- 👉 **Prefer Streamable HTTP below** for any new network-accessible deployment.
 
 ### HTTP 🌐
 
@@ -172,13 +173,16 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=http` + `MCP_SERVER_PORT=3000`
 
-### Streamable HTTP 🌐
+### Streamable HTTP 🌐 ✅ Recommended for network access
 
-**Modern HTTP transport** — Latest MCP transport standard.
+**Modern HTTP transport** — the current MCP transport standard, and the successor to SSE.
 
+- ✅ **Network access**: Connect from any MCP client over HTTP
+- ✅ **MCP gateway compatible**: Works with MCP gateways that consolidate servers
+- ✅ **No SSE handshake race**: session initialization is part of the same request/response cycle, avoiding the class of timing issue SSE has with proxies like `mcp-remote`
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=streamable_http` + `MCP_SERVER_PORT=3000`
 
-**💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **SSE** when running behind an MCP gateway to consolidate multiple MCP servers into a single URL.
+**💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **Streamable HTTP** when running behind an MCP gateway or for any other network-accessible deployment — prefer it over SSE, which is kept only for backward compatibility.
 
 ## 🧭 Tool Exposure Profiles
 
@@ -200,19 +204,19 @@ To reduce context-window bloat, the server will support named exposure profiles 
 - Make the server easier to use in application-specific deployments and focused agent workflows
 - Pair with `UNIFI_PROFILE` so profile selection is explicit and repeatable
 
-### Running in SSE Mode
+### Running in Streamable HTTP Mode (recommended for network access)
 
 ```bash
-# Set transport to SSE
-export MCP_SERVER_TRANSPORT=sse
+# Set transport to Streamable HTTP
+export MCP_SERVER_TRANSPORT=streamable_http
 export MCP_SERVER_PORT=3000
 
 # Start the server
 unifi-mcp-server
-# Server listening on 0.0.0.0:3000 via sse
+# Server listening on 0.0.0.0:3000 via streamable_http
 ```
 
-### Docker Compose for SSE Mode
+### Docker Compose for Streamable HTTP Mode
 
 ```yaml
 services:
@@ -222,7 +226,7 @@ services:
       UNIFI_API_KEY: your-api-key
       UNIFI_API_TYPE: local
       UNIFI_LOCAL_HOST: 192.168.2.1
-      MCP_SERVER_TRANSPORT: sse
+      MCP_SERVER_TRANSPORT: streamable_http
       MCP_SERVER_PORT: 3000
     ports:
       - "3000:3000"
@@ -230,16 +234,27 @@ services:
 
 ### Connecting via MCP Gateway
 
-Once running in SSE mode, configure your MCP gateway to connect:
+Once running in Streamable HTTP mode, configure your MCP gateway to connect:
 
 ```json
 {
   "mcpServers": {
     "unifi": {
-      "url": "http://your-server-ip:3000/sse"
+      "url": "http://your-server-ip:3000/mcp"
     }
   }
 }
+```
+
+### Running in SSE Mode (deprecated)
+
+SSE is kept for backward compatibility only — see the [transport modes](#-transport-modes) section above for why Streamable HTTP is preferred. To run it anyway:
+
+```bash
+export MCP_SERVER_TRANSPORT=sse
+export MCP_SERVER_PORT=3000
+unifi-mcp-server
+# Server listening on 0.0.0.0:3000 via sse
 ```
 
 ## Features

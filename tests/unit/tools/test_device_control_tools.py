@@ -1069,3 +1069,241 @@ async def test_set_radio_verifies_channel_width_echo(mock_settings):
 
     assert result["success"] is False
     assert any("ht" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_writes_and_verifies(mock_settings):
+    """The floor lands in the radio_table and the echo is verified."""
+    from src.tools.device_control import set_ap_min_rssi
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    stored = {
+        "_id": "ap-1",
+        "radio_table": [
+            {"radio": "ng", "channel": 6},
+            {"radio": "na", "channel": 36, "min_rssi_enabled": True, "min_rssi": -72},
+        ],
+    }
+    client = _radio_client([AP_CONFIG], put_return={"data": [stored]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            enabled=True,
+            min_rssi=-72,
+            confirm=True,
+        )
+
+    body = client.put.call_args[1]["json_data"]
+    na = next(e for e in body["radio_table"] if e.get("radio") == "na")
+    assert na["min_rssi_enabled"] is True and na["min_rssi"] == -72
+    assert result["success"] is True
+    assert result["min_rssi"] == -72
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_bounds_and_confirm(mock_settings):
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError):
+        await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            min_rssi=-95,
+            confirm=True,
+        )
+    with pytest.raises(ValidationError):
+        await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            min_rssi=-72,
+        )
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_rejects_unknown_band(mock_settings):
+    """An unrecognised band fails before any network I/O."""
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="Unknown band"):
+        await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="7",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_dry_run_previews_without_writing(mock_settings):
+    """dry_run returns the intended change and never opens a client."""
+    from src.tools.device_control import set_ap_min_rssi
+
+    result = await set_ap_min_rssi(
+        site_id="default",
+        device_id="ap-1",
+        band="5",
+        settings=mock_settings,
+        min_rssi=-70,
+        dry_run=True,
+    )
+
+    assert result["dry_run"] is True
+    assert result["would_set"]["radio"] == "na"
+    assert result["would_set"]["min_rssi"] == -70
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_unknown_device_raises(mock_settings):
+    """A device neither id nor MAC matches is reported, not written to."""
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import ResourceNotFoundError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": []})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        with pytest.raises(ResourceNotFoundError):
+            await set_ap_min_rssi(
+                site_id="default",
+                device_id="no-such-ap",
+                band="5",
+                settings=mock_settings,
+                confirm=True,
+            )
+    client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_falls_back_to_stat_record(mock_settings):
+    """When the config GET errors, the stat record still carries the table.
+
+    rest/device is the authoritative config source, but a controller that
+    refuses it must not cost the operation -- the radio table on the stat
+    blob is the same shape and is enough to build the write.
+    """
+    import copy
+
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import APIError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    stored = copy.deepcopy(AP_CONFIG)
+    stored["radio_table"][1]["min_rssi_enabled"] = True
+    stored["radio_table"][1]["min_rssi"] = -72
+
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(side_effect=[{"data": [AP_CONFIG]}, APIError("no config record")])
+    client.put = AsyncMock(return_value={"data": [stored]})
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            min_rssi=-72,
+            confirm=True,
+        )
+
+    assert result["success"] is True
+    assert result["min_rssi"] == -72
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_missing_radio_raises(mock_settings):
+    """Asking for a band the AP does not have is a caller error."""
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import ValidationError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    single_band = {"_id": "ap-1", "mac": "00:00:5e:00:53:41", "radio_table": [{"radio": "ng"}]}
+    client = _radio_client([single_band], put_return={"data": []})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        with pytest.raises(ValidationError, match="no na radio"):
+            await set_ap_min_rssi(
+                site_id="default",
+                device_id="ap-1",
+                band="5",
+                settings=mock_settings,
+                confirm=True,
+            )
+    client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_warns_when_controller_stores_something_else(mock_settings):
+    """A divergent echo is surfaced as a warning, not reported as success."""
+    import copy
+
+    from src.tools.device_control import set_ap_min_rssi
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    stored = copy.deepcopy(AP_CONFIG)
+    stored["radio_table"][1]["min_rssi_enabled"] = False
+    stored["radio_table"][1]["min_rssi"] = -80
+    client = _radio_client([AP_CONFIG], put_return={"data": [stored]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            enabled=True,
+            min_rssi=-72,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert len(result["warnings"]) == 2
+    assert any("min_rssi_enabled" in w for w in result["warnings"])
+    assert any("min_rssi=-80" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_warns_when_echo_is_empty(mock_settings):
+    """No radio table back means the change is unconfirmed, not successful."""
+    from src.tools.device_control import set_ap_min_rssi
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": [{"_id": "ap-1"}]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            min_rssi=-72,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert result["warnings"] == ["Controller did not echo the radio table; change unconfirmed"]

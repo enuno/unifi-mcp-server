@@ -26,6 +26,7 @@ from .tool_registry import register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import backups as backups_tools
+from .tools import channel_planning as channel_planning_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import connector as connector_tools
@@ -131,6 +132,7 @@ _LOCAL_TOOL_MODULES = [
     acls_tools,
     application_tools,
     backups_tools,
+    channel_planning_tools,
     client_mgmt_tools,
     clients_tools,
     content_filtering_tools,
@@ -180,6 +182,7 @@ _LOCAL_TOOL_MODULES = [
 
 _PROFILE_MODULES: dict[str, list[Any]] = {
     "network": [
+        channel_planning_tools,
         client_mgmt_tools,
         clients_tools,
         dhcp_tools,
@@ -577,8 +580,9 @@ def main() -> None:
                 "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
             )
 
+        transport = settings.server_transport.value.replace("_", "-")
         mcp.run(
-            transport=settings.server_transport.value,
+            transport=transport,
             host=settings.server_host,
             port=settings.server_port,
         )

@@ -243,7 +243,13 @@ async def list_site_internal_ap_neighbors_v2(
             except (APIError, ResourceNotFoundError, ValidationError) as exc:
                 skipped_aps.append({"ap_mac": ap_mac, "reason": str(exc)})
 
-        edges.sort(key=lambda row: (str(row.get("ap_mac")), str(row.get("mac")), -float(row.get("signal", -999))))
+        edges.sort(
+            key=lambda row: (
+                str(row.get("ap_mac")),
+                str(row.get("mac")),
+                -float(row.get("signal", -999)),
+            )
+        )
 
         result = {
             "site_id": site_id,

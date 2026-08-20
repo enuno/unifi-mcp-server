@@ -127,7 +127,10 @@ class TestListSiteInternalApNeighborsV2:
         assert client.get.call_args_list[0][0][0] == "/ea/sites/default/devices"
         assert result["managed_ap_count"] == 2
         assert result["internal_neighbor_edge_count"] == 2
-        assert all(edge["mac"] in {"00:00:5e:00:53:41", "00:00:5e:00:53:42"} for edge in result["internal_neighbor_edges"])
+        assert all(
+            edge["mac"] in {"00:00:5e:00:53:41", "00:00:5e:00:53:42"}
+            for edge in result["internal_neighbor_edges"]
+        )
         assert all(edge["mac"] != edge["ap_mac"] for edge in result["internal_neighbor_edges"])
 
     @pytest.mark.asyncio
@@ -141,9 +144,7 @@ class TestListSiteInternalApNeighborsV2:
         n1 = {"data": [{"mac": "00:00:5e:00:53:42", "channel": 1, "signal": -63}]}
 
         client = _client(get_return={"data": []})
-        client.get = AsyncMock(
-            side_effect=[devices, n1, ValidationError("boom")]
-        )
+        client.get = AsyncMock(side_effect=[devices, n1, ValidationError("boom")])
 
         with patch("src.tools.channel_planning.UniFiClient", return_value=client):
             result = await list_site_internal_ap_neighbors_v2("default", mock_settings)

@@ -584,6 +584,36 @@ class TestUpdateDpiSettings:
         assert result["success"] is True
 
     @pytest.mark.asyncio
+    async def test_creates_the_section_when_the_site_has_none(self, mock_settings):
+        """With no stored section the POST goes to the bare endpoint.
+
+        A site that has never had DPI configured returns no section, so
+        there is no `_id` to address. The id is appended only when one
+        exists -- posting `.../setting/dpi/None` would 404 and the change
+        would be silently lost.
+        """
+        from src.tools.dpi import update_dpi_settings
+
+        stored = {"_id": "dpi-new", "enabled": True, "fingerprintingEnabled": True}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": []}, {"data": [stored]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings("default", mock_settings, enabled=True, confirm=True)
+
+        url = client.post.call_args[0][0]
+        assert url == "/ea/sites/default/set/setting/dpi"
+        body = client.post.call_args[1]["json_data"]
+        assert body["enabled"] is True
+        # Nothing to preserve, so the lockstep default applies.
+        assert body["fingerprintingEnabled"] is True
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
     async def test_unstored_state_reports_unconfirmed(self, mock_settings):
         from src.tools.dpi import update_dpi_settings
 

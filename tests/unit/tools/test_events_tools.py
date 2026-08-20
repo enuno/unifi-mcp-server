@@ -4,11 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.tools.events import (
-    list_alarms,
-    list_events,
-    list_neighboring_aps,
-)
+from src.tools.events import list_alarms, list_events, list_neighboring_aps
 from src.utils.exceptions import ResourceNotFoundError, ValidationError
 
 

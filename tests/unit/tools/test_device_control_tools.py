@@ -1107,6 +1107,63 @@ async def test_set_min_rssi_writes_and_verifies(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_set_min_rssi_disable_does_not_write_a_floor(mock_settings):
+    """Disabling clears the flag and deliberately sends no floor value.
+
+    ``min_rssi`` is only written when the floor is being enabled. Sending
+    one back on the way out would leave a number in the radio_table that
+    reads like a floor still in force, so the disable path must touch
+    ``min_rssi_enabled`` and nothing else.
+    """
+    from src.tools.device_control import set_ap_min_rssi
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    stored = {
+        "_id": "ap-1",
+        "radio_table": [
+            {"radio": "ng", "channel": 6},
+            {"radio": "na", "channel": 36, "min_rssi_enabled": False},
+        ],
+    }
+    # A local config rather than AP_CONFIG: the write paths in this module
+    # mutate the radio_table entry in place, so by the time this test runs
+    # the shared fixture already carries an earlier test's min_rssi. This
+    # assertion is about what this call writes, so it needs an input no
+    # other test has touched.
+    config = {
+        "_id": "ap-1",
+        "mac": "00:00:5e:00:53:41",
+        "name": "Test AP",
+        "radio_table": [
+            {"radio": "ng", "channel": 11},
+            {"radio": "na", "channel": 36},
+        ],
+    }
+    client = _radio_client([config], put_return={"data": [stored]})
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        result = await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="5",
+            settings=mock_settings,
+            enabled=False,
+            min_rssi=-72,
+            confirm=True,
+        )
+
+    body = client.put.call_args[1]["json_data"]
+    na = next(e for e in body["radio_table"] if e.get("radio") == "na")
+    assert na["min_rssi_enabled"] is False
+    assert "min_rssi" not in na
+    assert result["success"] is True
+    assert result["min_rssi_enabled"] is False
+    assert result["min_rssi"] is None
+
+
+@pytest.mark.asyncio
 async def test_set_min_rssi_bounds_and_confirm(mock_settings):
     from src.tools.device_control import set_ap_min_rssi
     from src.utils.exceptions import ValidationError

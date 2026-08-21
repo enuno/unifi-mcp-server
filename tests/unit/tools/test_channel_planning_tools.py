@@ -88,6 +88,50 @@ class TestListApNeighborsV2:
         with pytest.raises(ValidationError, match="Invalid MAC"):
             await list_ap_neighbors_v2("default", "invalid", mock_settings)
 
+    @pytest.mark.asyncio
+    async def test_reports_rssi_filtered_rows_separately_from_dropped(self, mock_settings):
+        rows = [
+            {"mac": "00:00:5e:00:53:60", "channel": 1, "signal": -90},  # below floor
+            {"mac": "not-a-mac", "channel": 6, "signal": -40},  # malformed
+        ]
+        client = _client(get_return={"data": rows})
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_ap_neighbors_v2(
+                "default",
+                "00:00:5e:00:53:41",
+                mock_settings,
+                min_rssi=-85,
+            )
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_skips_invalid_internal_ap_macs_entry_instead_of_raising(self, mock_settings):
+        rows = [
+            {"mac": "00:00:5e:00:53:60", "channel": 1, "signal": -67},
+        ]
+        client = _client(get_return={"data": rows})
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_ap_neighbors_v2(
+                "default",
+                "00:00:5e:00:53:41",
+                mock_settings,
+                internal_ap_macs=["00:00:5e:00:53:60", "not-a-mac"],
+            )
+
+        assert [n["mac"] for n in result] == ["00:00:5e:00:53:60"]
+
+    @pytest.mark.asyncio
+    async def test_extract_rows_handles_non_list_response(self, mock_settings):
+        client = _client(get_return={"unexpected": "shape"})
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_ap_neighbors_v2("default", "00:00:5e:00:53:41", mock_settings)
+
+        assert result == []
+
 
 class TestListSiteInternalApNeighborsV2:
     @pytest.mark.asyncio
@@ -151,3 +195,44 @@ class TestListSiteInternalApNeighborsV2:
 
         assert result["internal_neighbor_edge_count"] == 1
         assert len(result["skipped_aps"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_device_list_yields_empty_graph(self, mock_settings):
+        client = _client(get_return={"data": []})
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_site_internal_ap_neighbors_v2("default", mock_settings)
+
+        assert result["managed_ap_count"] == 0
+        assert result["internal_neighbor_edge_count"] == 0
+        assert result["skipped_aps"] == []
+
+    @pytest.mark.asyncio
+    async def test_all_aps_fail_yields_empty_graph_with_skipped_entries(self, mock_settings):
+        devices = {
+            "data": [
+                {"type": "uap", "mac": "00:00:5e:00:53:41"},
+                {"type": "uap", "mac": "00:00:5e:00:53:42"},
+            ]
+        }
+
+        client = _client(get_return={"data": []})
+        client.get = AsyncMock(
+            side_effect=[devices, ValidationError("boom-1"), ValidationError("boom-2")]
+        )
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_site_internal_ap_neighbors_v2("default", mock_settings)
+
+        assert result["internal_neighbor_edge_count"] == 0
+        assert len(result["skipped_aps"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_non_list_device_response_yields_no_managed_aps(self, mock_settings):
+        client = _client(get_return={"unexpected": "shape"})
+
+        with patch("src.tools.channel_planning.UniFiClient", return_value=client):
+            result = await list_site_internal_ap_neighbors_v2("default", mock_settings)
+
+        assert result["managed_ap_count"] == 0
+        assert result["internal_neighbor_edges"] == []

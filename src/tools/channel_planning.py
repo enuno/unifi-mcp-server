@@ -4,6 +4,7 @@ These tools expose RF-neighbor surfaces used to build deterministic WiFi
 channel plans (for example non-overlapping 2.4 GHz assignments).
 """
 
+import asyncio
 import time
 from typing import Any
 
@@ -18,6 +19,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+
+# Early Access API rate limit is 100 req/min; cap concurrent per-AP neighbor
+# calls so a large site can't burst past it.
+_MAX_CONCURRENT_NEIGHBOR_CALLS = 8
 
 
 def _resolve_window(
@@ -49,9 +54,16 @@ def _normalize_neighbors(
     internal_set: set[str] | None,
     *,
     exclude_self: bool,
-) -> tuple[list[dict[str, Any]], int]:
-    """Normalize neighbor rows into a deterministic planning shape."""
+) -> tuple[list[dict[str, Any]], int, int]:
+    """Normalize neighbor rows into a deterministic planning shape.
+
+    Returns:
+        Tuple of ``(neighbors, dropped, filtered_rssi)`` where ``dropped``
+        counts malformed rows and ``filtered_rssi`` counts well-formed rows
+        excluded solely because they were below ``min_rssi``.
+    """
     dropped = 0
+    filtered_rssi = 0
     neighbors: list[dict[str, Any]] = []
 
     for row in rows if isinstance(rows, list) else []:
@@ -75,6 +87,7 @@ def _normalize_neighbors(
             continue
 
         if min_rssi is not None and signal_num < min_rssi:
+            filtered_rssi += 1
             continue
         if internal_set is not None and neighbor_mac_norm not in internal_set:
             continue
@@ -95,7 +108,7 @@ def _normalize_neighbors(
         normalized["radio"] = row.get("radio") or row.get("band")
         neighbors.append(normalized)
 
-    return neighbors, dropped
+    return neighbors, dropped, filtered_rssi
 
 
 def _extract_rows(response: Any) -> list[dict[str, Any]]:
@@ -141,11 +154,18 @@ async def list_ap_neighbors_v2(
     ap_mac = validate_mac_address(ap_mac)
     start_ms, end_ms = _resolve_window(start_ms, end_ms, min_rssi)
 
+    logger = get_logger(__name__, settings.log_level)
+
     internal_set: set[str] | None = None
     if internal_ap_macs is not None:
-        internal_set = {validate_mac_address(mac) for mac in internal_ap_macs}
-
-    logger = get_logger(__name__, settings.log_level)
+        internal_set = set()
+        for mac in internal_ap_macs:
+            try:
+                internal_set.add(validate_mac_address(mac))
+            except ValidationError:
+                logger.warning(
+                    sanitize_log_message(f"Skipping invalid internal_ap_macs entry: {mac!r}")
+                )
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
@@ -155,7 +175,7 @@ async def list_ap_neighbors_v2(
             params={"start": start_ms, "end": end_ms},
         )
 
-        neighbors, dropped = _normalize_neighbors(
+        neighbors, dropped, filtered_rssi = _normalize_neighbors(
             _extract_rows(response),
             ap_mac,
             min_rssi,
@@ -167,7 +187,7 @@ async def list_ap_neighbors_v2(
         logger.info(
             sanitize_log_message(
                 f"Retrieved {len(neighbors)} v2 neighbors for AP '{ap_mac}' in site '{site_id}'"
-                f" (dropped {dropped} malformed rows)"
+                f" (dropped {dropped} malformed rows, filtered {filtered_rssi} below min_rssi)"
             )
         )
         return neighbors
@@ -185,6 +205,11 @@ async def list_site_internal_ap_neighbors_v2(
     This helper discovers managed AP MACs for the site, calls the v2 per-AP
     neighbors endpoint for each AP, and keeps only rows where neighbor ``mac``
     belongs to the same managed AP set.
+
+    Request budget: one ``/ea/sites/{site_id}/devices`` call plus one v2
+    neighbors call per managed AP, issued with bounded concurrency (max
+    ``_MAX_CONCURRENT_NEIGHBOR_CALLS`` in flight) to stay well under the
+    Early Access API's 100 requests/minute limit.
 
     Args:
         site_id: Site identifier (UUID or short-name)
@@ -224,24 +249,41 @@ async def list_site_internal_ap_neighbors_v2(
         edges: list[dict[str, Any]] = []
         skipped_aps: list[dict[str, str]] = []
         dropped_total = 0
+        filtered_rssi_total = 0
 
-        for ap_mac in ap_macs:
-            try:
+        semaphore = asyncio.Semaphore(_MAX_CONCURRENT_NEIGHBOR_CALLS)
+
+        async def _fetch_ap_neighbors(ap_mac: str) -> tuple[str, Any]:
+            async with semaphore:
                 response = await client.get(
                     f"/proxy/network/v2/api/site/{site_id}/ap/{ap_mac}/neighbors",
                     params={"start": start_ms, "end": end_ms},
                 )
-                normalized, dropped = _normalize_neighbors(
-                    _extract_rows(response),
-                    ap_mac,
-                    min_rssi,
-                    internal_set,
-                    exclude_self=True,
-                )
-                edges.extend(normalized)
-                dropped_total += dropped
-            except (APIError, ResourceNotFoundError, ValidationError) as exc:
-                skipped_aps.append({"ap_mac": ap_mac, "reason": str(exc)})
+                return ap_mac, response
+
+        results = await asyncio.gather(
+            *(_fetch_ap_neighbors(ap_mac) for ap_mac in ap_macs),
+            return_exceptions=True,
+        )
+
+        for ap_mac, outcome in zip(ap_macs, results, strict=True):
+            if isinstance(outcome, BaseException):
+                if isinstance(outcome, (APIError, ResourceNotFoundError, ValidationError)):
+                    skipped_aps.append({"ap_mac": ap_mac, "reason": str(outcome)})
+                    continue
+                raise outcome
+
+            _, response = outcome
+            normalized, dropped, filtered_rssi = _normalize_neighbors(
+                _extract_rows(response),
+                ap_mac,
+                min_rssi,
+                internal_set,
+                exclude_self=True,
+            )
+            edges.extend(normalized)
+            dropped_total += dropped
+            filtered_rssi_total += filtered_rssi
 
         edges.sort(
             key=lambda row: (
@@ -260,6 +302,7 @@ async def list_site_internal_ap_neighbors_v2(
             "internal_neighbor_edges": edges,
             "internal_neighbor_edge_count": len(edges),
             "dropped_rows": dropped_total,
+            "filtered_rssi_rows": filtered_rssi_total,
             "skipped_aps": skipped_aps,
         }
 

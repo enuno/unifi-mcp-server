@@ -580,7 +580,7 @@ def main() -> None:
                 "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
             )
 
-        transport = settings.server_transport.value.replace("_", "-")
+        transport = settings.server_transport.value
         mcp.run(
             transport=transport,
             host=settings.server_host,

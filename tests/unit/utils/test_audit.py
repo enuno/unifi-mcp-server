@@ -509,12 +509,12 @@ class TestAuditCredentialRedaction:
     """Credentials must never reach the persisted audit record."""
 
     SECRETS = {
-        "auth_secret": "SuperSecretRadius2026",
-        "acct_secret": "AcctSecret2026",
-        "x_passphrase": "MeinWLANPasswort",
-        "x_ipsec_pre_shared_key": "IpsecPreShared2026",
-        "password": "hunter2hunter2",
-        "api_key": "abcdef0123456789",
+        "auth_secret": "SuperSecretRadius2026",  # pragma: allowlist secret
+        "acct_secret": "AcctSecret2026",  # pragma: allowlist secret
+        "x_passphrase": "MeinWLANPasswort",  # pragma: allowlist secret
+        "x_ipsec_pre_shared_key": "IpsecPreShared2026",  # pragma: allowlist secret
+        "password": "hunter2hunter2",  # pragma: allowlist secret
+        "api_key": "abcdef0123456789",  # pragma: allowlist secret
     }
 
     def test_secrets_are_redacted_in_the_record(self, tmp_path):
@@ -543,7 +543,7 @@ class TestAuditCredentialRedaction:
 
         logger.log_operation(
             operation="update_wlan",
-            parameters={"x_passphrase": "correct horse battery staple"},
+            parameters={"x_passphrase": "correct horse battery staple"},  # pragma: allowlist secret
             result="success",
         )
 
@@ -560,7 +560,11 @@ class TestAuditCredentialRedaction:
             parameters={
                 "site_id": "default",
                 "resource_id": "net-42",
-                "details": {"name": "IoT", "vlan": 20, "password": "secret-value"},
+                "details": {
+                    "name": "IoT",
+                    "vlan": 20,
+                    "password": "secret-value",
+                },  # pragma: allowlist secret
             },
             result="success",
         )
@@ -579,7 +583,9 @@ class TestAuditCredentialRedaction:
 
         logger.log_operation(
             operation="create_wlan",
-            parameters={"servers": [{"host": "10.0.0.1", "auth_secret": "deep-secret"}]},
+            parameters={
+                "servers": [{"host": "10.0.0.1", "auth_secret": "deep-secret"}]
+            },  # pragma: allowlist secret
             result="success",
         )
 

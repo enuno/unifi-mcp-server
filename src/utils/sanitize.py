@@ -54,6 +54,22 @@ SENSITIVE_FIELDS = {
     "location",
 }
 
+# Credential-bearing field patterns.
+#
+# A strict subset of SENSITIVE_FIELDS: these carry secrets rather than
+# identifiers. Audit records need the identifiers to stay readable (an audit
+# trail that cannot say which site or resource was touched has lost its
+# purpose), but must never carry the secrets.
+CREDENTIAL_FIELDS = {
+    "password",
+    "passphrase",
+    "psk",
+    "key",
+    "secret",
+    "token",
+    "api_key",
+}
+
 # Partial redaction patterns (show last N characters)
 PARTIAL_REDACT_FIELDS = {
     "mac",
@@ -81,8 +97,13 @@ def _redact_value(key: str, value: Any, partial: bool = True) -> str:
 
     str_value = str(value)
 
-    # For MAC addresses and IPs, show last segment for debugging
-    if partial and key.lower() in PARTIAL_REDACT_FIELDS:
+    # For MAC addresses and IPs, show last segment for debugging. Partial
+    # reveal is only ever appropriate for network identifiers, never for
+    # credentials: a trailing fragment of a passphrase or shared secret both
+    # shrinks the search space and confirms guesses, and audit records are
+    # persisted.
+    is_partial_field = key.lower() in PARTIAL_REDACT_FIELDS
+    if partial and is_partial_field:
         # MAC address: show last octet (XX:XX:XX:XX:XX:AB)
         if ":" in str_value and len(str_value) == 17:
             return f"**:**:**:**:**:{str_value[-2:]}"
@@ -91,7 +112,7 @@ def _redact_value(key: str, value: Any, partial: bool = True) -> str:
             return f"***.***.***.{str_value.split('.')[-1]}"
 
     # Full redaction
-    if len(str_value) <= 4:
+    if len(str_value) <= 4 or not is_partial_field:
         return "***"
     return f"***{str_value[-2:]}" if partial else "***"
 
@@ -243,3 +264,39 @@ def sanitize_sensitive_data(
     elif isinstance(data, list):
         return sanitize_list(data, partial)
     return data
+
+
+def sanitize_credentials(data: dict[str, Any]) -> dict[str, Any]:
+    """Redact only credential-bearing fields, leaving identifiers intact.
+
+    Unlike :func:`sanitize_dict`, which also redacts identifiers such as
+    ``site_id``, ``name`` and ``mac``, this keeps those readable. Use it where
+    the record must stay diagnostically useful — audit trails above all — while
+    still never persisting a secret. Redaction is always full: no trailing
+    fragment of a credential is preserved.
+
+    Args:
+        data: Dictionary potentially containing credentials
+
+    Returns:
+        Dictionary with credential fields redacted
+    """
+    if not isinstance(data, dict):
+        return data
+
+    sanitized: dict[str, Any] = {}
+    for key, value in data.items():
+        key_lower = key.lower()
+
+        if any(pattern in key_lower for pattern in CREDENTIAL_FIELDS):
+            sanitized[key] = "***" if value is not None else None
+        elif isinstance(value, dict):
+            sanitized[key] = sanitize_credentials(value)
+        elif isinstance(value, list):
+            sanitized[key] = [
+                sanitize_credentials(item) if isinstance(item, dict) else item for item in value
+            ]
+        else:
+            sanitized[key] = value
+
+    return sanitized

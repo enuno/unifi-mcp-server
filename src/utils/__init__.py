@@ -26,13 +26,14 @@ from .helpers import (
     sanitize_dict,
 )
 from .logger import get_logger, log_api_request, log_audit_event
-from .sanitize import sanitize_dict as sanitize_sensitive_dict
 from .sanitize import (
+    sanitize_credentials,
     sanitize_for_logging,
     sanitize_list,
     sanitize_log_message,
     sanitize_sensitive_data,
 )
+from .sanitize import sanitize_dict as sanitize_sensitive_dict
 from .validators import (
     coerce_bool,
     validate_confirmation,
@@ -86,6 +87,7 @@ __all__ = [
     "format_uptime",
     "format_bytes",
     "format_percentage",
+    "sanitize_credentials",
     "sanitize_dict",
     "merge_dicts",
     "parse_device_type",

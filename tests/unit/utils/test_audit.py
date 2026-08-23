@@ -503,3 +503,150 @@ class TestAuditAction:
         record = json.loads(content.strip())
 
         assert "details" not in record["parameters"]
+
+
+class TestAuditCredentialRedaction:
+    """Credentials must never reach the persisted audit record."""
+
+    SECRETS = {
+        "auth_secret": "SuperSecretRadius2026",
+        "acct_secret": "AcctSecret2026",
+        "x_passphrase": "MeinWLANPasswort",
+        "x_ipsec_pre_shared_key": "IpsecPreShared2026",
+        "password": "hunter2hunter2",
+        "api_key": "abcdef0123456789",
+    }
+
+    def test_secrets_are_redacted_in_the_record(self, tmp_path):
+        """Every credential-bearing field is replaced before the write."""
+        log_path = tmp_path / "audit.log"
+        logger = AuditLogger(log_file=log_path)
+
+        logger.log_operation(
+            operation="update_radius_profile",
+            parameters={"site_id": "default", "details": dict(self.SECRETS)},
+            result="success",
+        )
+
+        raw = log_path.read_text()
+        for value in self.SECRETS.values():
+            assert value not in raw, f"plaintext secret in audit log: {value}"
+
+        details = json.loads(raw.strip())["parameters"]["details"]
+        for key in self.SECRETS:
+            assert details[key] == "***", key
+
+    def test_no_trailing_fragment_of_a_secret_survives(self, tmp_path):
+        """Redaction is full: not even the last characters are kept."""
+        log_path = tmp_path / "audit.log"
+        logger = AuditLogger(log_file=log_path)
+
+        logger.log_operation(
+            operation="update_wlan",
+            parameters={"x_passphrase": "correct horse battery staple"},
+            result="success",
+        )
+
+        record = json.loads(log_path.read_text().strip())
+        assert record["parameters"]["x_passphrase"] == "***"
+
+    def test_identifiers_stay_readable(self, tmp_path):
+        """The audit trail keeps the fields that say what was touched."""
+        log_path = tmp_path / "audit.log"
+        logger = AuditLogger(log_file=log_path)
+
+        logger.log_operation(
+            operation="update_network",
+            parameters={
+                "site_id": "default",
+                "resource_id": "net-42",
+                "details": {"name": "IoT", "vlan": 20, "password": "secret-value"},
+            },
+            result="success",
+        )
+
+        record = json.loads(log_path.read_text().strip())
+        assert record["parameters"]["site_id"] == "default"
+        assert record["parameters"]["resource_id"] == "net-42"
+        assert record["parameters"]["details"]["name"] == "IoT"
+        assert record["parameters"]["details"]["vlan"] == 20
+        assert record["parameters"]["details"]["password"] == "***"
+
+    def test_nested_and_listed_secrets_are_redacted(self, tmp_path):
+        """Redaction recurses through nested dicts and lists."""
+        log_path = tmp_path / "audit.log"
+        logger = AuditLogger(log_file=log_path)
+
+        logger.log_operation(
+            operation="create_wlan",
+            parameters={"servers": [{"host": "10.0.0.1", "auth_secret": "deep-secret"}]},
+            result="success",
+        )
+
+        raw = log_path.read_text()
+        assert "deep-secret" not in raw
+        record = json.loads(raw.strip())
+        assert record["parameters"]["servers"][0]["auth_secret"] == "***"
+        assert record["parameters"]["servers"][0]["host"] == "10.0.0.1"
+
+
+class TestAuditLogFilePermissions:
+    """The audit log holds operation parameters and must not be world-readable."""
+
+    def test_log_file_is_owner_only(self, tmp_path):
+        """A freshly created audit log is mode 0600."""
+        log_path = tmp_path / "audit.log"
+        logger = AuditLogger(log_file=log_path)
+
+        logger.log_operation(operation="op", parameters={}, result="success")
+
+        assert log_path.exists()
+        assert log_path.stat().st_mode & 0o777 == 0o600
+
+
+class TestAuditLogEnabledFlag:
+    """UNIFI_AUDIT_LOG_ENABLED must actually switch auditing off."""
+
+    @pytest.mark.asyncio
+    async def test_disabled_suppresses_the_write(self, tmp_path):
+        """audit_action writes nothing when auditing is disabled."""
+        import src.utils.audit as audit_module
+
+        audit_module._audit_logger = None
+
+        log_path = tmp_path / "audit.log"
+        mock_settings = MagicMock()
+        mock_settings.audit_log_file = str(log_path)
+        mock_settings.audit_log_enabled = False
+
+        await audit_action(
+            settings=mock_settings,
+            action_type="delete_network",
+            resource_type="network",
+            resource_id="net-1",
+            site_id="default",
+        )
+
+        assert not log_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_enabled_still_writes(self, tmp_path):
+        """The default remains enabled."""
+        import src.utils.audit as audit_module
+
+        audit_module._audit_logger = None
+
+        log_path = tmp_path / "audit.log"
+        mock_settings = MagicMock()
+        mock_settings.audit_log_file = str(log_path)
+        mock_settings.audit_log_enabled = True
+
+        await audit_action(
+            settings=mock_settings,
+            action_type="delete_network",
+            resource_type="network",
+            resource_id="net-1",
+            site_id="default",
+        )
+
+        assert log_path.exists()

@@ -109,7 +109,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (camera/NVR/device/view/event read wired; PTZ/media streams in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
-| `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
+| `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
+| `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |

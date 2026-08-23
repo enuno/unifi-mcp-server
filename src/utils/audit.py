@@ -1,11 +1,13 @@
 """Audit logging for mutating operations."""
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 from .helpers import get_iso_timestamp
 from .logger import get_logger
+from .sanitize import sanitize_credentials
 
 
 class AuditLogger:
@@ -23,6 +25,15 @@ class AuditLogger:
 
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _opener(path: str, flags: int) -> int:
+        """Open the audit log owner-readable only.
+
+        The record contains operation parameters, so it must not be created
+        with the default 0644 an unrestricted umask would give it.
+        """
+        return os.open(path, flags, 0o600)
 
     def log_operation(
         self,
@@ -47,11 +58,16 @@ class AuditLogger:
         """
         timestamp = get_iso_timestamp()
 
-        # Create audit record
+        # Redact credentials because tools pass their request payloads
+        # straight through, and several carry secrets (RADIUS shared secrets,
+        # WLAN passphrases, IPsec PSKs). The record is persisted, so this
+        # cannot be left to call sites. Identifiers are deliberately kept: an
+        # audit trail that cannot say which site or resource was touched has
+        # lost its purpose.
         audit_record = {
             "timestamp": timestamp,
             "operation": operation,
-            "parameters": parameters,
+            "parameters": sanitize_credentials(parameters),
             "result": result,
             "dry_run": dry_run,
         }
@@ -67,7 +83,7 @@ class AuditLogger:
 
         # Log to file
         try:
-            with open(self.log_file, "a", encoding="utf-8") as f:
+            with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
                 f.write(json.dumps(audit_record) + "\n")
         except Exception as e:
             self.logger.error(f"Failed to write audit log: {e}")
@@ -191,6 +207,9 @@ async def audit_action(
         site_id: Site identifier
         details: Additional details about the action
     """
+    if not getattr(settings, "audit_log_enabled", True):
+        return
+
     parameters = {
         "action_type": action_type,
         "resource_type": resource_type,

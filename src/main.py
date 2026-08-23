@@ -246,6 +246,24 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
 
 _active_profile = os.getenv("UNIFI_PROFILE", "").lower().strip()
 
+# An unrecognised profile silently falls back to "every module" further down.
+# Warn loudly, because the failure mode is fail-open: an operator who sets a
+# profile expecting a reduced tool surface would otherwise get the full one.
+if (
+    _active_profile
+    and _active_profile not in ("all", "")
+    and _active_profile not in _PROFILE_MODULES
+):
+    logger.warning(
+        "Unknown UNIFI_PROFILE=%r - falling back to all tool modules. Known profiles: %s. "
+        "To expose only non-mutating tools, set UNIFI_READ_ONLY=true.",
+        _active_profile,
+        ", ".join(sorted(_PROFILE_MODULES)),
+    )
+
+if settings.read_only:
+    logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
+
 _TOOL_MODULES: list[Any] = []
 if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
     _base_modules = list(_CLOUD_TOOL_MODULES)

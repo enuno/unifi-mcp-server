@@ -336,6 +336,7 @@ async def list_spectrum_interference(
     Returns:
         List of interference entries across all queried APs
     """
+    site_id = validate_site_id(site_id)
     scan = await get_spectrum_scan(site_id, settings, ap_mac=ap_mac)
 
     logger = get_logger(__name__, settings.log_level)

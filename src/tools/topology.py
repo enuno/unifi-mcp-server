@@ -16,6 +16,7 @@ from src.utils.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
+from src.utils.validators import validate_site_id
 
 # The Integration API reports "ONLINE"; older/legacy payloads use "CONNECTED".
 _ONLINE_DEVICE_STATES = frozenset({"ONLINE", "CONNECTED"})
@@ -220,6 +221,7 @@ async def get_network_topology(
         print(f"Total clients: {topology['total_clients']}")
         ```
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         if not client.is_authenticated:
             await client.authenticate()
@@ -445,6 +447,7 @@ async def get_device_connections(
             print(f"{conn['source_node_id']} -> {conn['target_node_id']}")
         ```
     """
+    site_id = validate_site_id(site_id)
     topology = await get_network_topology(site_id, settings)
 
     connections = cast(list[dict[str, Any]], topology.get("connections", []))
@@ -490,6 +493,7 @@ async def get_port_mappings(
                 print(f"Port {port_num}: {peer['connected_name']}")
         ```
     """
+    site_id = validate_site_id(site_id)
     topology = await get_network_topology(site_id, settings)
 
     connections = topology.get("connections", [])
@@ -563,6 +567,7 @@ async def export_topology(
         dot_data = await export_topology("default", "dot", settings)
         ```
     """
+    site_id = validate_site_id(site_id)
     if format not in ["json", "graphml", "dot"]:
         raise ValidationError(
             f"Invalid export format: {format}. Must be 'json', 'graphml', or 'dot'"
@@ -659,6 +664,7 @@ async def get_topology_statistics(
         print(f"Max network depth: {stats['max_depth']}")
         ```
     """
+    site_id = validate_site_id(site_id)
     topology = await get_network_topology(site_id, settings)
 
     return {

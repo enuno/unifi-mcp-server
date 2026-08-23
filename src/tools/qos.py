@@ -53,6 +53,7 @@ async def list_traffic_routes(
     Returns:
         List of traffic routing policies
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(
             sanitize_log_message(
@@ -134,6 +135,7 @@ async def create_traffic_route(
     Returns:
         Created traffic route
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create traffic route", dry_run)
 
     # Validate action
@@ -243,6 +245,7 @@ async def update_traffic_route(
     Returns:
         Updated traffic route
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update traffic route", dry_run)
 
     # Build update data
@@ -316,6 +319,7 @@ async def delete_traffic_route(
     Returns:
         Deletion confirmation
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete traffic route")
 
     async with UniFiClient(settings) as client:

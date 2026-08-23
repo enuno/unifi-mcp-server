@@ -13,7 +13,7 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
-from ..utils import APIError, get_logger, log_audit, sanitize_log_message
+from ..utils import APIError, get_logger, log_audit, sanitize_log_message, validate_site_id
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -50,6 +50,7 @@ async def list_wan_dns(
     Returns each WAN interface's name, ID, current DNS servers, and
     dns_preference mode (``auto`` or ``manual``).
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -103,6 +104,7 @@ async def update_wan_dns(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -179,6 +181,7 @@ async def get_dns_filter_settings(
     Returns the global ``dns_filtering`` toggle and the per-network
     ``dns_filters`` list from the ``[ips]`` settings.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -236,6 +239,7 @@ async def update_dns_filter(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)

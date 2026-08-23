@@ -139,7 +139,13 @@ async def test_legitimate_site_ids_are_accepted() -> None:
     """The real site ID forms must keep working."""
     from src.utils.validators import validate_site_id
 
-    for good in ("default", "88f7af54-98f8-306a-a1c7-c9349722b1f6", "64f3ea9e476c410824968da6"):
+    # The 24-hex form is the legacy ObjectId; 507f191e... is the synthetic value
+    # already used elsewhere in this suite.
+    for good in (
+        "default",
+        "88f7af54-98f8-306a-a1c7-c9349722b1f6",
+        "507f191e810c19729de860ea",  # pragma: allowlist secret
+    ):
         assert validate_site_id(good) == good
 
 

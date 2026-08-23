@@ -167,6 +167,17 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_LOG_ENABLED",
     )
 
+    # Backup download location
+    backup_download_dir: str = Field(
+        default=".",
+        description=(
+            "Directory that download_backup writes into. The caller supplies "
+            "only the filename; any directory component is ignored and the "
+            "file is confined to this directory."
+        ),
+        validation_alias="UNIFI_BACKUP_DOWNLOAD_DIR",
+    )
+
     # Supermemory Configuration (optional operator notes/context store)
     supermemory_enabled: bool = Field(
         default=False,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`download_backup` could write anywhere and `backup_filename` could traverse the controller API**: the tool took `output_path` straight from the caller and did `Path(output_path).parent.mkdir(parents=True); write_bytes(...)`, so a malicious or prompt-injected call could create or overwrite any file the server process could write — with the umask-default `0644` permissions and no confirmation — and a symlink at the target was followed. Separately, `backup_filename` was interpolated unvalidated into `/proxy/network/data/backup/{filename}` (and the delete path); because httpx normalises `..` segments, a crafted filename turned the tool into an authenticated GET of any controller route. Now: `backup_filename` is validated to a single plain path component and URL-encoded before use (`download_backup` and `delete_backup`); and `download_backup` uses only the *filename* of `output_path`, writing it inside `UNIFI_BACKUP_DOWNLOAD_DIR` (new; default: current working directory) with `O_NOFOLLOW` and mode `0o600`. **Migration:** `output_path` is now a filename, not a full path — set `UNIFI_BACKUP_DOWNLOAD_DIR` to choose the destination directory.
+
 ### Added
 
 - **Historical time-series and RF scan trigger** (`get_historical_stats`, `start_spectrum_scan`): `get_historical_stats` reads the controller's rollup archives (`stat/report/{interval}.{subject}` for site/ap/user/gw at 5minutes/hourly/daily/monthly) — the only source of historical airtime, per-client signal, and client counts. Archive airtime attributes are band-prefixed (`ng-cu_total`, `na-cu_total`, ...); the bare `cu_total` family exists in live `stat/device` blobs but returns empty from `stat/report` (verified live on Network 10.5), so the per-AP defaults request the prefixed forms. `start_spectrum_scan` issues `cmd/devmgr` `spectrum-scan` to populate the tables `get_spectrum_scan` reads; it takes the AP's radios offline for several minutes and drops its clients, so it requires `confirm` and supports `dry_run`.

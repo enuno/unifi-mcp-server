@@ -1,5 +1,6 @@
 """Unit tests for device control tools."""
 
+import copy
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -822,11 +823,17 @@ AP_CONFIG = {
 def _radio_client(config_devices, put_return, config_get=None):
     client = MagicMock()
     client.authenticate = AsyncMock()
+    # Deep-copy what the fake controller hands back. The write paths edit
+    # the radio_table entry in place, so serving the module-level
+    # AP_CONFIG directly let one test's write leak into every test that
+    # ran after it -- results depended on execution order. Copying here
+    # fixes it once for the whole file rather than per test.
+    config_devices = copy.deepcopy(config_devices)
     # First GET enumerates stat/device; second GET fetches the per-id
     # config record (rest/device serves no collection GET).
     responses = [
         {"data": config_devices},
-        config_get if config_get is not None else {"data": [config_devices[0]]},
+        copy.deepcopy(config_get) if config_get is not None else {"data": [config_devices[0]]},
     ]
     client.get = AsyncMock(side_effect=responses)
     client.put = AsyncMock(return_value=put_return)
@@ -1364,3 +1371,56 @@ async def test_set_min_rssi_warns_when_echo_is_empty(mock_settings):
 
     assert result["success"] is False
     assert result["warnings"] == ["Controller did not echo the radio table; change unconfirmed"]
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_audits_the_failure_and_reraises(mock_settings):
+    """A write that raises still leaves an audit row.
+
+    Every other mutating tool in this module records `result="failed"`
+    before re-raising; without it a partial or failed change leaves no
+    trace at all, which is precisely the case someone later needs to
+    reconstruct.
+    """
+    from src.tools.device_control import set_ap_min_rssi
+    from src.utils.exceptions import APIError
+
+    mock_settings.get_site_api_path = MagicMock(
+        side_effect=lambda site, ep: f"/proxy/network/api/s/{site}/{ep}"
+    )
+    client = _radio_client([AP_CONFIG], put_return={"data": []})
+    client.put = AsyncMock(side_effect=APIError("controller rejected the write"))
+
+    with patch.object(dc_module, "UniFiClient", return_value=client):
+        with patch.object(dc_module, "log_audit") as mock_audit:
+            with pytest.raises(APIError):
+                await set_ap_min_rssi(
+                    site_id="default",
+                    device_id="ap-1",
+                    band="5",
+                    settings=mock_settings,
+                    min_rssi=-72,
+                    confirm=True,
+                )
+
+    results = [c.kwargs.get("result") for c in mock_audit.call_args_list]
+    assert "failed" in results, f"expected a failed audit row, got {results}"
+
+
+@pytest.mark.asyncio
+async def test_set_min_rssi_band_error_lists_every_alias(mock_settings):
+    """The error should name what it accepts, not a subset of it."""
+    from src.tools.device_control import RADIO_BAND_MAP, set_ap_min_rssi
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError) as exc:
+        await set_ap_min_rssi(
+            site_id="default",
+            device_id="ap-1",
+            band="7",
+            settings=mock_settings,
+            confirm=True,
+        )
+    for alias in ("ng", "na", "6e"):
+        assert alias in str(exc.value), f"{alias} missing from {exc.value}"
+    assert len(RADIO_BAND_MAP) >= 6

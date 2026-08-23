@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectAlarmWebhookResult, ProtectDeviceUpdateMessage, ProtectEventMessage
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.validators import coerce_bool, validate_confirmation
 
 
 def _extract_collection(response: Any) -> list[dict[str, Any]]:
@@ -130,12 +131,34 @@ async def send_protect_alarm_webhook(
     webhook_id: str,
     settings: Settings,
     payload: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Send a webhook to the Protect alarm manager."""
+    """Send a webhook to the Protect alarm manager.
+
+    Args:
+        webhook_id: Alarm webhook identifier
+        settings: Application settings
+        payload: Webhook payload to send
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The controller response to the webhook call
+    """
+    validate_confirmation(confirm, "send a Protect alarm webhook", dry_run)
     logger = get_logger(__name__, settings.log_level)
     webhook_id = webhook_id.strip()
     if not webhook_id:
         raise ValidationError("webhook_id is required")
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "send_protect_alarm_webhook",
+            "webhook_id": webhook_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()

@@ -8,6 +8,7 @@ from ..config import Settings
 from ..models import Client
 from ..utils import (
     ResourceNotFoundError,
+    ValidationError,
     get_logger,
     sanitize_log_message,
     validate_limit_offset,
@@ -243,17 +244,41 @@ async def list_client_rf_health(
     tool passes them through with a computed transmit retry percentage,
     wireless clients only, worst first.
 
+    The percentage is retries as a share of total transmit attempts::
+
+        tx_retry_pct = tx_retries / (tx_packets + tx_retries) * 100
+
+    stated explicitly because the other plausible reading -- retries per
+    successful packet, ``tx_retries / tx_packets`` -- yields a visibly
+    different number for the same client, and callers comparing against
+    another tool need to know which one this is.
+
     Args:
         site_id: Site identifier
         settings: Application settings
-        min_retry_pct: Optional floor; clients retrying less than this
-            percentage are dropped (e.g. 5 to see only strugglers)
+        min_retry_pct: Optional floor in percent, 0..100; clients
+            retrying less than this are dropped (e.g. 5 to see only
+            strugglers). A client with no transmit activity has no
+            percentage to compare, so any floor -- including 0 --
+            excludes it.
 
     Returns:
         List of wireless-client health dictionaries, highest transmit
         retry percentage first
     """
     site_id = validate_site_id(site_id)
+    if min_retry_pct is not None:
+        # Fail on the argument, not later on a comparison against a str,
+        # which raises TypeError from inside a list comprehension and
+        # tells the caller nothing useful.
+        try:
+            min_retry_pct = float(min_retry_pct)
+        except (TypeError, ValueError):
+            raise ValidationError(
+                f"min_retry_pct must be a number, got {min_retry_pct!r}"
+            ) from None
+        if not 0 <= min_retry_pct <= 100:
+            raise ValidationError(f"min_retry_pct must be between 0 and 100, got {min_retry_pct}")
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
@@ -265,6 +290,11 @@ async def list_client_rf_health(
         rows: list[dict[str, Any]] = []
         for c in raw if isinstance(raw, list) else []:
             if not isinstance(c, dict) or c.get("is_wired") or not c.get("radio"):
+                continue
+            # The sta payload can carry entries with no MAC; search_clients
+            # already skips those. A row keyed by None cannot be correlated
+            # with anything, so it is worse than absent.
+            if not c.get("mac"):
                 continue
             tx_packets = c.get("tx_packets") or 0
             tx_retries = c.get("tx_retries") or 0

@@ -618,3 +618,47 @@ class TestClientRfHealth:
             result = await list_client_rf_health("default", mock_settings)
 
         assert result[0]["tx_retry_pct"] is None
+
+
+@pytest.mark.asyncio
+async def test_rf_health_rejects_a_non_numeric_floor(mock_settings):
+    """Fail on the argument, not later inside a comprehension."""
+    from src.tools.clients import list_client_rf_health
+    from src.utils.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="must be a number"):
+        await list_client_rf_health("default", mock_settings, min_retry_pct="high")
+
+
+@pytest.mark.asyncio
+async def test_rf_health_rejects_an_out_of_range_floor(mock_settings):
+    """A percentage outside 0..100 can only be a caller mistake."""
+    from src.tools.clients import list_client_rf_health
+    from src.utils.exceptions import ValidationError
+
+    for bad in (-1, 101):
+        with pytest.raises(ValidationError, match="between 0 and 100"):
+            await list_client_rf_health("default", mock_settings, min_retry_pct=bad)
+
+
+@pytest.mark.asyncio
+async def test_rf_health_skips_clients_without_a_mac(mock_settings):
+    """A row keyed by None cannot be correlated with anything."""
+    from src.tools.clients import list_client_rf_health
+
+    payload = [
+        {"mac": "00:00:5e:00:53:01", "radio": "na", "tx_packets": 90, "tx_retries": 10},
+        {"radio": "na", "tx_packets": 50, "tx_retries": 50},  # no mac -- must be dropped
+    ]
+    client = MagicMock()
+    client.authenticate = AsyncMock()
+    client.get = AsyncMock(return_value={"data": payload})
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("src.tools.clients.UniFiClient", return_value=client):
+        rows = await list_client_rf_health("default", mock_settings)
+
+    assert [r["mac"] for r in rows] == ["00:00:5e:00:53:01"]
+    # and the documented denominator: 10 / (90 + 10) = 10%
+    assert rows[0]["tx_retry_pct"] == 10.0

@@ -253,6 +253,17 @@ async def list_client_rf_health(
     different number for the same client, and callers comparing against
     another tool need to know which one this is.
 
+    It will not match the controller UI, and not because of the
+    denominator. The UI's "TX Retries" is a live rate over a short recent
+    window: measured on one client it read 12.1%, briefly, while the
+    lifetime figure was 24.7% and the two candidate denominators gave
+    24.7% and 32.8%. That client's hourly rate ranged from 4.4% to 34.0%
+    across a single day, so the UI value moves between glances and the
+    lifetime one barely does. Neither is wrong; they answer different
+    questions. This tool reports the association's whole history, which
+    is stable enough to compare between clients but slow to react -- to
+    see a change, compare two readings rather than one against the UI.
+
     Args:
         site_id: Site identifier
         settings: Application settings

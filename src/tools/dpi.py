@@ -285,18 +285,29 @@ async def update_dpi_settings(
             next((s for s in vdata if isinstance(s, dict)), {}) if isinstance(vdata, list) else {}
         )
 
+        # Require the key to be present, rather than coercing with bool().
+        # A controller that drops `enabled` entirely returns None, and
+        # bool(None) is False -- so a disable request would have been
+        # reported as a confirmed success while the stored state was in
+        # fact unknown. Absent is not the same as false.
+        confirmed = "enabled" in stored and bool(stored["enabled"]) == enabled
+
         log_audit(
             operation="update_dpi_settings",
             parameters={"site_id": site_id, "enabled": enabled},
-            result="success" if bool(stored.get("enabled")) == enabled else "unconfirmed",
+            result="success" if confirmed else "unconfirmed",
             site_id=site_id,
         )
         result: dict[str, Any] = {
-            "success": bool(stored.get("enabled")) == enabled,
+            "success": confirmed,
             "enabled": stored.get("enabled"),
             "fingerprintingEnabled": stored.get("fingerprintingEnabled"),
         }
-        if not result["success"]:
-            result["warning"] = "Controller did not store the requested DPI state"
+        if not confirmed:
+            result["warning"] = (
+                "Controller did not report the requested DPI state"
+                if "enabled" in stored
+                else "Controller did not echo an 'enabled' value; state unconfirmed"
+            )
             logger.warning(sanitize_log_message(result["warning"]))
         return result

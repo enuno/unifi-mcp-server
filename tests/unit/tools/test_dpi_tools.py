@@ -614,6 +614,35 @@ class TestUpdateDpiSettings:
         assert result["success"] is True
 
     @pytest.mark.asyncio
+    async def test_absent_enabled_key_is_not_a_confirmed_disable(self, mock_settings):
+        """A dropped key must not read as a confirmed False.
+
+        Regression: the check coerced the echo with ``bool()``, and
+        ``bool(None)`` is ``False`` -- so a disable request against a
+        controller that omits ``enabled`` entirely reported success while
+        the stored state was actually unknown. Absent is not false.
+        """
+        from src.tools.dpi import update_dpi_settings
+
+        section = {"_id": "dpi-1", "enabled": True}
+        echoed_without_key = {"_id": "dpi-1"}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": [section]}, {"data": [echoed_without_key]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings(
+                "default", mock_settings, enabled=False, confirm=True
+            )
+
+        assert result["success"] is False
+        assert result["enabled"] is None
+        assert "did not echo" in result["warning"]
+
+    @pytest.mark.asyncio
     async def test_unstored_state_reports_unconfirmed(self, mock_settings):
         from src.tools.dpi import update_dpi_settings
 

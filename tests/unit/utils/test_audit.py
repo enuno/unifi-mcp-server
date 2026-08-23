@@ -563,8 +563,8 @@ class TestAuditCredentialRedaction:
                 "details": {
                     "name": "IoT",
                     "vlan": 20,
-                    "password": "secret-value",
-                },  # pragma: allowlist secret
+                    "password": "secret-value",  # pragma: allowlist secret
+                },
             },
             result="success",
         )
@@ -584,13 +584,15 @@ class TestAuditCredentialRedaction:
         logger.log_operation(
             operation="create_wlan",
             parameters={
-                "servers": [{"host": "10.0.0.1", "auth_secret": "deep-secret"}]
-            },  # pragma: allowlist secret
+                "servers": [
+                    {"host": "10.0.0.1", "auth_secret": "deep-secret"}  # pragma: allowlist secret
+                ]  # pragma: allowlist secret
+            },
             result="success",
         )
 
         raw = log_path.read_text()
-        assert "deep-secret" not in raw
+        assert "deep-secret" not in raw  # pragma: allowlist secret
         record = json.loads(raw.strip())
         assert record["parameters"]["servers"][0]["auth_secret"] == "***"
         assert record["parameters"]["servers"][0]["host"] == "10.0.0.1"

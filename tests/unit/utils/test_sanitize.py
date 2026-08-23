@@ -45,11 +45,12 @@ class TestRedactValue:
         """
         assert _redact_value("password", "mysecretpass") == "***"
         assert (
-            _redact_value("auth_secret", "SuperSecretRadius2026") == "***"
-        )  # pragma: allowlist secret
+            _redact_value("auth_secret", "SuperSecretRadius2026")
+            == "***"  # pragma: allowlist secret
+        )
         assert (
-            _redact_value("x_passphrase", "MeinWLANPasswort") == "***"
-        )  # pragma: allowlist secret
+            _redact_value("x_passphrase", "MeinWLANPasswort") == "***"  # pragma: allowlist secret
+        )
 
     def test_full_redaction_when_partial_false(self):
         """partial=False forces full redaction."""

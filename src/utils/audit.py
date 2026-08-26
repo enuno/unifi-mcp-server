@@ -1,6 +1,8 @@
 """Audit logging for mutating operations."""
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -171,6 +173,25 @@ def log_audit(
     """
     logger = get_audit_logger(log_file)
     logger.log_operation(operation, parameters, result, user, site_id, dry_run, error)
+
+
+@contextmanager
+def audit_on_failure(
+    operation: str,
+    parameters: dict[str, Any],
+    site_id: str | None = None,
+) -> Iterator[None]:
+    """Record a failed mutation attempt while preserving its exception."""
+    try:
+        yield
+    except Exception:
+        log_audit(
+            operation=operation,
+            parameters=parameters,
+            result="failed",
+            site_id=site_id,
+        )
+        raise
 
 
 async def audit_action(

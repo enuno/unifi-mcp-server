@@ -7,7 +7,16 @@ from typing import Any
 from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectLiveView, ProtectMetaInfo, ProtectViewer
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils import (
+    ValidationError,
+    audit_on_failure,
+    coerce_bool,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_confirmation,
+    validate_limit_offset,
+)
 
 
 def _validate_id(record_id: str, label: str) -> str:
@@ -34,6 +43,25 @@ def _extract_item(response: Any) -> dict[str, Any]:
             return data
         return response
     return {}
+
+
+def _prepare_mutation(
+    operation: str,
+    parameters: dict[str, Any],
+    confirm: bool | str,
+    dry_run: bool | str,
+) -> bool:
+    """Enforce confirmation and audit a side-effect-free preview."""
+    validate_confirmation(confirm, operation, dry_run)
+    is_dry_run = coerce_bool(dry_run)
+    if is_dry_run:
+        log_audit(
+            operation=operation,
+            parameters=parameters,
+            result="dry_run",
+            dry_run=True,
+        )
+    return is_dry_run
 
 
 async def get_protect_meta_info(settings: Settings) -> dict[str, Any]:
@@ -96,6 +124,8 @@ async def update_protect_viewer(
     settings: Settings,
     name: str | None = None,
     liveview: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update Protect viewer settings."""
     logger = get_logger(__name__, settings.log_level)
@@ -107,16 +137,22 @@ async def update_protect_viewer(
     if liveview is not None:
         payload["liveview"] = liveview
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"viewers/{viewer_id}"),
-            json_data=payload,
-        )
+    parameters = {"viewer_id": viewer_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_viewer", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": viewer_id, "changes": payload}
 
-    viewer = ProtectViewer.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect viewer {viewer_id}"))
-    return viewer.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_viewer", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"viewers/{viewer_id}"),
+                json_data=payload,
+            )
+
+        viewer = ProtectViewer.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_viewer", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect viewer {viewer_id}"))
+        return viewer.model_dump(by_alias=True)
 
 
 async def list_protect_live_views(
@@ -168,20 +204,27 @@ async def get_protect_live_view(live_view_id: str, settings: Settings) -> dict[s
 async def create_protect_live_view(
     live_view: dict[str, Any],
     settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a Protect live view."""
     logger = get_logger(__name__, settings.log_level)
+    parameters = {"changed_fields": sorted(live_view)}
+    if _prepare_mutation("create_protect_live_view", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_create": live_view}
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.post(
-            settings.get_protect_integration_path("liveviews"),
-            json_data=live_view,
-        )
+    with audit_on_failure("create_protect_live_view", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.post(
+                settings.get_protect_integration_path("liveviews"),
+                json_data=live_view,
+            )
 
-    created = ProtectLiveView.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Created Protect live view {created.id or 'unknown'}"))
-    return created.model_dump(by_alias=True)
+        created = ProtectLiveView.model_validate(_extract_item(response))
+        log_audit(operation="create_protect_live_view", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Created Protect live view {created.id or 'unknown'}"))
+        return created.model_dump(by_alias=True)
 
 
 async def update_protect_live_view(
@@ -194,6 +237,8 @@ async def update_protect_live_view(
     owner: str | None = None,
     layout: int | None = None,
     slots: list[dict[str, Any]] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update Protect live view settings."""
     logger = get_logger(__name__, settings.log_level)
@@ -215,13 +260,19 @@ async def update_protect_live_view(
     if slots is not None:
         payload["slots"] = slots
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"liveviews/{live_view_id}"),
-            json_data=payload,
-        )
+    parameters = {"live_view_id": live_view_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_live_view", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": live_view_id, "changes": payload}
 
-    live_view = ProtectLiveView.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect live view {live_view_id}"))
-    return live_view.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_live_view", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"liveviews/{live_view_id}"),
+                json_data=payload,
+            )
+
+        live_view = ProtectLiveView.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_live_view", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect live view {live_view_id}"))
+        return live_view.model_dump(by_alias=True)

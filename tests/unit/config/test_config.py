@@ -36,6 +36,12 @@ class TestSettingsValidateApiType:
         settings = Settings()
         assert settings.api_type == APIType.CLOUD_V1
 
+    def test_validate_legacy_cloud_alias(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud")
+        settings = Settings()
+        assert settings.api_type == APIType.CLOUD_EA
+
     def test_validate_api_type_local(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "LOCAL")
@@ -325,24 +331,28 @@ class TestSettingsTransportConfiguration:
     def test_transport_sse(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("MCP_SERVER_TRANSPORT", "sse")
+        monkeypatch.setenv("MCP_AUTH_TOKEN", "a" * 32)
         settings = Settings()
         assert settings.server_transport == TransportMode.SSE
 
     def test_transport_http(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("MCP_SERVER_TRANSPORT", "http")
+        monkeypatch.setenv("MCP_AUTH_TOKEN", "a" * 32)
         settings = Settings()
         assert settings.server_transport == TransportMode.HTTP
 
     def test_transport_streamable_http(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("MCP_SERVER_TRANSPORT", "streamable_http")
+        monkeypatch.setenv("MCP_AUTH_TOKEN", "a" * 32)
         settings = Settings()
         assert settings.server_transport == TransportMode.STREAMABLE_HTTP
 
     def test_transport_uppercase(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("MCP_SERVER_TRANSPORT", "SSE")
+        monkeypatch.setenv("MCP_AUTH_TOKEN", "a" * 32)
         settings = Settings()
         assert settings.server_transport == TransportMode.SSE
 

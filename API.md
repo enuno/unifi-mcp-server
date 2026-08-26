@@ -106,7 +106,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
-| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (camera/NVR/device/view/event read wired; PTZ/media streams in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
+| `UNIFI_PROFILE` | Tool exposure profile: `network`, `devices`, `security`, `system`, `minimal`, `protect`, `read-only`, or `all` | No | `all` |
+| `UNIFI_BACKUP_DIR` | Approved directory for downloaded backup files | No | `~/.unifi-mcp/backups` |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
@@ -116,6 +117,7 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address (http/sse transports) | No | `0.0.0.0` |
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
+| `MCP_AUTH_TOKEN` | Bearer token for every non-stdio transport (minimum 32 characters) | Network only | - |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 
 - Required when `UNIFI_API_TYPE=local`.
@@ -268,7 +270,7 @@ The following metrics are automatically tracked by agnost.ai:
 docker run -i \
   --name unifi-mcp \
   -e UNIFI_API_KEY=your-unifi-api-key \
-  -e UNIFI_API_TYPE=cloud \
+  -e UNIFI_API_TYPE=cloud-ea \
   -e AGNOST_ENABLED=true \
   -e AGNOST_ORG_ID=your-organization-id \
   ghcr.io/enuno/unifi-mcp-server:latest
@@ -3065,7 +3067,7 @@ Download a backup file to local storage.
 
 - `site_id` (string, required): Site identifier
 - `backup_filename` (string, required): Backup filename
-- `output_path` (string, required): Local filesystem path to save
+- `output_path` (string, required): New relative filename beneath `UNIFI_BACKUP_DIR`
 - `verify_checksum` (boolean, optional): Calculate SHA-256 checksum (default: true)
 
 **Returns:**
@@ -3086,7 +3088,7 @@ Download a backup file to local storage.
 result = await mcp.call_tool("download_backup", {
     "site_id": "default",
     "backup_filename": "backup_2025-01-29.unf",
-    "output_path": "/backups/unifi_backup.unf",
+    "output_path": "unifi_backup.unf",
     "verify_checksum": True
 })
 print(f"Downloaded: {result['size_bytes']} bytes")
@@ -3292,7 +3294,7 @@ The assistant will use `trigger_backup` with `backup_type="system"` and `retenti
 
 Uses `list_backups` and filters results to show recent backups with size information.
 
-**Prompt:** "Download my latest network backup to /tmp/emergency-backup.unf and verify the checksum."
+**Prompt:** "Download my latest network backup as emergency-backup.unf and verify the checksum."
 
 The assistant uses `download_backup` with checksum verification enabled for data integrity.
 

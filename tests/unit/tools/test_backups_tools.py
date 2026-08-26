@@ -209,6 +209,7 @@ async def test_download_backup_success(mock_settings, tmp_path):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    mock_settings.backup_directory = tmp_path
     output_path = tmp_path / "test_backup.unf"
 
     with patch.object(backups_module, "UniFiClient", return_value=mock_client):
@@ -216,7 +217,7 @@ async def test_download_backup_success(mock_settings, tmp_path):
             result = await download_backup(
                 "default",
                 "backup_20260101.unf",
-                str(output_path),
+                output_path.name,
                 mock_settings,
                 verify_checksum=True,
             )
@@ -238,6 +239,7 @@ async def test_download_backup_no_checksum(mock_settings, tmp_path):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    mock_settings.backup_directory = tmp_path
     output_path = tmp_path / "test_backup.unf"
 
     with patch.object(backups_module, "UniFiClient", return_value=mock_client):
@@ -245,12 +247,91 @@ async def test_download_backup_no_checksum(mock_settings, tmp_path):
             result = await download_backup(
                 "default",
                 "backup.unf",
-                str(output_path),
+                output_path.name,
                 mock_settings,
                 verify_checksum=False,
             )
 
             assert result["checksum"] is None
+
+
+@pytest.mark.asyncio
+async def test_download_backup_rejects_absolute_output_path_before_request(mock_settings, tmp_path):
+    """MCP callers must not select arbitrary process-writable destinations."""
+    mock_settings.backup_directory = tmp_path / "approved-backups"
+
+    with patch.object(backups_module, "UniFiClient") as client_class:
+        with pytest.raises(ValidationError, match="relative filename"):
+            await download_backup(
+                "default",
+                "backup.unf",
+                str(tmp_path / "outside" / "overwrite-me"),
+                mock_settings,
+            )
+
+    client_class.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("use_symlink", [False, True])
+async def test_download_backup_never_overwrites_existing_destination(
+    mock_settings, tmp_path, use_symlink
+):
+    """Existing regular files and symlinks must remain unchanged."""
+    backup_root = tmp_path / "approved-backups"
+    backup_root.mkdir()
+    protected_file = tmp_path / "protected.txt"
+    protected_file.write_bytes(b"original")
+    destination = backup_root / "existing.unf"
+    if use_symlink:
+        destination.symlink_to(protected_file)
+    else:
+        destination.write_bytes(b"original")
+    mock_settings.backup_directory = backup_root
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.download_backup = AsyncMock(return_value=b"replacement")
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(backups_module, "UniFiClient", return_value=mock_client):
+        with pytest.raises(ValidationError, match="already exists"):
+            await download_backup("default", "backup.unf", destination.name, mock_settings)
+
+    assert protected_file.read_bytes() == b"original"
+    if not use_symlink:
+        assert destination.read_bytes() == b"original"
+
+
+@pytest.mark.asyncio
+async def test_download_backup_uses_open_directory_when_root_path_is_swapped(
+    mock_settings, tmp_path
+):
+    """Replacing the configured root with a symlink must not redirect the write."""
+    backup_root = tmp_path / "approved-backups"
+    backup_root.mkdir()
+    opened_root = tmp_path / "opened-backup-directory"
+    outside_root = tmp_path / "outside"
+    outside_root.mkdir()
+    mock_settings.backup_directory = backup_root
+
+    async def swap_root_then_return_content(**_kwargs):
+        backup_root.rename(opened_root)
+        backup_root.symlink_to(outside_root, target_is_directory=True)
+        return b"controller-backup"
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.download_backup = AsyncMock(side_effect=swap_root_then_return_content)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(backups_module, "UniFiClient", return_value=mock_client):
+        await download_backup("default", "backup.unf", "saved.unf", mock_settings)
+
+    assert not (outside_root / "saved.unf").exists()
+    assert (opened_root / "saved.unf").read_bytes() == b"controller-backup"
 
 
 @pytest.mark.asyncio

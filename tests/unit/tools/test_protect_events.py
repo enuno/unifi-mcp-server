@@ -80,7 +80,7 @@ async def test_send_protect_alarm_webhook_success(mock_settings, mock_client):
     send_protect_alarm_webhook = _tool("send_protect_alarm_webhook")
 
     with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
-        result = await send_protect_alarm_webhook("webhook-1", mock_settings)
+        result = await send_protect_alarm_webhook("webhook-1", mock_settings, confirm=True)
 
     mock_client.authenticate.assert_awaited_once()
     mock_client.post.assert_awaited_once_with(

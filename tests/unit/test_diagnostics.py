@@ -108,7 +108,7 @@ class TestRunSpeedTest:
             mock_client_class.return_value = create_mock_client()
             mock_client_class.return_value.post = AsyncMock(return_value=response)
 
-            result = await run_speed_test("site-1", mock_settings)
+            result = await run_speed_test("site-1", mock_settings, confirm=True)
 
             assert isinstance(result, dict)
             assert result["status"] == "started"

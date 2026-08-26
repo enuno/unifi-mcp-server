@@ -102,16 +102,12 @@ from pydantic_settings import BaseSettings
 from pydantic import Field, SecretStr
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment."""
+    """Application settings loaded from the process environment."""
 
     unifi_api_key: SecretStr = Field(..., description="UniFi API Key from unifi.ui.com")
     unifi_api_type: str = Field(default="cloud", description="API type: cloud or local")
     unifi_host: str = Field(default="api.ui.com", description="API host")
     unifi_port: int = Field(default=443, description="API port")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 # Usage with automatic masking
 settings = Settings()
@@ -160,7 +156,9 @@ api_key = SecretStr(os.getenv("UNIFI_API_KEY"))
 
 **Secure Storage Options:**
 
-- Environment variables (`.env` file, never committed)
+- Process environment variables or an approved secret manager. If an
+  operator-managed file is used, source it explicitly; never discover `.env`
+  from an untrusted working directory.
 - AWS Secrets Manager
 - HashiCorp Vault
 - Azure Key Vault

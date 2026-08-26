@@ -1,9 +1,10 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
 from enum import Enum
+from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,12 +28,23 @@ class TransportMode(str, Enum):
     STREAMABLE_HTTP = "streamable_http"  # Modern HTTP transport
 
 
+class ToolProfile(str, Enum):
+    """Validated MCP tool exposure profiles."""
+
+    ALL = "all"
+    NETWORK = "network"
+    DEVICES = "devices"
+    SECURITY = "security"
+    SYSTEM = "system"
+    MINIMAL = "minimal"
+    PROTECT = "protect"
+    READ_ONLY = "read-only"
+
+
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables and .env file."""
+    """Application settings loaded from process environment variables."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
@@ -167,6 +179,12 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_LOG_ENABLED",
     )
 
+    backup_directory: Path = Field(
+        default_factory=lambda: Path.home() / ".unifi-mcp" / "backups",
+        description="Operator-approved directory for downloaded controller backups",
+        validation_alias="UNIFI_BACKUP_DIR",
+    )
+
     # Supermemory Configuration (optional operator notes/context store)
     supermemory_enabled: bool = Field(
         default=False,
@@ -199,6 +217,18 @@ class Settings(BaseSettings):
         validation_alias="MCP_SERVER_PORT",
     )
 
+    mcp_auth_token: SecretStr | None = Field(
+        default=None,
+        description="Bearer token required by every network MCP transport",
+        validation_alias="MCP_AUTH_TOKEN",
+    )
+
+    profile: ToolProfile = Field(
+        default=ToolProfile.ALL,
+        description="Validated MCP tool exposure profile",
+        validation_alias="UNIFI_PROFILE",
+    )
+
     @field_validator("api_type", mode="before")
     @classmethod
     def validate_api_type(cls, v: str) -> APIType:
@@ -212,7 +242,10 @@ class Settings(BaseSettings):
         """
         if isinstance(v, APIType):
             return v
-        return APIType(v.lower())
+        normalized = v.lower()
+        if normalized == "cloud":
+            normalized = APIType.CLOUD_EA.value
+        return APIType(normalized)
 
     @field_validator("local_port")
     @classmethod
@@ -265,18 +298,33 @@ class Settings(BaseSettings):
             return v
         return TransportMode(v.lower())
 
+    @field_validator("profile", mode="before")
+    @classmethod
+    def validate_profile(cls, v: str | ToolProfile) -> ToolProfile:
+        """Normalize profile names while rejecting unknown values."""
+        if isinstance(v, ToolProfile):
+            return v
+        return ToolProfile(v.lower().strip())
+
     @model_validator(mode="after")
-    def validate_local_configuration(self) -> "Settings":
-        """Validate that local API has required configuration.
+    def validate_runtime_configuration(self) -> "Settings":
+        """Validate security-critical runtime configuration.
 
         Returns:
             Validated settings instance
 
         Raises:
-            ValueError: If local API is selected but host is not provided
+            ValueError: If a selected runtime mode lacks required configuration
         """
         if self.api_type == APIType.LOCAL and not self.local_host:
             raise ValueError("local_host is required when api_type is 'local'")
+        if self.server_transport != TransportMode.STDIO:
+            if self.mcp_auth_token is None:
+                raise ValueError(
+                    "MCP_AUTH_TOKEN is required for http, sse, and streamable_http transports"
+                )
+            if len(self.mcp_auth_token.get_secret_value()) < 32:
+                raise ValueError("MCP_AUTH_TOKEN must contain at least 32 characters")
         return self
 
     @property

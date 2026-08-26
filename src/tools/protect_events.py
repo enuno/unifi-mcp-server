@@ -7,7 +7,16 @@ from typing import Any
 from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectAlarmWebhookResult, ProtectDeviceUpdateMessage, ProtectEventMessage
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils import (
+    ValidationError,
+    audit_on_failure,
+    coerce_bool,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_confirmation,
+    validate_limit_offset,
+)
 
 
 def _extract_collection(response: Any) -> list[dict[str, Any]]:
@@ -130,20 +139,42 @@ async def send_protect_alarm_webhook(
     webhook_id: str,
     settings: Settings,
     payload: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Send a webhook to the Protect alarm manager."""
     logger = get_logger(__name__, settings.log_level)
     webhook_id = webhook_id.strip()
     if not webhook_id:
         raise ValidationError("webhook_id is required")
+    validate_confirmation(confirm, "send Protect alarm webhook", dry_run)
+    parameters = {
+        "webhook_id": webhook_id,
+        "payload_fields": sorted((payload or {}).keys()),
+    }
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.post(
-            settings.get_protect_integration_path(f"alarm-manager/webhook/{webhook_id}"),
-            json_data=payload or {},
+    if coerce_bool(dry_run):
+        log_audit(
+            operation="send_protect_alarm_webhook",
+            parameters=parameters,
+            result="dry_run",
+            dry_run=True,
         )
+        return {"dry_run": True, "would_send": webhook_id, "payload": payload or {}}
 
-    result = ProtectAlarmWebhookResult.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Sent Protect alarm webhook {webhook_id}"))
-    return result.model_dump(by_alias=True)
+    with audit_on_failure("send_protect_alarm_webhook", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.post(
+                settings.get_protect_integration_path(f"alarm-manager/webhook/{webhook_id}"),
+                json_data=payload or {},
+            )
+
+        result = ProtectAlarmWebhookResult.model_validate(_extract_item(response))
+        log_audit(
+            operation="send_protect_alarm_webhook",
+            parameters=parameters,
+            result="success",
+        )
+        logger.info(sanitize_log_message(f"Sent Protect alarm webhook {webhook_id}"))
+        return result.model_dump(by_alias=True)

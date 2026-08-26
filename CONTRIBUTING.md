@@ -78,10 +78,13 @@ pre-commit install --hook-type commit-msg
 
 ### 4. Configure Environment
 
-Create a `.env` file for local development:
+Create an operator-controlled environment file for local development:
 
 ```bash
 cp .env.example .env
+set -a
+. ./.env
+set +a
 ```
 
 #### Obtain Your UniFi API Key
@@ -95,14 +98,15 @@ Before configuring the environment, you need to obtain an API key:
 
 #### Configure Your Environment
 
-Edit the `.env` file with your UniFi API key:
+Edit the file before explicitly sourcing it. The server does not discover or
+load `.env` from its working directory.
 
 ```env
 # Required: Your UniFi API Key
 UNIFI_API_KEY=your-api-key-here
 
 # For cloud API (recommended)
-UNIFI_API_TYPE=cloud
+UNIFI_API_TYPE=cloud-ea
 UNIFI_HOST=api.ui.com
 UNIFI_PORT=443
 UNIFI_VERIFY_SSL=true

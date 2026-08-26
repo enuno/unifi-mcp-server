@@ -164,7 +164,7 @@ The existing profile system is the natural place to add more granular, applicati
 }
 ```
 
-#### Environment variable (shell / .env)
+#### Environment variable (shell)
 
 ```bash
 export UNIFI_API_KEY=your-api-key
@@ -267,4 +267,7 @@ If a tool you need isn't available, either switch profiles or unset `UNIFI_PROFI
 
 **Unknown profile name**
 
-If `UNIFI_PROFILE` is set to an unrecognized value, the server falls back to loading all modules for the API type. Valid values: `network`, `devices`, `security`, `system`, `minimal`, `all` (or unset).
+An unrecognized or API-incompatible profile stops startup. Valid values:
+`network`, `devices`, `security`, `system`, `minimal`, `protect`, `read-only`,
+and `all` (or unset). This fail-closed behavior prevents a typo from exposing
+the complete tool surface.

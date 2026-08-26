@@ -13,7 +13,16 @@ from ..models import (
     ProtectLight,
     ProtectSensor,
 )
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils import (
+    ValidationError,
+    audit_on_failure,
+    coerce_bool,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_confirmation,
+    validate_limit_offset,
+)
 
 
 def _validate_id(record_id: str, label: str) -> str:
@@ -40,6 +49,25 @@ def _extract_item(response: Any) -> dict[str, Any]:
             return data
         return response
     return {}
+
+
+def _prepare_mutation(
+    operation: str,
+    parameters: dict[str, Any],
+    confirm: bool | str,
+    dry_run: bool | str,
+) -> bool:
+    """Enforce confirmation and audit a side-effect-free preview."""
+    validate_confirmation(confirm, operation, dry_run)
+    is_dry_run = coerce_bool(dry_run)
+    if is_dry_run:
+        log_audit(
+            operation=operation,
+            parameters=parameters,
+            result="dry_run",
+            dry_run=True,
+        )
+    return is_dry_run
 
 
 async def list_protect_devices(
@@ -127,6 +155,8 @@ async def update_protect_device(
     state: str | int | None = None,
     mac: str | None = None,
     firmware_version: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update a Protect device record."""
     logger = get_logger(__name__, settings.log_level)
@@ -146,16 +176,22 @@ async def update_protect_device(
     if firmware_version is not None:
         payload["firmwareVersion"] = firmware_version
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"devices/{device_id}"),
-            json_data=payload,
-        )
+    parameters = {"device_id": device_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_device", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": device_id, "changes": payload}
 
-    device = ProtectDevice.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect device {device_id}"))
-    return device.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_device", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"devices/{device_id}"),
+                json_data=payload,
+            )
+
+        device = ProtectDevice.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_device", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect device {device_id}"))
+        return device.model_dump(by_alias=True)
 
 
 async def list_protect_lights(
@@ -207,6 +243,8 @@ async def update_protect_light(
     is_light_force_enabled: bool | None = None,
     light_mode_settings: dict[str, Any] | None = None,
     light_device_settings: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update Protect light settings."""
     logger = get_logger(__name__, settings.log_level)
@@ -222,16 +260,22 @@ async def update_protect_light(
     if light_device_settings is not None:
         payload["lightDeviceSettings"] = light_device_settings
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"lights/{light_id}"),
-            json_data=payload,
-        )
+    parameters = {"light_id": light_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_light", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": light_id, "changes": payload}
 
-    light = ProtectLight.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect light {light_id}"))
-    return light.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_light", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"lights/{light_id}"),
+                json_data=payload,
+            )
+
+        light = ProtectLight.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_light", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect light {light_id}"))
+        return light.model_dump(by_alias=True)
 
 
 async def list_protect_sensors(
@@ -285,6 +329,8 @@ async def update_protect_sensor(
     temperature_settings: dict[str, Any] | None = None,
     motion_settings: dict[str, Any] | None = None,
     alarm_settings: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update Protect sensor settings."""
     logger = get_logger(__name__, settings.log_level)
@@ -304,16 +350,22 @@ async def update_protect_sensor(
     if alarm_settings is not None:
         payload["alarmSettings"] = alarm_settings
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"sensors/{sensor_id}"),
-            json_data=payload,
-        )
+    parameters = {"sensor_id": sensor_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_sensor", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": sensor_id, "changes": payload}
 
-    sensor = ProtectSensor.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect sensor {sensor_id}"))
-    return sensor.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_sensor", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"sensors/{sensor_id}"),
+                json_data=payload,
+            )
+
+        sensor = ProtectSensor.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_sensor", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect sensor {sensor_id}"))
+        return sensor.model_dump(by_alias=True)
 
 
 async def list_protect_chimes(
@@ -364,6 +416,8 @@ async def update_protect_chime(
     name: str | None = None,
     camera_ids: list[str] | None = None,
     ring_settings: list[dict[str, Any]] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Update Protect chime settings."""
     logger = get_logger(__name__, settings.log_level)
@@ -377,13 +431,19 @@ async def update_protect_chime(
     if ring_settings is not None:
         payload["ringSettings"] = ring_settings
 
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.patch(
-            settings.get_protect_integration_path(f"chimes/{chime_id}"),
-            json_data=payload,
-        )
+    parameters = {"chime_id": chime_id, "changed_fields": sorted(payload)}
+    if _prepare_mutation("update_protect_chime", parameters, confirm, dry_run):
+        return {"dry_run": True, "would_update": chime_id, "changes": payload}
 
-    chime = ProtectChime.model_validate(_extract_item(response))
-    logger.info(sanitize_log_message(f"Updated Protect chime {chime_id}"))
-    return chime.model_dump(by_alias=True)
+    with audit_on_failure("update_protect_chime", parameters):
+        async with ProtectClient(settings) as client:
+            await client.authenticate()
+            response = await client.patch(
+                settings.get_protect_integration_path(f"chimes/{chime_id}"),
+                json_data=payload,
+            )
+
+        chime = ProtectChime.model_validate(_extract_item(response))
+        log_audit(operation="update_protect_chime", parameters=parameters, result="success")
+        logger.info(sanitize_log_message(f"Updated Protect chime {chime_id}"))
+        return chime.model_dump(by_alias=True)

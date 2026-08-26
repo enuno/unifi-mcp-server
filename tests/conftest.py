@@ -13,10 +13,10 @@ sys.path.insert(0, str(project_root))
 
 @pytest.fixture(autouse=True, scope="function")
 def isolate_env_file(tmp_path, monkeypatch):
-    """Prevent Settings from loading .env file during unit tests.
+    """Isolate process environment and working directory during unit tests.
 
-    This ensures that tests using monkeypatch.delenv() actually work as expected,
-    since Pydantic Settings loads from both environment variables AND .env file.
+    Settings intentionally ignores working-directory .env files, but a temporary
+    directory also keeps file-producing tests isolated from the checkout.
     """
     # Change to a temp directory so .env file won't be found
     temp_dir = tmp_path / "test_env"

@@ -14,11 +14,13 @@ except importlib.metadata.PackageNotFoundError:
 
 from fastmcp import FastMCP
 
-from .a2a import A2AHTTPRouter, A2AState
+from .a2a import A2AState
 from .a2a.audit import get_audit_logger
 from .a2a.auth import AuthManager
 from .a2a.route_policy import ConfirmationWorkflow, SafetyController
-from .config import APIType, Settings, TransportMode
+from .api import validate_controller_relative_endpoint
+from .config import APIType, Settings, ToolProfile, TransportMode
+from .mcp_auth import build_mcp_auth, require_authenticated_request
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
 from .resources import protect as protect_resource
 from .resources import site_manager as site_manager_resource
@@ -66,7 +68,7 @@ from .tools import vouchers as vouchers_tools
 from .tools import vpn as vpn_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
-from .utils import get_logger
+from .utils import audit_on_failure, coerce_bool, get_logger, log_audit, validate_confirmation
 
 # ---------------------------------------------------------------------------
 # Initialisation
@@ -75,7 +77,7 @@ from .utils import get_logger
 settings = Settings()
 logger = get_logger(__name__, settings.log_level)
 
-mcp = FastMCP("UniFi MCP Server")
+mcp = FastMCP("UniFi MCP Server", auth=build_mcp_auth(settings))
 
 # ---------------------------------------------------------------------------
 # Optional: agnost tracking
@@ -174,7 +176,7 @@ _LOCAL_TOOL_MODULES = [
 # Profile-based module filtering (UNIFI_PROFILE env var)
 #
 # Set UNIFI_PROFILE to load only a subset of tools, reducing LLM context size.
-# Valid profiles: network, devices, security, system, minimal, protect
+# Valid profiles: network, devices, security, system, minimal, protect, read-only
 # Omit UNIFI_PROFILE (or set to "all") to load all tools for the API type.
 # ---------------------------------------------------------------------------
 
@@ -244,14 +246,28 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
     ],
 }
 
-_active_profile = os.getenv("UNIFI_PROFILE", "").lower().strip()
+_active_profile = settings.profile.value
+_READ_ONLY_PREFIXES = ("get_", "list_", "stat_", "search_")
+
+
+def _read_only_include(module: Any) -> list[str] | None:
+    """Return a registration allowlist for the read-only profile."""
+    if settings.profile != ToolProfile.READ_ONLY:
+        return None
+    return [name for name in dir(module) if name.startswith(_READ_ONLY_PREFIXES)]
+
 
 _TOOL_MODULES: list[Any] = []
 if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
     _base_modules = list(_CLOUD_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
+    if _active_profile not in ("all", "read-only"):
         _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _base_modules = [m for m in _base_modules if m in _profile_set] or _base_modules
+        _base_modules = [m for m in _base_modules if m in _profile_set]
+        if not _base_modules:
+            raise ValueError(
+                f"UNIFI_PROFILE={_active_profile!r} has no tools compatible with "
+                f"UNIFI_API_TYPE={settings.api_type.value!r}"
+            )
     _TOOL_MODULES = _base_modules
     logger.info(
         f"Cloud API mode ({settings.api_type.value})"
@@ -262,14 +278,22 @@ if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
     # which all 404 on the live Cloud API
     for _module in _TOOL_MODULES:
         if _module is sites_tools:
-            register_module_tools(mcp, _module, settings, exclude=["get_site_statistics"])
+            register_module_tools(
+                mcp,
+                _module,
+                settings,
+                include=_read_only_include(_module),
+                exclude=["get_site_statistics"],
+            )
         else:
-            register_module_tools(mcp, _module, settings)
+            register_module_tools(mcp, _module, settings, include=_read_only_include(_module))
 else:
     _all_local = list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
+    if _active_profile not in ("all", "read-only"):
         _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _TOOL_MODULES = [m for m in _all_local if m in _profile_set] or _all_local
+        _TOOL_MODULES = [m for m in _all_local if m in _profile_set]
+        if not _TOOL_MODULES:
+            raise ValueError(f"UNIFI_PROFILE={_active_profile!r} has no compatible tools")
     else:
         _TOOL_MODULES = _all_local
     logger.info(
@@ -278,7 +302,7 @@ else:
         + f" - registering {len(_TOOL_MODULES)} tool module(s)"
     )
     for _module in _TOOL_MODULES:
-        register_module_tools(mcp, _module, settings)
+        register_module_tools(mcp, _module, settings, include=_read_only_include(_module))
 
 # ---------------------------------------------------------------------------
 # Resource handlers
@@ -313,29 +337,62 @@ async def health_check() -> dict[str, str]:
 
 
 # Conditional debug tool
-if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
+if os.getenv("DEBUG", "").lower() in ("true", "1", "yes") and (
+    settings.profile != ToolProfile.READ_ONLY
+):
 
     @mcp.tool()
-    async def debug_api_request(endpoint: str, method: str = "GET") -> dict:
+    async def debug_api_request(
+        endpoint: str,
+        method: str = "GET",
+        confirm: bool | str = False,
+        dry_run: bool | str = False,
+    ) -> dict:
         """Debug tool to query arbitrary UniFi API endpoints.
 
         Args:
             endpoint: API endpoint path (e.g., /proxy/network/api/s/default/rest/networkconf)
             method: HTTP method (GET, POST, PUT, DELETE)
+            confirm: Required for DELETE requests
+            dry_run: Preview a DELETE without sending it
 
         Returns:
             Raw JSON response from the API
         """
         from .api import UniFiClient
 
-        async with UniFiClient(settings) as client:
-            await client.authenticate()
-            if method.upper() == "GET":
+        endpoint = validate_controller_relative_endpoint(endpoint)
+        normalized_method = method.upper()
+        if normalized_method == "DELETE":
+            validate_confirmation(confirm, "debug API DELETE", dry_run)
+            if coerce_bool(dry_run):
+                log_audit(
+                    operation="debug_api_request_delete",
+                    parameters={"endpoint": endpoint},
+                    result="dry_run",
+                    dry_run=True,
+                )
+                return {"dry_run": True, "would_delete": endpoint}
+
+        if normalized_method == "GET":
+            async with UniFiClient(settings) as client:
+                await client.authenticate()
                 return await client.get(endpoint)
-            elif method.upper() == "DELETE":
-                return await client.delete(endpoint)
-            else:
-                return {"error": f"Method {method} requires json_data parameter (not implemented)"}
+
+        if normalized_method == "DELETE":
+            parameters = {"endpoint": endpoint}
+            with audit_on_failure("debug_api_request_delete", parameters):
+                async with UniFiClient(settings) as client:
+                    await client.authenticate()
+                    result = await client.delete(endpoint)
+                log_audit(
+                    operation="debug_api_request_delete",
+                    parameters=parameters,
+                    result="success",
+                )
+                return result
+
+        return {"error": f"Method {method} requires json_data parameter (not implemented)"}
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +558,7 @@ def main() -> None:
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")
-    if _active_profile:
+    if _active_profile != "all":
         logger.info(f"Profile: {_active_profile} ({len(_TOOL_MODULES)} module(s) active)")
 
     # ---------------------------------------------------------------------------
@@ -514,9 +571,6 @@ def main() -> None:
         safety_controller=SafetyController(),
         confirmation_workflow=ConfirmationWorkflow(),
     )
-    a2a_router = A2AHTTPRouter(state=a2a_state)
-    _ = a2a_router  # mounted below onto FastMCP's internal Starlette app
-
     if settings.server_transport == TransportMode.STDIO:
         logger.info("Transport: stdio (default)")
         logger.info("Server ready to handle requests")
@@ -527,8 +581,8 @@ def main() -> None:
         logger.info(
             "A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit"
         )
-        # FastMCP 3.x HTTP transport uses an internal Starlette app; we mount
-        # the A2A router after server startup via a small wrapper.
+        # Register custom A2A routes before FastMCP creates its Starlette app.
+        from starlette.requests import Request
         from starlette.responses import JSONResponse
 
         from .a2a.http_handlers import (
@@ -539,43 +593,37 @@ def main() -> None:
             get_audit_handler,
         )
 
-        async def _a2a_agent_card(request):
+        @mcp.custom_route("/a2a/agent-card", methods=["GET"])
+        async def _a2a_agent_card(request: Request) -> JSONResponse:
+            require_authenticated_request(request)
             return JSONResponse(get_agent_card_handler())
 
-        async def _a2a_discover(request):
+        @mcp.custom_route("/a2a/discover", methods=["POST"])
+        async def _a2a_discover(request: Request) -> JSONResponse:
+            require_authenticated_request(request)
             body = await request.body()
             payload = await request.json() if body else {}
             return JSONResponse(await discover_handler(payload, state=a2a_state))
 
-        async def _a2a_delegate(request):
+        @mcp.custom_route("/a2a/delegate", methods=["POST"])
+        async def _a2a_delegate(request: Request) -> JSONResponse:
+            require_authenticated_request(request)
             payload = await request.json()
             return JSONResponse(await delegate_handler(payload, state=a2a_state))
 
-        async def _a2a_confirm(request):
+        @mcp.custom_route("/a2a/confirm", methods=["POST"])
+        async def _a2a_confirm(request: Request) -> JSONResponse:
+            require_authenticated_request(request)
             payload = await request.json()
             return JSONResponse(await confirm_handler(payload, state=a2a_state))
 
-        async def _a2a_audit(request):
+        @mcp.custom_route("/a2a/audit", methods=["GET"])
+        async def _a2a_audit(request: Request) -> JSONResponse:
+            require_authenticated_request(request)
             payload = dict(request.query_params)
             return JSONResponse(await get_audit_handler(payload, state=a2a_state))
 
-        # Try to mount onto FastMCP's internal Starlette app if available
-        _mounted = False
-        for attr in ("app", "_app", "server", "_server"):
-            app = getattr(mcp, attr, None)
-            if app is not None and hasattr(app, "add_route"):
-                app.add_route("/a2a/agent-card", _a2a_agent_card, methods=["GET"])
-                app.add_route("/a2a/discover", _a2a_discover, methods=["POST"])
-                app.add_route("/a2a/delegate", _a2a_delegate, methods=["POST"])
-                app.add_route("/a2a/confirm", _a2a_confirm, methods=["POST"])
-                app.add_route("/a2a/audit", _a2a_audit, methods=["GET"])
-                logger.info("A2A routes mounted on FastMCP internal app")
-                _mounted = True
-                break
-        if not _mounted:
-            logger.warning(
-                "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
-            )
+        logger.info("Authenticated A2A routes registered")
 
         mcp.run(
             transport=settings.server_transport.value,

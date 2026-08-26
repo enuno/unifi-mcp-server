@@ -1,6 +1,7 @@
 """Backup and restore operations MCP tools."""
 
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -284,7 +285,7 @@ async def download_backup(
     Args:
         site_id: Site identifier
         backup_filename: Backup filename to download
-        output_path: Local filesystem path to save the backup
+        output_path: Relative filename beneath ``UNIFI_BACKUP_DIR``
         settings: Application settings
         verify_checksum: Whether to calculate and verify file checksum
 
@@ -296,7 +297,7 @@ async def download_backup(
         result = await download_backup(
             site_id="default",
             backup_filename="backup_2025-01-29.unf",
-            output_path="/backups/unifi_backup.unf",
+            output_path="unifi_backup.unf",
             settings=settings
         )
         print(f"Downloaded to: {result['local_path']}")
@@ -306,6 +307,39 @@ async def download_backup(
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
+
+    relative_output = Path(output_path)
+    if (
+        not output_path.strip()
+        or relative_output.is_absolute()
+        or relative_output.name != output_path
+        or output_path in {".", ".."}
+    ):
+        raise ValidationError("output_path must be a relative filename beneath UNIFI_BACKUP_DIR")
+
+    backup_root = Path(settings.backup_directory).expanduser()
+    backup_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    output_file = backup_root.absolute() / output_path
+
+    if os.open not in os.supports_dir_fd:
+        raise ValidationError("Secure backup downloads are not supported on this platform")
+    directory_flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        directory_flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        directory_flags |= os.O_NOFOLLOW
+    backup_directory_fd: int | None = None
+    try:
+        backup_directory_fd = os.open(backup_root, directory_flags)
+        os.fchmod(backup_directory_fd, 0o700)
+    except OSError as exc:
+        if backup_directory_fd is not None:
+            os.close(backup_directory_fd)
+        raise ValidationError(
+            "UNIFI_BACKUP_DIR must resolve to an owner-only directory, not a symbolic link"
+        ) from exc
+    if backup_directory_fd is None:  # Defensive; os.open either returns an fd or raises.
+        raise ValidationError("Unable to open UNIFI_BACKUP_DIR securely")
 
     logger.info(
         sanitize_log_message(f"Downloading backup '{backup_filename}' from site '{site_id}'")
@@ -321,10 +355,24 @@ async def download_backup(
                 backup_filename=backup_filename,
             )
 
-            # Write to file
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_bytes(backup_content)
+            # Create a new owner-only file without following a final symlink or
+            # truncating an existing path.
+            flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            try:
+                file_descriptor = os.open(
+                    output_path,
+                    flags,
+                    0o600,
+                    dir_fd=backup_directory_fd,
+                )
+            except FileExistsError as exc:
+                raise ValidationError(
+                    f"Backup destination already exists: {output_file.name}"
+                ) from exc
+            with os.fdopen(file_descriptor, "wb") as backup_file:
+                backup_file.write(backup_content)
 
             # Calculate checksum if requested
             checksum = ""
@@ -335,14 +383,14 @@ async def download_backup(
 
             result = {
                 "backup_filename": backup_filename,
-                "local_path": str(output_file.absolute()),
+                "local_path": str(output_file),
                 "size_bytes": len(backup_content),
                 "checksum": checksum if verify_checksum else None,
                 "download_time": datetime.now().isoformat(),
             }
 
             logger.info(
-                f"Successfully downloaded backup '{backup_filename}' to '{output_path}' "
+                f"Successfully downloaded backup '{backup_filename}' to '{output_file}' "
                 f"({len(backup_content)} bytes)"
             )
             log_audit(
@@ -364,6 +412,8 @@ async def download_backup(
             site_id=site_id,
         )
         raise
+    finally:
+        os.close(backup_directory_fd)
 
 
 async def delete_backup(

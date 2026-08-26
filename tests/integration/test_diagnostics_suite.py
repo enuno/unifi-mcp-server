@@ -79,6 +79,7 @@ async def test_run_speed_test(settings, env: TestEnvironment) -> dict[str, Any]:
         result = await diagnostics.run_speed_test(
             site_id=env.site_id,
             settings=settings,
+            confirm=True,
         )
 
         assert isinstance(result, dict), "Result must be a dictionary"

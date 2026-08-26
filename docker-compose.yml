@@ -11,11 +11,11 @@ services:
     stdin_open: true  # Required for STDIO transport (kept for backward compatibility)
     tty: false
     ports:
-      - "${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"  # Expose for SSE/HTTP transport
+      - "127.0.0.1:${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"  # Loopback by default
     environment:
       # UniFi API Configuration
       UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
-      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}
       UNIFI_HOST: ${UNIFI_HOST:-api.ui.com}
       UNIFI_PORT: ${UNIFI_PORT:-443}
       UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
@@ -26,15 +26,18 @@ services:
       MCP_SERVER_TRANSPORT: ${MCP_SERVER_TRANSPORT:-stdio}
       MCP_SERVER_HOST: ${MCP_SERVER_HOST:-0.0.0.0}
       MCP_SERVER_PORT: ${MCP_SERVER_PORT:-3000}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
       MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
 
       # Optional: Rate Limiting
       UNIFI_RATE_LIMIT: ${UNIFI_RATE_LIMIT:-100}
       UNIFI_TIMEOUT: ${UNIFI_TIMEOUT:-30}
       UNIFI_MAX_RETRIES: ${UNIFI_MAX_RETRIES:-3}
-      UNIFI_PROFILE: ${UNIFI_PROFILE:-network}
+      # "minimal" is compatible with both cloud and local API modes.
+      UNIFI_PROFILE: ${UNIFI_PROFILE:-minimal}
       DRY_RUN: ${DRY_RUN:-false}
       UNIFI_AUDIT_LOG_PATH: ${UNIFI_AUDIT_LOG_PATH:-/app/audit.log}
+      UNIFI_BACKUP_DIR: ${UNIFI_BACKUP_DIR:-/app/backups}
       UNIFI_METRICS_ENABLED: ${UNIFI_METRICS_ENABLED:-false}
       UNIFI_WEBHOOK_REDIS_URL: ${UNIFI_WEBHOOK_REDIS_URL:-}
       UNIFI_CONTROLLERS: ${UNIFI_CONTROLLERS:-}
@@ -61,6 +64,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./audit.log:/app/audit.log
+      - ./backups:/app/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:3000/health')"]
       interval: 30s

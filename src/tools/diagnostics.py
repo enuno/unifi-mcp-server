@@ -57,36 +57,71 @@ async def get_network_references(
         }
 
 
-async def run_speed_test(site_id: str, settings: Settings) -> dict[str, Any]:
+async def run_speed_test(
+    site_id: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
     """Initiate a WAN speed test on the site.
 
     Args:
         site_id: Site identifier
         settings: Application settings
+        confirm: Confirmation flag required to start the test
+        dry_run: Preview the operation without starting a test
 
     Returns:
         Dictionary with speed test initiation status
     """
     site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "WAN speed test", dry_run)
+    dry_run = coerce_bool(dry_run)
     logger = get_logger(__name__, settings.log_level)
+    parameters = {"site_id": site_id}
 
-    async with UniFiClient(settings) as client:
-        await client.authenticate()
-
-        response = await client.post(
-            f"/ea/sites/{site_id}/cmd/devmgr",
-            json_data={"cmd": "speedtest"},
+    if dry_run:
+        log_audit(
+            operation="run_speed_test",
+            parameters=parameters,
+            result="dry_run",
+            site_id=site_id,
+            dry_run=True,
         )
-        data = response.get("data", {}) if isinstance(response, dict) else response
-        if not isinstance(data, dict):
-            data = {"status": "started"}
+        return {"dry_run": True, "would_start": "WAN speed test", "site_id": site_id}
 
-        logger.info(sanitize_log_message(f"Initiated speed test for site '{site_id}'"))
-        return {
-            "site_id": site_id,
-            "status": data.get("status", "started"),
-            "test_id": data.get("test_id"),
-        }
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
+
+            response = await client.post(
+                f"/ea/sites/{site_id}/cmd/devmgr",
+                json_data={"cmd": "speedtest"},
+            )
+            data = response.get("data", {}) if isinstance(response, dict) else response
+            if not isinstance(data, dict):
+                data = {"status": "started"}
+
+            log_audit(
+                operation="run_speed_test",
+                parameters=parameters,
+                result="success",
+                site_id=site_id,
+            )
+            logger.info(sanitize_log_message(f"Initiated speed test for site '{site_id}'"))
+            return {
+                "site_id": site_id,
+                "status": data.get("status", "started"),
+                "test_id": data.get("test_id"),
+            }
+    except Exception:
+        log_audit(
+            operation="run_speed_test",
+            parameters=parameters,
+            result="failed",
+            site_id=site_id,
+        )
+        raise
 
 
 async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, Any]:

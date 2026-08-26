@@ -17,9 +17,31 @@ from ..utils import (
     NetworkError,
     RateLimitError,
     ResourceNotFoundError,
+    ValidationError,
     get_logger,
     log_api_request,
 )
+
+
+def validate_controller_relative_endpoint(endpoint: str) -> str:
+    """Require a controller-relative path before attaching credentials.
+
+    Args:
+        endpoint: Candidate UniFi API endpoint.
+
+    Returns:
+        The validated endpoint unchanged.
+
+    Raises:
+        ValidationError: If the value could select or replace an origin.
+    """
+    if not endpoint.startswith("/") or endpoint.startswith("//"):
+        raise ValidationError(
+            "API endpoint must be a controller-relative path beginning with one '/'"
+        )
+    if "\\" in endpoint or any(ord(character) < 32 for character in endpoint):
+        raise ValidationError("API endpoint contains invalid path characters")
+    return endpoint
 
 
 class RateLimiter:
@@ -387,6 +409,8 @@ class UniFiClient:
             RateLimitError: If rate limit is exceeded
             NetworkError: If network communication fails
         """
+        endpoint = validate_controller_relative_endpoint(endpoint)
+
         if started_at is None:
             started_at = time.monotonic()
 
@@ -405,11 +429,7 @@ class UniFiClient:
 
             # Construct full URL explicitly to ensure HTTPS protocol is preserved
             # httpx's base_url joining can have issues with protocol handling
-            full_url = (
-                f"{self.settings.base_url}{translated_endpoint}"
-                if translated_endpoint.startswith("/")
-                else translated_endpoint
-            )
+            full_url = f"{self.settings.base_url}{translated_endpoint}"
 
             # CRITICAL: Ensure HTTPS scheme - force replace http:// with https://
             if full_url.startswith("http://"):

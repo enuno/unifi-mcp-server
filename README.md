@@ -165,6 +165,7 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 - ✅ **Network access**: Connect from any MCP client over HTTP
 - ✅ **MCP gateway compatible**: Works with MCP gateways that consolidate servers
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=sse` + `MCP_SERVER_PORT=3000`
+- 🔐 **Authentication**: Set a separate `MCP_AUTH_TOKEN` (minimum 32 characters)
 - 👉 **Prefer Streamable HTTP below** for any new network-accessible deployment.
 
 ### HTTP 🌐
@@ -172,6 +173,7 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 **Standard HTTP transport** — Alternative network mode.
 
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=http` + `MCP_SERVER_PORT=3000`
+- 🔐 **Authentication**: Set a separate `MCP_AUTH_TOKEN` (minimum 32 characters)
 
 ### Streamable HTTP 🌐 ✅ Recommended for network access
 
@@ -181,6 +183,7 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 - ✅ **MCP gateway compatible**: Works with MCP gateways that consolidate servers
 - ✅ **No SSE handshake race**: session initialization is part of the same request/response cycle, avoiding the class of timing issue SSE has with proxies like `mcp-remote`
 - ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=streamable_http` + `MCP_SERVER_PORT=3000`
+- 🔐 **Authentication**: Set a separate `MCP_AUTH_TOKEN` (minimum 32 characters)
 
 **💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **Streamable HTTP** when running behind an MCP gateway or for any other network-accessible deployment — prefer it over SSE, which is kept only for backward compatibility.
 
@@ -188,14 +191,15 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 
 To reduce context-window bloat, the server will support named exposure profiles that register only the tools relevant to a given UniFi application area.
 
-### Planned profiles
+### Available profiles
 
-- `network` — network, switching, WiFi, DHCP, DNS, traffic, and client tools
-- `protect` — cameras, NVRs, devices, views, events, talkback, and Protect workflows (read surfaces wired; PTZ/media streams still in progress)
-- `access` — doors, readers, credentials, visitors, and access-control workflows
-- `talk` — UniFi Talk devices, calls, lines, and telephony workflows
-- `drive` — UniFi Drive storage, files, sharing, and drive workflows
+- `network`, `devices`, `security`, `system`, and `minimal` — focused operational groups
+- `protect` — cameras, NVRs, devices, views, and events
 - `read-only` — `get_*`, `list_*`, `stat_*`, and `search_*` tools only
+
+Unknown or API-incompatible profile names stop startup instead of exposing the
+full tool surface. Omit `UNIFI_PROFILE` or use `all` only when the complete
+surface is intended.
 
 ### Intended behavior
 
@@ -210,6 +214,7 @@ To reduce context-window bloat, the server will support named exposure profiles 
 # Set transport to Streamable HTTP
 export MCP_SERVER_TRANSPORT=streamable_http
 export MCP_SERVER_PORT=3000
+export MCP_AUTH_TOKEN='replace-with-at-least-32-random-characters'
 
 # Start the server
 unifi-mcp-server
@@ -228,6 +233,7 @@ services:
       UNIFI_LOCAL_HOST: 192.168.2.1
       MCP_SERVER_TRANSPORT: streamable_http
       MCP_SERVER_PORT: 3000
+      MCP_AUTH_TOKEN: replace-with-at-least-32-random-characters
     ports:
       - "3000:3000"
 ```
@@ -240,7 +246,10 @@ Once running in Streamable HTTP mode, configure your MCP gateway to connect:
 {
   "mcpServers": {
     "unifi": {
-      "url": "http://your-server-ip:3000/mcp"
+      "url": "http://your-server-ip:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer replace-with-your-mcp-auth-token"
+      }
     }
   }
 }
@@ -253,6 +262,7 @@ SSE is kept for backward compatibility only — see the [transport modes](#-tran
 ```bash
 export MCP_SERVER_TRANSPORT=sse
 export MCP_SERVER_PORT=3000
+export MCP_AUTH_TOKEN='replace-with-at-least-32-random-characters'
 unifi-mcp-server
 # Server listening on 0.0.0.0:3000 via sse
 ```
@@ -463,7 +473,7 @@ docker pull ghcr.io/enuno/unifi-mcp-server:latest
 docker run -i -d \
   --name unifi-mcp \
   -e UNIFI_API_KEY=your-api-key \
-  -e UNIFI_API_TYPE=cloud \
+  -e UNIFI_API_TYPE=cloud-ea \
   ghcr.io/enuno/unifi-mcp-server:latest
 
 # OR run with local gateway proxy
@@ -558,6 +568,12 @@ cp .env.example .env
 # Edit .env with your UniFi credentials
 # Required: UNIFI_API_KEY
 # Recommended: UNIFI_API_TYPE=local, UNIFI_LOCAL_HOST=<gateway-ip>
+
+# Explicitly load the operator-controlled file; the server never discovers
+# .env from its working directory.
+set -a
+. ./.env
+set +a
 ```
 
 #### 4. Run Tests
@@ -617,7 +633,7 @@ docker buildx build \
 # Test the image
 docker run -i --rm \
   -e UNIFI_API_KEY=your-key \
-  -e UNIFI_API_TYPE=cloud \
+  -e UNIFI_API_TYPE=cloud-ea \
   unifi-mcp-server:0.2.0
 ```
 
@@ -684,11 +700,13 @@ See [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) for the complete release 
 2. Navigate to **Settings → Control Plane → Integrations**
 3. Click **Create API Key**
 4. **Save the key immediately** - it's only shown once!
-5. Store it securely in your `.env` file
+5. Store it in your process environment or approved secret manager
 
-#### Configuration File
+#### Process environment
 
-Create a `.env` file in the project root:
+Export the required values directly, or source an operator-controlled file
+explicitly before startup. The installed server intentionally ignores `.env`
+files discovered in its working directory.
 
 ```env
 # Required: Your UniFi API Key
@@ -738,7 +756,9 @@ WEBHOOK_SECRET=your-webhook-secret-here
 # SUPERMEMORY_API_KEY=your-supermemory-api-key-here
 ```
 
-See `.env.example` for all available options.
+See `.env.example` for all available options, then load it explicitly with
+`set -a; . ./.env; set +a`. Docker Compose may continue using its own `.env`
+interpolation behavior.
 
 ### Running the Server
 
@@ -825,7 +845,7 @@ For cloud API access, use:
         "-e",
         "UNIFI_API_KEY=your-api-key-here",
         "-e",
-        "UNIFI_API_TYPE=cloud",
+        "UNIFI_API_TYPE=cloud-ea",
         "ghcr.io/enuno/unifi-mcp-server:latest"
       ]
     }
@@ -1031,11 +1051,14 @@ See [docs/SKILLS.md](docs/SKILLS.md) for the full guide.
   - `UNIFI_DEFAULT_SITE`: Default site ID (default: default)
   - `UNIFI_SITE_MANAGER_ENABLED`: Enable Site Manager multi-site tools for cloud-ea (default: false)
 - **Tool Scope (reduces LLM context size)**:
-  - `UNIFI_PROFILE`: Load only a subset of tools — `network`, `devices`, `security`, `system`, or `minimal` (default: all tools)
+  - `UNIFI_PROFILE`: Load only a subset of tools — `network`, `devices`, `security`, `system`, `minimal`, `protect`, or `read-only` (default: all tools)
 - **MCP Server Transport**:
   - `MCP_SERVER_TRANSPORT`: Transport mode (`stdio`, `sse`, `http`, `streamable_http`; default: `stdio`)
   - `MCP_SERVER_HOST`: Bind address (default: `0.0.0.0`)
   - `MCP_SERVER_PORT`: Server port (default: `3000`)
+  - `MCP_AUTH_TOKEN`: Required bearer token for every network transport (minimum 32 characters)
+- **Backup downloads**:
+  - `UNIFI_BACKUP_DIR`: Approved destination directory for new backup files (default: `~/.unifi-mcp/backups`)
 
 ### Programmatic Usage
 

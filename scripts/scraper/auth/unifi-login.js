@@ -4,6 +4,7 @@
  */
 
 import fs from 'fs/promises';
+import { constants as fsConstants } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { delay } from '../utils/delay.js';
@@ -11,6 +12,21 @@ import { delay } from '../utils/delay.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const COOKIES_FILE = path.join(__dirname, '../../session-cookies.json');
+
+async function rejectCookieSymlink(cookiesFile) {
+  try {
+    const stat = await fs.lstat(cookiesFile);
+    if (stat.isSymbolicLink()) {
+      throw new Error('Session cookie file must not be a symbolic link');
+    }
+    return stat;
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
 
 // Configurable timeouts (can be overridden by environment variables)
 const PASSKEY_TIMEOUT = parseInt(process.env.AUTH_PASSKEY_TIMEOUT || '120000'); // 2 minutes
@@ -21,15 +37,24 @@ const PASSWORD_TIMEOUT = parseInt(process.env.AUTH_PASSWORD_TIMEOUT || '15000');
  * Load existing session cookies if available
  * @returns {Promise<Array|null>} Cookies or null if not found
  */
-export async function loadSessionCookies() {
+export async function loadSessionCookies(cookiesFile = COOKIES_FILE) {
+  let cookieFile;
   try {
-    const cookiesData = await fs.readFile(COOKIES_FILE, 'utf-8');
+    const flags = fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW || 0);
+    cookieFile = await fs.open(cookiesFile, flags);
+    const stat = await cookieFile.stat();
+    if (!stat.isFile() || (stat.mode & 0o077) !== 0) {
+      throw new Error('Session cookie file must have owner-only permissions');
+    }
+    const cookiesData = await cookieFile.readFile('utf-8');
     const cookies = JSON.parse(cookiesData);
     console.log('✓ Loaded existing session cookies');
     return cookies;
   } catch (error) {
     console.log('No existing session cookies found');
     return null;
+  } finally {
+    await cookieFile?.close();
   }
 }
 
@@ -37,8 +62,21 @@ export async function loadSessionCookies() {
  * Save session cookies to file
  * @param {Array} cookies - Browser cookies
  */
-export async function saveSessionCookies(cookies) {
-  await fs.writeFile(COOKIES_FILE, JSON.stringify(cookies, null, 2));
+export async function saveSessionCookies(cookies, cookiesFile = COOKIES_FILE) {
+  await rejectCookieSymlink(cookiesFile);
+  const flags =
+    fsConstants.O_WRONLY |
+    fsConstants.O_CREAT |
+    (fsConstants.O_NOFOLLOW || 0);
+  let cookieFile;
+  try {
+    cookieFile = await fs.open(cookiesFile, flags, 0o600);
+    await cookieFile.chmod(0o600);
+    await cookieFile.truncate(0);
+    await cookieFile.writeFile(JSON.stringify(cookies, null, 2), 'utf-8');
+  } finally {
+    await cookieFile?.close();
+  }
   console.log('✓ Session cookies saved');
 }
 
@@ -458,9 +496,9 @@ export async function authenticateUniFi(page, credentials) {
 /**
  * Clear saved session cookies
  */
-export async function clearSessionCookies() {
+export async function clearSessionCookies(cookiesFile = COOKIES_FILE) {
   try {
-    await fs.unlink(COOKIES_FILE);
+    await fs.unlink(cookiesFile);
     console.log('✓ Session cookies cleared');
   } catch (error) {
     // File doesn't exist, nothing to clear

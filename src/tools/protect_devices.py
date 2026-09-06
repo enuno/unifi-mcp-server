@@ -14,6 +14,7 @@ from ..models import (
     ProtectSensor,
 )
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.validators import coerce_bool, validate_confirmation
 
 
 def _validate_id(record_id: str, label: str) -> str:
@@ -127,8 +128,27 @@ async def update_protect_device(
     state: str | int | None = None,
     mac: str | None = None,
     firmware_version: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update a Protect device record."""
+    """Update a Protect device record.
+
+    Args:
+        device_id: Protect device identifier
+        settings: Application settings
+        name: New display name
+        model: Device model
+        type: Device type
+        state: Device state
+        mac: Device MAC address
+        firmware_version: Firmware version to record
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect device", dry_run)
     logger = get_logger(__name__, settings.log_level)
     device_id = _validate_id(device_id, "device_id")
 
@@ -145,6 +165,14 @@ async def update_protect_device(
         payload["mac"] = mac
     if firmware_version is not None:
         payload["firmwareVersion"] = firmware_version
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_device",
+            "device_id": device_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
@@ -207,8 +235,25 @@ async def update_protect_light(
     is_light_force_enabled: bool | None = None,
     light_mode_settings: dict[str, Any] | None = None,
     light_device_settings: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update Protect light settings."""
+    """Update Protect light settings.
+
+    Args:
+        light_id: Protect light identifier
+        settings: Application settings
+        name: New display name
+        is_light_force_enabled: Force the light on regardless of schedule
+        light_mode_settings: Light mode configuration
+        light_device_settings: Light hardware configuration
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect light", dry_run)
     logger = get_logger(__name__, settings.log_level)
     light_id = _validate_id(light_id, "light_id")
 
@@ -221,6 +266,14 @@ async def update_protect_light(
         payload["lightModeSettings"] = light_mode_settings
     if light_device_settings is not None:
         payload["lightDeviceSettings"] = light_device_settings
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_light",
+            "light_id": light_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
@@ -285,8 +338,27 @@ async def update_protect_sensor(
     temperature_settings: dict[str, Any] | None = None,
     motion_settings: dict[str, Any] | None = None,
     alarm_settings: dict[str, Any] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update Protect sensor settings."""
+    """Update Protect sensor settings.
+
+    Args:
+        sensor_id: Protect sensor identifier
+        settings: Application settings
+        name: New display name
+        light_settings: Light configuration for the sensor
+        humidity_settings: Humidity thresholds
+        temperature_settings: Temperature thresholds
+        motion_settings: Motion detection configuration
+        alarm_settings: Alarm configuration
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect sensor", dry_run)
     logger = get_logger(__name__, settings.log_level)
     sensor_id = _validate_id(sensor_id, "sensor_id")
 
@@ -303,6 +375,14 @@ async def update_protect_sensor(
         payload["motionSettings"] = motion_settings
     if alarm_settings is not None:
         payload["alarmSettings"] = alarm_settings
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_sensor",
+            "sensor_id": sensor_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
@@ -364,8 +444,24 @@ async def update_protect_chime(
     name: str | None = None,
     camera_ids: list[str] | None = None,
     ring_settings: list[dict[str, Any]] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update Protect chime settings."""
+    """Update Protect chime settings.
+
+    Args:
+        chime_id: Protect chime identifier
+        settings: Application settings
+        name: New display name
+        camera_ids: Cameras the chime responds to
+        ring_settings: Per-camera ring configuration
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect chime", dry_run)
     logger = get_logger(__name__, settings.log_level)
     chime_id = _validate_id(chime_id, "chime_id")
 
@@ -376,6 +472,14 @@ async def update_protect_chime(
         payload["cameraIds"] = camera_ids
     if ring_settings is not None:
         payload["ringSettings"] = ring_settings
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_chime",
+            "chime_id": chime_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()

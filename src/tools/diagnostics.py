@@ -57,18 +57,29 @@ async def get_network_references(
         }
 
 
-async def run_speed_test(site_id: str, settings: Settings) -> dict[str, Any]:
+async def run_speed_test(
+    site_id: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
     """Initiate a WAN speed test on the site.
 
     Args:
         site_id: Site identifier
         settings: Application settings
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
 
     Returns:
         Dictionary with speed test initiation status
     """
+    validate_confirmation(confirm, "start a speed test", dry_run)
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
+
+    if coerce_bool(dry_run):
+        return {"dry_run": True, "operation": "run_speed_test", "site_id": site_id}
 
     async with UniFiClient(settings) as client:
         await client.authenticate()

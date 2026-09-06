@@ -160,11 +160,32 @@ class Settings(BaseSettings):
         validation_alias="LOG_API_REQUESTS",
     )
 
+    # Safety
+    read_only: bool = Field(
+        default=False,
+        description=(
+            "Register only non-mutating tools. When enabled, tools that can change "
+            "controller state are never exposed to the MCP client."
+        ),
+        validation_alias="UNIFI_READ_ONLY",
+    )
+
     # Audit Logging
     audit_log_enabled: bool = Field(
         default=True,
         description="Enable audit logging for mutating operations",
         validation_alias="UNIFI_AUDIT_LOG_ENABLED",
+    )
+
+    # Backup download location
+    backup_download_dir: str = Field(
+        default=".",
+        description=(
+            "Directory that download_backup writes into. The caller supplies "
+            "only the filename; any directory component is ignored and the "
+            "file is confined to this directory."
+        ),
+        validation_alias="UNIFI_BACKUP_DOWNLOAD_DIR",
     )
 
     # Supermemory Configuration (optional operator notes/context store)
@@ -188,8 +209,12 @@ class Settings(BaseSettings):
     )
 
     server_host: str = Field(
-        default="0.0.0.0",  # nosec B104 — intentional; overridable via MCP_SERVER_HOST env var
-        description="Server bind address (used for http/sse/streamable_http transport)",
+        default="127.0.0.1",
+        description=(
+            "Server bind address (used for http/sse/streamable_http transport). "
+            "Defaults to loopback; set MCP_SERVER_HOST=0.0.0.0 to expose on all "
+            "interfaces, which additionally requires MCP_AUTH_TOKEN."
+        ),
         validation_alias="MCP_SERVER_HOST",
     )
 
@@ -197,6 +222,17 @@ class Settings(BaseSettings):
         default=3000,
         description="Server port (used for http/sse/streamable_http transport)",
         validation_alias="MCP_SERVER_PORT",
+    )
+
+    mcp_auth_token: str | None = Field(
+        default=None,
+        description=(
+            "Bearer token(s) required to call the MCP server over a network "
+            "transport (http/sse/streamable_http). Comma-separated to allow "
+            "several. When unset, only the stdio transport may start. Ignored "
+            "for stdio."
+        ),
+        validation_alias="MCP_AUTH_TOKEN",
     )
 
     @field_validator("api_type", mode="before")
@@ -249,6 +285,20 @@ class Settings(BaseSettings):
         if not 1 <= v <= 65535:
             raise ValueError(f"Server port must be between 1 and 65535, got {v}")
         return v
+
+    @property
+    def mcp_auth_tokens(self) -> list[str]:
+        """Return the configured MCP bearer tokens as a list.
+
+        Splits ``MCP_AUTH_TOKEN`` on commas and drops blanks so several
+        tokens can be issued from one variable. Empty when unset.
+
+        Returns:
+            List of non-empty bearer tokens (possibly empty)
+        """
+        if not self.mcp_auth_token:
+            return []
+        return [t.strip() for t in self.mcp_auth_token.split(",") if t.strip()]
 
     @field_validator("server_transport", mode="before")
     @classmethod

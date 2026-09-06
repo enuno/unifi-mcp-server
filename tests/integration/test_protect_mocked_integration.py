@@ -287,7 +287,9 @@ async def test_protect_device_family_tools_cover_devices_lights_sensors_and_chim
 
     devices = await list_protect_devices(local_settings, limit=1, offset=0)
     device = await get_protect_device("device-1", local_settings)
-    updated_device = await update_protect_device("device-1", local_settings, name="Updated Hub")
+    updated_device = await update_protect_device(
+        "device-1", local_settings, name="Updated Hub", confirm=True
+    )
     lights = await list_protect_lights(local_settings)
     light = await get_protect_light("light-1", local_settings)
     updated_light = await update_protect_light(
@@ -295,6 +297,7 @@ async def test_protect_device_family_tools_cover_devices_lights_sensors_and_chim
         local_settings,
         name="Night Light",
         is_light_force_enabled=True,
+        confirm=True,
     )
     sensors = await list_protect_sensors(local_settings)
     sensor = await get_protect_sensor("sensor-1", local_settings)
@@ -303,6 +306,7 @@ async def test_protect_device_family_tools_cover_devices_lights_sensors_and_chim
         local_settings,
         name="Updated Garage Sensor",
         motion_settings={"isEnabled": True},
+        confirm=True,
     )
     chimes = await list_protect_chimes(local_settings)
     chime = await get_protect_chime("chime-1", local_settings)
@@ -311,6 +315,7 @@ async def test_protect_device_family_tools_cover_devices_lights_sensors_and_chim
         local_settings,
         name="Updated Chime",
         camera_ids=["cam-1"],
+        confirm=True,
     )
 
     assert devices["count"] == 1
@@ -453,12 +458,14 @@ async def test_protect_views_events_and_webhooks_cover_the_registered_phase_thre
         local_settings,
         name="North Lobby Viewer",
         liveview="liveview-1",
+        confirm=True,
     )
     live_views = await list_protect_live_views(local_settings)
     live_view = await get_protect_live_view("liveview-1", local_settings)
     created_live_view = await create_protect_live_view(
         {"name": "Warehouse View", "modelKey": "liveview", "layout": 4, "slots": []},
         local_settings,
+        confirm=True,
     )
     updated_live_view = await update_protect_live_view(
         "liveview-1",
@@ -467,6 +474,7 @@ async def test_protect_views_events_and_webhooks_cover_the_registered_phase_thre
         model_key="liveview",
         layout=2,
         slots=[],
+        confirm=True,
     )
     device_updates = await list_protect_device_updates(local_settings)
     events = await list_protect_events(local_settings)
@@ -474,6 +482,7 @@ async def test_protect_views_events_and_webhooks_cover_the_registered_phase_thre
         "webhook-1",
         local_settings,
         payload={"event": "manual-trigger"},
+        confirm=True,
     )
 
     assert meta["version"] == "6.2.83"

@@ -106,7 +106,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
-| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (camera/NVR/device/view/event read wired; PTZ/media streams in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
+| `UNIFI_PROFILE` | Tool exposure profile: `network`, `devices`, `security`, `system`, `minimal`, `protect`. An unrecognised value logs a warning and falls back to all modules | No | unset |
+| `UNIFI_READ_ONLY` | Register only non-mutating tools. State-changing tools are not exposed to the client at all | No | `false` |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
@@ -3064,8 +3065,8 @@ Download a backup file to local storage.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `backup_filename` (string, required): Backup filename
-- `output_path` (string, required): Local filesystem path to save
+- `backup_filename` (string, required): Backup filename (a single path component; separators and `..` are rejected)
+- `output_path` (string, required): Filename to save under. Only the filename is used — any directory component is ignored and the file is written inside `UNIFI_BACKUP_DOWNLOAD_DIR` (default: the current working directory)
 - `verify_checksum` (boolean, optional): Calculate SHA-256 checksum (default: true)
 
 **Returns:**
@@ -3086,7 +3087,7 @@ Download a backup file to local storage.
 result = await mcp.call_tool("download_backup", {
     "site_id": "default",
     "backup_filename": "backup_2025-01-29.unf",
-    "output_path": "/backups/unifi_backup.unf",
+    "output_path": "unifi_backup.unf",
     "verify_checksum": True
 })
 print(f"Downloaded: {result['size_bytes']} bytes")

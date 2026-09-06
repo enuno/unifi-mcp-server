@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -19,6 +20,7 @@ from ..utils import (
     ResourceNotFoundError,
     get_logger,
     log_api_request,
+    validate_backup_filename,
 )
 
 
@@ -766,13 +768,15 @@ class UniFiClient:
             For local API: /proxy/network/data/backup/{filename}
         """
         site_id = await self.resolve_site_id(site_id)
+        backup_filename = validate_backup_filename(backup_filename)
+        safe_name = quote(backup_filename, safe="")
 
         # For local API
         if self.settings.api_type == APIType.LOCAL:
-            endpoint = f"/proxy/network/data/backup/{backup_filename}"
+            endpoint = f"/proxy/network/data/backup/{safe_name}"
         else:
             # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups/{backup_filename}/download"
+            endpoint = f"/ea/sites/{site_id}/backups/{safe_name}/download"
 
         # Use direct HTTP client for binary download
         full_url = f"{self.settings.base_url}{endpoint}"
@@ -800,13 +804,15 @@ class UniFiClient:
             For local API: DELETE /proxy/network/api/backup/delete-backup/{filename}
         """
         site_id = await self.resolve_site_id(site_id)
+        backup_filename = validate_backup_filename(backup_filename)
+        safe_name = quote(backup_filename, safe="")
 
         # For local API
         if self.settings.api_type == APIType.LOCAL:
-            endpoint = f"/proxy/network/api/backup/delete-backup/{backup_filename}"
+            endpoint = f"/proxy/network/api/backup/delete-backup/{safe_name}"
         else:
             # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups/{backup_filename}"
+            endpoint = f"/ea/sites/{site_id}/backups/{safe_name}"
 
         return await self.delete(endpoint)
 

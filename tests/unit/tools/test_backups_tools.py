@@ -35,6 +35,7 @@ def mock_settings():
     settings.request_timeout = 30.0
     settings.site_manager_enabled = False
     settings.get_headers = MagicMock(return_value={"X-API-Key": "test-key"})
+    settings.backup_download_dir = "."
     return settings
 
 
@@ -209,6 +210,8 @@ async def test_download_backup_success(mock_settings, tmp_path):
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
+    # Backups are confined to backup_download_dir; only the filename is used.
+    mock_settings.backup_download_dir = str(tmp_path)
     output_path = tmp_path / "test_backup.unf"
 
     with patch.object(backups_module, "UniFiClient", return_value=mock_client):
@@ -216,7 +219,7 @@ async def test_download_backup_success(mock_settings, tmp_path):
             result = await download_backup(
                 "default",
                 "backup_20260101.unf",
-                str(output_path),
+                "test_backup.unf",
                 mock_settings,
                 verify_checksum=True,
             )

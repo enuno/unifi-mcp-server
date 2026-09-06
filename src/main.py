@@ -76,7 +76,62 @@ from .utils import get_logger
 settings = Settings()
 logger = get_logger(__name__, settings.log_level)
 
-mcp = FastMCP("UniFi MCP Server")
+
+def build_auth_provider(current_settings: Settings) -> Any:
+    """Build the MCP authentication provider from settings.
+
+    Returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
+    ``MCP_AUTH_TOKEN`` when at least one is configured, otherwise ``None``.
+    Over stdio the provider is ignored; over a network transport ``None``
+    means the server refuses to start (see
+    :func:`ensure_network_transport_authenticated`).
+
+    Args:
+        current_settings: Loaded application settings
+
+    Returns:
+        A FastMCP auth provider, or None when no token is configured
+    """
+    tokens = current_settings.mcp_auth_tokens
+    if not tokens:
+        return None
+
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+    return StaticTokenVerifier(
+        tokens={token: {"client_id": "mcp-client", "scopes": []} for token in tokens}
+    )
+
+
+def ensure_network_transport_authenticated(current_settings: Settings, auth_provider: Any) -> None:
+    """Refuse to start a network transport without authentication.
+
+    stdio is a local subprocess channel and needs no token. The http, sse
+    and streamable_http transports open a TCP listener, so starting one
+    without an auth provider would expose every registered tool — including
+    destructive ones — to any host that can reach the port. Fail closed.
+
+    Args:
+        current_settings: Loaded application settings
+        auth_provider: The provider returned by :func:`build_auth_provider`
+
+    Raises:
+        SystemExit: If a network transport is selected without a token
+    """
+    if current_settings.server_transport == TransportMode.STDIO:
+        return
+    if auth_provider is None:
+        raise SystemExit(
+            "Refusing to start the "
+            f"'{current_settings.server_transport.value}' transport without "
+            "authentication: set MCP_AUTH_TOKEN to a bearer token (clients then "
+            "send 'Authorization: Bearer <token>'), or use "
+            "MCP_SERVER_TRANSPORT=stdio for local clients."
+        )
+
+
+mcp_auth = build_auth_provider(settings)
+mcp = FastMCP("UniFi MCP Server", auth=mcp_auth)
 
 # ---------------------------------------------------------------------------
 # Optional: agnost tracking
@@ -543,7 +598,9 @@ def main() -> None:
         logger.info("Server ready to handle requests")
         mcp.run()
     else:
+        ensure_network_transport_authenticated(settings, mcp_auth)
         logger.info(f"Transport: {settings.server_transport.value}")
+        logger.info("MCP authentication: bearer token required (MCP_AUTH_TOKEN)")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
         logger.info(
             "A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit"

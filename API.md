@@ -116,8 +116,9 @@ Configure the MCP server using environment variables:
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
-| `MCP_SERVER_HOST` | Server bind address (http/sse transports) | No | `0.0.0.0` |
+| `MCP_SERVER_HOST` | Server bind address for `http`/`sse`/`streamable_http` | No | `127.0.0.1` |
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
+| `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 
 - Required when `UNIFI_API_TYPE=local`.
@@ -445,7 +446,10 @@ The currently implemented Protect MCP resources are:
 - `protect://cameras`
 - `protect://cameras/{camera_id}`
 
-The currently implemented Protect MCP tools are grouped below.
+The currently implemented Protect MCP tools are grouped below. `update_protect_device`,
+`update_protect_light`, `update_protect_sensor`, `update_protect_chime`, `update_protect_viewer`,
+`create_protect_live_view`, `update_protect_live_view`, and `send_protect_alarm_webhook` require
+`confirm=True` and support `dry_run`.
 
 #### Cameras
 
@@ -517,7 +521,7 @@ viewers = await mcp.call_tool("list_protect_viewers", {})
 events = await mcp.call_tool("list_protect_events", {})
 webhook = await mcp.call_tool(
     "send_protect_alarm_webhook",
-    {"webhook_id": "webhook-1", "payload": {"event": "manual-trigger"}},
+    {"webhook_id": "webhook-1", "payload": {"event": "manual-trigger"}, "confirm": True},
 )
 ```
 
@@ -3075,7 +3079,7 @@ Download a backup file to local storage.
 ```json
 {
   "backup_filename": "backup_2025-01-29.unf",
-  "local_path": "/backups/unifi_backup.unf",
+  "local_path": "/home/user/unifi_backup.unf",
   "size_bytes": 5242880,
   "checksum": "a3f2b1...c4d5",
   "download_time": "2025-01-29T15:45:00Z"

@@ -79,8 +79,14 @@ jobs:
           # PYSEC-2022-42969 / CVE-2022-42969: ReDoS in py's SVN info parsing.
           # No fix version exists; py is unmaintained. This project does not use SVN,
           # so the vulnerability is not exploitable here.
+          #
+          # PYSEC-2026-3740 / CVE-2026-81726: path-sandbox bypass in NLTK's model
+          # save/load APIs (TransitionParser, AveragedPerceptron, PerceptronTagger).
+          # No fix version exists yet. nltk is a dev-only dependency here and is
+          # never imported by src/ or tests/, so the vulnerable APIs are unreachable.
           pip-audit --format json --output pip-audit-report.json \
-            --ignore-vuln PYSEC-2022-42969
+            --ignore-vuln PYSEC-2022-42969 \
+            --ignore-vuln PYSEC-2026-3740
 
       - name: Upload Safety report
         uses: actions/upload-artifact@v4

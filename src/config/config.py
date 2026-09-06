@@ -160,6 +160,16 @@ class Settings(BaseSettings):
         validation_alias="LOG_API_REQUESTS",
     )
 
+    # Safety
+    read_only: bool = Field(
+        default=False,
+        description=(
+            "Register only non-mutating tools. When enabled, tools that can change "
+            "controller state are never exposed to the MCP client."
+        ),
+        validation_alias="UNIFI_READ_ONLY",
+    )
+
     # Audit Logging
     audit_log_enabled: bool = Field(
         default=True,

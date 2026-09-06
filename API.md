@@ -3065,8 +3065,8 @@ Download a backup file to local storage.
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `backup_filename` (string, required): Backup filename
-- `output_path` (string, required): Local filesystem path to save
+- `backup_filename` (string, required): Backup filename (a single path component; separators and `..` are rejected)
+- `output_path` (string, required): Filename to save under. Only the filename is used — any directory component is ignored and the file is written inside `UNIFI_BACKUP_DOWNLOAD_DIR` (default: the current working directory)
 - `verify_checksum` (boolean, optional): Calculate SHA-256 checksum (default: true)
 
 **Returns:**
@@ -3087,7 +3087,7 @@ Download a backup file to local storage.
 result = await mcp.call_tool("download_backup", {
     "site_id": "default",
     "backup_filename": "backup_2025-01-29.unf",
-    "output_path": "/backups/unifi_backup.unf",
+    "output_path": "unifi_backup.unf",
     "verify_checksum": True
 })
 print(f"Downloaded: {result['size_bytes']} bytes")

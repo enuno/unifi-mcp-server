@@ -104,6 +104,30 @@ def test_network_transport_allowed_with_provider(transport) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# mcp.run() transport name (issue #159)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    ("configured", "fastmcp_name"),
+    [
+        ("http", "http"),
+        ("sse", "sse"),
+        # FastMCP's run() only recognizes "streamable-http" (hyphen); our env
+        # var uses "streamable_http" (underscore) to match stdio/http/sse.
+        # Passing the untranslated value raised
+        # ValueError: Unknown transport: streamable_http.
+        ("streamable_http", "streamable-http"),
+    ],
+)
+def test_main_passes_fastmcp_a_transport_name_it_recognizes(configured, fastmcp_name) -> None:
+    main = _reload_main(MCP_SERVER_TRANSPORT=configured, MCP_AUTH_TOKEN="tok")
+    with patch.object(main.mcp, "run") as mock_run:
+        main.main()
+    assert mock_run.call_args.kwargs["transport"] == fastmcp_name
+
+
+# --------------------------------------------------------------------------- #
 # End-to-end: the HTTP endpoint enforces the token
 # --------------------------------------------------------------------------- #
 

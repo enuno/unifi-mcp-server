@@ -655,7 +655,12 @@ def main() -> None:
                 "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
             )
 
-        transport = settings.server_transport.value
+        # FastMCP's run() only recognizes "streamable-http" (hyphen); our own
+        # config, env var, and docs all use "streamable_http" (underscore) to
+        # match MCP_SERVER_TRANSPORT's other values (stdio, http, sse), so
+        # translate at this one call site rather than changing the public
+        # config value (issue #159).
+        transport = settings.server_transport.value.replace("_", "-")
         mcp.run(
             transport=transport,
             host=settings.server_host,

@@ -17,7 +17,14 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
-from ..utils import APIError, ResourceNotFoundError, get_logger, log_audit, sanitize_log_message
+from ..utils import (
+    APIError,
+    ResourceNotFoundError,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_site_id,
+)
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -42,6 +49,7 @@ async def list_content_filters(
         network_ids, client_macs, allow_list, block_list, safe_search,
         schedule.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -74,6 +82,7 @@ async def list_content_filter_categories(
     ``ADULT``, ``GAMBLING``, ``HACKING``, ...) that can be assigned to a
     content filtering profile's ``categories`` list.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -137,6 +146,7 @@ async def update_content_filter(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -237,6 +247,7 @@ async def delete_content_filter(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)

@@ -315,7 +315,9 @@ class TestSettingsTransportConfiguration:
     def test_default_host(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         settings = Settings()
-        assert settings.server_host == "0.0.0.0"
+        # Defaults to loopback; exposing on all interfaces is an explicit
+        # opt-in that also requires MCP_AUTH_TOKEN.
+        assert settings.server_host == "127.0.0.1"
 
     def test_default_port(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")

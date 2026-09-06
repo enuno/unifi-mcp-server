@@ -12,6 +12,7 @@ from ..utils import (
     get_logger,
     sanitize_log_message,
     validate_confirmation,
+    validate_site_id,
 )
 
 logger = get_logger(__name__)
@@ -35,6 +36,7 @@ async def list_radius_profiles(
     Returns:
         List of RADIUS profiles
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing RADIUS profiles for site {site_id}"))
 
@@ -62,6 +64,7 @@ async def get_radius_profile(
     Returns:
         RADIUS profile details
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting RADIUS profile {profile_id} for site {site_id}"))
 
@@ -111,6 +114,7 @@ async def create_radius_profile(
     Returns:
         Created RADIUS profile
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -214,6 +218,7 @@ async def update_radius_profile(
     Returns:
         Updated RADIUS profile
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -313,6 +318,7 @@ async def delete_radius_profile(
     Returns:
         Deletion status
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete RADIUS profile", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -360,6 +366,7 @@ async def list_radius_accounts(
     Returns:
         List of RADIUS accounts
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing RADIUS accounts for site {site_id}"))
 
@@ -410,6 +417,7 @@ async def create_radius_account(
     Returns:
         Created RADIUS account
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create RADIUS account", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -487,6 +495,7 @@ async def get_radius_account(
     Returns:
         RADIUS account details with password redacted
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting RADIUS account {account_id} for site {site_id}"))
 
@@ -540,6 +549,7 @@ async def update_radius_account(
     Returns:
         Updated RADIUS account with password redacted
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update RADIUS account", dry_run)
 
     payload: dict[str, Any] = {}
@@ -622,6 +632,7 @@ async def delete_radius_account(
     Returns:
         Deletion status
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete RADIUS account", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -739,6 +750,7 @@ async def get_guest_portal_config(
         under ``"raw"``, since field names in this section vary across
         Network versions and callers may need ground truth.
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting guest portal config for site {site_id}"))
 
@@ -811,6 +823,7 @@ async def configure_guest_portal(
         Updated portal settings; ``skipped_fields`` lists requested fields
         this controller version has no key for (see below).
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "configure guest portal", dry_run)
 
     if auth_method == "hotspot":
@@ -963,6 +976,7 @@ async def list_hotspot_packages(
     Returns:
         List of hotspot packages
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing hotspot packages for site {site_id}"))
 
@@ -1010,6 +1024,7 @@ async def create_hotspot_package(
     Returns:
         Created hotspot package
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create hotspot package", dry_run)
 
     if duration_minutes < 1:
@@ -1076,6 +1091,7 @@ async def get_hotspot_package(
     Returns:
         Hotspot package details
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(
             sanitize_log_message(f"Getting hotspot package {package_id} for site {site_id}")
@@ -1125,6 +1141,7 @@ async def update_hotspot_package(
     Returns:
         Updated hotspot package
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update hotspot package", dry_run)
 
     if duration_minutes is not None and duration_minutes < 1:
@@ -1202,6 +1219,7 @@ async def delete_hotspot_package(
     Returns:
         Deletion status
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete hotspot package", dry_run)
 
     async with UniFiClient(settings) as client:

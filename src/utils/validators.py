@@ -198,3 +198,40 @@ def validate_limit_offset(limit: int | None = None, offset: int | None = None) -
         raise ValidationError(f"Offset must be non-negative: {final_offset}")
 
     return final_limit, final_offset
+
+
+_BACKUP_FILENAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$")
+
+
+def validate_backup_filename(backup_filename: str) -> str:
+    """Validate a controller backup filename before it is used in a path.
+
+    The filename is interpolated into a controller request path
+    (``/proxy/network/data/backup/{filename}``). Without validation, path
+    separators and ``..`` segments let a caller retarget the authenticated
+    GET at any controller route, and the bytes returned can then be written
+    to disk. Allow only a single, plain path component.
+
+    Args:
+        backup_filename: Backup filename supplied by the caller
+
+    Returns:
+        The validated filename, unchanged
+
+    Raises:
+        ValidationError: If the filename is empty, contains a path separator
+            or ``..`` segment, or has characters outside ``[A-Za-z0-9._-]``
+    """
+    if not backup_filename or not isinstance(backup_filename, str):
+        raise ValidationError("Backup filename cannot be empty")
+
+    if "/" in backup_filename or "\\" in backup_filename or backup_filename in (".", ".."):
+        raise ValidationError(f"Invalid backup filename: {backup_filename!r}")
+
+    if not _BACKUP_FILENAME_RE.match(backup_filename):
+        raise ValidationError(
+            f"Invalid backup filename: {backup_filename!r} "
+            "(allowed: letters, digits, '.', '_', '-'; no path separators)"
+        )
+
+    return backup_filename

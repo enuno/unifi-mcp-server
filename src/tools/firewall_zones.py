@@ -12,6 +12,7 @@ from ..utils import (
     get_logger,
     sanitize_log_message,
     validate_confirmation,
+    validate_site_id,
 )
 
 logger = get_logger(__name__)
@@ -81,6 +82,7 @@ async def list_firewall_zones(
     Returns:
         List of firewall zones
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -122,6 +124,7 @@ async def create_firewall_zone(
     Returns:
         Created firewall zone
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create firewall zone", dry_run)
 
     _ensure_local_api(settings)
@@ -208,6 +211,7 @@ async def update_firewall_zone(
     Returns:
         Updated firewall zone
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update firewall zone", dry_run)
 
     _ensure_local_api(settings)
@@ -309,6 +313,7 @@ async def assign_network_to_zone(
     Returns:
         Network assignment information
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "assign network to zone", dry_run)
 
     _ensure_local_api(settings)
@@ -422,6 +427,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
     Returns:
         List of networks in the zone
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -495,6 +501,7 @@ async def delete_firewall_zone(
     Raises:
         ValueError: If confirmation not provided
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete firewall zone", dry_run)
 
     _ensure_local_api(settings)
@@ -551,6 +558,7 @@ async def unassign_network_from_zone(
     Raises:
         ValueError: If confirmation not provided or network not in zone
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "unassign network from zone", dry_run)
 
     _ensure_local_api(settings)

@@ -5,8 +5,11 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
+    coerce_bool,
     get_logger,
+    log_audit,
     sanitize_log_message,
+    validate_confirmation,
     validate_limit_offset,
     validate_mac_address,
     validate_site_id,
@@ -216,3 +219,95 @@ async def get_client_dpi(
             "applications": paginated_apps,
             "total_applications": len(applications),
         }
+
+
+async def update_dpi_settings(
+    site_id: str,
+    settings: Settings,
+    enabled: bool = True,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Enable or disable DPI (traffic identification) on a site.
+
+    DPI is the passive per-flow application classifier behind the DPI
+    statistics tools; without it those counters stay empty. Read-modify-
+    write of the ``dpi`` settings section (``get/setting/dpi`` then
+    ``set/setting/dpi/{_id}``), preserving every other key the section
+    carries, with the stored state re-read and verified.
+
+    Args:
+        site_id: Site identifier
+        settings: Application settings
+        enabled: Desired DPI state
+        confirm: Confirmation flag (required)
+        dry_run: If True, preview the write without sending it
+
+    Returns:
+        Dictionary with the verified stored state
+    """
+    site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "DPI settings change", dry_run)
+    dry_run = coerce_bool(dry_run)
+    logger = get_logger(__name__, settings.log_level)
+
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+
+        response = await client.get(f"/ea/sites/{site_id}/get/setting/dpi")
+        data = response.get("data", []) if isinstance(response, dict) else response
+        section = (
+            next((s for s in data if isinstance(s, dict)), {}) if isinstance(data, list) else {}
+        )
+        settings_id = section.get("_id")
+
+        payload = {k: v for k, v in section.items() if not k.startswith("_")}
+        payload["enabled"] = enabled
+        # Per-client application tracking is what makes the statistics
+        # useful; keep it in lockstep unless the section already sets it.
+        payload.setdefault("fingerprintingEnabled", enabled)
+
+        if dry_run:
+            return {
+                "dry_run": True,
+                "current_enabled": section.get("enabled"),
+                "would_set": payload,
+            }
+
+        endpoint = f"/ea/sites/{site_id}/set/setting/dpi"
+        if settings_id:
+            endpoint += f"/{settings_id}"
+        await client.post(endpoint, json_data=payload)
+
+        verify = await client.get(f"/ea/sites/{site_id}/get/setting/dpi")
+        vdata = verify.get("data", []) if isinstance(verify, dict) else verify
+        stored = (
+            next((s for s in vdata if isinstance(s, dict)), {}) if isinstance(vdata, list) else {}
+        )
+
+        # Require the key to be present, rather than coercing with bool().
+        # A controller that drops `enabled` entirely returns None, and
+        # bool(None) is False -- so a disable request would have been
+        # reported as a confirmed success while the stored state was in
+        # fact unknown. Absent is not the same as false.
+        confirmed = "enabled" in stored and bool(stored["enabled"]) == enabled
+
+        log_audit(
+            operation="update_dpi_settings",
+            parameters={"site_id": site_id, "enabled": enabled},
+            result="success" if confirmed else "unconfirmed",
+            site_id=site_id,
+        )
+        result: dict[str, Any] = {
+            "success": confirmed,
+            "enabled": stored.get("enabled"),
+            "fingerprintingEnabled": stored.get("fingerprintingEnabled"),
+        }
+        if not confirmed:
+            result["warning"] = (
+                "Controller did not report the requested DPI state"
+                if "enabled" in stored
+                else "Controller did not echo an 'enabled' value; state unconfirmed"
+            )
+            logger.warning(sanitize_log_message(result["warning"]))
+        return result

@@ -6,7 +6,14 @@ from typing import Any, Literal
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..models.firewall_policy import FirewallPolicy, FirewallPolicyCreate, FirewallZoneV2Mapping
-from ..utils import APIError, ResourceNotFoundError, get_logger, log_audit, sanitize_log_message
+from ..utils import (
+    APIError,
+    ResourceNotFoundError,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_site_id,
+)
 from ..utils.validators import coerce_bool, validate_limit_offset
 
 logger = get_logger(__name__)
@@ -312,6 +319,7 @@ async def list_firewall_zones_v2(
         NotImplementedError: When using cloud API
         APIError: When the API request fails
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -395,6 +403,7 @@ async def list_firewall_policies(
         Cloud API does not support v2 endpoints. Configure UNIFI_API_TYPE=local
         and UNIFI_LOCAL_HOST to use this tool.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -465,6 +474,7 @@ async def get_firewall_policy(
         ... )
         >>> print(f"{policy['name']}: {policy['action']}")
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -605,6 +615,7 @@ async def create_firewall_policy(
             resolved.
         NotImplementedError: When using cloud API
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     valid_actions = ["ALLOW", "BLOCK"]
@@ -890,6 +901,7 @@ async def update_firewall_policy(
         ValueError: If confirmation not provided or an invalid value is supplied
         ResourceNotFoundError: If policy not found
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -1136,6 +1148,7 @@ async def delete_firewall_policy(
         ValueError: If confirmation not provided or attempting to delete predefined rule
         ResourceNotFoundError: If policy not found
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     if not coerce_bool(dry_run) and not coerce_bool(confirm):
@@ -1234,6 +1247,7 @@ async def get_zone_policy_matrix(
     Raises:
         NotImplementedError: When using cloud API
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:

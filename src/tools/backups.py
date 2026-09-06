@@ -1,6 +1,7 @@
 """Backup and restore operations MCP tools."""
 
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,61 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+
+
+def _resolve_backup_dest(output_path: str, settings: Settings) -> Path:
+    """Resolve where download_backup may write, confined to one directory.
+
+    Only the filename component of ``output_path`` is honoured; any directory
+    part (including ``..`` segments and absolute prefixes) is discarded, and
+    the file is placed inside ``settings.backup_download_dir``. This makes it
+    impossible for a caller to overwrite an arbitrary file on the host.
+
+    Args:
+        output_path: Caller-supplied name (only its basename is used)
+        settings: Application settings (provides the download directory)
+
+    Returns:
+        Absolute path inside the configured download directory
+
+    Raises:
+        ValidationError: If no usable filename remains after stripping the
+            directory component
+    """
+    name = os.path.basename(str(output_path).strip())
+    if not name or name in (".", ".."):
+        raise ValidationError(f"Invalid output_path: {output_path!r} (no filename component)")
+
+    base_dir = Path(settings.backup_download_dir).expanduser().resolve()
+    dest = (base_dir / name).resolve()
+
+    # Defence in depth: the join above already strips directories, but confirm
+    # the result did not escape the base directory (e.g. via a symlinked base).
+    if base_dir != dest.parent:
+        raise ValidationError(f"Refusing to write outside {base_dir}: {output_path!r}")
+
+    return dest
+
+
+def _write_backup_file(dest: Path, content: bytes) -> None:
+    """Write backup bytes to ``dest`` without following a symlink.
+
+    Creates the confined directory if needed and opens the destination with
+    ``O_NOFOLLOW`` so a symlink planted at the path cannot redirect the write,
+    and mode ``0o600`` so the backup (which contains controller secrets) is
+    not world-readable.
+
+    Args:
+        dest: Absolute destination path inside the confined directory
+        content: Backup file bytes
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    fd = os.open(dest, flags, 0o600)
+    try:
+        os.write(fd, content)
+    finally:
+        os.close(fd)
 
 
 async def trigger_backup(
@@ -284,7 +340,10 @@ async def download_backup(
     Args:
         site_id: Site identifier
         backup_filename: Backup filename to download
-        output_path: Local filesystem path to save the backup
+        output_path: Name to save the backup under. Only the filename
+            component is used; any directory part is ignored and the file is
+            written inside ``UNIFI_BACKUP_DOWNLOAD_DIR`` (default: the current
+            working directory).
         settings: Application settings
         verify_checksum: Whether to calculate and verify file checksum
 
@@ -296,7 +355,7 @@ async def download_backup(
         result = await download_backup(
             site_id="default",
             backup_filename="backup_2025-01-29.unf",
-            output_path="/backups/unifi_backup.unf",
+            output_path="unifi_backup.unf",
             settings=settings
         )
         print(f"Downloaded to: {result['local_path']}")
@@ -312,6 +371,10 @@ async def download_backup(
     )
 
     try:
+        # Resolve the destination before any network I/O so a bad path fails
+        # fast and the write is confined to the configured directory.
+        output_file = _resolve_backup_dest(output_path, settings)
+
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
@@ -321,10 +384,9 @@ async def download_backup(
                 backup_filename=backup_filename,
             )
 
-            # Write to file
-            output_file = Path(output_path)
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-            output_file.write_bytes(backup_content)
+            # Write the file inside the confined directory, refusing to follow
+            # a symlink planted at the destination and keeping it private.
+            _write_backup_file(output_file, backup_content)
 
             # Calculate checksum if requested
             checksum = ""
@@ -763,6 +825,7 @@ async def get_backup_status(
         1-3 minutes for system backups). This tool is primarily useful for
         very large deployments or system backups.
     """
+    site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
     try:

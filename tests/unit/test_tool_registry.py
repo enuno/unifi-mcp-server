@@ -20,11 +20,7 @@ if importlib.util.find_spec("fastmcp") is None:
     fastmcp_stub.FastMCP = FastMCP
     sys.modules["fastmcp"] = fastmcp_stub
 
-from src.tool_registry import (
-    MUTATING_TOOLS_WITHOUT_GATE,
-    is_mutating_tool,
-    register_module_tools,
-)
+from src.tool_registry import MUTATING_TOOLS_WITHOUT_GATE, is_mutating_tool, register_module_tools
 from src.tools import dpi_tools, reference_data
 
 

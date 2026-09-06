@@ -326,6 +326,7 @@ unifi-mcp-server
 
 ### Safety & Security
 
+- **Read-Only Mode**: Set `UNIFI_READ_ONLY=true` to register only non-mutating tools — state-changing tools are then absent from the MCP tool list entirely, rather than relying on a caller-supplied `confirm` flag
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Dry-Run Mode**: Planned change-safe preview path for all write and destructive operations
 - **Audit Logging**: Planned append-only audit trail for mutation paths

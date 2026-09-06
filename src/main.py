@@ -26,6 +26,7 @@ from .tool_registry import register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import backups as backups_tools
+from .tools import channel_planning as channel_planning_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import connector as connector_tools
@@ -75,7 +76,62 @@ from .utils import get_logger
 settings = Settings()
 logger = get_logger(__name__, settings.log_level)
 
-mcp = FastMCP("UniFi MCP Server")
+
+def build_auth_provider(current_settings: Settings) -> Any:
+    """Build the MCP authentication provider from settings.
+
+    Returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
+    ``MCP_AUTH_TOKEN`` when at least one is configured, otherwise ``None``.
+    Over stdio the provider is ignored; over a network transport ``None``
+    means the server refuses to start (see
+    :func:`ensure_network_transport_authenticated`).
+
+    Args:
+        current_settings: Loaded application settings
+
+    Returns:
+        A FastMCP auth provider, or None when no token is configured
+    """
+    tokens = current_settings.mcp_auth_tokens
+    if not tokens:
+        return None
+
+    from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
+
+    return StaticTokenVerifier(
+        tokens={token: {"client_id": "mcp-client", "scopes": []} for token in tokens}
+    )
+
+
+def ensure_network_transport_authenticated(current_settings: Settings, auth_provider: Any) -> None:
+    """Refuse to start a network transport without authentication.
+
+    stdio is a local subprocess channel and needs no token. The http, sse
+    and streamable_http transports open a TCP listener, so starting one
+    without an auth provider would expose every registered tool — including
+    destructive ones — to any host that can reach the port. Fail closed.
+
+    Args:
+        current_settings: Loaded application settings
+        auth_provider: The provider returned by :func:`build_auth_provider`
+
+    Raises:
+        SystemExit: If a network transport is selected without a token
+    """
+    if current_settings.server_transport == TransportMode.STDIO:
+        return
+    if auth_provider is None:
+        raise SystemExit(
+            "Refusing to start the "
+            f"'{current_settings.server_transport.value}' transport without "
+            "authentication: set MCP_AUTH_TOKEN to a bearer token (clients then "
+            "send 'Authorization: Bearer <token>'), or use "
+            "MCP_SERVER_TRANSPORT=stdio for local clients."
+        )
+
+
+mcp_auth = build_auth_provider(settings)
+mcp = FastMCP("UniFi MCP Server", auth=mcp_auth)
 
 # ---------------------------------------------------------------------------
 # Optional: agnost tracking
@@ -131,6 +187,7 @@ _LOCAL_TOOL_MODULES = [
     acls_tools,
     application_tools,
     backups_tools,
+    channel_planning_tools,
     client_mgmt_tools,
     clients_tools,
     content_filtering_tools,
@@ -180,6 +237,7 @@ _LOCAL_TOOL_MODULES = [
 
 _PROFILE_MODULES: dict[str, list[Any]] = {
     "network": [
+        channel_planning_tools,
         client_mgmt_tools,
         clients_tools,
         dhcp_tools,
@@ -245,6 +303,24 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
 }
 
 _active_profile = os.getenv("UNIFI_PROFILE", "").lower().strip()
+
+# An unrecognised profile silently falls back to "every module" further down.
+# Warn loudly, because the failure mode is fail-open: an operator who sets a
+# profile expecting a reduced tool surface would otherwise get the full one.
+if (
+    _active_profile
+    and _active_profile not in ("all", "")
+    and _active_profile not in _PROFILE_MODULES
+):
+    logger.warning(
+        "Unknown UNIFI_PROFILE=%r - falling back to all tool modules. Known profiles: %s. "
+        "To expose only non-mutating tools, set UNIFI_READ_ONLY=true.",
+        _active_profile,
+        ", ".join(sorted(_PROFILE_MODULES)),
+    )
+
+if settings.read_only:
+    logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 
 _TOOL_MODULES: list[Any] = []
 if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
@@ -522,7 +598,9 @@ def main() -> None:
         logger.info("Server ready to handle requests")
         mcp.run()
     else:
+        ensure_network_transport_authenticated(settings, mcp_auth)
         logger.info(f"Transport: {settings.server_transport.value}")
+        logger.info("MCP authentication: bearer token required (MCP_AUTH_TOKEN)")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
         logger.info(
             "A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit"
@@ -577,8 +655,9 @@ def main() -> None:
                 "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
             )
 
+        transport = settings.server_transport.value
         mcp.run(
-            transport=settings.server_transport.value,
+            transport=transport,
             host=settings.server_host,
             port=settings.server_port,
         )

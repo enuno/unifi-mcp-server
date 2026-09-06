@@ -807,3 +807,173 @@ async def force_provision_device(
             site_id=site_id,
         )
         raise
+
+
+async def set_ap_min_rssi(
+    site_id: str,
+    device_id: str,
+    band: str,
+    settings: Settings,
+    enabled: bool = True,
+    min_rssi: int = -75,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Set the minimum client RSSI on one AP radio.
+
+    Reads the device record, edits one radio_table entry, PUTs it back and
+    verifies the echo. The read prefers the config record
+    (``rest/device/{id}``), but that route answers GET with 404 on current
+    controllers -- verified on Network 10.5 against both an online and an
+    offline AP -- so in practice the stat record supplies the radio table
+    and the write is only as trustworthy as that blob. Echo verification
+    is what makes that acceptable: a divergent stored value is reported,
+    never assumed.
+
+    The PUT is a partial update rather than a full-record replace:
+    sending only ``radio_table`` was measured to leave the other 113 keys
+    of the device record untouched.
+
+    Below the floor the AP refuses/evicts the association, so a client
+    camped on a distant AP at a weak signal re-places itself onto a
+    nearer one. Per-radio and per-AP -- unlike the WLAN-wide roaming
+    assistant, a floor on one AP leaves every other radio accepting
+    weak clients (e.g. yard coverage on a different AP).
+
+    Args:
+        site_id: Site identifier
+        device_id: Device ID or MAC address
+        band: Radio band -- "2.4", "5", or "6" (also ng/na/6e)
+        settings: Application settings
+        enabled: Enable (True) or disable (False) the floor
+        min_rssi: Floor in dBm, -90..-60. Ignored when ``enabled`` is
+            False -- writing a number back beside a disabled floor leaves
+            a value in the radio_table that reads like a floor still in
+            force.
+        confirm: Confirmation flag (required)
+        dry_run: If True, preview without writing
+
+    Returns:
+        Dictionary with stored state, echo-verified
+    """
+    site_id = validate_site_id(site_id)
+    validate_confirmation(confirm, "min-RSSI change", dry_run)
+    dry_run = coerce_bool(dry_run)
+    radio = RADIO_BAND_MAP.get(str(band).lower())
+    if radio is None:
+        raise ValidationError(
+            f"Unknown band '{band}'; accepted: " + ", ".join(sorted(RADIO_BAND_MAP))
+        )
+    if not -90 <= min_rssi <= -60:
+        raise ValidationError(f"min_rssi must be -90..-60 dBm, got {min_rssi}")
+    logger = get_logger(__name__, settings.log_level)
+    parameters = {
+        "site_id": site_id,
+        "device_id": device_id,
+        "radio": radio,
+        "enabled": enabled,
+        "min_rssi": min_rssi,
+    }
+
+    if dry_run:
+        return {"dry_run": True, "would_set": parameters}
+
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
+
+            response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
+            devices = response if isinstance(response, list) else response.get("data", [])
+            stat_device = next(
+                (
+                    d
+                    for d in devices
+                    if isinstance(d, dict)
+                    and (d.get("_id") == device_id or d.get("mac") == device_id)
+                ),
+                None,
+            )
+            if not stat_device:
+                raise ResourceNotFoundError("device", device_id)
+            resolved_id = stat_device["_id"]
+
+            try:
+                config_response = await client.get(
+                    settings.get_site_api_path(site_id, f"rest/device/{resolved_id}")
+                )
+                device = first_response_item(config_response)
+            except APIError:
+                device = {}
+            if not device:
+                device = stat_device
+
+            radio_table = device.get("radio_table", [])
+            target = next(
+                (
+                    e
+                    for e in radio_table
+                    if isinstance(e, dict) and (e.get("radio") == radio or e.get("name") == radio)
+                ),
+                None,
+            )
+            if target is None:
+                raise ValidationError(f"Device has no {radio} radio")
+            target["min_rssi_enabled"] = enabled
+            if enabled:
+                target["min_rssi"] = min_rssi
+
+            put_response = await client.put(
+                settings.get_site_api_path(site_id, f"rest/device/{resolved_id}"),
+                json_data={"radio_table": radio_table},
+            )
+            stored = first_response_item(put_response)
+            stored_entry = next(
+                (
+                    e
+                    for e in stored.get("radio_table", []) or []
+                    if isinstance(e, dict) and (e.get("radio") == radio or e.get("name") == radio)
+                ),
+                {},
+            )
+            warnings: list[str] = []
+            if stored_entry:
+                if bool(stored_entry.get("min_rssi_enabled")) != enabled:
+                    warnings.append(
+                        f"Controller stored min_rssi_enabled={stored_entry.get('min_rssi_enabled')!r}"
+                    )
+                if enabled and stored_entry.get("min_rssi") != min_rssi:
+                    warnings.append(f"Controller stored min_rssi={stored_entry.get('min_rssi')!r}")
+            else:
+                warnings.append("Controller did not echo the radio table; change unconfirmed")
+
+            log_audit(
+                operation="set_ap_min_rssi",
+                parameters=parameters,
+                result="success" if not warnings else "unconfirmed",
+                site_id=site_id,
+            )
+            result: dict[str, Any] = {
+                "success": not warnings,
+                "device_id": resolved_id,
+                "device_name": device.get("name"),
+                "radio": radio,
+                "min_rssi_enabled": stored_entry.get("min_rssi_enabled"),
+                "min_rssi": stored_entry.get("min_rssi"),
+            }
+            if warnings:
+                for w in warnings:
+                    logger.warning(sanitize_log_message(w))
+                result["warnings"] = warnings
+            return result
+    except Exception as e:
+        # Mirrors force_provision_device: a write that raises still
+        # gets an audit row, otherwise a partial or failed change
+        # leaves no trace at all.
+        logger.error(sanitize_log_message(f"Failed to set min RSSI on '{device_id}': {e}"))
+        log_audit(
+            operation="set_ap_min_rssi",
+            parameters=parameters,
+            result="failed",
+            site_id=site_id,
+        )
+        raise

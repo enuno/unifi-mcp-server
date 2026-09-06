@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectLiveView, ProtectMetaInfo, ProtectViewer
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.validators import coerce_bool, validate_confirmation
 
 
 def _validate_id(record_id: str, label: str) -> str:
@@ -96,8 +97,23 @@ async def update_protect_viewer(
     settings: Settings,
     name: str | None = None,
     liveview: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update Protect viewer settings."""
+    """Update Protect viewer settings.
+
+    Args:
+        viewer_id: Protect viewer identifier
+        settings: Application settings
+        name: New display name
+        liveview: Live view to display on the viewer
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect viewer", dry_run)
     logger = get_logger(__name__, settings.log_level)
     viewer_id = _validate_id(viewer_id, "viewer_id")
 
@@ -106,6 +122,14 @@ async def update_protect_viewer(
         payload["name"] = name
     if liveview is not None:
         payload["liveview"] = liveview
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_viewer",
+            "viewer_id": viewer_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
@@ -168,9 +192,25 @@ async def get_protect_live_view(live_view_id: str, settings: Settings) -> dict[s
 async def create_protect_live_view(
     live_view: dict[str, Any],
     settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Create a Protect live view."""
+    """Create a Protect live view.
+
+    Args:
+        live_view: Live view definition to create
+        settings: Application settings
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The created live view as returned by the controller
+    """
+    validate_confirmation(confirm, "create a Protect live view", dry_run)
     logger = get_logger(__name__, settings.log_level)
+
+    if coerce_bool(dry_run):
+        return {"dry_run": True, "operation": "create_protect_live_view"}
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
@@ -194,8 +234,28 @@ async def update_protect_live_view(
     owner: str | None = None,
     layout: int | None = None,
     slots: list[dict[str, Any]] | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Update Protect live view settings."""
+    """Update Protect live view settings.
+
+    Args:
+        live_view_id: Protect live view identifier
+        settings: Application settings
+        name: New display name
+        model_key: Live view model key
+        is_default: Mark this live view as the default
+        is_global: Share the live view across users
+        owner: Live view owner identifier
+        layout: Live view layout identifier
+        slots: Live view slot configuration
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect live view", dry_run)
     logger = get_logger(__name__, settings.log_level)
     live_view_id = _validate_id(live_view_id, "live_view_id")
 
@@ -214,6 +274,14 @@ async def update_protect_live_view(
         payload["layout"] = layout
     if slots is not None:
         payload["slots"] = slots
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "update_protect_live_view",
+            "live_view_id": live_view_id,
+            "payload": payload,
+        }
 
     async with ProtectClient(settings) as client:
         await client.authenticate()

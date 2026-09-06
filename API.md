@@ -106,7 +106,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
-| `UNIFI_PROFILE` | Tool exposure profile: `network`, `protect` (camera/NVR/device/view/event read wired; PTZ/media streams in progress), `access`, `talk`, `drive`, `read-only` | No | unset |
+| `UNIFI_PROFILE` | Tool exposure profile: `network`, `devices`, `security`, `system`, `minimal`, `protect`. An unrecognised value logs a warning and falls back to all modules | No | unset |
+| `UNIFI_READ_ONLY` | Register only non-mutating tools. State-changing tools are not exposed to the client at all | No | `false` |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |

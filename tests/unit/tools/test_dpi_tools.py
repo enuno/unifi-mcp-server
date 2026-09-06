@@ -555,3 +555,130 @@ async def test_list_countries_empty(mock_settings):
         result = await list_countries(mock_settings)
 
     assert result == []
+
+
+class TestUpdateDpiSettings:
+    @pytest.mark.asyncio
+    async def test_rmw_preserves_section_and_verifies(self, mock_settings):
+        from src.tools.dpi import update_dpi_settings
+
+        section = {"_id": "dpi-1", "enabled": False, "fingerprintingEnabled": False, "site_id": "s"}
+        stored = {**section, "enabled": True, "fingerprintingEnabled": False}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": [section]}, {"data": [stored]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings("default", mock_settings, enabled=True, confirm=True)
+
+        url = client.post.call_args[0][0]
+        assert url == "/ea/sites/default/set/setting/dpi/dpi-1"
+        body = client.post.call_args[1]["json_data"]
+        assert body["enabled"] is True
+        assert body["fingerprintingEnabled"] is False  # existing value preserved
+        assert body["site_id"] == "s"  # section keys carried through
+        assert "_id" not in body
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_creates_the_section_when_the_site_has_none(self, mock_settings):
+        """With no stored section the POST goes to the bare endpoint.
+
+        A site that has never had DPI configured returns no section, so
+        there is no `_id` to address. The id is appended only when one
+        exists -- posting `.../setting/dpi/None` would 404 and the change
+        would be silently lost.
+        """
+        from src.tools.dpi import update_dpi_settings
+
+        stored = {"_id": "dpi-new", "enabled": True, "fingerprintingEnabled": True}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": []}, {"data": [stored]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings("default", mock_settings, enabled=True, confirm=True)
+
+        url = client.post.call_args[0][0]
+        assert url == "/ea/sites/default/set/setting/dpi"
+        body = client.post.call_args[1]["json_data"]
+        assert body["enabled"] is True
+        # Nothing to preserve, so the lockstep default applies.
+        assert body["fingerprintingEnabled"] is True
+        assert result["success"] is True
+
+    @pytest.mark.asyncio
+    async def test_absent_enabled_key_is_not_a_confirmed_disable(self, mock_settings):
+        """A dropped key must not read as a confirmed False.
+
+        Regression: the check coerced the echo with ``bool()``, and
+        ``bool(None)`` is ``False`` -- so a disable request against a
+        controller that omits ``enabled`` entirely reported success while
+        the stored state was actually unknown. Absent is not false.
+        """
+        from src.tools.dpi import update_dpi_settings
+
+        section = {"_id": "dpi-1", "enabled": True}
+        echoed_without_key = {"_id": "dpi-1"}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": [section]}, {"data": [echoed_without_key]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings(
+                "default", mock_settings, enabled=False, confirm=True
+            )
+
+        assert result["success"] is False
+        assert result["enabled"] is None
+        assert "did not echo" in result["warning"]
+
+    @pytest.mark.asyncio
+    async def test_unstored_state_reports_unconfirmed(self, mock_settings):
+        from src.tools.dpi import update_dpi_settings
+
+        section = {"_id": "dpi-1", "enabled": False}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(side_effect=[{"data": [section]}, {"data": [section]}])
+        client.post = AsyncMock(return_value={"data": []})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings("default", mock_settings, enabled=True, confirm=True)
+
+        assert result["success"] is False
+        assert "warning" in result
+
+    @pytest.mark.asyncio
+    async def test_dry_run_and_confirm_gate(self, mock_settings):
+        from src.tools.dpi import update_dpi_settings
+        from src.utils.exceptions import ValidationError
+
+        section = {"_id": "dpi-1", "enabled": False}
+        client = MagicMock()
+        client.authenticate = AsyncMock()
+        client.get = AsyncMock(return_value={"data": [section]})
+        client.post = AsyncMock()
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("src.tools.dpi.UniFiClient", return_value=client):
+            result = await update_dpi_settings(
+                "default", mock_settings, enabled=True, confirm=True, dry_run=True
+            )
+        assert result["dry_run"] is True and result["current_enabled"] is False
+        client.post.assert_not_called()
+
+        with pytest.raises(ValidationError):
+            await update_dpi_settings("default", mock_settings, enabled=True)

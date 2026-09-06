@@ -11,7 +11,11 @@ services:
     stdin_open: true  # Required for STDIO transport (kept for backward compatibility)
     tty: false
     ports:
-      - "${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"  # Expose for SSE/HTTP transport
+      # Publishes on loopback only. To reach the server from other hosts, put
+      # an authenticating TLS reverse proxy in front and set MCP_AUTH_TOKEN;
+      # only then widen this to "0.0.0.0:...". Not used by the default stdio
+      # transport.
+      - "127.0.0.1:${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"
     environment:
       # UniFi API Configuration
       UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
@@ -24,8 +28,11 @@ services:
 
       # MCP Server Transport Configuration
       MCP_SERVER_TRANSPORT: ${MCP_SERVER_TRANSPORT:-stdio}
-      MCP_SERVER_HOST: ${MCP_SERVER_HOST:-0.0.0.0}
+      MCP_SERVER_HOST: ${MCP_SERVER_HOST:-127.0.0.1}
       MCP_SERVER_PORT: ${MCP_SERVER_PORT:-3000}
+      # Required before any network transport (http/sse/streamable_http) will
+      # start; the server refuses to open a listener without it.
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
       MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
 
       # Optional: Rate Limiting

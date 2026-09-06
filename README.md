@@ -180,9 +180,15 @@ The UniFi MCP Server supports **multiple transport modes** for different deploym
 - ✅ **Network access**: Connect from any MCP client over HTTP
 - ✅ **MCP gateway compatible**: Works with MCP gateways that consolidate servers
 - ✅ **No SSE handshake race**: session initialization is part of the same request/response cycle, avoiding the class of timing issue SSE has with proxies like `mcp-remote`
-- ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=streamable_http` + `MCP_SERVER_PORT=3000`
+- ⚙️ **Configuration**: `MCP_SERVER_TRANSPORT=streamable_http` + `MCP_SERVER_PORT=3000` + `MCP_AUTH_TOKEN=<token>`
 
-**💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **Streamable HTTP** when running behind an MCP gateway or for any other network-accessible deployment — prefer it over SSE, which is kept only for backward compatibility.
+> ⚠️ **Authentication is required for network transports.** The MCP endpoint exposes every
+> registered tool, including destructive ones. `http`, `sse`, and `streamable_http` will refuse
+> to start unless `MCP_AUTH_TOKEN` is set; clients then send `Authorization: Bearer <token>`.
+> The server binds to `127.0.0.1` by default — terminate TLS and authenticate at a reverse proxy
+> before widening `MCP_SERVER_HOST` to `0.0.0.0`.
+
+**💡 Recommendation**: Use **STDIO** for local AI clients (Claude Desktop, Cursor). Use **Streamable HTTP** when running behind an authenticating MCP gateway or reverse proxy — prefer it over SSE, which is kept only for backward compatibility.
 
 ## 🧭 Tool Exposure Profiles
 
@@ -210,10 +216,13 @@ To reduce context-window bloat, the server will support named exposure profiles 
 # Set transport to Streamable HTTP
 export MCP_SERVER_TRANSPORT=streamable_http
 export MCP_SERVER_PORT=3000
+# Required — the server refuses to start a network transport without it
+export MCP_AUTH_TOKEN=$(openssl rand -hex 32)
 
-# Start the server
+# Start the server (binds to 127.0.0.1 by default)
 unifi-mcp-server
-# Server listening on 0.0.0.0:3000 via streamable_http
+# Server listening on 127.0.0.1:3000 via streamable_http
+# Clients send: Authorization: Bearer $MCP_AUTH_TOKEN
 ```
 
 ### Docker Compose for Streamable HTTP Mode
@@ -228,8 +237,11 @@ services:
       UNIFI_LOCAL_HOST: 192.168.2.1
       MCP_SERVER_TRANSPORT: streamable_http
       MCP_SERVER_PORT: 3000
+      MCP_SERVER_HOST: 0.0.0.0            # container-internal; keep the published port on loopback
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN}   # required — clients send Authorization: Bearer <token>
     ports:
-      - "3000:3000"
+      # Published on loopback; put an authenticating TLS proxy in front to expose it further.
+      - "127.0.0.1:3000:3000"
 ```
 
 ### Connecting via MCP Gateway
@@ -254,7 +266,7 @@ SSE is kept for backward compatibility only — see the [transport modes](#-tran
 export MCP_SERVER_TRANSPORT=sse
 export MCP_SERVER_PORT=3000
 unifi-mcp-server
-# Server listening on 0.0.0.0:3000 via sse
+# Server listening on 127.0.0.1:3000 via sse (MCP_AUTH_TOKEN required)
 ```
 
 ## Features
@@ -326,6 +338,7 @@ unifi-mcp-server
 
 ### Safety & Security
 
+- **Read-Only Mode**: Set `UNIFI_READ_ONLY=true` to register only non-mutating tools — state-changing tools are then absent from the MCP tool list entirely, rather than relying on a caller-supplied `confirm` flag
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Dry-Run Mode**: Planned change-safe preview path for all write and destructive operations
 - **Audit Logging**: Planned append-only audit trail for mutation paths
@@ -1034,8 +1047,9 @@ See [docs/SKILLS.md](docs/SKILLS.md) for the full guide.
   - `UNIFI_PROFILE`: Load only a subset of tools — `network`, `devices`, `security`, `system`, or `minimal` (default: all tools)
 - **MCP Server Transport**:
   - `MCP_SERVER_TRANSPORT`: Transport mode (`stdio`, `sse`, `http`, `streamable_http`; default: `stdio`)
-  - `MCP_SERVER_HOST`: Bind address (default: `0.0.0.0`)
+  - `MCP_SERVER_HOST`: Bind address for network transports (default: `127.0.0.1`)
   - `MCP_SERVER_PORT`: Server port (default: `3000`)
+  - `MCP_AUTH_TOKEN`: Bearer token required for network transports; comma-separate for several (default: unset — network transports refuse to start without it)
 
 ### Programmatic Usage
 

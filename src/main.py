@@ -26,6 +26,7 @@ from .tool_registry import register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import backups as backups_tools
+from .tools import channel_planning as channel_planning_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import connector as connector_tools
@@ -131,6 +132,7 @@ _LOCAL_TOOL_MODULES = [
     acls_tools,
     application_tools,
     backups_tools,
+    channel_planning_tools,
     client_mgmt_tools,
     clients_tools,
     content_filtering_tools,
@@ -180,6 +182,7 @@ _LOCAL_TOOL_MODULES = [
 
 _PROFILE_MODULES: dict[str, list[Any]] = {
     "network": [
+        channel_planning_tools,
         client_mgmt_tools,
         clients_tools,
         dhcp_tools,
@@ -245,6 +248,24 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
 }
 
 _active_profile = os.getenv("UNIFI_PROFILE", "").lower().strip()
+
+# An unrecognised profile silently falls back to "every module" further down.
+# Warn loudly, because the failure mode is fail-open: an operator who sets a
+# profile expecting a reduced tool surface would otherwise get the full one.
+if (
+    _active_profile
+    and _active_profile not in ("all", "")
+    and _active_profile not in _PROFILE_MODULES
+):
+    logger.warning(
+        "Unknown UNIFI_PROFILE=%r - falling back to all tool modules. Known profiles: %s. "
+        "To expose only non-mutating tools, set UNIFI_READ_ONLY=true.",
+        _active_profile,
+        ", ".join(sorted(_PROFILE_MODULES)),
+    )
+
+if settings.read_only:
+    logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 
 _TOOL_MODULES: list[Any] = []
 if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
@@ -577,8 +598,9 @@ def main() -> None:
                 "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
             )
 
+        transport = settings.server_transport.value
         mcp.run(
-            transport=settings.server_transport.value,
+            transport=transport,
             host=settings.server_host,
             port=settings.server_port,
         )

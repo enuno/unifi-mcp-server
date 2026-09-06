@@ -71,7 +71,7 @@ All tools require `local` API mode unless noted.
 
 | Tool | Description |
 |---|---|
-| `run_speed_test` | Trigger a WAN speed test |
+| `run_speed_test` | Trigger a WAN speed test (requires `confirm=True`) |
 | `get_speed_test_status` | Check status of a running speed test |
 | `get_speed_test_history` | Historical speed test results |
 | `get_spectrum_scan` | Get WiFi spectrum scan data for an AP |

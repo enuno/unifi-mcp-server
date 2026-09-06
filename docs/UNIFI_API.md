@@ -2772,8 +2772,8 @@ Download a backup file to local storage.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `backup_filename` | string | Yes | Backup filename to download |
-| `output_path` | string | Yes | Local filesystem path to save |
+| `backup_filename` | string | Yes | Backup filename (a single path component; separators and `..` are rejected) |
+| `output_path` | string | Yes | Filename to save under. Only the filename is used — any directory component is ignored and the file is written inside `UNIFI_BACKUP_DOWNLOAD_DIR` (default: the current working directory) |
 | `verify_checksum` | boolean | No | Calculate SHA256 checksum (default: true) |
 
 **Example Usage:**
@@ -2782,7 +2782,7 @@ Download a backup file to local storage.
 result = await download_backup(
     site_id="default",
     backup_filename="backup_2026-01-24.unf",
-    output_path="/backups/unifi_backup.unf",
+    output_path="unifi_backup.unf",
     settings=settings
 )
 print(f"Downloaded: {result['size_bytes']} bytes")

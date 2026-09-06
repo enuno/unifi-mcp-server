@@ -268,7 +268,7 @@ async def list_site_internal_ap_neighbors_v2(
 
         for ap_mac, outcome in zip(ap_macs, results, strict=True):
             if isinstance(outcome, BaseException):
-                if isinstance(outcome, (APIError, ResourceNotFoundError, ValidationError)):
+                if isinstance(outcome, APIError | ResourceNotFoundError | ValidationError):
                     skipped_aps.append({"ap_mac": ap_mac, "reason": str(outcome)})
                     continue
                 raise outcome

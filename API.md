@@ -110,7 +110,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_READ_ONLY` | Register only non-mutating tools. State-changing tools are not exposed to the client at all | No | `false` |
 | `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
-| `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path | No | `audit.jsonl` |
+| `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
+| `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |

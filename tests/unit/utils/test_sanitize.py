@@ -35,18 +35,31 @@ class TestRedactValue:
         """Values ≤4 chars are fully redacted."""
         assert _redact_value("password", "abc") == "***"
 
-    def test_long_value_partial_redaction(self):
-        """Longer values show last 2 chars."""
-        assert _redact_value("password", "mysecretpass") == "***ss"
+    def test_credential_never_partially_revealed(self):
+        """Credentials are fully redacted regardless of length.
+
+        A trailing fragment of a passphrase or shared secret both shrinks the
+        search space and confirms guesses, and these values are persisted to
+        the audit log. Partial reveal is only for the network identifiers in
+        PARTIAL_REDACT_FIELDS.
+        """
+        assert _redact_value("password", "mysecretpass") == "***"
+        assert (
+            _redact_value("auth_secret", "SuperSecretRadius2026")
+            == "***"  # pragma: allowlist secret
+        )
+        assert (
+            _redact_value("x_passphrase", "MeinWLANPasswort") == "***"  # pragma: allowlist secret
+        )
 
     def test_full_redaction_when_partial_false(self):
         """partial=False forces full redaction."""
         assert _redact_value("password", "mysecretpass", partial=False) == "***"
 
-    def test_non_sensitive_key_not_in_partial_fields(self):
-        """Key not in PARTIAL_REDACT_FIELDS gets standard redaction."""
+    def test_key_not_in_partial_fields_gets_full_redaction(self):
+        """Key not in PARTIAL_REDACT_FIELDS gets full redaction."""
         result = _redact_value("token", "abcdefghij")
-        assert result == "***ij"
+        assert result == "***"
 
 
 class TestSanitizeDict:
@@ -229,3 +242,53 @@ class TestSanitizeSensitiveData:
         """Non-dict, non-list input is returned unchanged."""
         result = sanitize_sensitive_data("plain string")  # type: ignore[arg-type]
         assert result == "plain string"
+
+
+class TestSanitizeCredentials:
+    """Tests for sanitize_credentials."""
+
+    def test_credentials_redacted_identifiers_kept(self):
+        """Secrets go, identifiers stay."""
+        from src.utils.sanitize import sanitize_credentials
+
+        result = sanitize_credentials(
+            {
+                "site_id": "default",
+                "name": "Corp RADIUS",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "auth_secret": "SuperSecretRadius2026",  # pragma: allowlist secret
+                "x_passphrase": "MeinWLANPasswort",  # pragma: allowlist secret
+                "auth_port": 1812,
+            }
+        )
+
+        assert result["site_id"] == "default"
+        assert result["name"] == "Corp RADIUS"
+        assert result["mac"] == "aa:bb:cc:dd:ee:ff"
+        assert result["auth_port"] == 1812
+        assert result["auth_secret"] == "***"
+        assert result["x_passphrase"] == "***"
+
+    def test_recurses_into_nested_structures(self):
+        """Nested dicts and lists of dicts are covered."""
+        from src.utils.sanitize import sanitize_credentials
+
+        result = sanitize_credentials(
+            {"outer": {"token": "abc"}, "items": [{"psk": "xyz"}, {"vlan": 10}]}
+        )
+
+        assert result["outer"]["token"] == "***"
+        assert result["items"][0]["psk"] == "***"
+        assert result["items"][1]["vlan"] == 10
+
+    def test_none_stays_none(self):
+        """An unset credential is not turned into a redaction marker."""
+        from src.utils.sanitize import sanitize_credentials
+
+        assert sanitize_credentials({"password": None})["password"] is None
+
+    def test_non_dict_passthrough(self):
+        """Non-dict input is returned unchanged."""
+        from src.utils.sanitize import sanitize_credentials
+
+        assert sanitize_credentials("not-a-dict") == "not-a-dict"

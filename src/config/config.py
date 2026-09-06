@@ -177,6 +177,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_LOG_ENABLED",
     )
 
+    audit_log_file: str | None = Field(
+        default=None,
+        description=(
+            "Path to the audit log file. Relative paths resolve against the "
+            "process working directory, which is not predictable under stdio "
+            "transport - prefer an absolute path."
+        ),
+        validation_alias="UNIFI_AUDIT_LOG_PATH",
+    )
+
     # Backup download location
     backup_download_dir: str = Field(
         default=".",

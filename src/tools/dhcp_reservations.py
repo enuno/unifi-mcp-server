@@ -15,7 +15,14 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
-from ..utils import APIError, ResourceNotFoundError, get_logger, log_audit, sanitize_log_message
+from ..utils import (
+    APIError,
+    ResourceNotFoundError,
+    get_logger,
+    log_audit,
+    sanitize_log_message,
+    validate_site_id,
+)
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -61,6 +68,7 @@ async def list_dhcp_reservations(
     Returns:
         List of reservation dicts with mac, fixed_ip, name, network_id.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -108,6 +116,7 @@ async def get_dhcp_reservation(
     Returns the reservation dict if the MAC has a fixed IP, otherwise raises
     ResourceNotFoundError.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -171,6 +180,7 @@ async def create_dhcp_reservation(
     Returns:
         Created / merged reservation dict.
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -279,6 +289,7 @@ async def update_dhcp_reservation(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -389,6 +400,7 @@ async def remove_dhcp_reservation(
         confirm: REQUIRED True
         dry_run: Preview without applying
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)

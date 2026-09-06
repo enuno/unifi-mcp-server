@@ -51,6 +51,7 @@ from ..utils import (
     get_logger,
     sanitize_log_message,
     validate_confirmation,
+    validate_site_id,
 )
 
 logger = get_logger(__name__)
@@ -261,6 +262,7 @@ async def get_traffic_flows(
         List of flow dictionaries. Each dict has the full v2 schema —
         ``source``, ``destination``, ``traffic_data``, ``policies``, etc.
     """
+    site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(
         site_id,
         settings,
@@ -303,6 +305,7 @@ async def get_flow_statistics(
     by the same client-side filters as :func:`get_traffic_flows`). There is
     no "time range" — the v2 endpoint does not support historical windows.
     """
+    site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(
         site_id,
         settings,
@@ -358,6 +361,7 @@ async def get_traffic_flow_details(
     Raises :class:`ResourceNotFoundError` if the flow has rolled out of the
     window (the v2 endpoint has no "fetch by id" lookup).
     """
+    site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
@@ -386,6 +390,7 @@ async def get_top_flows(
         limit: Maximum number of flows to return (default 10)
         sort_by: ``"bytes"`` (default), ``"packets"``, or ``"duration"``.
     """
+    site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(site_id, settings)
 
     def _key(flow: TrafficFlow) -> int:
@@ -410,6 +415,7 @@ async def get_flow_risks(
     ``high``/``critical``). ``min_risk_level`` keeps everything at or above
     the given level.
     """
+    site_id = validate_site_id(site_id)
     order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
     threshold = order.get((min_risk_level or "").lower(), 0)
 
@@ -430,6 +436,7 @@ async def filter_traffic_flows(
     ``"protocol=UDP,destination_zone_name=External,min_bytes=1000"``. Any
     key recognised by :func:`get_traffic_flows` may be used.
     """
+    site_id = validate_site_id(site_id)
     parsed: dict[str, Any] = {}
     for chunk in (part.strip() for part in filter_expression.split(",")):
         if not chunk or "=" not in chunk:
@@ -454,6 +461,7 @@ async def get_client_flow_aggregation(
     settings: Settings,
 ) -> dict[str, Any]:
     """Aggregate the current flow sample for a specific client MAC."""
+    site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(site_id, settings, source_mac=client_mac)
 
     if not flows:
@@ -495,6 +503,7 @@ async def get_flow_analytics(
     destinations in a single call. Thin wrapper over
     :func:`get_flow_statistics` with an additional risk breakdown.
     """
+    site_id = validate_site_id(site_id)
     stats = await get_flow_statistics(site_id, settings)
     flows = await _get_filtered_flows(site_id, settings)
 
@@ -514,6 +523,7 @@ async def export_traffic_flows(
     max_records: int | None = None,
 ) -> str:
     """Serialise the current flow sample to JSON or CSV."""
+    site_id = validate_site_id(site_id)
     if export_format not in {"json", "csv"}:
         raise ValueError("export_format must be 'json' or 'csv'")
 
@@ -617,6 +627,7 @@ async def find_flows_for_rule_reference(
     Returns:
         List of lightweight match records suitable for rendering to the user.
     """
+    site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(
         site_id,
         settings,
@@ -714,6 +725,7 @@ async def get_flow_trends(
     For aggregated time-series over longer windows, use the ``stat/report/*``
     endpoints via other MCP tools (e.g. client bandwidth history).
     """
+    site_id = validate_site_id(site_id)
     raise NotImplementedError(
         "get_flow_trends is not supported: the v2 traffic-flows endpoint "
         "does not expose historical time-series data. Use stat/report-based "
@@ -733,6 +745,7 @@ async def stream_traffic_flows(
     source — fast networks roll through that window in well under a second.
     Use :func:`get_traffic_flows` on a poll schedule instead.
     """
+    site_id = validate_site_id(site_id)
     raise NotImplementedError(
         "stream_traffic_flows is not supported: the v2 traffic-flows endpoint "
         "caps responses at 50 flows with no pagination, so a streaming view "
@@ -749,6 +762,7 @@ async def get_connection_states(
     The v2 ``traffic-flows`` endpoint reports already-completed flows with
     start/end timestamps, not a live connection table.
     """
+    site_id = validate_site_id(site_id)
     raise NotImplementedError(
         "get_connection_states is not supported: the v2 traffic-flows "
         "endpoint does not report explicit connection states. It returns "
@@ -771,6 +785,7 @@ async def block_flow_source_ip(
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a firewall rule blocking the source IP of a specific flow."""
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow source IP", dry_run)
 
     flow_dict = await get_traffic_flow_details(site_id, flow_id, settings)
@@ -800,6 +815,7 @@ async def block_flow_destination_ip(
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a firewall rule blocking the destination IP of a specific flow."""
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow destination IP", dry_run)
 
     flow_dict = await get_traffic_flow_details(site_id, flow_id, settings)
@@ -835,6 +851,7 @@ async def block_flow_application(
     falls back to blocking the destination IP when no distinct application
     can be inferred.
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow application", dry_run)
 
     flow_dict = await get_traffic_flow_details(site_id, flow_id, settings)

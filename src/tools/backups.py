@@ -825,6 +825,7 @@ async def get_backup_status(
         1-3 minutes for system backups). This tool is primarily useful for
         very large deployments or system backups.
     """
+    site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
 
     try:

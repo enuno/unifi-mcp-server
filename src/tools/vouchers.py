@@ -17,6 +17,7 @@ from ..utils import (
     get_logger,
     sanitize_log_message,
     validate_confirmation,
+    validate_site_id,
 )
 
 logger = get_logger(__name__)
@@ -61,6 +62,7 @@ async def list_vouchers(
     Returns:
         List of vouchers
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing vouchers for site {site_id}"))
 
@@ -95,6 +97,7 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
     Returns:
         Voucher details
     """
+    site_id = validate_site_id(site_id)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting voucher {voucher_id} for site {site_id}"))
 
@@ -146,6 +149,7 @@ async def create_vouchers(
     Returns:
         Created vouchers, including their access codes
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create vouchers", dry_run)
 
     if not name:
@@ -231,6 +235,7 @@ async def delete_voucher(
     Returns:
         Deletion status
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete voucher", dry_run)
 
     async with UniFiClient(settings) as client:
@@ -280,6 +285,7 @@ async def bulk_delete_vouchers(
     Returns:
         Deletion status with the controller's reported count
     """
+    site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "bulk delete vouchers", dry_run)
 
     if not filter_expr:

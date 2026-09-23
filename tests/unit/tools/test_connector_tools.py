@@ -58,7 +58,7 @@ def make_mock_client(response: dict | None = None):
 class TestConnectorNetworkGet:
     @pytest.mark.asyncio
     async def test_success_builds_correct_endpoint(self, mock_settings):
-        """GET must proxy to connector/{console_id}/proxy/network/{path}."""
+        """GET must proxy to connector/consoles/{console_id}/proxy/network/{path}."""
         response = {"data": [{"_id": "wlan1"}]}
         with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client(response)
@@ -68,7 +68,7 @@ class TestConnectorNetworkGet:
                 settings=mock_settings,
             )
         mock_cls.return_value.get.assert_called_once_with(
-            "connector/console-abc/proxy/network/api/s/default/rest/wlanconf",
+            "connector/consoles/console-abc/proxy/network/api/s/default/rest/wlanconf",
             params=None,
         )
         assert result == response
@@ -84,7 +84,7 @@ class TestConnectorNetworkGet:
                 settings=mock_settings,
             )
         mock_cls.return_value.get.assert_called_once_with(
-            "connector/console-abc/proxy/network/api/s/default/stat/device",
+            "connector/consoles/console-abc/proxy/network/api/s/default/stat/device",
             params=None,
         )
 
@@ -100,7 +100,7 @@ class TestConnectorNetworkGet:
                 params={"_limit": "10"},
             )
         mock_cls.return_value.get.assert_called_once_with(
-            "connector/c1/proxy/network/api/s/default/rest/wlanconf",
+            "connector/consoles/c1/proxy/network/api/s/default/rest/wlanconf",
             params={"_limit": "10"},
         )
 
@@ -145,7 +145,7 @@ class TestConnectorNetworkPost:
                 confirm=True,
             )
         mock_cls.return_value.post.assert_called_once_with(
-            "connector/c1/proxy/network/api/s/default/rest/wlanconf",
+            "connector/consoles/c1/proxy/network/api/s/default/rest/wlanconf",
             json_data={"name": "Test", "security": "wpapsk"},
         )
         assert result == response
@@ -175,7 +175,7 @@ class TestConnectorNetworkPost:
             )
         mock_cls.return_value.post.assert_not_called()
         assert result["dry_run"] is True
-        assert "connector/c1/proxy/network" in result["would_post_to"]
+        assert "connector/consoles/c1/proxy/network" in result["would_post_to"]
 
 
 class TestConnectorNetworkPut:
@@ -242,7 +242,7 @@ class TestConnectorNetworkDelete:
                 confirm=True,
             )
         mock_cls.return_value.delete.assert_called_once_with(
-            "connector/c1/proxy/network/api/s/default/rest/wlanconf/wlan-123"
+            "connector/consoles/c1/proxy/network/api/s/default/rest/wlanconf/wlan-123"
         )
         assert result == {}
 
@@ -279,7 +279,7 @@ class TestConnectorNetworkDelete:
 class TestConnectorProtectGet:
     @pytest.mark.asyncio
     async def test_success_builds_protect_endpoint(self, mock_settings):
-        """GET must proxy to connector/{console_id}/proxy/protect/{path}."""
+        """GET must proxy to connector/consoles/{console_id}/proxy/protect/{path}."""
         response = {"data": [{"id": "cam-1"}]}
         with patch("src.tools.connector.SiteManagerClient") as mock_cls:
             mock_cls.return_value = make_mock_client(response)
@@ -289,7 +289,7 @@ class TestConnectorProtectGet:
                 settings=mock_settings,
             )
         mock_cls.return_value.get.assert_called_once_with(
-            "connector/console-xyz/proxy/protect/v1/cameras",
+            "connector/consoles/console-xyz/proxy/protect/v1/cameras",
             params=None,
         )
         assert result == response
@@ -320,7 +320,7 @@ class TestConnectorProtectPost:
                 confirm=True,
             )
         mock_cls.return_value.post.assert_called_once_with(
-            "connector/c1/proxy/protect/v1/cameras/cam-1/snapshot",
+            "connector/consoles/c1/proxy/protect/v1/cameras/cam-1/snapshot",
             json_data={},
         )
 
@@ -374,7 +374,7 @@ class TestConnectorProtectDelete:
                 confirm=True,
             )
         mock_cls.return_value.delete.assert_called_once_with(
-            "connector/c1/proxy/protect/v1/cameras/cam-1"
+            "connector/consoles/c1/proxy/protect/v1/cameras/cam-1"
         )
 
     @pytest.mark.asyncio

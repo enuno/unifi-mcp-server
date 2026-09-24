@@ -117,9 +117,9 @@ Devices,port_profiles,get_device_port_overrides,read,implemented,current,na
 Devices,port_profiles,set_device_port_overrides,write,implemented,current,na
 Devices,port_profiles,get_device_by_mac,read,implemented,current,na
 System,qos,list_traffic_routes,read,implemented,current,na
-System,qos,create_traffic_route,write,implemented,current,na
-System,qos,update_traffic_route,write,implemented,current,na
-System,qos,delete_traffic_route,write,implemented,current,na
+System,qos,create_traffic_route,write,missing,current,removed-issue-171-pending-v2-hardware-verification
+System,qos,update_traffic_route,write,missing,current,removed-issue-171-pending-v2-hardware-verification
+System,qos,delete_traffic_route,write,missing,current,removed-issue-171-pending-v2-hardware-verification
 Security,radius,list_radius_profiles,read,implemented,current,na
 Security,radius,get_radius_profile,read,implemented,current,na
 Security,radius,create_radius_profile,write,implemented,current,na

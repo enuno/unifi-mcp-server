@@ -2140,7 +2140,7 @@ UniFi's QoS system provides comprehensive traffic prioritization and shaping cap
 
 - **QoS Profiles**: Define traffic priority levels (0-7) with DSCP marking (0-63) for bandwidth guarantees
 - **ProAV Protocols**: Pre-configured templates for professional audio/video standards (Dante, Q-SYS, SDVoE, AVB, RAVENNA, NDI, SMPTE 2110)
-- **Smart Queue Management (SQM)**: Bufferbloat mitigation using fq_codel or CAKE algorithms
+- **Smart Queue Management (SQM)**: Bufferbloat mitigation using fq_codel on the WAN
 - **Traffic Routes**: Policy-based routing rules with match criteria (IP, port, protocol, VLAN) and actions (allow, deny, mark, shape)
 
 **Best Practices:**
@@ -2414,199 +2414,137 @@ Validate that network infrastructure meets ProAV protocol requirements.
 
 ---
 
-### Get Smart Queue Config ✅
+### Smart Queues (WAN fq_codel)
 
-Retrieve Smart Queue Management (SQM) configuration for a WAN interface.
+Smart Queues are not a separate API resource. They are three fields on the WAN
+network record served by the Local API's `rest/networkconf` collection:
+
+| Field | Type | Units | Description |
+|-------|------|-------|-------------|
+| `wan_smartq_enabled` | boolean | — | Whether the fq_codel shaper is on |
+| `wan_smartq_down_rate` | number | **kbps** | Shaped download rate |
+| `wan_smartq_up_rate` | number | **kbps** | Shaped upload rate |
+
+**Units:** the controller stores both rates in **kbps**, even though the UniFi UI
+displays them in Mbps. The MCP tools take and return **Mbps** and convert on
+both read and write. Writing a Mbps-scale value straight to the field shapes the
+line to about a thousandth of the intended rate (verified live: writing `840`
+capped a ~940 Mbps line at 0.84 Mbps).
+
+**WAN selection:** both tools accept an optional `wan_network_id` (the WAN
+record's `_id`). If it is omitted, they use the first `networkconf` record with
+`purpose: "wan"`.
+
+### Get Smart Queue Status ✅
+
+Read the Smart Queue configuration of a WAN.
 
 - **Method:** `GET`
-- **Endpoint:** `/v1/sites/{siteId}/qos/smart-queue/{wanId}`
-- **MCP Tool:** `get_smart_queue_config()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
+- **Endpoint:** `/api/s/{site}/rest/networkconf` (filtered to `purpose: "wan"`)
+- **MCP Tool:** `get_smart_queue_status(site_id, wan_network_id=None)`
 
-**Response:** `200 OK`
+**Tool Response:**
 
 ```json
 {
-  "_id": "wan-001",
-  "algorithm": "fq_codel",
-  "download_kbps": 100000,
-  "upload_kbps": 20000,
-  "overhead_bytes": 44,
-  "atm_mode": false,
-  "enabled": true
+  "wan_network_id": "5f0c...a1",
+  "wan_name": "Primary (WAN1)",
+  "enabled": true,
+  "download_mbps": 900.0,
+  "upload_mbps": 40.0
 }
 ```
+
+`download_mbps` and `upload_mbps` are `null` if the controller has no rate
+stored.
 
 ---
 
 ### Configure Smart Queue ✅
 
-Configure Smart Queue Management for bufferbloat mitigation on a WAN interface.
+Enable, retune, or disable Smart Queues on a WAN.
 
-- **Method:** `POST`
-- **Endpoint:** `/v1/sites/{siteId}/qos/smart-queue/{wanId}`
-- **MCP Tool:** `configure_smart_queue()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
+- **Method:** `PUT`
+- **Endpoint:** `/api/s/{site}/rest/networkconf/{networkId}`
+- **MCP Tool:** `configure_smart_queue(site_id, enabled=True, download_mbps=None, upload_mbps=None, wan_network_id=None, confirm=False, dry_run=False)`
 - **Requires:** `confirm=true`
 - **Supports:** `dry_run=true`
 
-**Request Body:**
+**Tool Parameters:**
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `download_kbps` | number | Yes | Download bandwidth in Kbps |
-| `upload_kbps` | number | Yes | Upload bandwidth in Kbps |
-| `algorithm` | string | No | "fq_codel" or "cake" (default: fq_codel) |
-| `overhead_bytes` | number | No | Protocol overhead (default: 44) |
-| `atm_mode` | boolean | No | ATM cell overhead (default: false) |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `site_id` | string | Yes | Site identifier |
+| `enabled` | boolean | No | Turn the shaper on or off (default: `true`) |
+| `download_mbps` | number | When enabling | Shaped download rate, 1–100000 Mbps |
+| `upload_mbps` | number | When enabling | Shaped upload rate, 1–100000 Mbps |
+| `wan_network_id` | string | No | WAN `networkconf` `_id` (default: primary WAN) |
 
-**Example Request:**
+To disable, call with `enabled=false`; the rates can be omitted.
+
+**Request Body sent to the controller** (for `download_mbps=900, upload_mbps=40`):
 
 ```json
 {
-  "download_kbps": 95000,
-  "upload_kbps": 19000,
-  "algorithm": "cake",
-  "overhead_bytes": 44,
-  "atm_mode": false
+  "wan_smartq_enabled": true,
+  "wan_smartq_down_rate": 900000,
+  "wan_smartq_up_rate": 40000
 }
 ```
 
-**Performance Note:** SQM is most effective for connections <300 Mbps. Above 300 Mbps, CPU overhead may impact performance.
+Rate fields are only included when the matching argument is given.
 
-**Response:** `200 OK`
+**Tool Response:** Same shape as `get_smart_queue_status`. The values are read
+back from the controller after the write, so they show what was stored rather
+than what was requested. With `dry_run=true`, the tool returns
+`{"dry_run": true, "wan_network_id": ..., "payload": {...}}` and sends nothing.
 
----
+**Warning:** Applying the change reprovisions the gateway, which can briefly
+interrupt WAN traffic.
 
-### Disable Smart Queue ✅
-
-Disable Smart Queue Management on a WAN interface.
-
-- **Method:** `DELETE`
-- **Endpoint:** `/v1/sites/{siteId}/qos/smart-queue/{wanId}`
-- **MCP Tool:** `disable_smart_queue()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Response:** `200 OK`
+**Performance Note:** Smart Queues work best on connections below ~300 Mbps.
+Above that, gateway CPU overhead may limit throughput.
 
 ---
 
 ### List Traffic Routes ✅
 
-List all policy-based traffic routing rules.
+List UniFi **Traffic Routes** (policy-based routing rules, e.g. sending selected clients or domains through a VPN client network).
 
 - **Method:** `GET`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes`
-- **MCP Tool:** `list_traffic_routes()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
+- **Endpoint:** `/proxy/network/v2/api/site/{site}/trafficroutes` (local gateway only)
+- **MCP Tool:** `list_traffic_routes(site_id, limit=100, offset=0)`
+- **Note:** Earlier versions read `/api/s/{site}/rest/routing`, which serves static routes, so this tool always returned `[]` (issue #171). An unexpected response shape now raises an error instead of being reported as an empty list.
 
-**Query Parameters:**
-
-| Parameter | Type | Default |
-|-----------|------|---------|
-| `offset` | number | 0 |
-| `limit` | number | 100 |
-
-**Response:** `200 OK`
+**Response:** `200 OK`, a bare JSON array (keys verbatim, values illustrative)
 
 ```json
-{
-  "data": [
-    {
-      "_id": "route-001",
-      "name": "VoIP Priority Route",
-      "action": "mark",
-      "priority": 100,
-      "match_criteria": {
-        "source_ip": "192.168.1.0/24",
-        "destination_port": 5060,
-        "protocol": "udp"
-      },
-      "dscp_marking": 46,
-      "enabled": true
-    }
-  ],
-  "total": 12,
-  "offset": 0,
-  "limit": 100
-}
+[
+  {
+    "_id": "route-001",
+    "description": "Laptop via VPN",
+    "enabled": true,
+    "matching_target": "INTERNET",
+    "network_id": "vpn-client-network-id",
+    "next_hop": "",
+    "kill_switch_enabled": true,
+    "domains": [],
+    "ip_addresses": [],
+    "ip_ranges": [],
+    "regions": [],
+    "target_devices": [
+      { "network_id": "lan-network-id", "type": "NETWORK" },
+      { "client_mac": "aa:bb:cc:dd:ee:ff", "type": "CLIENT" }
+    ]
+  }
+]
 ```
 
----
+`matching_target` is one of `INTERNET`, `DOMAIN`, `IP` or `REGION`; the matching `domains`, `ip_addresses`, `ip_ranges` or `regions` list holds the criteria. `network_id` is the interface traffic egresses through.
 
-### Create Traffic Route ✅
+### Create / Update / Delete Traffic Route ❌ (removed)
 
-Create a new policy-based traffic routing rule.
-
-- **Method:** `POST`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes`
-- **MCP Tool:** `create_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Request Body:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique route name |
-| `action` | string | Yes | "allow", "deny", "mark", "shape" |
-| `priority` | number | No | 1-1000 (default: 100) |
-| `source_ip` | string | No | CIDR notation |
-| `destination_ip` | string | No | CIDR notation |
-| `source_port` | number | No | 1-65535 |
-| `destination_port` | number | No | 1-65535 |
-| `protocol` | string | No | "tcp", "udp", "icmp" |
-| `vlan_id` | number | No | 1-4094 |
-| `dscp_marking` | number | No | 0-63 (for "mark" action) |
-| `bandwidth_limit_kbps` | number | No | ≥0 (for "shape" action) |
-| `enabled` | boolean | No | Default: true |
-
-**Example Request:**
-
-```json
-{
-  "name": "Zoom QoS Priority",
-  "action": "mark",
-  "priority": 200,
-  "match_criteria": {
-    "destination_port": 8801,
-    "protocol": "udp"
-  },
-  "dscp_marking": 34,
-  "enabled": true
-}
-```
-
-**Response:** `201 Created`
-
----
-
-### Update Traffic Route ✅
-
-Update an existing traffic routing rule.
-
-- **Method:** `PATCH`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes/{routeId}`
-- **MCP Tool:** `update_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Response:** `200 OK`
-
----
-
-### Delete Traffic Route ✅
-
-Delete a traffic routing rule.
-
-- **Method:** `DELETE`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes/{routeId}`
-- **MCP Tool:** `delete_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Response:** `200 OK`
+`create_traffic_route`, `update_traffic_route` and `delete_traffic_route` were removed (issue #171). They posted a document (`action`, `match_criteria`, `dscp_marking`, `priority`, ...) matching no UniFi resource to `rest/routing`. They will return once the v2 write path (`POST /trafficroutes`, `PUT` / `DELETE /trafficroutes/{id}`) has been verified against real hardware.
 
 ---
 

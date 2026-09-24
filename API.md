@@ -3272,21 +3272,17 @@ The assistant will use `get_port_mappings` to show exactly what's plugged into s
 
 ### Quality of Service (QoS) Management
 
-**Prompt:** "I need to prioritize video conferencing traffic on my network. Create a QoS profile for Zoom, Teams, and WebEx with high priority."
+**Prompt:** "My video calls stutter when someone is uploading. Turn on Smart Queues on my WAN for my 500/50 Mbps connection."
 
-The assistant will use `create_qos_profile` to configure traffic prioritization for common video conferencing applications.
+The assistant will use `configure_smart_queue` with `download_mbps=500` and `upload_mbps=50` to enable fq_codel shaping on the primary WAN.
 
-**Prompt:** "Show me all active QoS profiles and their bandwidth allocations."
+**Prompt:** "Is Smart Queue enabled on my WAN, and what rates is it shaping to?"
 
-Uses `list_qos_profiles` to display current QoS configuration and traffic shaping rules.
+Uses `get_smart_queue_status` to show whether the shaper is on and its download/upload rates in Mbps.
 
-**Prompt:** "Create a traffic route that sends all Netflix traffic through my secondary WAN during business hours (9 AM - 5 PM)."
+**Prompt:** "Which of my devices are routed through the VPN, and is the kill switch on?"
 
-The assistant combines `create_traffic_route` with schedule configuration to implement time-based routing policies.
-
-**Prompt:** "Set up Pro AV mode on ports 5-8 for our conference room equipment with guaranteed 1 Gbps bandwidth."
-
-Uses QoS templates and port-based traffic shaping to ensure quality for professional audio/video equipment.
+The assistant uses `list_traffic_routes` to read the site's Traffic Routes, including each route's matching target, target clients or networks, egress interface, and kill-switch setting.
 
 ### Backup & Disaster Recovery
 
@@ -3394,9 +3390,9 @@ The assistant uses `export_site_config` to generate comprehensive site documenta
 
 The assistant uses `get_network_topology` and filters for the specific device to diagnose connectivity issues.
 
-**Prompt:** "Show me all QoS profiles that have applied rate limiting in the last hour."
+**Prompt:** "Latency spikes whenever the link is busy. Is Smart Queue turned on, and are its rates set below my line speed?"
 
-Uses `list_qos_profiles` combined with statistics to identify active traffic shaping.
+Uses `get_smart_queue_status` to check the WAN's shaper state and rates.
 
 **Prompt:** "Which backup is most recent and has it been tested for restore capability?"
 
@@ -3408,22 +3404,22 @@ Uses `list_radius_accounts` or authentication logs to troubleshoot access issues
 
 ### Combining Multiple Operations
 
-**Prompt:** "I'm setting up a new branch office. Create a site, configure basic networks, set up QoS for VoIP, enable RADIUS authentication, and schedule daily backups."
+**Prompt:** "I'm setting up a new branch office. Create a site, configure basic networks, enable Smart Queues on the WAN, enable RADIUS authentication, and schedule daily backups."
 
 The assistant will orchestrate multiple MCP tools:
 
 1. `create_site` - Provision the site
 2. `create_network` - Set up VLANs
-3. `create_qos_profile` - Configure VoIP prioritization
+3. `configure_smart_queue` - Enable WAN Smart Queues
 4. `create_radius_profile` - Enable 802.1X authentication
 5. `configure_backup_schedule` - Automate backups
 
-**Prompt:** "Audit my network: show me topology depth, list all QoS policies, count clients per site, check backup status, and verify all RADIUS servers are reachable."
+**Prompt:** "Audit my network: show me topology depth, check Smart Queue status, count clients per site, check backup status, and verify all RADIUS servers are reachable."
 
 Demonstrates complex multi-tool queries combining:
 
 - `get_topology_statistics`
-- `list_qos_profiles`
+- `get_smart_queue_status`
 - `aggregate_client_stats`
 - `list_backups` + `get_backup_status`
 - `list_radius_profiles`

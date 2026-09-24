@@ -1,4 +1,4 @@
-"""Traffic route management tools.
+"""Traffic route and Smart Queue tools.
 
 Note: QoS Profile Management (5 tools), ProAV Profile Management (3 tools),
 and Smart Queue Management (3 tools) were removed because they used endpoints
@@ -8,13 +8,21 @@ endpoint patterns that Ubiquiti never implemented. The unit tests passed
 because they mock the HTTP layer, so the non-existent endpoints were never
 caught until tested against real hardware.
 
+The traffic route tools had the same defect in a quieter form (issue #171):
+they read ``rest/routing`` (which exists, but serves static routes) with a
+schema matching no UniFi resource, so ``list_traffic_routes`` always returned
+``[]``. ``list_traffic_routes`` now reads UniFi's Traffic Routes from the v2
+``trafficroutes`` endpoint. ``create_traffic_route``, ``update_traffic_route``
+and ``delete_traffic_route`` were removed until their v2 write paths can be
+verified against real hardware.
+
 See: https://developer.ui.com/network/ for documented endpoints.
 """
 
-from typing import Any, cast
+from typing import Any
 
 from ..api.client import UniFiClient
-from ..config import Settings
+from ..config import APIType, Settings
 from ..models.qos_profile import TrafficRoute
 from ..utils import (
     APIError,
@@ -25,6 +33,7 @@ from ..utils import (
     get_logger,
     sanitize_log_message,
     validate_confirmation,
+    validate_limit_offset,
     validate_site_id,
 )
 
@@ -32,7 +41,7 @@ logger = get_logger(__name__)
 
 
 # ============================================================================
-# Traffic Route Management (4 tools)
+# Traffic Routes (v2 API, local gateway only)
 # ============================================================================
 
 
@@ -42,7 +51,14 @@ async def list_traffic_routes(
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    """List all traffic routing policies for a site.
+    """List UniFi Traffic Routes (policy-based routing rules) for a site.
+
+    Reads ``/proxy/network/v2/api/site/{site}/trafficroutes``. Each route
+    says what it matches (``matching_target``: INTERNET, DOMAIN, IP or
+    REGION, with the matching ``domains`` / ``ip_addresses`` /
+    ``ip_ranges`` / ``regions``), which clients or networks it applies to
+    (``target_devices``), and the interface traffic egresses through
+    (``network_id``, e.g. a VPN client network).
 
     Args:
         site_id: Site identifier
@@ -51,9 +67,23 @@ async def list_traffic_routes(
         offset: Number of routes to skip
 
     Returns:
-        List of traffic routing policies
+        List of traffic routes
+
+    Raises:
+        NotImplementedError: When not using the local API (v2 endpoints are
+            only reachable on a local gateway)
+        APIError: When the controller's response is not a list of routes;
+            raised rather than reported as an empty list, so "no routes
+            configured" is never confused with "wrong endpoint"
     """
     site_id = validate_site_id(site_id)
+    limit, offset = validate_limit_offset(limit, offset)
+    if settings.api_type != APIType.LOCAL:
+        raise NotImplementedError(
+            "Traffic routes (v2 API) are only available when UNIFI_API_TYPE='local'. "
+            "Please configure a local UniFi gateway connection to use this tool."
+        )
+
     async with UniFiClient(settings) as client:
         logger.info(
             sanitize_log_message(
@@ -64,286 +94,18 @@ async def list_traffic_routes(
         if not client.is_authenticated:
             await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/rest/routing")
-        data = cast(
-            list[dict[str, Any]],
-            response if isinstance(response, list) else response.get("data", []),
-        )
+        normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
+        response = await client.get(f"{settings.get_v2_api_path(normalized_site_id)}/trafficroutes")
 
-        traffic_routes: list[dict[str, Any]] = [
-            route
-            for route in data
-            if "static-route_nexthop" not in route
-            and "action" in route
-            and "match_criteria" in route
-        ]
-
-        skipped_routes = len(data) - len(traffic_routes)
-        if skipped_routes:
-            logger.info(
-                sanitize_log_message(
-                    f"Skipped {skipped_routes} non-traffic route(s) returned by /rest/routing"
-                )
+        routes = response.get("data") if isinstance(response, dict) else response
+        if not isinstance(routes, list) or not all(isinstance(r, dict) for r in routes):
+            raise APIError(
+                "Unexpected response from the trafficroutes endpoint: expected a list of "
+                f"route objects, got {type(routes).__name__}"
             )
 
-        # Apply pagination over traffic routes only
-        paginated_data = traffic_routes[offset : offset + limit]
-
-        return [TrafficRoute(**route).model_dump() for route in paginated_data]
-
-
-async def create_traffic_route(
-    site_id: str,
-    name: str,
-    action: str,
-    settings: Settings,
-    description: str | None = None,
-    source_ip: str | None = None,
-    destination_ip: str | None = None,
-    source_port: int | None = None,
-    destination_port: int | None = None,
-    protocol: str | None = None,
-    vlan_id: int | None = None,
-    dscp_marking: int | None = None,
-    bandwidth_limit_kbps: int | None = None,
-    priority: int = 100,
-    enabled: bool = True,
-    confirm: bool | str = False,
-    dry_run: bool | str = False,
-) -> dict[str, Any]:
-    """Create a new traffic routing policy.
-
-    Args:
-        site_id: Site identifier
-        name: Route name
-        action: Route action (allow, deny, mark, shape)
-        settings: Application settings
-        description: Route description
-        source_ip: Source IP address or CIDR
-        destination_ip: Destination IP address or CIDR
-        source_port: Source port (1-65535)
-        destination_port: Destination port (1-65535)
-        protocol: Protocol (tcp, udp, icmp, all)
-        vlan_id: VLAN ID (1-4094)
-        dscp_marking: DSCP value to mark packets (0-63, for mark action)
-        bandwidth_limit_kbps: Bandwidth limit in kbps (for shape action)
-        priority: Route priority (1-1000, lower = higher priority)
-        enabled: Route enabled
-        confirm: Confirmation flag (required for creation)
-        dry_run: If True, validate but don't execute
-
-    Returns:
-        Created traffic route
-    """
-    site_id = validate_site_id(site_id)
-    validate_confirmation(confirm, "create traffic route", dry_run)
-
-    # Validate action
-    valid_actions = ["allow", "deny", "mark", "shape"]
-    if action not in valid_actions:
-        raise ValidationError(f"Invalid action '{action}'. Use: {', '.join(valid_actions)}")
-
-    # Validate DSCP marking
-    if dscp_marking is not None and not 0 <= dscp_marking <= 63:
-        raise ValidationError(f"DSCP marking must be 0-63, got {dscp_marking}")
-
-    # Validate priority
-    if not 1 <= priority <= 1000:
-        raise ValidationError(f"Priority must be 1-1000, got {priority}")
-
-    # Build match criteria
-    match_criteria: dict[str, Any] = {}
-    if source_ip:
-        match_criteria["source_ip"] = source_ip
-    if destination_ip:
-        match_criteria["destination_ip"] = destination_ip
-    if source_port:
-        match_criteria["source_port"] = source_port
-    if destination_port:
-        match_criteria["destination_port"] = destination_port
-    if protocol:
-        match_criteria["protocol"] = protocol
-    if vlan_id:
-        match_criteria["vlan_id"] = vlan_id
-
-    # Build route data
-    route_data: dict[str, Any] = {
-        "name": name,
-        "action": action,
-        "match_criteria": match_criteria,
-        "priority": priority,
-        "enabled": enabled,
-    }
-
-    if description:
-        route_data["description"] = description
-    if dscp_marking is not None:
-        route_data["dscp_marking"] = dscp_marking
-    if bandwidth_limit_kbps is not None:
-        route_data["bandwidth_limit_kbps"] = bandwidth_limit_kbps
-
-    if dry_run:
-        logger.info(
-            sanitize_log_message(
-                f"[DRY RUN] Would create traffic route '{name}' for site {site_id}"
-            )
-        )
-        return {"dry_run": True, "route": route_data}
-
-    async with UniFiClient(settings) as client:
-        logger.info(sanitize_log_message(f"Creating traffic route '{name}' for site {site_id}"))
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        response = await client.post(f"/ea/sites/{site_id}/rest/routing", json_data=route_data)
-
-        data = response if isinstance(response, list) else response.get("data", [])
-        if not data:
-            raise ValidationError("Failed to create traffic route")
-
-        result = TrafficRoute(**data[0]).model_dump()
-
-        await audit_action(
-            settings,
-            action_type="create_traffic_route",
-            resource_type="traffic_route",
-            resource_id=result.get("id", "unknown"),
-            details={"name": name, "action": action},
-            site_id=site_id,
-        )
-
-        return result
-
-
-async def update_traffic_route(
-    site_id: str,
-    route_id: str,
-    settings: Settings,
-    name: str | None = None,
-    action: str | None = None,
-    description: str | None = None,
-    enabled: bool | None = None,
-    priority: int | None = None,
-    confirm: bool | str = False,
-    dry_run: bool | str = False,
-) -> dict[str, Any]:
-    """Update an existing traffic routing policy.
-
-    Args:
-        site_id: Site identifier
-        route_id: Traffic route ID to update
-        settings: Application settings
-        name: New route name
-        action: New route action (allow, deny, mark, shape)
-        description: New description
-        enabled: New enabled state
-        priority: New priority (1-1000)
-        confirm: Confirmation flag (required for updates)
-        dry_run: If True, validate but don't execute
-
-    Returns:
-        Updated traffic route
-    """
-    site_id = validate_site_id(site_id)
-    validate_confirmation(confirm, "update traffic route", dry_run)
-
-    # Build update data
-    update_data: dict[str, Any] = {}
-    if name is not None:
-        update_data["name"] = name
-    if action is not None:
-        update_data["action"] = action
-    if description is not None:
-        update_data["description"] = description
-    if enabled is not None:
-        update_data["enabled"] = enabled
-    if priority is not None:
-        if not 1 <= priority <= 1000:
-            raise ValidationError(f"Priority must be 1-1000, got {priority}")
-        update_data["priority"] = priority
-
-    if not update_data:
-        raise ValidationError("No update fields provided")
-
-    if dry_run:
-        logger.info(
-            sanitize_log_message(
-                f"[DRY RUN] Would update traffic route {route_id} for site {site_id}"
-            )
-        )
-        return {"dry_run": True, "route_id": route_id, "updates": update_data}
-
-    async with UniFiClient(settings) as client:
-        logger.info(sanitize_log_message(f"Updating traffic route {route_id} for site {site_id}"))
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        response = await client.put(
-            f"/ea/sites/{site_id}/rest/routing/{route_id}", json_data=update_data
-        )
-
-        data = response if isinstance(response, list) else response.get("data", [])
-        if not data:
-            raise ValidationError(f"Failed to update traffic route {route_id}")
-
-        result = TrafficRoute(**data[0]).model_dump()
-
-        await audit_action(
-            settings,
-            action_type="update_traffic_route",
-            resource_type="traffic_route",
-            resource_id=route_id,
-            details=update_data,
-            site_id=site_id,
-        )
-
-        return result
-
-
-async def delete_traffic_route(
-    site_id: str,
-    route_id: str,
-    settings: Settings,
-    confirm: bool | str = False,
-) -> dict[str, Any]:
-    """Delete a traffic routing policy.
-
-    Args:
-        site_id: Site identifier
-        route_id: Traffic route ID to delete
-        settings: Application settings
-        confirm: Confirmation flag (required for deletion)
-
-    Returns:
-        Deletion confirmation
-    """
-    site_id = validate_site_id(site_id)
-    validate_confirmation(confirm, "delete traffic route")
-
-    async with UniFiClient(settings) as client:
-        logger.info(sanitize_log_message(f"Deleting traffic route {route_id} for site {site_id}"))
-
-        if not client.is_authenticated:
-            await client.authenticate()
-
-        await client.delete(f"/ea/sites/{site_id}/rest/routing/{route_id}")
-
-        await audit_action(
-            settings,
-            action_type="delete_traffic_route",
-            resource_type="traffic_route",
-            resource_id=route_id,
-            details={"deleted": True},
-            site_id=site_id,
-        )
-
-        return {
-            "success": True,
-            "message": f"Traffic route {route_id} deleted successfully",
-            "route_id": route_id,
-        }
+        paginated = routes[offset : offset + limit]
+        return [TrafficRoute.model_validate(route).model_dump() for route in paginated]
 
 
 # ============================================================================

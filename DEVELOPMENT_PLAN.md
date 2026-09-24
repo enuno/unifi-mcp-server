@@ -187,7 +187,7 @@ Describe how to execute the plan without losing sight of the current production 
 - Device migration tools — done
 - `NETWORK_PLAYBOOK.md` runbook library — done
 - `skills/` domain knowledge packs — done
-- `docker-compose.yml` and `HARBOR_SETUP.md` — done; `Makefile` — open
+- `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md` — done
 - Documentation synchronization across README, API, UNIFI_API, and changelog — open
 
 #### Exit criteria

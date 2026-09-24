@@ -68,7 +68,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Add `NETWORK_PLAYBOOK.md` runbook library
 - [x] Add `skills/` domain knowledge packs (channel planning, devices, network, security, system)
 - [x] Add `docker-compose.yml` and `HARBOR_SETUP.md`
-- [ ] Add `Makefile`
+- [x] Add `Makefile` (`make help` lists targets; `make ci` mirrors the blocking CI jobs)
 - [ ] Synchronize README, API.md, UNIFI_API.md, and CHANGELOG.md
 - [ ] Prepare release prep notes and version bump
 

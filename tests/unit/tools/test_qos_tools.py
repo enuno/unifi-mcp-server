@@ -1,14 +1,17 @@
-"""Tests for traffic route tools.
+"""Tests for traffic route and Smart Queue tools.
 
 Note: Tests for QoS Profile (5 tools), ProAV Profile (3 tools), and Smart
 Queue (3 tools) were removed along with the tools themselves. Those tools
-used non-existent API endpoints (rest/qosprofile, rest/wanconf).
-See src/tools/qos.py docstring for details.
+used non-existent API endpoints (rest/qosprofile, rest/wanconf). The
+create/update/delete traffic route tools were removed for the same reason
+(issue #171). See src/tools/qos.py docstring for details.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from src.utils import APIError
 
 
 @pytest.fixture
@@ -23,333 +26,180 @@ def mock_settings():
     settings.local_host = "192.168.2.1"
     settings.local_port = 443
     settings.local_verify_ssl = False
+    settings.get_v2_api_path = lambda site_id: f"/proxy/network/v2/api/site/{site_id}"
     return settings
 
 
 @pytest.fixture
 def sample_traffic_routes():
+    """Traffic Routes as the v2 endpoint returns them (keys verbatim from issue #171)."""
     return [
         {
             "_id": "route-001",
-            "name": "Block External DNS",
-            "description": "Block external DNS queries",
-            "action": "deny",
+            "description": "Streaming via VPN",
+            "domains": [{"domain": "example.com", "port_ranges": [], "ports": []}],
             "enabled": True,
-            "match_criteria": {
-                "destination_port": 53,
-                "protocol": "udp",
-            },
-            "priority": 100,
-            "site_id": "default",
+            "ip_addresses": [],
+            "ip_ranges": [],
+            "kill_switch_enabled": True,
+            "matching_target": "DOMAIN",
+            "network_id": "vpn-net-1",
+            "next_hop": "",
+            "regions": [],
+            "target_devices": [{"network_id": "lan-net-1", "type": "NETWORK"}],
         },
         {
             "_id": "route-002",
-            "name": "Prioritize VoIP",
-            "description": "Mark VoIP with EF",
-            "action": "mark",
-            "enabled": True,
-            "match_criteria": {
-                "destination_port": 5060,
-                "protocol": "udp",
-            },
-            "dscp_marking": 46,
-            "priority": 50,
-            "site_id": "default",
+            "description": "Laptop all traffic via VPN",
+            "domains": [],
+            "enabled": False,
+            "ip_addresses": [],
+            "ip_ranges": [],
+            "kill_switch_enabled": False,
+            "matching_target": "INTERNET",
+            "network_id": "vpn-net-1",
+            "next_hop": "",
+            "regions": [],
+            "target_devices": [{"client_mac": "aa:bb:cc:dd:ee:ff", "type": "CLIENT"}],
         },
     ]
 
 
+def _route_client(response):
+    """Patch UniFiClient so GET returns ``response``; return (patcher, instance)."""
+    patcher = patch("src.tools.qos.UniFiClient")
+    mock_client = patcher.start()
+    instance = AsyncMock()
+    mock_client.return_value.__aenter__.return_value = instance
+    instance.is_authenticated = True
+    instance._site_uuid_to_name = {}
+    instance.get = AsyncMock(return_value=response)
+    return patcher, instance
+
+
 class TestListTrafficRoutes:
     @pytest.mark.asyncio
-    async def test_list_traffic_routes_success(self, mock_settings, sample_traffic_routes):
+    async def test_reads_v2_trafficroutes_endpoint(self, mock_settings, sample_traffic_routes):
         from src.tools.qos import list_traffic_routes
 
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = False
-            mock_instance.authenticate = AsyncMock()
-            mock_instance.resolve_site_id = AsyncMock(return_value="default")
-            mock_instance.get = AsyncMock(return_value={"data": sample_traffic_routes})
-
+        patcher, instance = _route_client(sample_traffic_routes)
+        try:
             result = await list_traffic_routes("default", mock_settings)
+        finally:
+            patcher.stop()
 
-            assert len(result) == 2
-            assert result[0]["name"] == "Block External DNS"
-            assert result[1]["name"] == "Prioritize VoIP"
+        instance.get.assert_awaited_once_with("/proxy/network/v2/api/site/default/trafficroutes")
+        assert [r["id"] for r in result] == ["route-001", "route-002"]
+        assert result[0]["matching_target"] == "DOMAIN"
+        assert result[0]["network_id"] == "vpn-net-1"
+        assert result[0]["kill_switch_enabled"] is True
+        assert result[0]["domains"][0]["domain"] == "example.com"
+        assert result[1]["target_devices"][0]["client_mac"] == "aa:bb:cc:dd:ee:ff"
+        assert result[1]["target_devices"][0]["type"] == "CLIENT"
 
     @pytest.mark.asyncio
-    async def test_list_traffic_routes_pagination(self, mock_settings, sample_traffic_routes):
+    async def test_site_uuid_resolved_to_internal_name(self, mock_settings, sample_traffic_routes):
         from src.tools.qos import list_traffic_routes
 
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = False
-            mock_instance.authenticate = AsyncMock()
-            mock_instance.resolve_site_id = AsyncMock(return_value="default")
-            mock_instance.get = AsyncMock(
-                return_value={"data": sample_traffic_routes * 3}  # 6 routes
-            )
+        patcher, instance = _route_client(sample_traffic_routes)
+        instance._site_uuid_to_name = {"88f7af54-98f8-306a-a1c7-c9349722b1f6": "default"}
+        try:
+            await list_traffic_routes("88f7af54-98f8-306a-a1c7-c9349722b1f6", mock_settings)
+        finally:
+            patcher.stop()
 
+        instance.get.assert_awaited_once_with("/proxy/network/v2/api/site/default/trafficroutes")
+
+    @pytest.mark.asyncio
+    async def test_unknown_fields_are_preserved(self, mock_settings, sample_traffic_routes):
+        from src.tools.qos import list_traffic_routes
+
+        route = dict(sample_traffic_routes[0], future_field="kept")
+        patcher, _ = _route_client([route])
+        try:
+            result = await list_traffic_routes("default", mock_settings)
+        finally:
+            patcher.stop()
+
+        assert result[0]["future_field"] == "kept"
+
+    @pytest.mark.asyncio
+    async def test_accepts_data_envelope(self, mock_settings, sample_traffic_routes):
+        from src.tools.qos import list_traffic_routes
+
+        patcher, _ = _route_client({"data": sample_traffic_routes})
+        try:
+            result = await list_traffic_routes("default", mock_settings)
+        finally:
+            patcher.stop()
+
+        assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_list_means_no_routes(self, mock_settings):
+        from src.tools.qos import list_traffic_routes
+
+        patcher, _ = _route_client([])
+        try:
+            result = await list_traffic_routes("default", mock_settings)
+        finally:
+            patcher.stop()
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_pagination(self, mock_settings, sample_traffic_routes):
+        from src.tools.qos import list_traffic_routes
+
+        routes = [dict(sample_traffic_routes[0], _id=f"route-{i}") for i in range(6)]
+        patcher, _ = _route_client(routes)
+        try:
             result = await list_traffic_routes("default", mock_settings, limit=2, offset=2)
-            assert len(result) == 2
+        finally:
+            patcher.stop()
+
+        assert [r["id"] for r in result] == ["route-2", "route-3"]
 
     @pytest.mark.asyncio
-    async def test_list_traffic_routes_filters_static_routes_before_pagination(self, mock_settings):
+    @pytest.mark.parametrize(
+        "response",
+        [{"count": 0}, {"data": "nope"}, "unexpected", None, [1, 2]],
+        ids=["count-only", "data-not-list", "string", "none", "non-dict-items"],
+    )
+    async def test_unexpected_shape_raises_instead_of_empty(self, mock_settings, response):
+        """A payload that is not a route list must not be reported as 'no routes' (#171)."""
         from src.tools.qos import list_traffic_routes
 
-        mixed_routes = [
-            {
-                "_id": "policy-001",
-                "name": "Policy 1",
-                "action": "deny",
-                "enabled": True,
-                "match_criteria": {"destination_port": 53, "protocol": "udp"},
-                "priority": 100,
-                "site_id": "default",
-            },
-            {
-                "_id": "static-001",
-                "name": "Static Route 1",
-                "static-route_nexthop": "192.168.1.1",
-                "enabled": True,
-                "priority": 10,
-                "site_id": "default",
-            },
-            {
-                "_id": "policy-002",
-                "name": "Policy 2",
-                "action": "mark",
-                "enabled": True,
-                "match_criteria": {"destination_port": 5060, "protocol": "udp"},
-                "dscp_marking": 46,
-                "priority": 50,
-                "site_id": "default",
-            },
-            {
-                "_id": "static-002",
-                "name": "Static Route 2",
-                "static-route_nexthop": "192.168.1.2",
-                "enabled": True,
-                "priority": 20,
-                "site_id": "default",
-            },
-            {
-                "_id": "policy-003",
-                "name": "Policy 3",
-                "action": "allow",
-                "enabled": True,
-                "match_criteria": {"destination_port": 443, "protocol": "tcp"},
-                "priority": 25,
-                "site_id": "default",
-            },
-        ]
-
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = True
-            mock_instance.get = AsyncMock(return_value={"data": mixed_routes})
-
-            result = await list_traffic_routes("default", mock_settings, limit=2, offset=1)
-
-        assert [route["name"] for route in result] == ["Policy 2", "Policy 3"]
-
-
-class TestCreateTrafficRoute:
-    @pytest.mark.asyncio
-    async def test_create_traffic_route_success(self, mock_settings):
-        from src.tools.qos import create_traffic_route
-
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = False
-            mock_instance.authenticate = AsyncMock()
-            mock_instance.resolve_site_id = AsyncMock(return_value="default")
-            mock_instance.post = AsyncMock(
-                return_value={
-                    "data": [
-                        {
-                            "_id": "route-new",
-                            "name": "Test Route",
-                            "action": "allow",
-                            "enabled": True,
-                            "match_criteria": {
-                                "destination_port": 443,
-                                "protocol": "tcp",
-                            },
-                            "priority": 100,
-                            "site_id": "default",
-                        }
-                    ]
-                }
-            )
-
-            with patch("src.tools.qos.audit_action", new_callable=AsyncMock):
-                result = await create_traffic_route(
-                    site_id="default",
-                    name="Test Route",
-                    action="allow",
-                    settings=mock_settings,
-                    destination_port=443,
-                    protocol="tcp",
-                    confirm=True,
-                )
-
-            assert result["name"] == "Test Route"
-            assert result["action"] == "allow"
+        patcher, _ = _route_client(response)
+        try:
+            with pytest.raises(APIError, match="Unexpected response"):
+                await list_traffic_routes("default", mock_settings)
+        finally:
+            patcher.stop()
 
     @pytest.mark.asyncio
-    async def test_create_traffic_route_requires_confirmation(self, mock_settings):
-        from src.tools.qos import create_traffic_route
-        from src.utils.exceptions import ValidationError
+    async def test_requires_local_api(self, mock_settings):
+        from src.config import APIType
+        from src.tools.qos import list_traffic_routes
 
-        with pytest.raises(ValidationError, match="requires confirmation"):
-            await create_traffic_route(
-                site_id="default",
-                name="Test",
-                action="allow",
-                settings=mock_settings,
-                confirm=False,
-            )
+        mock_settings.api_type = APIType.CLOUD_V1
+        with pytest.raises(NotImplementedError, match="UNIFI_API_TYPE='local'"):
+            await list_traffic_routes("default", mock_settings)
 
     @pytest.mark.asyncio
-    async def test_create_traffic_route_invalid_action(self, mock_settings):
-        from src.tools.qos import create_traffic_route
-        from src.utils.exceptions import ValidationError
+    async def test_invalid_pagination_rejected(self, mock_settings):
+        from src.tools.qos import list_traffic_routes
+        from src.utils import ValidationError
 
-        with pytest.raises(ValidationError, match="Invalid action"):
-            await create_traffic_route(
-                site_id="default",
-                name="Test",
-                action="invalid",
-                settings=mock_settings,
-                confirm=True,
-            )
+        with pytest.raises(ValidationError):
+            await list_traffic_routes("default", mock_settings, limit=0)
 
-    @pytest.mark.asyncio
-    async def test_create_traffic_route_invalid_dscp(self, mock_settings):
-        from src.tools.qos import create_traffic_route
-        from src.utils.exceptions import ValidationError
+    def test_write_tools_removed(self):
+        """create/update/delete targeted a resource that does not exist (#171)."""
+        import src.tools.qos as qos
 
-        with pytest.raises(ValidationError, match="DSCP marking must be 0-63"):
-            await create_traffic_route(
-                site_id="default",
-                name="Test",
-                action="mark",
-                settings=mock_settings,
-                dscp_marking=100,  # Invalid
-                confirm=True,
-            )
-
-    @pytest.mark.asyncio
-    async def test_create_traffic_route_invalid_priority(self, mock_settings):
-        from src.tools.qos import create_traffic_route
-        from src.utils.exceptions import ValidationError
-
-        with pytest.raises(ValidationError, match="Priority must be 1-1000"):
-            await create_traffic_route(
-                site_id="default",
-                name="Test",
-                action="allow",
-                settings=mock_settings,
-                priority=2000,  # Invalid
-                confirm=True,
-            )
-
-
-class TestUpdateTrafficRoute:
-    @pytest.mark.asyncio
-    async def test_update_traffic_route_success(self, mock_settings, sample_traffic_routes):
-        from src.tools.qos import update_traffic_route
-
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = False
-            mock_instance.authenticate = AsyncMock()
-            mock_instance.resolve_site_id = AsyncMock(return_value="default")
-            updated_route = sample_traffic_routes[0].copy()
-            updated_route["enabled"] = False
-            mock_instance.put = AsyncMock(return_value={"data": [updated_route]})
-
-            with patch("src.tools.qos.audit_action", new_callable=AsyncMock):
-                result = await update_traffic_route(
-                    site_id="default",
-                    route_id="route-001",
-                    settings=mock_settings,
-                    enabled=False,
-                    confirm=True,
-                )
-
-            assert result["enabled"] is False
-
-    @pytest.mark.asyncio
-    async def test_update_traffic_route_requires_confirmation(self, mock_settings):
-        from src.tools.qos import update_traffic_route
-        from src.utils.exceptions import ValidationError
-
-        with pytest.raises(ValidationError, match="requires confirmation"):
-            await update_traffic_route(
-                site_id="default",
-                route_id="route-001",
-                settings=mock_settings,
-                enabled=False,
-                confirm=False,
-            )
-
-    @pytest.mark.asyncio
-    async def test_update_traffic_route_no_fields(self, mock_settings):
-        from src.tools.qos import update_traffic_route
-        from src.utils.exceptions import ValidationError
-
-        with pytest.raises(ValidationError, match="No update fields provided"):
-            await update_traffic_route(
-                site_id="default",
-                route_id="route-001",
-                settings=mock_settings,
-                confirm=True,
-            )
-
-
-class TestDeleteTrafficRoute:
-    @pytest.mark.asyncio
-    async def test_delete_traffic_route_success(self, mock_settings):
-        from src.tools.qos import delete_traffic_route
-
-        with patch("src.tools.qos.UniFiClient") as mock_client:
-            mock_instance = AsyncMock()
-            mock_client.return_value.__aenter__.return_value = mock_instance
-            mock_instance.is_authenticated = False
-            mock_instance.authenticate = AsyncMock()
-            mock_instance.resolve_site_id = AsyncMock(return_value="default")
-            mock_instance.delete = AsyncMock(return_value={})
-
-            with patch("src.tools.qos.audit_action", new_callable=AsyncMock):
-                result = await delete_traffic_route(
-                    site_id="default",
-                    route_id="route-001",
-                    settings=mock_settings,
-                    confirm=True,
-                )
-
-            assert result["success"] is True
-            assert result["route_id"] == "route-001"
-
-    @pytest.mark.asyncio
-    async def test_delete_traffic_route_requires_confirmation(self, mock_settings):
-        from src.tools.qos import delete_traffic_route
-        from src.utils.exceptions import ValidationError
-
-        with pytest.raises(ValidationError, match="requires confirmation"):
-            await delete_traffic_route(
-                site_id="default",
-                route_id="route-001",
-                settings=mock_settings,
-                confirm=False,
-            )
+        for name in ("create_traffic_route", "update_traffic_route", "delete_traffic_route"):
+            assert not hasattr(qos, name)
 
 
 # ============================================================================

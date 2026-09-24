@@ -2494,119 +2494,42 @@ Disable Smart Queue Management on a WAN interface.
 
 ### List Traffic Routes ✅
 
-List all policy-based traffic routing rules.
+List UniFi **Traffic Routes** (policy-based routing rules, e.g. sending selected clients or domains through a VPN client network).
 
 - **Method:** `GET`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes`
-- **MCP Tool:** `list_traffic_routes()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
+- **Endpoint:** `/proxy/network/v2/api/site/{site}/trafficroutes` (local gateway only)
+- **MCP Tool:** `list_traffic_routes(site_id, limit=100, offset=0)`
+- **Note:** Earlier versions read `/api/s/{site}/rest/routing`, which serves static routes, so this tool always returned `[]` (issue #171). An unexpected response shape now raises an error instead of being reported as an empty list.
 
-**Query Parameters:**
-
-| Parameter | Type | Default |
-|-----------|------|---------|
-| `offset` | number | 0 |
-| `limit` | number | 100 |
-
-**Response:** `200 OK`
+**Response:** `200 OK`, a bare JSON array (keys verbatim, values illustrative)
 
 ```json
-{
-  "data": [
-    {
-      "_id": "route-001",
-      "name": "VoIP Priority Route",
-      "action": "mark",
-      "priority": 100,
-      "match_criteria": {
-        "source_ip": "192.168.1.0/24",
-        "destination_port": 5060,
-        "protocol": "udp"
-      },
-      "dscp_marking": 46,
-      "enabled": true
-    }
-  ],
-  "total": 12,
-  "offset": 0,
-  "limit": 100
-}
+[
+  {
+    "_id": "route-001",
+    "description": "Laptop via VPN",
+    "enabled": true,
+    "matching_target": "INTERNET",
+    "network_id": "vpn-client-network-id",
+    "next_hop": "",
+    "kill_switch_enabled": true,
+    "domains": [],
+    "ip_addresses": [],
+    "ip_ranges": [],
+    "regions": [],
+    "target_devices": [
+      { "network_id": "lan-network-id", "type": "NETWORK" },
+      { "client_mac": "aa:bb:cc:dd:ee:ff", "type": "CLIENT" }
+    ]
+  }
+]
 ```
 
----
+`matching_target` is one of `INTERNET`, `DOMAIN`, `IP` or `REGION`; the matching `domains`, `ip_addresses`, `ip_ranges` or `regions` list holds the criteria. `network_id` is the interface traffic egresses through.
 
-### Create Traffic Route ✅
+### Create / Update / Delete Traffic Route ❌ (removed)
 
-Create a new policy-based traffic routing rule.
-
-- **Method:** `POST`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes`
-- **MCP Tool:** `create_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Request Body:**
-
-| Field | Type | Required | Constraints |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique route name |
-| `action` | string | Yes | "allow", "deny", "mark", "shape" |
-| `priority` | number | No | 1-1000 (default: 100) |
-| `source_ip` | string | No | CIDR notation |
-| `destination_ip` | string | No | CIDR notation |
-| `source_port` | number | No | 1-65535 |
-| `destination_port` | number | No | 1-65535 |
-| `protocol` | string | No | "tcp", "udp", "icmp" |
-| `vlan_id` | number | No | 1-4094 |
-| `dscp_marking` | number | No | 0-63 (for "mark" action) |
-| `bandwidth_limit_kbps` | number | No | ≥0 (for "shape" action) |
-| `enabled` | boolean | No | Default: true |
-
-**Example Request:**
-
-```json
-{
-  "name": "Zoom QoS Priority",
-  "action": "mark",
-  "priority": 200,
-  "match_criteria": {
-    "destination_port": 8801,
-    "protocol": "udp"
-  },
-  "dscp_marking": 34,
-  "enabled": true
-}
-```
-
-**Response:** `201 Created`
-
----
-
-### Update Traffic Route ✅
-
-Update an existing traffic routing rule.
-
-- **Method:** `PATCH`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes/{routeId}`
-- **MCP Tool:** `update_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Response:** `200 OK`
-
----
-
-### Delete Traffic Route ✅
-
-Delete a traffic routing rule.
-
-- **Method:** `DELETE`
-- **Endpoint:** `/v1/sites/{siteId}/qos/routes/{routeId}`
-- **MCP Tool:** `delete_traffic_route()`
-- **Implementation:** v0.2.0 Phase 3 (82% coverage)
-- **Requires:** `confirm=true`
-
-**Response:** `200 OK`
+`create_traffic_route`, `update_traffic_route` and `delete_traffic_route` were removed (issue #171). They posted a document (`action`, `match_criteria`, `dscp_marking`, `priority`, ...) matching no UniFi resource to `rest/routing`. They will return once the v2 write path (`POST /trafficroutes`, `PUT` / `DELETE /trafficroutes/{id}`) has been verified against real hardware.
 
 ---
 

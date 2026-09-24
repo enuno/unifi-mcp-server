@@ -3280,9 +3280,9 @@ The assistant will use `create_qos_profile` to configure traffic prioritization 
 
 Uses `list_qos_profiles` to display current QoS configuration and traffic shaping rules.
 
-**Prompt:** "Create a traffic route that sends all Netflix traffic through my secondary WAN during business hours (9 AM - 5 PM)."
+**Prompt:** "Which of my devices are routed through the VPN, and is the kill switch on?"
 
-The assistant combines `create_traffic_route` with schedule configuration to implement time-based routing policies.
+The assistant uses `list_traffic_routes` to read the site's Traffic Routes, including each route's matching target, target clients or networks, egress interface, and kill-switch setting.
 
 **Prompt:** "Set up Pro AV mode on ports 5-8 for our conference room equipment with guaranteed 1 Gbps bandwidth."
 

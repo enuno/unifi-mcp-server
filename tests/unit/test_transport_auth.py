@@ -180,6 +180,73 @@ def test_http_endpoint_accepts_valid_token() -> None:
     assert resp.status_code < 400
 
 
+# --- A2A HTTP routes -------------------------------------------------------
+
+_A2A_REQUESTS = [
+    ("GET", "/a2a/agent-card", None),
+    ("POST", "/a2a/discover", {}),
+    ("POST", "/a2a/delegate", {"tool_name": "list_sites", "params": {}}),
+    ("POST", "/a2a/confirm", {"token": "nope"}),
+    ("GET", "/a2a/audit", None),
+]
+
+
+def _a2a_http_app():
+    """Run main() with mcp.run stubbed out, then build its HTTP app."""
+    main = _reload_main(MCP_SERVER_TRANSPORT="streamable_http", MCP_AUTH_TOKEN="s3cr3t-token")
+    with patch.object(main.mcp, "run"):
+        main.main()
+    return main.mcp.http_app(transport="streamable-http")
+
+
+def _a2a_call(client, method, path, body, headers):
+    if method == "GET":
+        return client.get(path, headers=headers)
+    return client.post(path, json=body, headers=headers)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [{}, {"Authorization": "Bearer wrong"}, {"Authorization": "s3cr3t-token"}],
+    ids=["missing", "wrong", "no-scheme"],
+)
+@pytest.mark.parametrize(("method", "path", "body"), _A2A_REQUESTS)
+def test_a2a_routes_reject_unauthenticated(method, path, body, headers) -> None:
+    from starlette.testclient import TestClient
+
+    with TestClient(_a2a_http_app()) as client:
+        resp = _a2a_call(client, method, path, body, headers)
+    assert resp.status_code == 401
+    assert resp.headers["www-authenticate"] == "Bearer"
+
+
+@pytest.mark.parametrize(("method", "path", "body"), _A2A_REQUESTS)
+def test_a2a_routes_served_with_valid_token(method, path, body) -> None:
+    from starlette.testclient import TestClient
+
+    headers = {"Authorization": "Bearer s3cr3t-token"}
+    with TestClient(_a2a_http_app()) as client:
+        resp = _a2a_call(client, method, path, body, headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), dict)
+
+
+def test_a2a_agent_card_content_with_valid_token() -> None:
+    from starlette.testclient import TestClient
+
+    with TestClient(_a2a_http_app()) as client:
+        resp = client.get("/a2a/agent-card", headers={"Authorization": "Bearer s3cr3t-token"})
+    assert resp.json()["name"] == "unifi-mcp-server"
+
+
+def test_a2a_routes_not_registered_for_stdio() -> None:
+    main = _reload_main(MCP_SERVER_TRANSPORT="stdio")
+    with patch.object(main.mcp, "run"):
+        main.main()
+    paths = {route.path for route in main.mcp._get_additional_http_routes()}
+    assert not any(p.startswith("/a2a/") for p in paths)
+
+
 # Restore a pristine src.main for any later tests in the session.
 def teardown_module(module) -> None:  # noqa: D401
     _reload_main()

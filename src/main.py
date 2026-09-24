@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import os
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 try:
@@ -14,7 +15,7 @@ except importlib.metadata.PackageNotFoundError:
 
 from fastmcp import FastMCP
 
-from .a2a import A2AHTTPRouter, A2AState
+from .a2a import A2AState
 from .a2a.audit import get_audit_logger
 from .a2a.auth import AuthManager
 from .a2a.route_policy import ConfirmationWorkflow, SafetyController
@@ -128,6 +129,81 @@ def ensure_network_transport_authenticated(current_settings: Settings, auth_prov
             "send 'Authorization: Bearer <token>'), or use "
             "MCP_SERVER_TRANSPORT=stdio for local clients."
         )
+
+
+def register_a2a_routes(server: FastMCP, state: A2AState, auth_provider: Any) -> None:
+    """Register the /a2a/* HTTP endpoints on a FastMCP server.
+
+    FastMCP's auth provider only guards the MCP endpoint itself; custom
+    routes are served without enforcement. ``/a2a/delegate`` and
+    ``/a2a/confirm`` can trigger tool execution and ``/a2a/audit`` returns
+    logged tool parameters, so every route here checks the same bearer
+    token as ``/mcp`` via ``auth_provider.verify_token``.
+
+    Args:
+        server: The FastMCP server to register the routes on
+        state: Shared A2A handler state
+        auth_provider: The provider returned by :func:`build_auth_provider`
+            (must not be None; see :func:`ensure_network_transport_authenticated`)
+    """
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+
+    from .a2a.http_handlers import (
+        confirm_handler,
+        delegate_handler,
+        discover_handler,
+        get_agent_card_handler,
+        get_audit_handler,
+    )
+
+    def _bearer_required(
+        handler: Callable[[Request], Awaitable[Response]],
+    ) -> Callable[[Request], Awaitable[Response]]:
+        async def wrapper(request: Request) -> Response:
+            scheme, _, token = request.headers.get("authorization", "").partition(" ")
+            if scheme.lower() != "bearer" or not token.strip():
+                authorized = False
+            else:
+                authorized = await auth_provider.verify_token(token.strip()) is not None
+            if not authorized:
+                return JSONResponse(
+                    {"error": "invalid_token", "error_description": "Authentication required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            return await handler(request)
+
+        return wrapper
+
+    async def _a2a_agent_card(request: Request) -> Response:
+        return JSONResponse(get_agent_card_handler())
+
+    async def _a2a_discover(request: Request) -> Response:
+        body = await request.body()
+        payload = await request.json() if body else {}
+        return JSONResponse(await discover_handler(payload, state=state))
+
+    async def _a2a_delegate(request: Request) -> Response:
+        payload = await request.json()
+        return JSONResponse(await delegate_handler(payload, state=state))
+
+    async def _a2a_confirm(request: Request) -> Response:
+        payload = await request.json()
+        return JSONResponse(await confirm_handler(payload, state=state))
+
+    async def _a2a_audit(request: Request) -> Response:
+        payload = dict(request.query_params)
+        return JSONResponse(await get_audit_handler(payload, state=state))
+
+    for path, methods, handler in (
+        ("/a2a/agent-card", ["GET"], _a2a_agent_card),
+        ("/a2a/discover", ["POST"], _a2a_discover),
+        ("/a2a/delegate", ["POST"], _a2a_delegate),
+        ("/a2a/confirm", ["POST"], _a2a_confirm),
+        ("/a2a/audit", ["GET"], _a2a_audit),
+    ):
+        server.custom_route(path, methods=methods)(_bearer_required(handler))
 
 
 mcp_auth = build_auth_provider(settings)
@@ -581,7 +657,7 @@ def main() -> None:
         logger.info(f"Profile: {_active_profile} ({len(_TOOL_MODULES)} module(s) active)")
 
     # ---------------------------------------------------------------------------
-    # A2A protocol HTTP router (mounted when not in stdio mode)
+    # A2A protocol HTTP routes (registered when not in stdio mode)
     # ---------------------------------------------------------------------------
     a2a_state = A2AState(
         settings=settings,
@@ -590,8 +666,6 @@ def main() -> None:
         safety_controller=SafetyController(),
         confirmation_workflow=ConfirmationWorkflow(),
     )
-    a2a_router = A2AHTTPRouter(state=a2a_state)
-    _ = a2a_router  # mounted below onto FastMCP's internal Starlette app
 
     if settings.server_transport == TransportMode.STDIO:
         logger.info("Transport: stdio (default)")
@@ -602,58 +676,11 @@ def main() -> None:
         logger.info(f"Transport: {settings.server_transport.value}")
         logger.info("MCP authentication: bearer token required (MCP_AUTH_TOKEN)")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
+        register_a2a_routes(mcp, a2a_state, mcp_auth)
         logger.info(
-            "A2A endpoints: /a2a/agent-card, /a2a/discover, /a2a/delegate, /a2a/confirm, /a2a/audit"
+            "A2A endpoints (bearer token required): /a2a/agent-card, /a2a/discover, "
+            "/a2a/delegate, /a2a/confirm, /a2a/audit"
         )
-        # FastMCP 3.x HTTP transport uses an internal Starlette app; we mount
-        # the A2A router after server startup via a small wrapper.
-        from starlette.responses import JSONResponse
-
-        from .a2a.http_handlers import (
-            confirm_handler,
-            delegate_handler,
-            discover_handler,
-            get_agent_card_handler,
-            get_audit_handler,
-        )
-
-        async def _a2a_agent_card(request):
-            return JSONResponse(get_agent_card_handler())
-
-        async def _a2a_discover(request):
-            body = await request.body()
-            payload = await request.json() if body else {}
-            return JSONResponse(await discover_handler(payload, state=a2a_state))
-
-        async def _a2a_delegate(request):
-            payload = await request.json()
-            return JSONResponse(await delegate_handler(payload, state=a2a_state))
-
-        async def _a2a_confirm(request):
-            payload = await request.json()
-            return JSONResponse(await confirm_handler(payload, state=a2a_state))
-
-        async def _a2a_audit(request):
-            payload = dict(request.query_params)
-            return JSONResponse(await get_audit_handler(payload, state=a2a_state))
-
-        # Try to mount onto FastMCP's internal Starlette app if available
-        _mounted = False
-        for attr in ("app", "_app", "server", "_server"):
-            app = getattr(mcp, attr, None)
-            if app is not None and hasattr(app, "add_route"):
-                app.add_route("/a2a/agent-card", _a2a_agent_card, methods=["GET"])
-                app.add_route("/a2a/discover", _a2a_discover, methods=["POST"])
-                app.add_route("/a2a/delegate", _a2a_delegate, methods=["POST"])
-                app.add_route("/a2a/confirm", _a2a_confirm, methods=["POST"])
-                app.add_route("/a2a/audit", _a2a_audit, methods=["GET"])
-                logger.info("A2A routes mounted on FastMCP internal app")
-                _mounted = True
-                break
-        if not _mounted:
-            logger.warning(
-                "Could not auto-mount A2A routes onto FastMCP app; use A2AHTTPRouter.mount() manually"
-            )
 
         # FastMCP's run() only recognizes "streamable-http" (hyphen); our own
         # config, env var, and docs all use "streamable_http" (underscore) to

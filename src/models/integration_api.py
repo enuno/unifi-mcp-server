@@ -52,12 +52,16 @@ class IntegrationDevice(BaseModel):
     firmware_updatable: bool | None = Field(
         None, alias="firmwareUpdatable", description="Whether firmware can be updated"
     )
-    # ``features`` and ``interfaces`` are objects, not lists: the controller
-    # sends ``features.switching`` / ``features.accessPoint`` and
-    # ``interfaces.ports[...]`` / ``interfaces.radios[...]``.
-    features: dict[str, Any] | None = Field(None, description="Per-capability feature details")
-    interfaces: dict[str, Any] | None = Field(
-        None, description="Ports and radios reported by the device"
+    # ``features`` and ``interfaces`` come in two shapes. The detail endpoint
+    # sends objects (``features.switching`` / ``features.accessPoint``,
+    # ``interfaces.ports[...]`` / ``interfaces.radios[...]``); the list endpoint
+    # may send just the names (``["switching", "accessPoint"]``,
+    # ``["ports", "radios"]``), e.g. on a UDR7 (issue #170). Keep either verbatim.
+    features: dict[str, Any] | list[str] | None = Field(
+        None, description="Per-capability feature details, or capability names"
+    )
+    interfaces: dict[str, Any] | list[str] | None = Field(
+        None, description="Ports and radios reported by the device, or interface names"
     )
 
 

@@ -113,6 +113,38 @@ async def test_list_integration_devices_success(mock_settings, mock_client):
 
 
 @pytest.mark.asyncio
+async def test_list_integration_devices_accepts_list_shaped_features(mock_settings, mock_client):
+    """The list endpoint may name capabilities as lists rather than objects (issue #170)."""
+    mock_response = {
+        "offset": 0,
+        "limit": 25,
+        "count": 1,
+        "totalCount": 1,
+        "data": [
+            {
+                "id": "dev-uuid-2",
+                "macAddress": "aa:bb:cc:dd:ee:01",
+                "name": "UDR7",
+                "model": "UDR7",
+                "state": "ONLINE",
+                "features": ["switching", "accessPoint"],
+                "interfaces": ["ports", "radios"],
+            }
+        ],
+    }
+    mock_client.get = AsyncMock(return_value=mock_response)
+
+    with patch("src.tools.integration_api.UniFiClient", return_value=mock_client):
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        result = await list_integration_devices("default", mock_settings)
+
+    device = result["data"][0]
+    assert device["features"] == ["switching", "accessPoint"]
+    assert device["interfaces"] == ["ports", "radios"]
+
+
+@pytest.mark.asyncio
 async def test_get_integration_device_success(mock_settings, mock_client):
     """Test getting a single integration API device."""
     mock_response = {

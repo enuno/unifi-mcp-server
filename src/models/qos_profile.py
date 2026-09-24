@@ -3,83 +3,64 @@
 Note: QoSProfile, ProAVTemplate, SmartQueueConfig and related models were
 removed because they backed tools using non-existent API endpoints
 (rest/qosprofile, rest/wanconf). See src/tools/qos.py docstring for details.
+
+``TrafficRoute`` models UniFi's **Traffic Routes** feature (policy-based
+routing, e.g. sending selected clients or domains through a VPN), as served by
+the local v2 API at ``/proxy/network/v2/api/site/{site}/trafficroutes``. The
+previous model (``action`` / ``match_criteria`` / ``dscp_marking`` / ...)
+matched no UniFi resource and was removed along with ``RouteAction``,
+``MatchCriteria`` and ``RouteSchedule`` (issue #171).
 """
 
-from enum import Enum
+from typing import Any
 
-from pydantic import BaseModel, Field
-
-
-class RouteAction(str, Enum):
-    """Traffic route action types."""
-
-    ALLOW = "allow"  # Allow traffic
-    DENY = "deny"  # Deny traffic
-    MARK = "mark"  # Mark with DSCP
-    SHAPE = "shape"  # Shape to rate
+from pydantic import BaseModel, ConfigDict, Field
 
 
-class MatchCriteria(BaseModel):
-    """Traffic matching criteria for routing policies."""
+class TrafficRouteTargetDevice(BaseModel):
+    """A client or network whose traffic a route applies to."""
 
-    source_ip: str | None = Field(None, description="Source IP address or CIDR")
-    destination_ip: str | None = Field(None, description="Destination IP address or CIDR")
-    source_port: int | None = Field(None, ge=1, le=65535, description="Source port")
-    destination_port: int | None = Field(None, ge=1, le=65535, description="Destination port")
-    protocol: str | None = Field(None, description="Protocol (tcp, udp, icmp, all)")
-    vlan_id: int | None = Field(None, ge=1, le=4094, description="VLAN ID")
+    model_config = ConfigDict(extra="allow")
 
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
-
-
-class RouteSchedule(BaseModel):
-    """Time-based routing schedule."""
-
-    enabled: bool = Field(False, description="Enable time-based schedule")
-    days: list[str] = Field(
-        default_factory=list, description="Days active (mon, tue, wed, thu, fri, sat, sun)"
-    )
-    start_time: str | None = Field(None, description="Start time (HH:MM format)")
-    end_time: str | None = Field(None, description="End time (HH:MM format)")
-
-    class Config:
-        """Pydantic configuration."""
-
-        use_enum_values = True
+    type: str | None = Field(None, description="Target kind: CLIENT or NETWORK")
+    client_mac: str | None = Field(None, description="Client MAC (type CLIENT)")
+    network_id: str | None = Field(None, description="Network _id (type NETWORK)")
 
 
 class TrafficRoute(BaseModel):
-    """Policy-based traffic routing configuration."""
+    """A UniFi Traffic Route (policy-based routing rule).
+
+    Unknown keys are kept, so fields added by newer controller versions pass
+    through to callers instead of being dropped.
+    """
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
     id: str = Field(alias="_id", description="Route ID")
-    name: str = Field(..., description="Route name")
     description: str | None = Field(None, description="Route description")
-    action: RouteAction = Field(..., description="Route action")
-    enabled: bool = Field(True, description="Route enabled")
-
-    # Traffic matching
-    match_criteria: MatchCriteria = Field(..., description="Traffic matching criteria")
-
-    # QoS settings
-    dscp_marking: int | None = Field(None, ge=0, le=63, description="DSCP value to mark")
-    bandwidth_limit_kbps: int | None = Field(None, ge=0, description="Bandwidth limit in kbps")
-
-    # Scheduling
-    schedule: RouteSchedule | None = Field(None, description="Time-based schedule")
-
-    # Priority
-    priority: int = Field(
-        default=100, ge=1, le=1000, description="Route priority (lower = higher priority)"
+    enabled: bool | None = Field(None, description="Whether the route is active")
+    matching_target: str | None = Field(
+        None, description="What the route matches: INTERNET, DOMAIN, IP or REGION"
     )
-
-    # State
-    site_id: str | None = Field(None, description="Site ID")
-
-    class Config:
-        """Pydantic configuration."""
-
-        populate_by_name = True
-        use_enum_values = True
+    network_id: str | None = Field(
+        None, description="Network _id of the interface (e.g. VPN client, WAN) traffic egresses"
+    )
+    next_hop: str | None = Field(None, description="Explicit next-hop address, if set")
+    kill_switch_enabled: bool | None = Field(
+        None, description="Block matching traffic when the egress interface is down"
+    )
+    domains: list[dict[str, Any]] = Field(
+        default_factory=list, description="Domain matches (matching_target DOMAIN)"
+    )
+    ip_addresses: list[dict[str, Any]] = Field(
+        default_factory=list, description="IP / subnet matches (matching_target IP)"
+    )
+    ip_ranges: list[dict[str, Any]] = Field(
+        default_factory=list, description="IP range matches (matching_target IP)"
+    )
+    regions: list[str] = Field(
+        default_factory=list, description="Country codes (matching_target REGION)"
+    )
+    target_devices: list[TrafficRouteTargetDevice] = Field(
+        default_factory=list, description="Clients and networks the route applies to"
+    )

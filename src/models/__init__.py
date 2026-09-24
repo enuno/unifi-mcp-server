@@ -63,7 +63,7 @@ from .protect_event import (
 )
 from .protect_nvr import ProtectNVR
 from .protect_view import ProtectLiveView, ProtectLiveViewSlot, ProtectMetaInfo, ProtectViewer
-from .qos_profile import MatchCriteria, RouteAction, RouteSchedule, TrafficRoute
+from .qos_profile import TrafficRoute, TrafficRouteTargetDevice
 from .radius import RADIUSProfile
 from .reference_data import DeviceTag
 from .site import Site, SiteReference
@@ -135,10 +135,8 @@ __all__ = [
     "BackupValidationResult",
     "RestoreOperation",
     "RestoreStatus",
-    "RouteAction",
-    "MatchCriteria",
-    "RouteSchedule",
     "TrafficRoute",
+    "TrafficRouteTargetDevice",
     "PortProfile",
     "PortOverride",
     "PortTableEntry",

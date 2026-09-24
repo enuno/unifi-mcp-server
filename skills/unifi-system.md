@@ -61,10 +61,7 @@ Requires cloud API or Site Manager access.
 
 | Tool | Description |
 |---|---|
-| `list_traffic_routes` | List all traffic routing policies |
-| `create_traffic_route` | Create a policy-based route (e.g., route IoT via VPN) |
-| `update_traffic_route` | Modify an existing traffic route |
-| `delete_traffic_route` | Delete a traffic route (requires `confirm=True`) |
+| `list_traffic_routes` | List UniFi Traffic Routes (policy-based routing, e.g. clients or domains via VPN); local API only |
 
 ## Traffic Flow Analytics (local API only)
 

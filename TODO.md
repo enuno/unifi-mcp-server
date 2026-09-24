@@ -1,7 +1,7 @@
 # UniFi MCP Server — Active TODO
 
 **Last Updated:** 2026-09-24
-**Current Codebase:** 272 MCP tools registered in local mode across 46 tool modules; 2,202 unit tests passing
+**Current Codebase:** 275 MCP tools registered in local mode across 47 tool modules; 2,240 unit tests passing
 **Current Posture:** Phase 3 complete; Phase 4 active; Phase 5 partially started (A2A, profiles, read-only mode, audit hardening)
 
 This TODO mirrors `DEVELOPMENT_PLAN.md` and tracks the work that is still open in the repo.
@@ -63,7 +63,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [ ] Add tests for all new Phase 1–3 modules (suite is at 2,158 tests; per-module coverage gaps still need measuring against the 80% target)
 - [x] Close remaining minor gaps: Dynamic DNS full CRUD
 - [x] Close remaining minor gaps: Tagged MAC management (`src/tools/mac_tags.py`)
-- [ ] Close remaining minor gaps: Device migration tools
+- [x] Close remaining minor gaps: Device migration tools (`src/tools/device_migration.py`)
 - [ ] Fix "Received request before initialization was complete" (issue #96)
 - [x] Add `NETWORK_PLAYBOOK.md` runbook library
 - [x] Add `skills/` domain knowledge packs (channel planning, devices, network, security, system)
@@ -75,7 +75,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 ### Phase 5 — Enterprise scale & operational excellence
 
 - [ ] Add multi-controller / multi-site orchestration (runbook only: `MULTI_CONTROLLER.md`)
-- [ ] Add dry-run / change-safe mode (partial: `dry_run` exists in 31 of 48 tool modules; not yet universal or enforced in CI)
+- [ ] Add dry-run / change-safe mode (partial: `dry_run` exists in 32 of 47 tool modules; not yet universal or enforced in CI)
 - [ ] Add tool-level RBAC via API key scopes (partial: bearer auth required on network transports and `/a2a/*`; no per-tool scopes)
 - [ ] Add append-only audit logging (partial: `src/utils/audit.py` appends JSONL with credential redaction and 0600 permissions; encryption / tamper evidence tracked in issue #22)
 - [ ] Add Prometheus metrics endpoint (runbook only: `METRICS.md`)

@@ -26,7 +26,7 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
    - `src/api/` - UniFi API client
    - `src/models/` - Pydantic data models
    - `src/tools/` - MCP tool implementations
-   - `tests/unit/` - Unit tests (2,202 tests passing)
+   - `tests/unit/` - Unit tests (2,240 tests passing)
 
 ### Development Workflow
 
@@ -79,11 +79,11 @@ The server supports three UniFi API access modes:
 
 Phases 0–3 are complete (docs cleanup, Network API, Site Manager API, Protect API). **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
 
-**Phase 4 open items**: Device migration tools, `Makefile`, per-module coverage to 80%, doc sync, release prep.
+**Phase 4 open items**: `Makefile`, per-module coverage to 80%, doc sync, release prep.
 
 **Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` mode, bearer auth on network transports, credential-redacted audit log.
 
-**Total**: 272 MCP tools registered in local mode, 2,202 unit tests passing
+**Total**: 275 MCP tools registered in local mode, 2,240 unit tests passing
 
 ### Important Constraints
 

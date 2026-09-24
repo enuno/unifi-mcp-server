@@ -660,6 +660,31 @@ Removes (unadopts) an adopted device from the site. If the device is online, it 
 
 ---
 
+### Device Migration (legacy commands)
+
+Local gateway only. Both commands key on the device MAC and are sent to the
+site the device is in now.
+
+**Move to another site on this controller**
+
+- **Method:** `POST`
+- **Endpoint:** `/api/s/{site}/cmd/sitemgr`
+- **Body:** `{"cmd": "move-device", "site": "<target site _id>", "mac": "<mac>"}`
+- **MCP Tool:** `move_device_to_site()`
+- `site` is the target site's 24-hex `_id`, which only the legacy `/api/self/sites` listing returns. The tool resolves it from a short name, UI description, or `_id`.
+
+**Migrate to another controller**
+
+- **Method:** `POST`
+- **Endpoint:** `/api/s/{site}/cmd/devmgr`
+- **Body:** `{"cmd": "migrate", "mac": "<mac>", "inform_url": "http://<host>:8080/inform"}`; `{"cmd": "cancel-migrate", "mac": "<mac>"}` aborts
+- **MCP Tools:** `migrate_device()`, `cancel_device_migration()`
+- After `migrate` the device appears on the new controller as pending adoption.
+
+**Verification:** unit-tested against mocked responses; not yet exercised on live hardware.
+
+---
+
 ## Clients
 
 Endpoints for viewing and managing connected clients (wired, wireless, VPN, and guest).

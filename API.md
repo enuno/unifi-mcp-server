@@ -1136,6 +1136,71 @@ stop broadcasting.
 - `confirm` (boolean/string, required for execution): Set true to apply
 - `dry_run` (boolean/string, optional): Preview without applying
 
+### Device Migration Tools
+
+Move a device to another site on this controller, or hand it to another
+controller. Local API only (`UNIFI_API_TYPE=local`). Each tool finds the
+device in `site_id` first (by MAC in any common format, or by 24-hex device
+ID), so a typo fails before any command is sent and a dry run names the
+device that would move. All three are mutating: they require `confirm=true`
+unless `dry_run=true`, and are hidden in read-only mode.
+
+#### `move_device_to_site`
+
+Move an adopted device to another site on the same controller
+(`cmd/sitemgr` `move-device`). The device reprovisions with the target
+site's configuration, so expect a brief outage on it and anything behind it.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device is in now
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `target_site` (string, required): Destination site by short name
+  (e.g. `default`), UI description, or 24-hex `_id`. A description shared by
+  several sites is rejected as ambiguous.
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+**Example:**
+
+```python
+result = await mcp.call_tool("move_device_to_site", {
+    "site_id": "default",
+    "device_id": "aa:bb:cc:dd:ee:01",
+    "target_site": "Branch Office",
+    "dry_run": True
+})
+```
+
+#### `migrate_device`
+
+Migrate a device to another controller by setting its inform URL
+(`cmd/devmgr` `migrate`). The device then appears on the new controller as
+pending adoption; adopt it there to finish. An offline device only receives
+the command when it next checks in, and the result carries a warning.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device is in now
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `inform_url` (string, required): `http(s)://<host>[:port]/inform`, e.g.
+  `http://controller.example.net:8080/inform`. Other paths, credentials,
+  query strings, and non-HTTP schemes are rejected.
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+#### `cancel_device_migration`
+
+Abort a pending migration (`cmd/devmgr` `cancel-migrate`). Only useful before
+the device is adopted on the new controller.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device was migrated from
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
 ### Site Management Tools
 
 #### `get_site_details`

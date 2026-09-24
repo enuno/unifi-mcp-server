@@ -33,6 +33,7 @@ from .tools import clients as clients_tools
 from .tools import connector as connector_tools
 from .tools import content_filtering as content_filtering_tools
 from .tools import device_control as device_control_tools
+from .tools import device_migration as device_migration_tools
 from .tools import devices as devices_tools
 from .tools import dhcp_reservations as dhcp_tools
 from .tools import diagnostics as diagnostics_tools
@@ -269,6 +270,7 @@ _LOCAL_TOOL_MODULES = [
     clients_tools,
     content_filtering_tools,
     device_control_tools,
+    device_migration_tools,
     diagnostics_tools,
     dhcp_tools,
     dns_tools,
@@ -328,6 +330,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
     ],
     "devices": [
         device_control_tools,
+        device_migration_tools,
         devices_tools,
         diagnostics_tools,
         mac_tags_tools,

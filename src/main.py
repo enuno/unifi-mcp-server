@@ -661,10 +661,23 @@ def main() -> None:
         # translate at this one call site rather than changing the public
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
+        run_kwargs: dict[str, Any] = {}
+        if settings.server_transport != TransportMode.SSE:
+            # Stop sessionless, non-initialize requests (health checks, probes)
+            # from each leaking a registered session in the MCP SDK (issue #173).
+            import fastmcp
+            from starlette.middleware import Middleware
+
+            from .utils.session_guard import SessionlessRequestGuard
+
+            run_kwargs["middleware"] = [
+                Middleware(SessionlessRequestGuard, path=fastmcp.settings.streamable_http_path)
+            ]
         mcp.run(
             transport=transport,
             host=settings.server_host,
             port=settings.server_port,
+            **run_kwargs,
         )
 
 

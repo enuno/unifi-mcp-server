@@ -168,6 +168,11 @@ Devices,switching,list_mclag_domains,read,implemented,current,na
 Devices,switching,get_mclag_domain,read,implemented,current,na
 Devices,switching,list_lags,read,implemented,current,na
 Devices,switching,get_lag_details,read,implemented,current,na
+Devices,mac_tags,list_mac_tags,read,implemented,current,na
+Devices,mac_tags,get_mac_tag,read,implemented,current,na
+Devices,mac_tags,create_mac_tag,write,implemented,current,na
+Devices,mac_tags,update_mac_tag,write,implemented,current,na
+Devices,mac_tags,delete_mac_tag,write,implemented,current,na
 Network,topology,get_network_topology,read,implemented,current,na
 Network,topology,get_device_connections,read,implemented,current,na
 Network,topology,get_port_mappings,read,implemented,current,na

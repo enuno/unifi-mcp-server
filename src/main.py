@@ -45,6 +45,7 @@ from .tools import firewall_groups as firewall_groups_tools
 from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
 from .tools import integration_api as integration_api_tools
+from .tools import mac_tags as mac_tags_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
@@ -280,6 +281,7 @@ _LOCAL_TOOL_MODULES = [
     firewall_groups_tools,
     firewall_policies_tools,
     firewall_zones_tools,
+    mac_tags_tools,
     network_config_tools,
     networks_tools,
     port_fwd_tools,
@@ -328,6 +330,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         device_control_tools,
         devices_tools,
         diagnostics_tools,
+        mac_tags_tools,
         port_profile_tools,
         switching_tools,
         topology_tools,

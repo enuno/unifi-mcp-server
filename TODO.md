@@ -1,7 +1,7 @@
 # UniFi MCP Server — Active TODO
 
 **Last Updated:** 2026-09-24
-**Current Codebase:** 267 MCP tools registered in local mode across 45 tool modules; 2,158 unit tests passing
+**Current Codebase:** 272 MCP tools registered in local mode across 46 tool modules; 2,202 unit tests passing
 **Current Posture:** Phase 3 complete; Phase 4 active; Phase 5 partially started (A2A, profiles, read-only mode, audit hardening)
 
 This TODO mirrors `DEVELOPMENT_PLAN.md` and tracks the work that is still open in the repo.
@@ -62,7 +62,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 
 - [ ] Add tests for all new Phase 1–3 modules (suite is at 2,158 tests; per-module coverage gaps still need measuring against the 80% target)
 - [x] Close remaining minor gaps: Dynamic DNS full CRUD
-- [ ] Close remaining minor gaps: Tagged MAC management
+- [x] Close remaining minor gaps: Tagged MAC management (`src/tools/mac_tags.py`)
 - [ ] Close remaining minor gaps: Device migration tools
 - [ ] Fix "Received request before initialization was complete" (issue #96)
 - [x] Add `NETWORK_PLAYBOOK.md` runbook library

@@ -3575,6 +3575,18 @@ Returns all device tags defined within a site (used for WiFi Broadcast assignmen
 
 **Response:** `200 OK`
 
+### MAC Tags (legacy, writable)
+
+The Integration API only lists device tags. Tags are created and edited on the
+local gateway's legacy REST collection, where each tag is a name plus a
+`member_table` of device MAC addresses.
+
+- **Endpoint:** `/api/s/{site}/rest/tag` (`GET`, `POST`) and `/api/s/{site}/rest/tag/{tagId}` (`GET`, `PUT`, `DELETE`)
+- **Body:** `{"name": "Lobby APs", "member_table": ["aa:bb:cc:dd:ee:01"]}`
+- **MCP Tools:** `list_mac_tags()`, `get_mac_tag()`, `create_mac_tag()`, `update_mac_tag()`, `delete_mac_tag()`
+- **API mode:** local only
+- **Verification:** unit-tested against mocked responses; not yet exercised on live hardware. Writes re-read the tag when the controller does not echo it, and report any member difference as a warning.
+
 ### List DPI Categories
 
 Returns predefined Deep Packet Inspection (DPI) categories used for traffic identification and filtering.

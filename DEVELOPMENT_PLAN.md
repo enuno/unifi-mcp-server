@@ -2,7 +2,7 @@
 
 **Document Version:** 2026-09-24
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
-**Repository Baseline:** 267 MCP tools registered in local mode across 45 tool modules; 2,158 unit tests passing
+**Repository Baseline:** 272 MCP tools registered in local mode across 46 tool modules; 2,202 unit tests passing
 **Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started)
 
 ---
@@ -98,6 +98,7 @@ Describe how to execute the plan without losing sight of the current production 
 | Diagnostics | Complete | Speed test, spectrum scan, historical stats |
 | Events / Alarms | Complete | Controller events, alarms, neighboring APs |
 | Dynamic DNS | Complete | Full CRUD |
+| Tagged MACs | Complete | Device tag CRUD on legacy `rest/tag` (local only) |
 | Protect | Complete | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
 | Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
@@ -107,7 +108,7 @@ Describe how to execute the plan without losing sight of the current production 
 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
-- Tagged MAC management and device migration tools are not yet implemented.
+- Device migration tools are not yet implemented.
 - Access API is not yet implemented.
 - Multi-controller orchestration is not yet implemented (runbook only).
 - Prometheus metrics and the Redis webhook event bus are not yet implemented (runbooks only).
@@ -182,7 +183,7 @@ Describe how to execute the plan without losing sight of the current production 
 
 - Full test coverage for new Phase 1–3 modules — in progress
 - Dynamic DNS full CRUD — done
-- Tagged MAC management — open
+- Tagged MAC management — done
 - Device migration tools — open
 - `NETWORK_PLAYBOOK.md` runbook library — done
 - `skills/` domain knowledge packs — done

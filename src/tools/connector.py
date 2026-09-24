@@ -4,8 +4,8 @@ The UniFi Cloud Connector allows reaching into a locally-managed UniFi
 controller through Ubiquiti's cloud relay without requiring a public IP or VPN.
 
 Endpoint pattern:
-  Network:  /v1/connector/{console_id}/proxy/network/{path}
-  Protect:  /v1/connector/{console_id}/proxy/protect/{path}
+  Network:  /v1/connector/consoles/{console_id}/proxy/network/{path}
+  Protect:  /v1/connector/consoles/{console_id}/proxy/protect/{path}
 
 The ``console_id`` is the host identifier returned by ``list_hosts``.
 These tools require ``UNIFI_SITE_MANAGER_ENABLED=true``.
@@ -46,7 +46,7 @@ async def connector_network_get(
     """Proxy a GET request to the Network Application via Cloud Connector.
 
     Forwards the request to
-    ``https://api.ui.com/v1/connector/{console_id}/proxy/network/{path}``
+    ``https://api.ui.com/v1/connector/consoles/{console_id}/proxy/network/{path}``
     and returns the raw response.
 
     Args:
@@ -69,7 +69,7 @@ async def connector_network_get(
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
-        endpoint = f"connector/{console_id}/proxy/network/{path}"
+        endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
         logger.info(f"Connector network GET: {endpoint}")
         return await client.get(endpoint, params=params)
 
@@ -105,7 +105,7 @@ async def connector_network_post(
     validate_confirmation(confirm, "connector_network_post", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/network/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_post_to": endpoint, "body": body}
@@ -142,7 +142,7 @@ async def connector_network_put(
     validate_confirmation(confirm, "connector_network_put", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/network/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_put_to": endpoint, "body": body}
@@ -179,7 +179,7 @@ async def connector_network_patch(
     validate_confirmation(confirm, "connector_network_patch", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/network/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_patch_to": endpoint, "body": body}
@@ -214,7 +214,7 @@ async def connector_network_delete(
     validate_confirmation(confirm, "connector_network_delete", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/network/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_delete": endpoint}
@@ -238,7 +238,7 @@ async def connector_protect_get(
     """Proxy a GET request to the Protect Application via Cloud Connector.
 
     Forwards the request to
-    ``https://api.ui.com/v1/connector/{console_id}/proxy/protect/{path}``
+    ``https://api.ui.com/v1/connector/consoles/{console_id}/proxy/protect/{path}``
     and returns the raw response.
 
     Args:
@@ -261,7 +261,7 @@ async def connector_protect_get(
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
-        endpoint = f"connector/{console_id}/proxy/protect/{path}"
+        endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
         logger.info(f"Connector protect GET: {endpoint}")
         return await client.get(endpoint, params=params)
 
@@ -293,7 +293,7 @@ async def connector_protect_post(
     validate_confirmation(confirm, "connector_protect_post", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/protect/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_post_to": endpoint, "body": body}
@@ -330,7 +330,7 @@ async def connector_protect_put(
     validate_confirmation(confirm, "connector_protect_put", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/protect/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_put_to": endpoint, "body": body}
@@ -367,7 +367,7 @@ async def connector_protect_patch(
     validate_confirmation(confirm, "connector_protect_patch", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/protect/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_patch_to": endpoint, "body": body}
@@ -402,7 +402,7 @@ async def connector_protect_delete(
     validate_confirmation(confirm, "connector_protect_delete", dry_run)
     path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
-    endpoint = f"connector/{console_id}/proxy/protect/{path}"
+    endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
     if dry_run:
         return {"dry_run": True, "would_delete": endpoint}

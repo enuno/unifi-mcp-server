@@ -6,7 +6,7 @@ This file provides project-specific instructions for AI coding assistants workin
 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
 
-**Current Version**: v0.2.3
+**Current Version**: v0.2.5 (package version; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 **Python Version**: 3.10+
 **Framework**: FastMCP
 
@@ -26,7 +26,7 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
    - `src/api/` - UniFi API client
    - `src/models/` - Pydantic data models
    - `src/tools/` - MCP tool implementations
-   - `tests/unit/` - Unit tests (1,156 tests passing)
+   - `tests/unit/` - Unit tests (2,158 tests passing)
 
 ### Development Workflow
 
@@ -77,31 +77,13 @@ The server supports three UniFi API access modes:
 
 ### Current Development Focus
 
-**Version 0.2.3** (Current):
+Phases 0–3 are complete (docs cleanup, Network API, Site Manager API, Protect API). **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
 
-- ✅ P1 API bug fixes (QoS audit_action, Site Manager decorator, Topology warnings, Backup client methods)
-- ✅ P2 RADIUS & Guest Portal — Complete CRUD (get/update for RADIUS accounts and hotspot packages)
+**Phase 4 open items**: Tagged MAC management, device migration tools, `Makefile`, per-module coverage to 80%, doc sync, release prep.
 
-**Version 0.2.2** (Complete ✅):
+**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` mode, bearer auth on network transports, credential-redacted audit log.
 
-- ✅ Port Profile & Switch Port Management (8 tools)
-- ✅ Security hardening (dependency updates, PII removal)
-- ✅ API endpoint fixes (RADIUS, firewall, WLAN, network)
-- ✅ Bug fixes (dry_run, list handling, type hints)
-
-**Version 0.2.0** (Complete ✅):
-
-- ✅ Zone-Based Firewall (7 working tools)
-- ✅ Traffic Flow Monitoring (15 tools)
-- ✅ Advanced QoS (11 tools)
-- ✅ Backup & Restore (8 tools)
-- ✅ Multi-Site Aggregation (4 tools)
-- ✅ ACL & Traffic Filtering (7 tools)
-- ✅ Site Management (9 tools)
-- ✅ RADIUS & Guest Portal (10 tools — full CRUD)
-- ✅ Network Topology (5 tools)
-
-**Total**: 86+ MCP tools, 1,156 tests passing
+**Total**: 267 MCP tools registered in local mode, 2,158 unit tests passing
 
 ### Important Constraints
 
@@ -134,5 +116,5 @@ The server supports three UniFi API access modes:
 
 ---
 
-**Last Updated**: 2026-02-18
+**Last Updated**: 2026-09-24
 **Maintained By**: Development Team

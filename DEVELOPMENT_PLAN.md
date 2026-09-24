@@ -1,8 +1,9 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-07-01
+**Document Version:** 2026-09-24
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
-**Repository Baseline:** ~220 async tool functions across 40+ modules
+**Repository Baseline:** 275 MCP tools registered in local mode across 47 tool modules; 2,240 unit tests passing
+**Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started)
 
 ---
 
@@ -79,7 +80,7 @@ Describe how to execute the plan without losing sight of the current production 
 | Firewall Groups | Complete | Address and port group CRUD |
 | Traffic Flows | Complete | Real-time flows with documented 50-flow cap |
 | DPI | Complete | Statistics, top applications, client DPI |
-| QoS / Traffic Routes | Complete | Traffic route CRUD |
+| QoS / Traffic Routes | Partial | Smart Queue read/configure; Traffic Routes read-only from the v2 endpoint (write tools removed in #178 until verified on hardware) |
 | Traffic Matching Lists | Complete | CRUD |
 | Port Forwarding | Complete | CRUD |
 | Port Profiles | Complete | Profile CRUD and device port overrides |
@@ -94,16 +95,25 @@ Describe how to execute the plan without losing sight of the current production 
 | Site Manager | Partial | Aggregated sites, health, inventory, ISP metrics, SD-WAN read, hosts, version control |
 | Device Control | Complete | Upgrade, restart, locate, LED |
 | Cloud Connector | Complete | Network and Protect proxy tools |
-| Diagnostics | Complete | Speed test, spectrum scan |
+| Diagnostics | Complete | Speed test, spectrum scan, historical stats |
+| Events / Alarms | Complete | Controller events, alarms, neighboring APs |
+| Dynamic DNS | Complete | Full CRUD |
+| Tagged MACs | Complete | Device tag CRUD on legacy `rest/tag` (local only) |
+| Device Migration | Complete | Move between sites (`move-device`), migrate to another controller (`migrate` / `cancel-migrate`); local only |
+| Protect | Complete | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests |
+| A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
+| Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
+| Audit logging | Partial | JSONL append-mode log with credential redaction and 0600 permissions; encryption / tamper evidence open (issue #22) |
 
 ### 2.2 Known limitations
 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
-- Protect native client coverage is not yet implemented.
+- Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented.
-- Multi-controller orchestration is not yet implemented.
-- Dry-run, RBAC, audit logging, and metrics are not yet universal across all write paths.
-- Context-reduction profiles exist conceptually but need formal registry and manifest filtering.
+- Multi-controller orchestration is not yet implemented (runbook only).
+- Prometheus metrics and the Redis webhook event bus are not yet implemented (runbooks only).
+- Dry-run covers 32 of 47 tool modules and is not enforced in CI; per-tool RBAC scopes do not exist yet.
+- Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 
 ---
 
@@ -135,7 +145,7 @@ Describe how to execute the plan without losing sight of the current production 
 
 ## 4. Phased implementation plan
 
-### Phase 3: Protect API integration
+### Phase 3: Protect API integration (complete)
 
 **Goal:** deliver native Protect coverage on top of the existing Network and Site Manager foundation.
 
@@ -165,20 +175,20 @@ Describe how to execute the plan without losing sight of the current production 
 
 ---
 
-### Phase 4: Testing, polish, minor gaps, and developer experience
+### Phase 4: Testing, polish, minor gaps, and developer experience (active)
 
 **Goal:** harden the server, close remaining small gaps, and ship AI-friendly operational assets.
 
 #### Deliverables
 
-- Full test coverage for new Phase 1–3 modules
-- Dynamic DNS full CRUD
-- Tagged MAC management
-- Device migration tools
-- `NETWORK_PLAYBOOK.md` runbook library
-- `skills/` domain knowledge packs
-- `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md`
-- Documentation synchronization across README, API, UNIFI_API, and changelog
+- Full test coverage for new Phase 1–3 modules — in progress
+- Dynamic DNS full CRUD — done
+- Tagged MAC management — done
+- Device migration tools — done
+- `NETWORK_PLAYBOOK.md` runbook library — done
+- `skills/` domain knowledge packs — done
+- `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md` — done
+- Documentation synchronization across README, API, UNIFI_API, and changelog — open
 
 #### Exit criteria
 
@@ -188,21 +198,21 @@ Describe how to execute the plan without losing sight of the current production 
 
 ---
 
-### Phase 5: Enterprise scale and operational excellence
+### Phase 5: Enterprise scale and operational excellence (partially started)
 
 **Goal:** turn the server into a multi-site, multi-team operating platform with strong safety and observability controls.
 
 #### Deliverables
 
-- Multi-controller / multi-site orchestration
-- Dry-run / change-safe mode
-- Tool-level RBAC via API key scopes
-- Append-only audit log
-- Prometheus metrics endpoint
-- A2A agent card and manifest
-- Webhook event bus with Redis pub/sub
-- Tool exposure profiles for network, protect, access, talk, drive, and read-only sessions
-- Access API implementation
+- Multi-controller / multi-site orchestration — open (runbook only)
+- Dry-run / change-safe mode — partial
+- Tool-level RBAC via API key scopes — partial (transport-level bearer auth only)
+- Append-only audit log — partial (issue #22 open)
+- Prometheus metrics endpoint — open (runbook only)
+- A2A agent card and manifest — done
+- Webhook event bus with Redis pub/sub — partial (receiver only)
+- Tool exposure profiles for network, protect, access, talk, drive, and read-only sessions — partial (read-only and protect done)
+- Access API implementation — open
 
 #### Exit criteria
 
@@ -218,14 +228,16 @@ Describe how to execute the plan without losing sight of the current production 
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.2.5 | Current stable release | Baseline release artifact |
-| v0.3.0 | Phases 0–2 completion | Docs sync, Network refs, connector foundation |
-| v0.4.0 | Phase 3 | Protect API integration |
+| v0.2.5 | Current package version | `pyproject.toml` version on `main` |
+| v0.3.0 | Phases 0–2 completion | Shipped on `main`; never tagged or version-bumped |
+| v0.4.0 | Phase 3 | Protect API integration; `CHANGELOG.md` has a `[0.4.0]` section, but no tag or version bump exists |
 | v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
 | v1.1.0+ | Post-Phase 5 | Access expansion and follow-on domains |
 
 ---
+
+> **Release versioning needs reconciling before the next release.** `main` still declares 0.2.5, a `v0.2.6` tag exists on a commit that is not on `main`, and `CHANGELOG.md` has a `[0.4.0]` heading with no matching tag. Phase 4 release prep has to pick the next version number and fold the `[0.4.0]` and `[Unreleased]` entries into it.
 
 ## 6. Required downstream docs
 

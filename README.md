@@ -562,6 +562,15 @@ pre-commit install
 pre-commit install --hook-type commit-msg
 ```
 
+**Using make:** the repository `Makefile` wraps the uv commands above, and every
+target runs through the locked environment, so no activation is needed:
+
+```bash
+make install   # uv sync --frozen --extra dev
+make hooks     # install the pre-commit and commit-msg hooks
+make help      # list every target
+```
+
 #### 3. Configure Environment
 
 ```bash
@@ -586,6 +595,12 @@ pytest tests/unit/ --cov=src --cov-report=html --cov-report=term-missing
 open htmlcov/index.html  # macOS
 # Or: xdg-open htmlcov/index.html  # Linux
 ```
+
+The same checks CI runs are available as `make` targets: `make test`,
+`make test-cov` (with the 80% coverage gate), `make lint`, `make format`,
+`make security`, `make docs-coverage`, `make pre-commit`, and `make ci` to run
+all of the blocking ones. `make typecheck` runs mypy, which CI does not block on
+yet.
 
 #### 5. Run the Server
 

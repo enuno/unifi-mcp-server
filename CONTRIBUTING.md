@@ -67,6 +67,8 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 uv pip install -e ".[dev]"
 ```
 
+With `make`, `make install` does the same from `uv.lock` (`uv sync --frozen --extra dev`).
+
 ### 3. Set Up Pre-commit Hooks
 
 Pre-commit hooks ensure code quality and consistency before commits:
@@ -75,6 +77,8 @@ Pre-commit hooks ensure code quality and consistency before commits:
 pre-commit install
 pre-commit install --hook-type commit-msg
 ```
+
+Or run `make hooks`.
 
 ### 4. Configure Environment
 
@@ -260,6 +264,7 @@ expired. Now it automatically re-authenticates.
 
 1. Ensure all tests pass: `pytest`
 2. Ensure code passes all pre-commit checks: `pre-commit run --all-files`
+   (`make ci` runs these plus every other blocking CI check: lint, bandit, docstring coverage and the 80% coverage gate)
 3. Update the `README.md` or other documentation with details of changes
 4. Update the `API.md` if you've added new MCP tools or resources
 5. Rebase your branch on the latest `main` if needed

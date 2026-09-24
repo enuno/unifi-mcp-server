@@ -1036,6 +1036,171 @@ Delete a Dynamic DNS record. Mutating operation; requires `confirm=true` unless
 - `confirm` (boolean/string, required for execution): Set true to apply
 - `dry_run` (boolean/string, optional): Preview without applying
 
+### Tagged MAC Tools
+
+A tag is a named set of device MAC addresses (`member_table`). The controller
+uses tags to target WiFi broadcasts at a subset of access points. These tools
+read and write the local gateway's legacy `rest/tag` endpoint and require
+`UNIFI_API_TYPE=local`; `list_device_tags` is the read-only Integration API view.
+MACs are accepted with any common separator and normalized to lowercase colon
+form. Write tools compare what the controller stored against the request and
+attach `warnings` on any difference.
+
+#### `list_mac_tags`
+
+List MAC tags on a site.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:**
+Array of tags with `id`, `name`, `member_table` (device MACs) and `member_count`.
+
+#### `get_mac_tag`
+
+Get one MAC tag by ID.
+
+**Parameters:**
+
+- `tag_id` (string, required): Tag ID (24-hex ObjectId)
+- `site_id` (string, required): Site identifier
+
+#### `create_mac_tag`
+
+Create a MAC tag. Mutating operation; requires `confirm=true` unless
+`dry_run=true`. A name that matches an existing tag (case-insensitive) is
+rejected instead of creating a duplicate.
+
+**Parameters:**
+
+- `name` (string, required): Tag display name
+- `macs` (array, required): Device MAC addresses to assign (may be empty)
+- `site_id` (string, required): Site identifier
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+**Example:**
+
+```python
+result = await mcp.call_tool("create_mac_tag", {
+    "site_id": "default",
+    "name": "Lobby APs",
+    "macs": ["aa:bb:cc:dd:ee:01", "AA-BB-CC-DD-EE-02"],
+    "confirm": True
+})
+```
+
+#### `update_mac_tag`
+
+Rename a MAC tag or change its members. Mutating operation; requires
+`confirm=true` unless `dry_run=true`. `add_macs`/`remove_macs` are applied to
+the tag's current members, so members added by someone else are kept. `macs`
+replaces the member list outright (`[]` clears it) and cannot be combined with
+`add_macs`/`remove_macs`. A dry run returns `changes` (`added_macs`,
+`removed_macs`, `name`) and the `merged_payload` that would be sent.
+
+**Parameters:**
+
+- `tag_id` (string, required): Tag ID
+- `site_id` (string, required): Site identifier
+- `name` (string, optional): New display name
+- `macs` (array, optional): Full replacement member list
+- `add_macs` (array, optional): MACs to add
+- `remove_macs` (array, optional): MACs to remove
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+**Example:**
+
+```python
+result = await mcp.call_tool("update_mac_tag", {
+    "site_id": "default",
+    "tag_id": "5f1e2d3c4b5a697886950413",
+    "add_macs": ["aa:bb:cc:dd:ee:03"],
+    "remove_macs": ["aa:bb:cc:dd:ee:01"],
+    "dry_run": True
+})
+```
+
+#### `delete_mac_tag`
+
+Delete a MAC tag. Mutating operation; requires `confirm=true` unless
+`dry_run=true`. A WLAN that broadcasts only on this tag's access points may
+stop broadcasting.
+
+**Parameters:**
+
+- `tag_id` (string, required): Tag ID
+- `site_id` (string, required): Site identifier
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+### Device Migration Tools
+
+Move a device to another site on this controller, or hand it to another
+controller. Local API only (`UNIFI_API_TYPE=local`). Each tool finds the
+device in `site_id` first (by MAC in any common format, or by 24-hex device
+ID), so a typo fails before any command is sent and a dry run names the
+device that would move. All three are mutating: they require `confirm=true`
+unless `dry_run=true`, and are hidden in read-only mode.
+
+#### `move_device_to_site`
+
+Move an adopted device to another site on the same controller
+(`cmd/sitemgr` `move-device`). The device reprovisions with the target
+site's configuration, so expect a brief outage on it and anything behind it.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device is in now
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `target_site` (string, required): Destination site by short name
+  (e.g. `default`), UI description, or 24-hex `_id`. A description shared by
+  several sites is rejected as ambiguous.
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+**Example:**
+
+```python
+result = await mcp.call_tool("move_device_to_site", {
+    "site_id": "default",
+    "device_id": "aa:bb:cc:dd:ee:01",
+    "target_site": "Branch Office",
+    "dry_run": True
+})
+```
+
+#### `migrate_device`
+
+Migrate a device to another controller by setting its inform URL
+(`cmd/devmgr` `migrate`). The device then appears on the new controller as
+pending adoption; adopt it there to finish. An offline device only receives
+the command when it next checks in, and the result carries a warning.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device is in now
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `inform_url` (string, required): `http(s)://<host>[:port]/inform`, e.g.
+  `http://controller.example.net:8080/inform`. Other paths, credentials,
+  query strings, and non-HTTP schemes are rejected.
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
+#### `cancel_device_migration`
+
+Abort a pending migration (`cmd/devmgr` `cancel-migrate`). Only useful before
+the device is adopted on the new controller.
+
+**Parameters:**
+
+- `site_id` (string, required): Site the device was migrated from
+- `device_id` (string, required): Device MAC or 24-hex device ID
+- `confirm` (boolean/string, required for execution): Set true to apply
+- `dry_run` (boolean/string, optional): Preview without applying
+
 ### Site Management Tools
 
 #### `get_site_details`

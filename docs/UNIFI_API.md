@@ -660,6 +660,31 @@ Removes (unadopts) an adopted device from the site. If the device is online, it 
 
 ---
 
+### Device Migration (legacy commands)
+
+Local gateway only. Both commands key on the device MAC and are sent to the
+site the device is in now.
+
+**Move to another site on this controller**
+
+- **Method:** `POST`
+- **Endpoint:** `/api/s/{site}/cmd/sitemgr`
+- **Body:** `{"cmd": "move-device", "site": "<target site _id>", "mac": "<mac>"}`
+- **MCP Tool:** `move_device_to_site()`
+- `site` is the target site's 24-hex `_id`, which only the legacy `/api/self/sites` listing returns. The tool resolves it from a short name, UI description, or `_id`.
+
+**Migrate to another controller**
+
+- **Method:** `POST`
+- **Endpoint:** `/api/s/{site}/cmd/devmgr`
+- **Body:** `{"cmd": "migrate", "mac": "<mac>", "inform_url": "http://<host>:8080/inform"}`; `{"cmd": "cancel-migrate", "mac": "<mac>"}` aborts
+- **MCP Tools:** `migrate_device()`, `cancel_device_migration()`
+- After `migrate` the device appears on the new controller as pending adoption.
+
+**Verification:** unit-tested against mocked responses; not yet exercised on live hardware.
+
+---
+
 ## Clients
 
 Endpoints for viewing and managing connected clients (wired, wireless, VPN, and guest).
@@ -3574,6 +3599,18 @@ Returns all device tags defined within a site (used for WiFi Broadcast assignmen
 | `filter` | string | - |
 
 **Response:** `200 OK`
+
+### MAC Tags (legacy, writable)
+
+The Integration API only lists device tags. Tags are created and edited on the
+local gateway's legacy REST collection, where each tag is a name plus a
+`member_table` of device MAC addresses.
+
+- **Endpoint:** `/api/s/{site}/rest/tag` (`GET`, `POST`) and `/api/s/{site}/rest/tag/{tagId}` (`GET`, `PUT`, `DELETE`)
+- **Body:** `{"name": "Lobby APs", "member_table": ["aa:bb:cc:dd:ee:01"]}`
+- **MCP Tools:** `list_mac_tags()`, `get_mac_tag()`, `create_mac_tag()`, `update_mac_tag()`, `delete_mac_tag()`
+- **API mode:** local only
+- **Verification:** unit-tested against mocked responses; not yet exercised on live hardware. Writes re-read the tag when the controller does not echo it, and report any member difference as a warning.
 
 ### List DPI Categories
 

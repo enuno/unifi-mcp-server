@@ -62,7 +62,7 @@ The MCP endpoint is available at `http://localhost:3000/mcp` by default.
 
 #### Claude Code
 
-Claude Code supports HTTP MCP servers natively. Add a `.mcp.json` to the project root (already included in this repo):
+Claude Code supports HTTP MCP servers natively. Add a `.mcp.json` to the project root:
 
 ```json
 {

@@ -119,3 +119,51 @@ async def test_authenticate_awaits_rate_limiter(
 
     rate_limiter.acquire.assert_awaited()
     mock_http_client.get.assert_awaited_with("sites")
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("method", ["list_sites", "list_hosts"])
+@patch("src.api.site_manager_client.httpx.AsyncClient")
+@patch("src.api.site_manager_client.RateLimiter")
+async def test_list_limit_maps_to_page_size(
+    mock_rate_limiter: MagicMock,
+    mock_http_client_cls: MagicMock,
+    mock_settings: MockSettings,
+    method: str,
+) -> None:
+    """The Site Manager API paginates with pageSize/nextToken, not limit/offset."""
+    mock_rate_limiter.return_value = AsyncMock()
+    mock_http_client = _build_mock_http_client()
+    mock_http_client_cls.return_value = mock_http_client
+
+    client = SiteManagerClient(cast(Any, mock_settings))
+    client._authenticated = True
+
+    await getattr(client, method)(limit=2)
+
+    mock_http_client.get.assert_awaited_once_with(
+        method.removeprefix("list_"), params={"pageSize": 2}
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("method", ["list_sites", "list_hosts"])
+@patch("src.api.site_manager_client.httpx.AsyncClient")
+@patch("src.api.site_manager_client.RateLimiter")
+async def test_list_offset_is_not_sent(
+    mock_rate_limiter: MagicMock,
+    mock_http_client_cls: MagicMock,
+    mock_settings: MockSettings,
+    method: str,
+) -> None:
+    """offset is accepted for schema compatibility but the API has no such parameter."""
+    mock_rate_limiter.return_value = AsyncMock()
+    mock_http_client = _build_mock_http_client()
+    mock_http_client_cls.return_value = mock_http_client
+
+    client = SiteManagerClient(cast(Any, mock_settings))
+    client._authenticated = True
+
+    await getattr(client, method)(offset=5)
+
+    mock_http_client.get.assert_awaited_once_with(method.removeprefix("list_"), params=None)

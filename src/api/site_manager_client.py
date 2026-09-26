@@ -172,8 +172,10 @@ class SiteManagerClient:
         Returns:
             Response with sites list
         """
-        params = {"limit": limit, "offset": offset}
-        return await self.get("sites", params={k: v for k, v in params.items() if v is not None})
+        # The Site Manager API paginates with pageSize/nextToken; it ignores
+        # limit and has no offset parameter, so offset is accepted but unused.
+        params = {"pageSize": limit} if limit is not None else None
+        return await self.get("sites", params=params)
 
     async def get_site_health(self, site_id: str | None = None) -> dict[str, Any]:
         """Get health metrics for a site or all sites.
@@ -289,8 +291,10 @@ class SiteManagerClient:
         Returns:
             Response with hosts list
         """
-        params = {"limit": limit, "offset": offset}
-        return await self.get("hosts", params={k: v for k, v in params.items() if v is not None})
+        # The Site Manager API paginates with pageSize/nextToken; it ignores
+        # limit and has no offset parameter, so offset is accepted but unused.
+        params = {"pageSize": limit} if limit is not None else None
+        return await self.get("hosts", params=params)
 
     async def get_host(self, host_id: str) -> dict[str, Any]:
         """Get host details by ID.

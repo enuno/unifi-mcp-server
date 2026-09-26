@@ -70,9 +70,28 @@ async def app_lifespan(_server: FastMCP) -> AsyncIterator[None]:
         await pool.shutdown()
 
 
+SERVER_INSTRUCTIONS = (
+    "UniFi Network Controller tools.\n"
+    "- Start with list_all_sites to obtain a site_id; most tools require it.\n"
+    "- All mutating tools require confirm=True. Call with confirm=False first "
+    "to get a dry-run preview of the change without applying it.\n"
+    "- Integration API endpoints require UUID ids (as returned by list_* tools). "
+    "MongoDB ObjectId values from the legacy API are rejected.\n"
+    "- Device actions through the Integration API support only RESTART. "
+    "locate_device and upgrade_device use the legacy cmd/devmgr API instead.\n"
+    "- Client actions (block, unblock, reconnect, forget) take MAC addresses "
+    "directly; no id translation is needed.\n"
+    "- Legacy and Integration responses use different field names "
+    "(mac/macAddress, ip/ipAddress, _id/id); do not assume one shape.\n"
+    "- list_firewall_policies and list_active_clients return the full "
+    "unpaginated list and can be very large. Prefer search_clients, "
+    "get_client_details and get_firewall_policy when you need one item."
+)
+
 # Initialize FastMCP server
 mcp = FastMCP(
     "UniFi MCP Server",
+    instructions=SERVER_INSTRUCTIONS,
     lifespan=app_lifespan,
     providers=[
         devices_provider,

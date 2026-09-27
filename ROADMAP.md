@@ -122,8 +122,6 @@ Goal: turn the server into a multi-site, multi-team operating platform with stro
 |---|---|---|
 | v0.2.5 | Current stable release | Baseline release artifact |
 | v0.3.0 | Phases 0–2 completion | Docs sync, Network refs, connector foundation |
-| v0.4.0 | Phase 3 | Protect API integration |
-| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience, API-spec alignment |
+| v0.4.0 | Phase 3 | Protect API integration (folded into v0.5.0 — never tagged) |
+| v0.5.0 | Phases 3+4+5a+6 | Next release (prepped 2026-09-27): 364 tools/60 modules, spec alignment v10.6.106/v7.3.68, Protect v7 expansion, Mobility/InnerSpace/Carrier Fabric, transport auth hardening |
 | v1.0.0 | Phase 5 | Enterprise scale and operational excellence |
-| v1.1.0 | Phase 5a | Protect v7 expansion (39 new operations) |
-| v1.2.0+ | Phase 6 | Mobility, InnerSpace, Carrier Fabric; Access if/when a spec is published |

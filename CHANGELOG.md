@@ -5,13 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-09-27
+
+> Folds the never-tagged `[0.4.0]` changes and everything since into the first release cut from `main` since v0.2.5. `main` previously declared 0.2.5 while carrying Phase 3-6 work; `pyproject.toml` now matches the tag.
 
 ### Added
 
 - **Protect v7 expansion (Phase 5a)**: 40 new tools across 10 modules implementing the Protect v7.3.68 surface — arm profiles with alarm enable/disable (`arm-profiles` CRUD, `set_current_protect_arm_profile`, `enable_protect_alarm`, `disable_protect_alarm`), sirens (`play`/`stop`/`test-sound`), speakers (`test-sound`), fobs, relays (incl. `activate_protect_relay_output`), bridges, link stations, alarm hubs (incl. `trigger_protect_alarm_hub_output`), Protect users, UniFi Identity (ULP) users, and POS transaction ingestion (`ingest_pos_transaction`, with sale/refund enum, amount>0, ISO-4217 currency, and 24h/5min timestamp validation). Models in `src/models/protect_v7.py` (permissive `extra="allow"`). All writes require `confirm` and support `dry_run`; `get_protect_arm_profile` is a documented convenience read (GET `{id}` not published in the v7.3.68 spec). **Mock-tested only — verify write paths against live Protect hardware.** In the `protect` (and `system`) tool profile; 57 tool modules total.
 
 - **Phase 6 — Mobility, InnerSpace, Carrier Fabric**: 25 new tools across 3 modules implementing all operations in the three newly published UniFi APIs. Mobility v1.0.0 (8 tools: workspaces, admins, devices, clients, device rename/network/wireless writes) and Carrier Fabric v1.0.0 (11 tools: service plans + full subscriber lifecycle — CRUD, host attach/detach, plan assign, suspend/resume; all writes confirm-gated) are cloud APIs on `api.ui.com` reusing the existing `SiteManagerClient` transport (no new client code; require `UNIFI_SITE_MANAGER_ENABLED`). InnerSpace v1.3.23 (6 read-only tools) proxies through the Cloud Connector at `/v1/connector/consoles/{consoleId}/proxy/innerspace/integration`. New tool exposure profiles `mobility`, `innerspace`, `carrier`; models in `src/models/{mobility,innerspace,carrier}.py`. 60 tool modules total. **Mock-tested only — verify against live cloud access.**
+
+- **Protect Phase 3 surfaces** (incorporating the previously untagged `[0.4.0]` changes): documented the read-only Protect surfaces in `API.md`, `README.md`, and `docs/UNIFI_API.md`; added `list_protect_devices` (device updates/messages), `list_protect_views` (live views/viewer metadata), and `list_protect_events` (events/alarm notifications).
+
 
 ### Security
 
@@ -102,15 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Corrected `test_update_ip` to assert the PUT body enables `use_fixedip`, and added `test_update_name_only_does_not_enable_fixedip` to ensure metadata-only updates don't flip the flag.
 - **Fixture MAC moved to the RFC 7042 documentation range**: `test_firewall_policy.py` used a sample client MAC whose OUI belongs to Proxmox/QEMU — a real VM's address from someone's network rather than a synthetic value. Replaced with `00:00:5e:00:53:01` from the range RFC 7042 reserves for documentation; the value is opaque to every assertion that reads it.
-
-## [0.4.0] - 2026-07-19
-
-### Added
-
-- **Protect Phase 3 docs update**: documented the new read-only Protect surfaces in `API.md`, `README.md`, and `docs/UNIFI_API.md` so the repo now calls out devices, live views, and events as wired where applicable.
-- **Protect device surface**: added `list_protect_devices` as the read-only device update/message tool for the Phase 3 Protect module.
-- **Protect views surface**: added `list_protect_views` as the live views / viewer metadata tool for the Phase 3 Protect module.
-- **Protect events surface**: added `list_protect_events` as the read-only Protect event / alarm notification tool for the Phase 3 Protect module.
 
 ## [0.2.4] - 2026-02-19
 

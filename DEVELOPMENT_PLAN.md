@@ -209,8 +209,8 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 - `NETWORK_PLAYBOOK.md` runbook library — done
 - `skills/` domain knowledge packs — done
 - `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md` — done
-- Documentation synchronization across README, API, UNIFI_API, and changelog — open
-- API-spec alignment wave (§2.3) — in progress:
+- Documentation synchronization across README, API, UNIFI_API, and changelog — done (2026-09-27: README tool totals, UNIFI_API.md v10.6.106 + v7.3.68 + Phase 6 mappings, CHANGELOG [0.5.0] fold; API.md spot-checks clean)
+- API-spec alignment wave (§2.3) — done:
   - `docs/UNIFI_API.md` version bump 10.3.55 → 10.6.106 + version-history entry + removal of embedded v10.1.68 artifacts — done
   - `docs/UNIFI_API.md` Protect section updated to v7.3.68 with the 39 new operations documented as planned (not yet implemented) — done
   - Replace legacy puppeteer scrapers with direct-download spec artifacts (`openapi.json` / `llms.txt`) — done (`scripts/fetch-specs.sh`; scrapers deprecated in `scripts/README.md`)
@@ -317,17 +317,14 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.2.5 | Current package version | `pyproject.toml` version on `main` |
-| v0.3.0 | Phases 0–2 completion | Shipped on `main`; never tagged or version-bumped |
-| v0.4.0 | Phase 3 | Protect API integration; `CHANGELOG.md` has a `[0.4.0]` section, but no tag or version bump exists |
-| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience, API-spec alignment (v10.6.106 / v7.3.68) |
+| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Next release (prepped 2026-09-27, tag pending)**: 364 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
+| v0.2.5 | Last tagged release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v1.1.0 | Phase 5a | Protect v7 expansion (39 new operations) |
-| v1.2.0+ | Phase 6 | Mobility, InnerSpace, Carrier Fabric; Access if/when Ubiquiti publishes a spec |
+| v0.6.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; Phase 5 items as they land |
 
 ---
 
-> **Release versioning needs reconciling before the next release.** `main` still declares 0.2.5, a `v0.2.6` tag exists on a commit that is not on `main`, and `CHANGELOG.md` has a `[0.4.0]` heading with no matching tag. Phase 4 release prep has to pick the next version number and fold the `[0.4.0]` and `[Unreleased]` entries into it.
+> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. Remaining release steps: hardware verification of mock-tested surfaces (below), then `git tag v0.5.0 && git push origin v0.5.0` (triggers `.github/workflows/release.yml`).
 
 ## 6. Required downstream docs
 

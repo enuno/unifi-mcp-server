@@ -4537,9 +4537,9 @@ pip install httpx urllib3
 
 ---
 
-### Protect v7.3.68 — planned surface (not yet implemented)
+### Protect v7.3.68 — implemented (Phase 5a, 2026-09-27)
 
-> Verified against the canonical spec snapshot `scripts/protect-api-spec-v7.3.68.json` (audit 2026-09-26). These 39 operations shipped in Protect v7 and are **not** implemented in this server — queued as Phase 5a in `DEVELOPMENT_PLAN.md`. The v6-era surfaces documented above remain valid but must be re-verified against v7 schemas during implementation.
+> Verified against the canonical spec snapshot `scripts/protect-api-spec-v7.3.68.json` (audit 2026-09-26). These 39 operations shipped in Protect v7 and are now implemented as MCP tools across 10 modules (sirens, alarm/arm-profiles, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS). **Mock-tested only — verify against live Protect hardware before relying on write paths** (same caveat as the F1–F3 Integration API findings: mocked tests assert the code's assumptions, not controller behavior). All writes require `confirm=True` and support `dry_run`.
 
 **Arm profiles / alarm control (7)**
 - `GET /v1/arm-profiles` — list arm profiles
@@ -4581,4 +4581,4 @@ pip install httpx urllib3
 **Point of sale (1)**
 - `POST /v1/pos/cameras/{id}/transactions` — ingest POS transaction
 
-All proxy through the Cloud Connector under `/v1/connector/consoles/{consoleId}/proxy/protect/integration`. Write operations (arm profile CRUD, alarm enable/disable, siren/speaker/relay/alarm-hub triggers and patches, POS ingestion) must ship behind `UNIFI_READ_ONLY`, `confirm=True`, dry-run interception, and audit logging.
+All proxy through the Cloud Connector under `/v1/connector/consoles/{consoleId}/proxy/protect/integration`. Write operations (arm profile CRUD, alarm enable/disable, siren/speaker/relay/alarm-hub triggers and patches, POS ingestion) ship behind `UNIFI_READ_ONLY` (mutating tools are not registered in read-only mode), `confirm=True`, `dry_run` preview, and are covered by mocked unit tests. Tool names map as: `list_protect_arm_profiles` / `get_protect_arm_profile` / `create_protect_arm_profile` / `update_protect_arm_profile` / `delete_protect_arm_profile` / `set_current_protect_arm_profile` / `enable_protect_alarm` / `disable_protect_alarm`, `list_protect_sirens` / `get_protect_siren` / `update_protect_siren` / `play_protect_siren` / `stop_protect_siren` / `test_protect_siren_sound`, `list_protect_speakers` / `get_protect_speaker` / `update_protect_speaker` / `test_protect_speaker_sound`, `list_protect_fobs` / `get_protect_fob` / `update_protect_fob`, `list_protect_relays` / `get_protect_relay` / `update_protect_relay` / `activate_protect_relay_output`, `list_protect_bridges` / `get_protect_bridge` / `update_protect_bridge`, `list_protect_link_stations` / `get_protect_link_station` / `update_protect_link_station`, `list_protect_alarm_hubs` / `get_protect_alarm_hub` / `update_protect_alarm_hub` / `trigger_protect_alarm_hub_output`, `list_protect_users` / `get_protect_user`, `list_protect_ulp_users` / `get_protect_ulp_user`, and `ingest_pos_transaction`.

@@ -256,16 +256,17 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### Deliverables
 
-- `src/models/protect_*.py` models for the new v7 device categories
+- `src/models/protect_v7.py` models for the new v7 device categories — done
 - Tool modules for:
-  - Arm profiles (list, create, update, delete, set-current) and alarm enable/disable — **write tools must respect `UNIFI_READ_ONLY` and `confirm=True` conventions**
-  - Sirens (CRUD + play/stop/test-sound), speakers (CRUD + test-sound)
-  - Fobs, relays (incl. output activation), bridges, link stations, alarm hubs (incl. output trigger)
-  - Protect users and UniFi Identity (ULP) users (read)
-  - POS transaction ingestion (write; confirm-gated)
-- `docs/UNIFI_API.md` Protect section: 39 new operations documented with request/response shapes from `protect-api-spec-v7.3.68.json`
-- Mocked integration tests mirroring the Phase 3 pattern (no live hardware dependency)
-- Optional: alarm state exposed as MCP resources (arm status, active siren state)
+  - Arm profiles (list, create, update, delete, set-current) and alarm enable/disable — **write tools must respect `UNIFI_READ_ONLY` and `confirm=True` conventions** — done (`src/tools/protect_alarm.py`)
+  - Sirens (CRUD + play/stop/test-sound), speakers (CRUD + test-sound) — done (`protect_sirens.py`, `protect_speakers.py`)
+  - Fobs, relays (incl. output activation), bridges, link stations, alarm hubs (incl. output trigger) — done (`protect_fobs.py`, `protect_relays.py`, `protect_bridges.py`, `protect_link_stations.py`, `protect_alarm_hubs.py`)
+  - Protect users and UniFi Identity (ULP) users (read) — done (`protect_users.py`)
+  - POS transaction ingestion (write; confirm-gated) — done (`protect_pos.py`)
+- `docs/UNIFI_API.md` Protect section: 39 new operations documented with request/response shapes from `protect-api-spec-v7.3.68.json` — done (marked implemented with hardware-verification caveat)
+- Mocked integration tests mirroring the Phase 3 pattern (no live hardware dependency) — done (+108 unit tests across 10 test modules; suite 2386 passed)
+- Optional: alarm state exposed as MCP resources — deferred
+- Live-hardware verification of write paths — **open** (mocked tests assert the code's assumptions; same class of risk as audit findings F1–F3)
 
 #### Scope
 

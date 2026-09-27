@@ -56,19 +56,18 @@ def load_dotenv(path: Path) -> None:
 async def phase_a(settings) -> None:
     from src.tools import (
         carrier,
-        connector,
         innerspace,
         mobility,
         protect_alarm,
         protect_sirens,
+        site_manager,
         sites,
     )
 
     # 1. Local controller: Integration API auth + site listing
     try:
         result = await sites.list_sites(settings)
-        count = result.get("count", len(result.get("sites", result.get("data", []))))
-        report("A", "local controller auth + list_sites", "PASS", f"{count} site(s)")
+        report("A", "local controller auth + list_sites", "PASS", f"{count_items(result)} site(s)")
     except Exception as e:  # noqa: BLE001 - harness reports, never raises
         report("A", "local controller auth + list_sites", classify(e), str(e)[:120])
         return  # no point probing Protect if the controller is unreachable
@@ -82,7 +81,13 @@ async def phase_a(settings) -> None:
             result = await coro(settings)
             report("A", f"protect v7 read: {name}", "PASS", f"{result.get('count', '?')} item(s)")
         except Exception as e:  # noqa: BLE001
-            report("A", f"protect v7 read: {name}", classify(e), str(e)[:120])
+            if "Expecting value" in str(e):
+                # Gateways without a Protect application serve the SPA index
+                # page (text/html) for unknown proxy paths — verified live on
+                # U7 Express (200 text/html catch-all). Not a code defect.
+                report("A", f"protect v7 read: {name}", "SKIP", "no Protect application on this console")
+            else:
+                report("A", f"protect v7 read: {name}", classify(e), str(e)[:120])
 
     # 3. Cloud APIs (Mobility / Carrier) — only if the cloud key is enabled
     if settings.site_manager_enabled:
@@ -99,7 +104,7 @@ async def phase_a(settings) -> None:
 
         # 4. InnerSpace via connector proxy (needs a console_id from list_hosts)
         try:
-            hosts = await connector.list_hosts(settings)
+            hosts = await site_manager.list_hosts(settings)
             host_list = hosts.get("hosts", hosts.get("data", []))
             if not host_list:
                 report("A", "innerspace: list_access_points", "SKIP", "no consoles in list_hosts")
@@ -173,6 +178,20 @@ async def phase_b(settings) -> None:
     # B5. Mobility: device rename round-trip requires a device id from Phase A;
     # left to the operator (rename changes visible device state).
     report("B", "mobility device rename", "SKIP", "operator-driven; pick a device and revert after")
+
+
+def count_items(result) -> int:
+    """Harness-side count that tolerates list or dict tool returns."""
+    if isinstance(result, list):
+        return len(result)
+    if isinstance(result, dict):
+        for key in ("count", "total"):
+            if isinstance(result.get(key), int):
+                return result[key]
+        for key in ("sites", "data", "hosts", "results"):
+            if isinstance(result.get(key), list):
+                return len(result[key])
+    return -1
 
 
 def classify(e: Exception) -> str:

@@ -13,8 +13,8 @@ const __dirname = path.dirname(__filename);
 
 const API_SOURCES = [
   { name: 'Site Manager', url: 'https://developer.ui.com/site-manager/v1.0.0/gettingstarted', version: 'v1.0.0' },
-  { name: 'Network', url: 'https://developer.ui.com/network/v10.1.68/gettingstarted', version: 'v10.1.68' },
-  { name: 'Protect', url: 'https://developer.ui.com/protect/v6.2.83/gettingstarted', version: 'v6.2.83' }
+  { name: 'Network', url: 'https://developer.ui.com/network/v10.6.106/gettingstarted', version: 'v10.6.106' },
+  { name: 'Protect', url: 'https://developer.ui.com/protect/v7.3.68/gettingstarted', version: 'v7.3.68' }
 ];
 
 const DOCS_PATH = path.join(__dirname, '../docs/UNIFI_API.md');

@@ -34,7 +34,7 @@ function parseArgs() {
     headed: args.includes('--headed'),
     debug: args.includes('--debug'),
     clearSession: args.includes('--clear-session'),
-    version: args.find(arg => arg.startsWith('--version='))?.split('=')[1] || '10.1.68'
+    version: args.find(arg => arg.startsWith('--version='))?.split('=')[1] || '10.6.106'
   };
 }
 

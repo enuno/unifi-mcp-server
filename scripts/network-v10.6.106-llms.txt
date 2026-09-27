@@ -1,0 +1,122 @@
+# Network API Documentation (v10.6.106)
+
+> Network API reference for version v10.6.106. For all services and latest versions, see [llms.txt](https://developer.ui.com/llms.txt).
+
+Authentication: All APIs use API Key authentication via the `X-API-KEY` header. Generate keys at unifi.ui.com.
+
+## Specifications
+- [OpenAPI Spec](https://developer.ui.com/network/v10.6.106/openapi.json): Machine-readable OpenAPI specification
+- [Postman Collection](https://developer.ui.com/network/v10.6.106/postman-collection.json): Postman collection for import
+
+## Network (v10.6.106)
+
+**General**
+- [Getting Started](https://developer.ui.com/network/v10.6.106/gettingstarted)
+- [Filtering](https://developer.ui.com/network/v10.6.106/filtering)
+- [Error Handling](https://developer.ui.com/network/v10.6.106/error-handling)
+
+**API Endpoints**
+
+*Application Info*
+- `GET /v1/info` - [Get Application Info](https://developer.ui.com/network/v10.6.106/getinfo)
+
+*Sites*
+- `GET /v1/sites` - [List Local Sites](https://developer.ui.com/network/v10.6.106/getsiteoverviewpage)
+
+*UniFi Devices*
+- `GET /v1/pending-devices` - [List Devices Pending Adoption](https://developer.ui.com/network/v10.6.106/getpendingdevicepage)
+- `GET /v1/sites/{siteId}/devices` - [List Adopted Devices](https://developer.ui.com/network/v10.6.106/getadopteddeviceoverviewpage)
+- `POST /v1/sites/{siteId}/devices` - [Adopt Devices](https://developer.ui.com/network/v10.6.106/adoptdevice)
+- `DELETE /v1/sites/{siteId}/devices/{deviceId}` - [Remove (Unadopt) Device](https://developer.ui.com/network/v10.6.106/removedevice)
+- `GET /v1/sites/{siteId}/devices/{deviceId}` - [Get Adopted Device Details](https://developer.ui.com/network/v10.6.106/getadopteddevicedetails)
+- `POST /v1/sites/{siteId}/devices/{deviceId}/actions` - [Execute Adopted Device Action](https://developer.ui.com/network/v10.6.106/executeadopteddeviceaction)
+- `POST /v1/sites/{siteId}/devices/{deviceId}/interfaces/ports/{portIdx}/actions` - [Execute Port Action](https://developer.ui.com/network/v10.6.106/executeportaction)
+- `GET /v1/sites/{siteId}/devices/{deviceId}/statistics/latest` - [Get Latest Adopted Device Statistics](https://developer.ui.com/network/v10.6.106/getadopteddevicelateststatistics)
+
+*Clients*
+- `GET /v1/sites/{siteId}/clients` - [List Connected Clients](https://developer.ui.com/network/v10.6.106/getconnectedclientoverviewpage)
+- `GET /v1/sites/{siteId}/clients/{clientId}` - [Get Connected Client Details](https://developer.ui.com/network/v10.6.106/getconnectedclientdetails)
+- `POST /v1/sites/{siteId}/clients/{clientId}/actions` - [Execute Client Action](https://developer.ui.com/network/v10.6.106/executeconnectedclientaction)
+
+*Networks*
+- `GET /v1/sites/{siteId}/networks` - [List Networks](https://developer.ui.com/network/v10.6.106/getnetworksoverviewpage)
+- `POST /v1/sites/{siteId}/networks` - [Create Network](https://developer.ui.com/network/v10.6.106/createnetwork)
+- `DELETE /v1/sites/{siteId}/networks/{networkId}` - [Delete Network](https://developer.ui.com/network/v10.6.106/deletenetwork)
+- `GET /v1/sites/{siteId}/networks/{networkId}` - [Get Network Details](https://developer.ui.com/network/v10.6.106/getnetworkdetails)
+- `PUT /v1/sites/{siteId}/networks/{networkId}` - [Update Network](https://developer.ui.com/network/v10.6.106/updatenetwork)
+- `GET /v1/sites/{siteId}/networks/{networkId}/references` - [Get Network References](https://developer.ui.com/network/v10.6.106/getnetworkreferences)
+
+*WiFi Broadcasts*
+- `GET /v1/sites/{siteId}/wifi/broadcasts` - [List Wifi Broadcasts](https://developer.ui.com/network/v10.6.106/getwifibroadcastpage)
+- `POST /v1/sites/{siteId}/wifi/broadcasts` - [Create Wifi Broadcast](https://developer.ui.com/network/v10.6.106/createwifibroadcast)
+- `DELETE /v1/sites/{siteId}/wifi/broadcasts/{wifiBroadcastId}` - [Delete Wifi Broadcast](https://developer.ui.com/network/v10.6.106/deletewifibroadcast)
+- `GET /v1/sites/{siteId}/wifi/broadcasts/{wifiBroadcastId}` - [Get Wifi Broadcast Details](https://developer.ui.com/network/v10.6.106/getwifibroadcastdetails)
+- `PUT /v1/sites/{siteId}/wifi/broadcasts/{wifiBroadcastId}` - [Update Wifi Broadcast](https://developer.ui.com/network/v10.6.106/updatewifibroadcast)
+
+*Hotspot*
+- `DELETE /v1/sites/{siteId}/hotspot/vouchers` - [Delete Vouchers](https://developer.ui.com/network/v10.6.106/deletevouchers)
+- `GET /v1/sites/{siteId}/hotspot/vouchers` - [List Vouchers](https://developer.ui.com/network/v10.6.106/getvouchers)
+- `POST /v1/sites/{siteId}/hotspot/vouchers` - [Generate Vouchers](https://developer.ui.com/network/v10.6.106/createvouchers)
+- `DELETE /v1/sites/{siteId}/hotspot/vouchers/{voucherId}` - [Delete Voucher](https://developer.ui.com/network/v10.6.106/deletevoucher)
+- `GET /v1/sites/{siteId}/hotspot/vouchers/{voucherId}` - [Get Voucher Details](https://developer.ui.com/network/v10.6.106/getvoucher)
+
+*Firewall*
+- `GET /v1/sites/{siteId}/firewall/policies` - [List Firewall Policies](https://developer.ui.com/network/v10.6.106/getfirewallpolicies)
+- `POST /v1/sites/{siteId}/firewall/policies` - [Create Firewall Policy](https://developer.ui.com/network/v10.6.106/createfirewallpolicy)
+- `GET /v1/sites/{siteId}/firewall/policies/ordering` - [Get User-Defined Firewall Policy Ordering](https://developer.ui.com/network/v10.6.106/getfirewallpolicyordering)
+- `PUT /v1/sites/{siteId}/firewall/policies/ordering` - [Reorder User-Defined Firewall Policies](https://developer.ui.com/network/v10.6.106/updatefirewallpolicyordering)
+- `DELETE /v1/sites/{siteId}/firewall/policies/{firewallPolicyId}` - [Delete Firewall Policy](https://developer.ui.com/network/v10.6.106/deletefirewallpolicy)
+- `GET /v1/sites/{siteId}/firewall/policies/{firewallPolicyId}` - [Get Firewall Policy](https://developer.ui.com/network/v10.6.106/getfirewallpolicy)
+- `PATCH /v1/sites/{siteId}/firewall/policies/{firewallPolicyId}` - [Patch Firewall Policy](https://developer.ui.com/network/v10.6.106/patchfirewallpolicy)
+- `PUT /v1/sites/{siteId}/firewall/policies/{firewallPolicyId}` - [Update Firewall Policy](https://developer.ui.com/network/v10.6.106/updatefirewallpolicy)
+- `GET /v1/sites/{siteId}/firewall/zones` - [List Firewall Zones](https://developer.ui.com/network/v10.6.106/getfirewallzones)
+- `POST /v1/sites/{siteId}/firewall/zones` - [Create Custom Firewall Zone](https://developer.ui.com/network/v10.6.106/createfirewallzone)
+- `DELETE /v1/sites/{siteId}/firewall/zones/{firewallZoneId}` - [Delete Custom Firewall Zone](https://developer.ui.com/network/v10.6.106/deletefirewallzone)
+- `GET /v1/sites/{siteId}/firewall/zones/{firewallZoneId}` - [Get Firewall Zone](https://developer.ui.com/network/v10.6.106/getfirewallzone)
+- `PUT /v1/sites/{siteId}/firewall/zones/{firewallZoneId}` - [Update Firewall Zone](https://developer.ui.com/network/v10.6.106/updatefirewallzone)
+
+*Access Control (ACL Rules)*
+- `GET /v1/sites/{siteId}/acl-rules` - [List ACL Rules](https://developer.ui.com/network/v10.6.106/getaclrulepage)
+- `POST /v1/sites/{siteId}/acl-rules` - [Create ACL Rule](https://developer.ui.com/network/v10.6.106/createaclrule)
+- `GET /v1/sites/{siteId}/acl-rules/ordering` - [Get User-Defined ACL Rule Ordering](https://developer.ui.com/network/v10.6.106/getaclruleordering)
+- `PUT /v1/sites/{siteId}/acl-rules/ordering` - [Reorder User-Defined ACL Rules](https://developer.ui.com/network/v10.6.106/updateaclruleordering)
+- `DELETE /v1/sites/{siteId}/acl-rules/{aclRuleId}` - [Delete ACL Rule](https://developer.ui.com/network/v10.6.106/deleteaclrule)
+- `GET /v1/sites/{siteId}/acl-rules/{aclRuleId}` - [Get ACL Rule](https://developer.ui.com/network/v10.6.106/getaclrule)
+- `PUT /v1/sites/{siteId}/acl-rules/{aclRuleId}` - [Update ACL Rule](https://developer.ui.com/network/v10.6.106/updateaclrule)
+
+*Switching*
+- `GET /v1/sites/{siteId}/switching/lags` - [List LAGs](https://developer.ui.com/network/v10.6.106/getlagpage)
+- `GET /v1/sites/{siteId}/switching/lags/{lagId}` - [Get LAG Details](https://developer.ui.com/network/v10.6.106/getlag)
+- `GET /v1/sites/{siteId}/switching/mc-lag-domains` - [List MC-LAG Domains](https://developer.ui.com/network/v10.6.106/getmclagdomainpage)
+- `GET /v1/sites/{siteId}/switching/mc-lag-domains/{mcLagDomainId}` - [Get MC-LAG Domain](https://developer.ui.com/network/v10.6.106/getmclagdomain)
+- `GET /v1/sites/{siteId}/switching/switch-stacks` - [List Switch Stacks](https://developer.ui.com/network/v10.6.106/getswitchstackpage)
+- `GET /v1/sites/{siteId}/switching/switch-stacks/{switchStackId}` - [Get Switch Stack](https://developer.ui.com/network/v10.6.106/getswitchstack)
+
+*DNS Policies*
+- `GET /v1/sites/{siteId}/dns/policies` - [List DNS Policies](https://developer.ui.com/network/v10.6.106/getdnspolicypage)
+- `POST /v1/sites/{siteId}/dns/policies` - [Create DNS Policy](https://developer.ui.com/network/v10.6.106/creatednspolicy)
+- `DELETE /v1/sites/{siteId}/dns/policies/{dnsPolicyId}` - [Delete DNS Policy](https://developer.ui.com/network/v10.6.106/deletednspolicy)
+- `GET /v1/sites/{siteId}/dns/policies/{dnsPolicyId}` - [Get DNS Policy](https://developer.ui.com/network/v10.6.106/getdnspolicy)
+- `PUT /v1/sites/{siteId}/dns/policies/{dnsPolicyId}` - [Update DNS Policy](https://developer.ui.com/network/v10.6.106/updatednspolicy)
+
+*Traffic Matching Lists*
+- `GET /v1/sites/{siteId}/traffic-matching-lists` - [List Traffic Matching Lists](https://developer.ui.com/network/v10.6.106/gettrafficmatchinglists)
+- `POST /v1/sites/{siteId}/traffic-matching-lists` - [Create Traffic Matching List](https://developer.ui.com/network/v10.6.106/createtrafficmatchinglist)
+- `DELETE /v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}` - [Delete Traffic Matching List](https://developer.ui.com/network/v10.6.106/deletetrafficmatchinglist)
+- `GET /v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}` - [Get Traffic Matching List](https://developer.ui.com/network/v10.6.106/gettrafficmatchinglist)
+- `PUT /v1/sites/{siteId}/traffic-matching-lists/{trafficMatchingListId}` - [Update Traffic Matching List](https://developer.ui.com/network/v10.6.106/updatetrafficmatchinglist)
+
+*Supporting Resources*
+- `GET /v1/countries` - [List Countries](https://developer.ui.com/network/v10.6.106/getcountries)
+- `GET /v1/dpi/applications` - [List DPI Applications](https://developer.ui.com/network/v10.6.106/getdpiapplications)
+- `GET /v1/dpi/categories` - [List DPI Application Categories](https://developer.ui.com/network/v10.6.106/getdpiapplicationcategories)
+- `GET /v1/sites/{siteId}/device-tags` - [List Device Tags](https://developer.ui.com/network/v10.6.106/getdevicetagpage)
+- `GET /v1/sites/{siteId}/radius/profiles` - [List Radius Profiles](https://developer.ui.com/network/v10.6.106/getradiusprofileoverviewpage)
+- `GET /v1/sites/{siteId}/vpn/servers` - [List VPN Servers](https://developer.ui.com/network/v10.6.106/getvpnserverpage)
+- `GET /v1/sites/{siteId}/vpn/site-to-site-tunnels` - [List Site-To-Site VPN Tunnels](https://developer.ui.com/network/v10.6.106/getsitetositevpntunnelpage)
+- `GET /v1/sites/{siteId}/wans` - [List WAN Interfaces](https://developer.ui.com/network/v10.6.106/getwansoverviewpage)
+
+## Optional
+
+**Network Ansible Modules**
+- [Quick Start](https://developer.ui.com/network/v10.6.106/quick_start.ansible)

@@ -8,12 +8,14 @@ from ..models import Device, IntegrationDevice
 from ..utils import (
     APIError,
     ResourceNotFoundError,
+    ValidationError,
     audit_action,
     get_logger,
     sanitize_log_message,
     validate_confirmation,
     validate_device_id,
     validate_limit_offset,
+    validate_mac_address,
     validate_site_id,
 )
 
@@ -294,62 +296,64 @@ async def list_pending_devices(
 
 async def adopt_device(
     site_id: str,
-    device_id: str,
+    mac: str,
     settings: Settings,
-    name: str | None = None,
+    ignore_device_limit: bool = False,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Adopt a pending device onto the specified site.
 
+    Hardware-verified 2026-09-27 against Integration API v10.6.106 (U7
+    Express, Network 10.x): the spec endpoint answers with
+    ``api.device.adoption.unknown-device`` for unknown MACs (i.e. it exists
+    and validates), while the legacy ``/devices/{id}/adopt`` route the tool
+    used before returns 404 "No endpoint" on current controllers.
+
     Args:
         site_id: Site identifier
-        device_id: Device identifier to adopt
+        mac: Device MAC address (spec identifies the device by MAC, not ID)
         settings: Application settings
-        name: Optional device name
+        ignore_device_limit: Bypass the controller's device-count limit
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
     Returns:
-        Adopted device information
+        Adoption result information
     """
     validate_confirmation(confirm, "adopt device", dry_run)
     site_id = validate_site_id(site_id)
-    device_id = validate_device_id(device_id)
+    mac = validate_mac_address(mac)
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        payload = {}
-        if name:
-            payload["name"] = name
+        payload = {"macAddress": mac, "ignoreDeviceLimit": bool(ignore_device_limit)}
 
         if dry_run:
-            logger.info(sanitize_log_message(f"[DRY RUN] Would adopt device {device_id}"))
-            return {"dry_run": True, "device_id": device_id, "payload": payload}
+            logger.info(sanitize_log_message(f"[DRY RUN] Would adopt device {mac}"))
+            return {"dry_run": True, "mac": mac, "payload": payload}
 
         response = await client.post(
-            f"/integration/v1/sites/{site_id}/devices/{device_id}/adopt", json_data=payload
+            f"/integration/v1/sites/{site_id}/devices", json_data=payload
         )
-        if isinstance(response, list):
-            data = response[0] if response else {}
-        else:
-            _raw = response.get("data", response)
-            data = _raw[0] if isinstance(_raw, list) else _raw
+        data = response[0] if isinstance(response, list) and response else (
+            response.get("data", response) if isinstance(response, dict) else {}
+        )
 
-        # Audit the action
         await audit_action(
             settings,
             action_type="adopt_device",
             resource_type="device",
-            resource_id=device_id,
+            resource_id=mac,
             site_id=site_id,
-            details={"name": name} if name else {},
+            details={"ignore_device_limit": ignore_device_limit},
         )
 
-        logger.info(sanitize_log_message(f"Successfully adopted device {device_id}"))
-        return Device(**data).model_dump()
+        logger.info(sanitize_log_message(f"Successfully adopted device {mac}"))
+        return {"success": True, "mac": mac, "result": data}
+
 
 
 async def execute_port_action(
@@ -364,13 +368,24 @@ async def execute_port_action(
 ) -> dict[str, Any]:
     """Execute an action on a specific port of a device.
 
+    Hardware-verified 2026-09-27 against Integration API v10.6.106 (U7
+    Express, Network 10.x): the spec route
+    ``/devices/{id}/interfaces/ports/{idx}/actions`` answers with a 400
+    ``api.request.unknown-type-id`` for unknown actions (endpoint exists and
+    validates), while the legacy ``/ports/{idx}/action`` route returns 404
+    "No endpoint".
+
+    The v10.6.106 spec defines exactly one port action: ``POWER_CYCLE``
+    (PoE power-cycle). ``params`` is not a spec property and is accepted
+    for backwards compatibility but never sent.
+
     Args:
         site_id: Site identifier
         device_id: Device identifier
         port_idx: Port index number
-        action: Action to perform (power-cycle, enable, disable)
+        action: ``power_cycle`` (the only Integration API port action)
         settings: Application settings
-        params: Additional action parameters
+        params: Deprecated, ignored (no spec carrier)
         confirm: Confirmation flag (required)
         dry_run: If True, validate but don't execute
 
@@ -382,15 +397,22 @@ async def execute_port_action(
     device_id = validate_device_id(device_id)
     logger = get_logger(__name__, settings.log_level)
 
+    normalized = action.strip().upper().replace("-", "_")
+    if normalized != "POWER_CYCLE":
+        raise ValidationError(
+            f"unsupported port action '{action}': the Integration API v10.6.106 "
+            "defines only 'power_cycle'"
+        )
+
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        payload = {"action": action, "params": params or {}}
+        payload = {"action": "POWER_CYCLE"}
 
         if dry_run:
             logger.info(
                 sanitize_log_message(
-                    f"[DRY RUN] Would execute port action '{action}' on device {device_id} port {port_idx}"
+                    f"[DRY RUN] Would power-cycle port {port_idx} on device {device_id}"
                 )
             )
             return {
@@ -401,7 +423,8 @@ async def execute_port_action(
             }
 
         response = await client.post(
-            f"/integration/v1/sites/{site_id}/devices/{device_id}/ports/{port_idx}/action",
+            f"/integration/v1/sites/{site_id}/devices/{device_id}"
+            f"/interfaces/ports/{port_idx}/actions",
             json_data=payload,
         )
         if isinstance(response, list):
@@ -417,10 +440,10 @@ async def execute_port_action(
             resource_type="device_port",
             resource_id=f"{device_id}:{port_idx}",
             site_id=site_id,
-            details={"action": action},
+            details={"action": "POWER_CYCLE"},
         )
 
         logger.info(
-            sanitize_log_message(f"Successfully executed port action '{action}' on port {port_idx}")
+            sanitize_log_message(f"Successfully power-cycled port {port_idx}")
         )
-        return {"success": True, "action": action, "port_idx": port_idx, "result": data}
+        return {"success": True, "action": "POWER_CYCLE", "port_idx": port_idx, "result": data}

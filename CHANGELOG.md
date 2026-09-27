@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Protect Phase 3 surfaces** (incorporating the previously untagged `[0.4.0]` changes): documented the read-only Protect surfaces in `API.md`, `README.md`, and `docs/UNIFI_API.md`; added `list_protect_devices` (device updates/messages), `list_protect_views` (live views/viewer metadata), and `list_protect_events` (events/alarm notifications).
 
+### Fixed
+
+- **Latent Integration API write-path defects F1–F3 fixed after live-hardware confirmation** (audit 2026-09-26, probes 2026-09-27 on U7 Express / Network 10.x): the spec endpoints were proven live (400 validation errors for invalid payloads) while all three legacy routes the code used return 404 "No endpoint" on current controllers. `adopt_device` now identifies the device by MAC and POSTs `/v1/sites/{siteId}/devices` with `{macAddress, ignoreDeviceLimit}` (was: non-existent `.../devices/{id}/adopt`); `execute_port_action` now uses the plural `.../interfaces/ports/{idx}/actions` path restricted to the spec's only port action, `POWER_CYCLE`, and no longer sends the unspecced `params` field; `authorize_guest` uses the plural `.../clients/{clientId}/actions` path with the spec's `AUTHORIZE_GUEST_ACCESS` discriminator body (limits at top level: `timeLimitMinutes`, `rxRateLimitKbps`, `txRateLimitKbps`, `dataUsageLimitMBytes`). **Breaking:** `limit_bandwidth` has no Integration API equivalent — it now raises `NotImplementedError` directing callers to `authorize_guest`'s rate-limit parameters (the legacy `limit-bandwidth` endpoint 404s on current controllers).
+
 
 ### Security
 

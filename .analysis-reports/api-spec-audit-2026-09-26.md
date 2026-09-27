@@ -50,3 +50,29 @@
 1. Verify F1–F3 against live hardware; fix paths/bodies per spec; keep `params` only if hardware shows it is honored.
 2. Decide whether `adopt_device` should take a MAC (spec) or keep device-ID UX and resolve MAC internally.
 3. Re-run this audit after each spec snapshot refresh (`scripts/fetch-specs.sh` + this method; consider scripting it as `scripts/audit-spec-coverage.py` with F1–F3 as regression cases).
+
+## Hardware verification — 2026-09-27 (U7 Express, Network 10.x, tailnet 100.77.15.105)
+
+All three findings **confirmed live** with deliberately invalid payloads
+(bogus MAC / unknown action names — controller validation answers without
+executing any real action):
+
+| Finding | Spec endpoint | Legacy endpoint | Verdict |
+|---|---|---|---|
+| F1 adoption | `POST /v1/sites/{siteId}/devices` -> 400 `api.device.adoption.unknown-device` (exists, validates MAC) | `POST .../devices/{id}/adopt` -> 404 "No endpoint" | CONFIRMED |
+| F2 port action | `POST .../interfaces/ports/{idx}/actions` -> 400 `api.request.unknown-type-id` (exists, validates `action`) | `POST .../ports/{idx}/action` -> 404 "No endpoint" | CONFIRMED |
+| F3 client actions | `POST .../clients/{clientId}/actions` -> 400 `api.request.unknown-type-id` (exists; UUID path verified) | `POST .../clients/{mac}/action` -> 404 "No endpoint" | CONFIRMED |
+
+Spec vocabulary extracted from the v10.6.106 snapshot:
+- Port actions: exactly one — `POWER_CYCLE` (PoE power-cycle); body `{"action"}` only.
+- Client actions: `AUTHORIZE_GUEST_ACCESS` (optional top-level
+  `timeLimitMinutes` 1-1000000, `dataUsageLimitMBytes` 1-1048576,
+  `rxRateLimitKbps`/`txRateLimitKbps` 2-100000) and `UNAUTHORIZE_GUEST_ACCESS`.
+  No bandwidth-only action exists — legacy `limit-bandwidth` has no spec carrier.
+
+Fixes shipped same day (see `git log`): `adopt_device` now takes a MAC and
+POSTs the collection; `execute_port_action` uses the spec path restricted to
+`POWER_CYCLE` (params deprecated, never sent); `authorize_guest` uses the
+plural actions path with the spec discriminator body; `limit_bandwidth` fails
+fast with migration guidance. Unit tests rewritten to assert the verified
+wire shapes (2,454 passed).

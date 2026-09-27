@@ -486,20 +486,23 @@ class TestListPendingDevices:
 class TestAdoptDevice:
     @pytest.mark.asyncio
     async def test_adopt_device_success(self, mock_settings):
-        mock_response = {"data": make_device(DEVICE_ID_1, "Adopted AP")}
+        mock_response = {"data": {"macAddress": "00:11:22:33:44:55", "state": "ADOPTING"}}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             with patch("src.tools.devices.audit_action", new_callable=AsyncMock) as mock_audit:
                 mock_client = create_mock_client(mock_response)
                 mock_client_class.return_value = mock_client
 
-                result = await adopt_device(
-                    "site-1", DEVICE_ID_1, mock_settings, name="My AP", confirm=True
-                )
+                result = await adopt_device("site-1", "00:11:22:33:44:55", mock_settings, confirm=True)
 
-                assert result["id"] == DEVICE_ID_1
-                mock_client.post.assert_called_once()
+                assert result["success"] is True
+                call_args = mock_client.post.call_args
+                assert call_args[0][0] == "/integration/v1/sites/site-1/devices"
+                assert call_args[1]["json_data"] == {
+                    "macAddress": "00:11:22:33:44:55", "ignoreDeviceLimit": False
+                }
                 mock_audit.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_adopt_device_dry_run(self, mock_settings):
@@ -508,13 +511,14 @@ class TestAdoptDevice:
             mock_client_class.return_value = mock_client
 
             result = await adopt_device(
-                "site-1", DEVICE_ID_1, mock_settings, name="My AP", confirm=True, dry_run=True
+                "site-1", "00:11:22:33:44:55", mock_settings, confirm=True, dry_run=True
             )
 
             assert result["dry_run"] is True
-            assert result["device_id"] == DEVICE_ID_1
-            assert result["payload"]["name"] == "My AP"
+            assert result["mac"] == "00:11:22:33:44:55"
+            assert result["payload"] == {"macAddress": "00:11:22:33:44:55", "ignoreDeviceLimit": False}
             mock_client.post.assert_not_called()
+
 
     @pytest.mark.asyncio
     async def test_adopt_device_no_confirm(self, mock_settings):
@@ -522,19 +526,26 @@ class TestAdoptDevice:
             await adopt_device("site-1", DEVICE_ID_1, mock_settings)
 
     @pytest.mark.asyncio
-    async def test_adopt_device_no_name(self, mock_settings):
-        mock_response = {"data": make_device(DEVICE_ID_1)}
+    async def test_adopt_device_ignore_device_limit(self, mock_settings):
+        mock_response = {"data": {"macAddress": "00:11:22:33:44:55"}}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             with patch("src.tools.devices.audit_action", new_callable=AsyncMock):
                 mock_client = create_mock_client(mock_response)
                 mock_client_class.return_value = mock_client
 
-                result = await adopt_device("site-1", DEVICE_ID_1, mock_settings, confirm=True)
+                await adopt_device(
+                    "site-1", "00:11:22:33:44:55", mock_settings,
+                    ignore_device_limit=True, confirm=True,
+                )
 
-                assert result["id"] == DEVICE_ID_1
                 call_args = mock_client.post.call_args
-                assert call_args[1]["json_data"] == {}
+                assert call_args[1]["json_data"]["ignoreDeviceLimit"] is True
+
+    @pytest.mark.asyncio
+    async def test_adopt_device_invalid_mac(self, mock_settings):
+        with pytest.raises(ValidationError, match="MAC"):
+            await adopt_device("site-1", "not-a-mac", mock_settings, confirm=True)
 
 
 class TestExecutePortAction:
@@ -552,9 +563,16 @@ class TestExecutePortAction:
                 )
 
                 assert result["success"] is True
-                assert result["action"] == "power-cycle"
+                assert result["action"] == "POWER_CYCLE"
                 assert result["port_idx"] == 1
+                call_args = mock_client.post.call_args
+                assert call_args[0][0] == (
+                    f"/integration/v1/sites/site-1/devices/{DEVICE_ID_1}"
+                    "/interfaces/ports/1/actions"
+                )
+                assert call_args[1]["json_data"] == {"action": "POWER_CYCLE"}
                 mock_audit.assert_called_once()
+
 
     @pytest.mark.asyncio
     async def test_execute_port_action_dry_run(self, mock_settings):
@@ -563,13 +581,14 @@ class TestExecutePortAction:
             mock_client_class.return_value = mock_client
 
             result = await execute_port_action(
-                "site-1", DEVICE_ID_1, 2, "disable", mock_settings, confirm=True, dry_run=True
+                "site-1", DEVICE_ID_1, 2, "power_cycle", mock_settings, confirm=True, dry_run=True
             )
 
             assert result["dry_run"] is True
             assert result["port_idx"] == 2
-            assert result["payload"]["action"] == "disable"
+            assert result["payload"] == {"action": "POWER_CYCLE"}
             mock_client.post.assert_not_called()
+
 
     @pytest.mark.asyncio
     async def test_execute_port_action_no_confirm(self, mock_settings):
@@ -577,7 +596,15 @@ class TestExecutePortAction:
             await execute_port_action("site-1", DEVICE_ID_1, 1, "enable", mock_settings)
 
     @pytest.mark.asyncio
-    async def test_execute_port_action_with_params(self, mock_settings):
+    async def test_execute_port_action_unsupported_action(self, mock_settings):
+        with pytest.raises(ValidationError, match="unsupported port action"):
+            await execute_port_action(
+                "site-1", DEVICE_ID_1, 1, "disable", mock_settings, confirm=True
+            )
+
+    @pytest.mark.asyncio
+    async def test_execute_port_action_params_ignored(self, mock_settings):
+        """params is deprecated and never sent (no spec carrier)."""
         mock_response = {"data": {"status": "ok"}}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
@@ -586,14 +613,11 @@ class TestExecutePortAction:
                 mock_client_class.return_value = mock_client
 
                 await execute_port_action(
-                    "site-1",
-                    DEVICE_ID_1,
-                    3,
-                    "power-cycle",
-                    mock_settings,
-                    params={"delay": 5},
-                    confirm=True,
+                    "site-1", DEVICE_ID_1, 3, "POWER_CYCLE",
+                    mock_settings, params={"delay": 5}, confirm=True,
                 )
 
-                call_args = mock_client.post.call_args
-                assert call_args[1]["json_data"]["params"] == {"delay": 5}
+                json_data = mock_client.post.call_args[1]["json_data"]
+                assert json_data == {"action": "POWER_CYCLE"}
+                assert "params" not in json_data
+

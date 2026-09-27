@@ -365,7 +365,7 @@ New documents introduced by the roadmap:
 | Metrics cardinality grows too large | Low | Medium | Cap label cardinality and keep labels stable |
 | API/documentation drift returns | Medium | Medium | Phase gates require docs and implementation sync; spec snapshots pinned per release (P10) |
 | Spec snapshots rot (pins drift again, as v10.1.68 did) | Medium | Medium | Quarterly re-audit against `developer.ui.com` index; keep `openapi.json` artifacts in-repo; legacy scrapers replaced with direct-download path |
-| Latent Integration API write defects (audit 2026-09-26: adopt, port-action, client-action paths) | High (verified by spec diff) | High | Mock tests assert code's own assumptions — verify F1-F3 on live hardware before release; see `.analysis-reports/api-spec-audit-2026-09-26.md` |
+| Latent Integration API write defects (audit 2026-09-26: adopt, port-action, client-action paths) | Resolved 2026-09-27 | High | Hardware probes confirmed all three (spec endpoints live, legacy routes 404); fixes shipped with spec-verified mocked tests — see `.analysis-reports/api-spec-audit-2026-09-26.md` addendum |
 
 ---
 

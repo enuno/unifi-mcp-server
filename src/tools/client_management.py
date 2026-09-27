@@ -282,23 +282,36 @@ async def reconnect_client(
 
 async def authorize_guest(
     site_id: str,
-    client_mac: str,
+    client_id: str,
     duration: int,
     settings: Settings,
     upload_limit_kbps: int | None = None,
     download_limit_kbps: int | None = None,
+    data_usage_limit_mbytes: int | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Authorize a guest client for network access.
 
+    Hardware-verified 2026-09-27 against Integration API v10.6.106 (U7
+    Express, Network 10.x): the spec route ``/clients/{id}/actions`` answers
+    with a 400 ``api.request.unknown-type-id`` for unknown actions (endpoint
+    exists and validates), while the legacy singular ``/action`` route
+    returns 404 "No endpoint". Payload follows the spec's
+    ``AUTHORIZE_GUEST_ACCESS`` discriminator: limits ride at the top level
+    (no ``params`` wrapper).
+
     Args:
         site_id: Site identifier
-        client_mac: Client MAC address
-        duration: Access duration in seconds
+        client_id: Client MAC address or Integration API client UUID
+            (UUID verified live; controllers generally accept either)
+        duration: Access duration in seconds (converted to the spec's
+            timeLimitMinutes; 1 minute minimum, controller default applies
+            when omitted — pass 0 to omit)
         settings: Application settings
-        upload_limit_kbps: Upload speed limit in kbps
-        download_limit_kbps: Download speed limit in kbps
+        upload_limit_kbps: Upload rate limit (spec txRateLimitKbps, 2-100000)
+        download_limit_kbps: Download rate limit (spec rxRateLimitKbps, 2-100000)
+        data_usage_limit_mbytes: Data cap in MB (1-1048576)
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't authorize
 
@@ -309,20 +322,31 @@ async def authorize_guest(
         ConfirmationRequiredError: If confirm is not True
     """
     site_id = validate_site_id(site_id)
-    client_mac = validate_mac_address(client_mac)
+    client_id = client_id.strip()
+    if not client_id:
+        raise ValueError("client_id must not be empty")
     validate_confirmation(confirm, "client management operation", dry_run)
     logger = get_logger(__name__, settings.log_level)
 
+    if duration < 0:
+        raise ValueError("duration must be >= 0 seconds")
+    if upload_limit_kbps is not None and not 2 <= upload_limit_kbps <= 100000:
+        raise ValueError("upload_limit_kbps must be between 2 and 100000")
+    if download_limit_kbps is not None and not 2 <= download_limit_kbps <= 100000:
+        raise ValueError("download_limit_kbps must be between 2 and 100000")
+    if data_usage_limit_mbytes is not None and not 1 <= data_usage_limit_mbytes <= 1048576:
+        raise ValueError("data_usage_limit_mbytes must be between 1 and 1048576")
+
     parameters = {
         "site_id": site_id,
-        "client_mac": client_mac,
+        "client_id": client_id,
         "duration": duration,
     }
 
     if dry_run:
         logger.info(
             sanitize_log_message(
-                f"DRY RUN: Would authorize guest client '{client_mac}' for {duration}s in site '{site_id}'"
+                f"DRY RUN: Would authorize guest client '{client_id}' for {duration}s in site '{site_id}'"
             )
         )
         log_audit(
@@ -332,29 +356,31 @@ async def authorize_guest(
             site_id=site_id,
             dry_run=True,
         )
-        return {"dry_run": True, "would_authorize": client_mac, "duration": duration}
+        return {"dry_run": True, "would_authorize": client_id, "duration": duration}
 
     try:
         async with UniFiClient(settings) as client:
             await client.authenticate()
 
-            # Build authorization payload
-            params: dict[str, Any] = {"duration": duration}
+            # Spec: AUTHORIZE_GUEST_ACCESS with top-level optional limits
+            payload: dict[str, Any] = {"action": "AUTHORIZE_GUEST_ACCESS"}
+            if duration > 0:
+                payload["timeLimitMinutes"] = max(1, -(-duration // 60))
             if upload_limit_kbps is not None:
-                params["uploadLimit"] = upload_limit_kbps
+                payload["txRateLimitKbps"] = upload_limit_kbps
             if download_limit_kbps is not None:
-                params["downloadLimit"] = download_limit_kbps
-            auth_data = {"action": "authorize-guest", "params": params}
+                payload["rxRateLimitKbps"] = download_limit_kbps
+            if data_usage_limit_mbytes is not None:
+                payload["dataUsageLimitMBytes"] = data_usage_limit_mbytes
 
-            # Authorize guest using new API endpoint
             await client.post(
-                f"/integration/v1/sites/{site_id}/clients/{client_mac}/action",
-                json_data=auth_data,
+                f"/integration/v1/sites/{site_id}/clients/{client_id}/actions",
+                json_data=payload,
             )
 
             logger.info(
                 sanitize_log_message(
-                    f"Authorized guest client '{client_mac}' for {duration}s in site '{site_id}'"
+                    f"Authorized guest client '{client_id}' for {duration}s in site '{site_id}'"
                 )
             )
             log_audit(
@@ -366,13 +392,13 @@ async def authorize_guest(
 
             return {
                 "success": True,
-                "client_mac": client_mac,
+                "client_id": client_id,
                 "duration": duration,
                 "message": f"Guest authorized for {duration} seconds",
             }
 
     except Exception as e:
-        logger.error(sanitize_log_message(f"Failed to authorize guest client '{client_mac}': {e}"))
+        logger.error(sanitize_log_message(f"Failed to authorize guest client '{client_id}': {e}"))
         log_audit(
             operation="authorize_guest",
             parameters=parameters,
@@ -393,6 +419,12 @@ async def limit_bandwidth(
 ) -> dict[str, Any]:
     """Apply bandwidth restrictions to a client.
 
+    Deprecated: the Integration API v10.6.106 defines no bandwidth-only
+    client action (hardware-verified — the legacy endpoint 404s). This tool
+    now raises ``NotImplementedError`` with migration guidance; use
+    ``authorize_guest`` with ``upload_limit_kbps``/``download_limit_kbps``
+    to carry limits at authorization time.
+
     Args:
         site_id: Site identifier
         client_mac: Client MAC address
@@ -402,11 +434,8 @@ async def limit_bandwidth(
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't apply limits
 
-    Returns:
-        Bandwidth limit result dictionary
-
     Raises:
-        ConfirmationRequiredError: If confirm is not True
+        NotImplementedError: Always — no spec equivalent exists.
     """
     site_id = validate_site_id(site_id)
     client_mac = validate_mac_address(client_mac)
@@ -446,52 +475,17 @@ async def limit_bandwidth(
             "download_limit_kbps": download_limit_kbps,
         }
 
-    try:
-        async with UniFiClient(settings) as client:
-            await client.authenticate()
-
-            # Build bandwidth limit payload
-            params: dict[str, Any] = {}
-            if upload_limit_kbps is not None:
-                params["uploadLimit"] = upload_limit_kbps
-            if download_limit_kbps is not None:
-                params["downloadLimit"] = download_limit_kbps
-            limit_data = {"action": "limit-bandwidth", "params": params}
-
-            # Apply bandwidth limits using new API endpoint
-            await client.post(
-                f"/integration/v1/sites/{site_id}/clients/{client_mac}/action",
-                json_data=limit_data,
-            )
-
-            logger.info(
-                sanitize_log_message(
-                    f"Applied bandwidth limits to client '{client_mac}' in site '{site_id}'"
-                )
-            )
-            log_audit(
-                operation="limit_bandwidth",
-                parameters=parameters,
-                result="success",
-                site_id=site_id,
-            )
-
-            return {
-                "success": True,
-                "client_mac": client_mac,
-                "upload_limit_kbps": upload_limit_kbps,
-                "download_limit_kbps": download_limit_kbps,
-                "message": "Bandwidth limits applied",
-            }
-
-    except Exception as e:
-        logger.error(
-            sanitize_log_message(f"Failed to apply bandwidth limits to client '{client_mac}': {e}")
-        )
-        log_audit(
-            operation="limit_bandwidth",
-            parameters=parameters,
-            result="failed",
-            site_id=site_id,
-        )
-        raise
+    # The v10.6.106 Integration API defines exactly two client actions —
+    # AUTHORIZE_GUEST_ACCESS and UNAUTHORIZE_GUEST_ACCESS — and no
+    # bandwidth-only action. Hardware verification 2026-09-27 confirmed the
+    # legacy "limit-bandwidth" endpoint the tool used returns 404 "No
+    # endpoint" on current controllers. Bandwidth limits are carried by
+    # authorize_guest's txRateLimitKbps/rxRateLimitKbps instead.
+    raise NotImplementedError(
+        "limit_bandwidth has no Integration API v10.6.106 equivalent — the "
+        "legacy 'limit-bandwidth' endpoint returns 404 on current controllers "
+        "(hardware-verified 2026-09-27). Apply limits while authorizing via "
+        "authorize_guest(upload_limit_kbps=..., download_limit_kbps=...) "
+        "instead. For an already-authorized guest, unauthorize and re-authorize "
+        "with the desired limits."
+    )

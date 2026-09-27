@@ -322,63 +322,64 @@ async def test_reconnect_client_invalid_mac(mock_settings):
 
 @pytest.mark.asyncio
 async def test_authorize_guest_success(mock_settings):
-    """Test successful guest authorization."""
-    mock_auth_response = {"meta": {"rc": "ok"}}
+    """Spec shape: AUTHORIZE_GUEST_ACCESS, duration seconds -> timeLimitMinutes."""
 
     mock_client = MagicMock()
     mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_auth_response)
+    mock_client.post = AsyncMock(return_value={"meta": {"rc": "ok"}})
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(cm_module, "UniFiClient", return_value=mock_client):
         result = await authorize_guest(
             site_id="default",
-            client_mac="00:11:22:33:44:55",
+            client_id="00:11:22:33:44:55",
             duration=3600,
             settings=mock_settings,
             confirm=True,
         )
 
     assert result["success"] is True
-    assert result["client_mac"] == "00:11:22:33:44:55"
-    assert result["duration"] == 3600
-    assert "3600 seconds" in result["message"]
-    mock_client.post.assert_called_once()
+    assert result["client_id"] == "00:11:22:33:44:55"
+    call_args = mock_client.post.call_args
+    assert call_args[0][0] == "/integration/v1/sites/default/clients/00:11:22:33:44:55/actions"
+    assert call_args[1]["json_data"] == {
+        "action": "AUTHORIZE_GUEST_ACCESS",
+        "timeLimitMinutes": 60,
+    }
 
 
 @pytest.mark.asyncio
 async def test_authorize_guest_with_limits(mock_settings):
-    """Test guest authorization with bandwidth limits."""
-    mock_auth_response = {"meta": {"rc": "ok"}}
+    """Limits ride at the top level (spec tx/rxRateLimitKbps, dataUsageLimitMBytes)."""
 
     mock_client = MagicMock()
     mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_auth_response)
+    mock_client.post = AsyncMock(return_value={"meta": {"rc": "ok"}})
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(cm_module, "UniFiClient", return_value=mock_client):
         result = await authorize_guest(
             site_id="default",
-            client_mac="00:11:22:33:44:55",
+            client_id="00:11:22:33:44:55",
             duration=7200,
             settings=mock_settings,
             upload_limit_kbps=1024,
             download_limit_kbps=2048,
+            data_usage_limit_mbytes=512,
             confirm=True,
         )
 
     assert result["success"] is True
-    assert result["duration"] == 7200
-
-    # Verify the limits were included in the request
-    call_args = mock_client.post.call_args
-    json_data = call_args[1]["json_data"]
-    assert json_data["action"] == "authorize-guest"
-    assert json_data["params"]["duration"] == 7200
-    assert json_data["params"]["uploadLimit"] == 1024
-    assert json_data["params"]["downloadLimit"] == 2048
+    json_data = mock_client.post.call_args[1]["json_data"]
+    assert json_data == {
+        "action": "AUTHORIZE_GUEST_ACCESS",
+        "timeLimitMinutes": 120,
+        "txRateLimitKbps": 1024,
+        "rxRateLimitKbps": 2048,
+        "dataUsageLimitMBytes": 512,
+    }
 
 
 @pytest.mark.asyncio
@@ -386,7 +387,7 @@ async def test_authorize_guest_dry_run(mock_settings):
     """Test guest authorization dry run."""
     result = await authorize_guest(
         site_id="default",
-        client_mac="00:11:22:33:44:55",
+        client_id="00:11:22:33:44:55",
         duration=3600,
         settings=mock_settings,
         confirm=True,
@@ -404,7 +405,7 @@ async def test_authorize_guest_no_confirm(mock_settings):
     with pytest.raises(ValidationError) as excinfo:
         await authorize_guest(
             site_id="default",
-            client_mac="00:11:22:33:44:55",
+            client_id="00:11:22:33:44:55",
             duration=3600,
             settings=mock_settings,
             confirm=False,
@@ -414,114 +415,60 @@ async def test_authorize_guest_no_confirm(mock_settings):
 
 
 @pytest.mark.asyncio
-async def test_authorize_guest_invalid_mac(mock_settings):
-    """Test guest authorization with invalid MAC address."""
-    with pytest.raises(ValidationError) as excinfo:
+async def test_authorize_guest_empty_client_id(mock_settings):
+    """client_id must be non-empty (MAC or Integration API UUID accepted)."""
+    with pytest.raises(ValueError) as excinfo:
         await authorize_guest(
             site_id="default",
-            client_mac="invalid-mac",
+            client_id="   ",
             duration=3600,
             settings=mock_settings,
             confirm=True,
         )
 
-    assert "mac" in str(excinfo.value).lower() or "invalid" in str(excinfo.value).lower()
-
-
-# =============================================================================
-# limit_bandwidth Tests
-# =============================================================================
+    assert "client_id" in str(excinfo.value).lower()
 
 
 @pytest.mark.asyncio
 async def test_limit_bandwidth_download_only(mock_settings):
-    """Test applying download bandwidth limit only."""
-    mock_limit_response = {"meta": {"rc": "ok"}}
-
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_limit_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
-        result = await limit_bandwidth(
+    """No Integration API equivalent - must fail fast with migration guidance."""
+    with pytest.raises(NotImplementedError, match="no Integration API"):
+        await limit_bandwidth(
             site_id="default",
             client_mac="00:11:22:33:44:55",
             settings=mock_settings,
-            download_limit_kbps=5000,
+            upload_limit_kbps=1024,
+            download_limit_kbps=2048,
             confirm=True,
         )
-
-    assert result["success"] is True
-    assert result["client_mac"] == "00:11:22:33:44:55"
-    assert result["download_limit_kbps"] == 5000
-    assert result["upload_limit_kbps"] is None
-    assert result["message"] == "Bandwidth limits applied"
-
-    # Verify request
-    call_args = mock_client.post.call_args
-    json_data = call_args[1]["json_data"]
-    assert json_data["action"] == "limit-bandwidth"
-    assert json_data["params"]["downloadLimit"] == 5000
-    assert "uploadLimit" not in json_data["params"]
 
 
 @pytest.mark.asyncio
 async def test_limit_bandwidth_both(mock_settings):
-    """Test applying both upload and download bandwidth limits."""
-    mock_limit_response = {"meta": {"rc": "ok"}}
-
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_limit_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
-        result = await limit_bandwidth(
+    """No Integration API equivalent - must fail fast with migration guidance."""
+    with pytest.raises(NotImplementedError, match="no Integration API"):
+        await limit_bandwidth(
             site_id="default",
             client_mac="00:11:22:33:44:55",
             settings=mock_settings,
-            upload_limit_kbps=1000,
-            download_limit_kbps=5000,
+            upload_limit_kbps=1024,
+            download_limit_kbps=2048,
             confirm=True,
         )
-
-    assert result["success"] is True
-    assert result["upload_limit_kbps"] == 1000
-    assert result["download_limit_kbps"] == 5000
-
-    # Verify request includes both limits
-    call_args = mock_client.post.call_args
-    json_data = call_args[1]["json_data"]
-    assert json_data["params"]["uploadLimit"] == 1000
-    assert json_data["params"]["downloadLimit"] == 5000
 
 
 @pytest.mark.asyncio
 async def test_limit_bandwidth_upload_only(mock_settings):
-    """Test applying upload bandwidth limit only."""
-    mock_limit_response = {"meta": {"rc": "ok"}}
-
-    mock_client = MagicMock()
-    mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_limit_response)
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=None)
-
-    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
-        result = await limit_bandwidth(
+    """No Integration API equivalent - must fail fast with migration guidance."""
+    with pytest.raises(NotImplementedError, match="no Integration API"):
+        await limit_bandwidth(
             site_id="default",
             client_mac="00:11:22:33:44:55",
             settings=mock_settings,
-            upload_limit_kbps=2000,
+            upload_limit_kbps=1024,
+            download_limit_kbps=2048,
             confirm=True,
         )
-
-    assert result["success"] is True
-    assert result["upload_limit_kbps"] == 2000
-    assert result["download_limit_kbps"] is None
 
 
 @pytest.mark.asyncio
@@ -694,29 +641,24 @@ async def test_block_client_multiple_clients(mock_settings):
 
 @pytest.mark.asyncio
 async def test_authorize_guest_minimal(mock_settings):
-    """Test guest authorization with minimal parameters."""
-    mock_auth_response = {"meta": {"rc": "ok"}}
+    """duration=0 omits timeLimitMinutes (controller default applies)."""
 
     mock_client = MagicMock()
     mock_client.authenticate = AsyncMock()
-    mock_client.post = AsyncMock(return_value=mock_auth_response)
+    mock_client.post = AsyncMock(return_value={"meta": {"rc": "ok"}})
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=None)
 
     with patch.object(cm_module, "UniFiClient", return_value=mock_client):
         result = await authorize_guest(
             site_id="default",
-            client_mac="00:11:22:33:44:55",
-            duration=60,  # Minimal 1 minute
+            client_id="00:11:22:33:44:55",
+            duration=0,
             settings=mock_settings,
             confirm=True,
         )
 
     assert result["success"] is True
-    assert result["duration"] == 60
+    json_data = mock_client.post.call_args[1]["json_data"]
+    assert json_data == {"action": "AUTHORIZE_GUEST_ACCESS"}
 
-    # Verify no optional limits were set
-    call_args = mock_client.post.call_args
-    json_data = call_args[1]["json_data"]
-    assert "uploadLimit" not in json_data["params"]
-    assert "downloadLimit" not in json_data["params"]

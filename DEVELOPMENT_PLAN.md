@@ -286,23 +286,23 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 **Goal:** extend the platform beyond Network/Protect with the three newly published UniFi APIs, each of which is small enough to land as a focused increment (25 operations total).
 
-#### 6.1 Mobility v1.0.0 (8 operations)
+#### 6.1 Mobility v1.0.0 (8 operations) — **done (2026-09-27)**
 
 - Cloud API against `api.ui.com` (same auth model as the existing Site Manager cloud client)
 - Ops: device configuration (3), workspaces (2), devices (2), clients (1)
-- Deliverables: `src/api/mobility_client.py`, `src/models/mobility_*.py`, tool module, docs section, mocked tests
+- Deliverables: ~~`src/api/mobility_client.py`~~ tools reuse `SiteManagerClient` (zero new transport — deviation from plan, recorded here), `src/models/mobility.py`, `src/tools/mobility.py` (8 tools), docs section, 20 mocked tests — done
 
-#### 6.2 InnerSpace v1.3.23 (6 operations)
+#### 6.2 InnerSpace v1.3.23 (6 operations) — **done (2026-09-27)**
 
 - Served via the **Cloud Connector proxy** pattern already used for Network/Protect proxying (`/v1/connector/consoles/{consoleId}/proxy/innerspace/integration`)
 - Indoor-location/analytics data (per spec tags); read-oriented surface
-- Deliverables: proxy routing extension, tool module, docs, mocked tests
+- Deliverables: `src/models/innerspace.py`, `src/tools/innerspace.py` (6 read-only tools), docs section, 16 mocked tests — done
 
-#### 6.3 Carrier Fabric v1.0.0 (11 operations)
+#### 6.3 Carrier Fabric v1.0.0 (11 operations) — **done (2026-09-27)**
 
 - Cloud API against `api.ui.com`; carrier/ISP domain: subscribers (7), service state (2), service plans (2)
 - Highest blast radius of the three (subscriber lifecycle management) — all writes confirm-gated and audited
-- Deliverables: `src/api/carrier_fabric_client.py`, models, tool module, docs, mocked tests
+- Deliverables: ~~`src/api/carrier_fabric_client.py`~~ tools reuse `SiteManagerClient` (same deviation as 6.1), `src/models/carrier.py`, `src/tools/carrier.py` (11 tools), docs section, 30 mocked tests — done
 
 #### Shared exit criteria
 

@@ -4582,3 +4582,58 @@ pip install httpx urllib3
 - `POST /v1/pos/cameras/{id}/transactions` — ingest POS transaction
 
 All proxy through the Cloud Connector under `/v1/connector/consoles/{consoleId}/proxy/protect/integration`. Write operations (arm profile CRUD, alarm enable/disable, siren/speaker/relay/alarm-hub triggers and patches, POS ingestion) ship behind `UNIFI_READ_ONLY` (mutating tools are not registered in read-only mode), `confirm=True`, `dry_run` preview, and are covered by mocked unit tests. Tool names map as: `list_protect_arm_profiles` / `get_protect_arm_profile` / `create_protect_arm_profile` / `update_protect_arm_profile` / `delete_protect_arm_profile` / `set_current_protect_arm_profile` / `enable_protect_alarm` / `disable_protect_alarm`, `list_protect_sirens` / `get_protect_siren` / `update_protect_siren` / `play_protect_siren` / `stop_protect_siren` / `test_protect_siren_sound`, `list_protect_speakers` / `get_protect_speaker` / `update_protect_speaker` / `test_protect_speaker_sound`, `list_protect_fobs` / `get_protect_fob` / `update_protect_fob`, `list_protect_relays` / `get_protect_relay` / `update_protect_relay` / `activate_protect_relay_output`, `list_protect_bridges` / `get_protect_bridge` / `update_protect_bridge`, `list_protect_link_stations` / `get_protect_link_station` / `update_protect_link_station`, `list_protect_alarm_hubs` / `get_protect_alarm_hub` / `update_protect_alarm_hub` / `trigger_protect_alarm_hub_output`, `list_protect_users` / `get_protect_user`, `list_protect_ulp_users` / `get_protect_ulp_user`, and `ingest_pos_transaction`.
+
+### Phase 6 — Mobility, InnerSpace, Carrier Fabric (implemented 2026-09-27)
+
+> Verified against the canonical spec snapshots `scripts/mobility-api-spec-v1.0.0.json`,
+> `scripts/innerspace-api-spec-v1.3.23.json`, and `scripts/carrier-fabric-api-spec-v1.0.0.json`.
+> All 25 operations implemented. **Mock-tested only — verify against live Ubiquiti cloud
+> access (Mobility/Carrier require a UniFi API key with cloud scope; InnerSpace requires a
+> console with the InnerSpace integration).**
+
+**Mobility v1.0.0 (8)** — cloud API on `api.ui.com/v1/mobility`, same API-key transport as
+Site Manager (tools reuse `SiteManagerClient`; require `UNIFI_SITE_MANAGER_ENABLED=true`):
+
+- `GET /v1/mobility/workspaces` → `list_mobility_workspaces`
+- `GET /v1/mobility/workspaces/{id}/admins` → `list_mobility_workspace_admins`
+- `GET /v1/mobility/workspaces/{id}/devices` (limit 1–200, offset) → `list_mobility_devices`
+- `GET /v1/mobility/workspaces/{id}/devices/{id}` → `get_mobility_device`
+- `PUT  /v1/mobility/workspaces/{id}/devices/{id}` (name 1–32) → `update_mobility_device`
+- `GET /v1/mobility/workspaces/{id}/devices/{id}/clients` → `list_mobility_device_clients`
+- `PUT  /v1/mobility/workspaces/{id}/devices/{id}/network` (snake_case DHCP body:
+  `host_address`, `dhcp_mode` dhcp|none, `dhcp_range_start/stop`, `dhcp_lease_time`)
+  → `update_mobility_device_network`
+- `PUT  /v1/mobility/workspaces/{id}/devices/{id}/wireless` (`ssid`, `password` required)
+  → `update_mobility_device_wireless`
+
+**InnerSpace v1.3.23 (6, read-only)** — Cloud Connector proxy
+(`/v1/connector/consoles/{consoleId}/proxy/innerspace/integration/...`), `console_id`
+parameter per tool (from `list_hosts`), no writes:
+
+- `GET v1/access_points` → `list_innerspace_access_points`
+- `GET v1/floor_plans` → `list_innerspace_floor_plans`
+- `GET v1/inventory` → `list_innerspace_inventory`
+- `GET v1/project` → `get_innerspace_project`
+- `GET v1/switches` (optional `siteId` query) → `list_innerspace_switches`
+- `GET v1/assets/{planId}/{filename}` → `download_innerspace_asset`
+
+**Carrier Fabric v1.0.0 (11)** — cloud API on `api.ui.com/v1/carrier`, highest blast radius
+(subscriber lifecycle); all writes confirm-gated with dry-run:
+
+- `GET /v1/carrier/service-plans` → `list_carrier_service_plans`
+- `GET /v1/carrier/service-plans/{id}` → `get_carrier_service_plan`
+- `GET /v1/carrier/subscribers` (limit/offset/`planId`/`suspended`) → `list_carrier_subscribers`
+- `POST /v1/carrier/subscribers` (`subscriberNumber` required 1–32; optional camelCase
+  `name`, `email`, `notes`, `serviceAddress`, `planId`, `hostId`, `metadata`)
+  → `create_carrier_subscriber`
+- `GET /v1/carrier/subscribers/{id}` → `get_carrier_subscriber`
+- `PATCH /v1/carrier/subscribers/{id}` (only provided fields; spec semantics: absent =
+  unchanged, explicit null = clears — this tool only sends provided fields)
+  → `update_carrier_subscriber`
+- `PUT /v1/carrier/subscribers/{id}/host` (`hostId`) → `attach_carrier_subscriber_host`
+- `DELETE /v1/carrier/subscribers/{id}/host` → `detach_carrier_subscriber_host`
+- `PUT /v1/carrier/subscribers/{id}/plan` (`planId`) → `assign_carrier_subscriber_plan`
+- `POST /v1/carrier/subscribers/{id}/resume` → `resume_carrier_subscriber`
+- `POST /v1/carrier/subscribers/{id}/suspend` (optional `reason`) → `suspend_carrier_subscriber`
+
+New tool exposure profiles `mobility`, `innerspace`, `carrier` (via `UNIFI_PROFILE`).

@@ -1464,7 +1464,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 - [x] 30+ AI assistant example prompts
 - [x] Comprehensive documentation (docs/archive/VERIFICATION_REPORT.md, API.md)
 
-**Total: 74 MCP tools + Comprehensive documentation and verification**
+**Total: 364 MCP tools + Comprehensive documentation and verification**
 
 ### Version 0.3.0 (Future - Planned)
 

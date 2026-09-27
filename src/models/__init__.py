@@ -61,6 +61,7 @@ from .protect_event import (
     ProtectDeviceUpdateMessage,
     ProtectEventMessage,
 )
+from .mobility import MobilityDevice, MobilityDeviceClient, MobilityWorkspace, MobilityWorkspaceAdmin
 from .protect_nvr import ProtectNVR
 from .protect_v7 import (
     ProtectAlarmHub,
@@ -171,6 +172,10 @@ __all__ = [
     "ProtectDeviceUpdateMessage",
     "ProtectEventMessage",
     "ProtectAlarmWebhookResult",
+    "MobilityDevice",
+    "MobilityDeviceClient",
+    "MobilityWorkspace",
+    "MobilityWorkspaceAdmin",
     "ProtectNVR",
     "ProtectSiren",
     "ProtectSpeaker",

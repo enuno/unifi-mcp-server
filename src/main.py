@@ -27,6 +27,7 @@ from .tool_registry import register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import backups as backups_tools
+from .tools import carrier as carrier_tools
 from .tools import channel_planning as channel_planning_tools
 from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
@@ -46,7 +47,9 @@ from .tools import firewall_groups as firewall_groups_tools
 from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
 from .tools import integration_api as integration_api_tools
+from .tools import innerspace as innerspace_tools
 from .tools import mac_tags as mac_tags_tools
+from .tools import mobility as mobility_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
@@ -293,6 +296,9 @@ _LOCAL_TOOL_MODULES = [
     firewall_groups_tools,
     firewall_policies_tools,
     firewall_zones_tools,
+    carrier_tools,
+    innerspace_tools,
+    mobility_tools,
     mac_tags_tools,
     network_config_tools,
     networks_tools,
@@ -421,6 +427,15 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_relays_tools,
         protect_speakers_tools,
         protect_users_tools,
+    ],
+    "mobility": [
+        mobility_tools,
+    ],
+    "innerspace": [
+        innerspace_tools,
+    ],
+    "carrier": [
+        carrier_tools,
     ],
 }
 

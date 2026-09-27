@@ -52,11 +52,19 @@ from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
 from .tools import port_profiles as port_profile_tools
 from .tools import protect_alarm as protect_alarm_tools
+from .tools import protect_alarm_hubs as protect_alarm_hubs_tools
+from .tools import protect_bridges as protect_bridges_tools
 from .tools import protect_cameras as protect_cameras_tools
 from .tools import protect_devices as protect_devices_tools
 from .tools import protect_events as protect_events_tools
+from .tools import protect_fobs as protect_fobs_tools
+from .tools import protect_link_stations as protect_link_stations_tools
 from .tools import protect_nvr as protect_nvr_tools
+from .tools import protect_pos as protect_pos_tools
+from .tools import protect_relays as protect_relays_tools
 from .tools import protect_sirens as protect_sirens_tools
+from .tools import protect_speakers as protect_speakers_tools
+from .tools import protect_users as protect_users_tools
 from .tools import protect_views as protect_views_tools
 from .tools import qos as qos_tools
 from .tools import radius as radius_tools
@@ -296,6 +304,15 @@ _LOCAL_TOOL_MODULES = [
     protect_events_tools,
     protect_nvr_tools,
     protect_sirens_tools,
+    protect_alarm_tools,
+    protect_alarm_hubs_tools,
+    protect_bridges_tools,
+    protect_fobs_tools,
+    protect_link_stations_tools,
+    protect_pos_tools,
+    protect_relays_tools,
+    protect_speakers_tools,
+    protect_users_tools,
     qos_tools,
     radius_tools,
     ref_tools,
@@ -372,6 +389,14 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_nvr_tools,
         protect_sirens_tools,
         protect_alarm_tools,
+        protect_alarm_hubs_tools,
+        protect_bridges_tools,
+        protect_fobs_tools,
+        protect_link_stations_tools,
+        protect_pos_tools,
+        protect_relays_tools,
+        protect_speakers_tools,
+        protect_users_tools,
         traffic_flows_tools,
         tml_tools,
     ],
@@ -388,6 +413,14 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_nvr_tools,
         protect_sirens_tools,
         protect_alarm_tools,
+        protect_alarm_hubs_tools,
+        protect_bridges_tools,
+        protect_fobs_tools,
+        protect_link_stations_tools,
+        protect_pos_tools,
+        protect_relays_tools,
+        protect_speakers_tools,
+        protect_users_tools,
     ],
 }
 

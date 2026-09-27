@@ -1,9 +1,10 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-09-24
+**Document Version:** 2026-09-26
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
 **Repository Baseline:** 275 MCP tools registered in local mode across 47 tool modules; 2,240 unit tests passing
-**Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started)
+**API Spec Baseline** (audited 2026-09-26): UniFi Network **v10.6.106**, UniFi Protect **v7.3.68**, Site Manager v1.0.0; newly published: Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
+**Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started; API-spec alignment wave in progress)
 
 ---
 
@@ -13,8 +14,9 @@ This plan defines the path from the current UniFi Network-centric server to a pr
 
 The roadmap preserves the current Network and Site Manager baseline while adding the following strategic capabilities:
 
-- native Protect API coverage
-- Access API expansion
+- native Protect API coverage — v6-era surface complete; **v7.3.68 expansion outstanding** (39 new operations, §2.3)
+- API-spec alignment: codebase and docs pinned to current official specs (Network v10.6.106, Protect v7.3.68) with a repeatable diff/audit workflow
+- Access API expansion — **blocked** (no official spec published as of 2026-09-26)
 - multi-controller / multi-site orchestration
 - dry-run / change-safe execution
 - tool-level RBAC
@@ -23,6 +25,7 @@ The roadmap preserves the current Network and Site Manager baseline while adding
 - A2A agent discovery
 - webhook-driven event bus
 - task-specific tool exposure profiles
+- new API domains: Mobility, InnerSpace, Carrier Fabric (Phase 6, §4.6)
 - AI-readable runbooks and domain skills
 - standardized developer workflow and registry support
 
@@ -100,7 +103,7 @@ Describe how to execute the plan without losing sight of the current production 
 | Dynamic DNS | Complete | Full CRUD |
 | Tagged MACs | Complete | Device tag CRUD on legacy `rest/tag` (local only) |
 | Device Migration | Complete | Move between sites (`move-device`), migrate to another controller (`migrate` / `cancel-migrate`); local only |
-| Protect | Complete | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests |
+| Protect | Partial (v6) | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests. **v7.3.68 (2026) added 39 operations** — arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion — all unmapped (§2.3, Phase 5a) |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
 | Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
 | Audit logging | Partial | JSONL append-mode log with credential redaction and 0600 permissions; encryption / tamper evidence open (issue #22) |
@@ -109,11 +112,22 @@ Describe how to execute the plan without losing sight of the current production 
 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
-- Access API is not yet implemented.
+- Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
 - Multi-controller orchestration is not yet implemented (runbook only).
 - Prometheus metrics and the Redis webhook event bus are not yet implemented (runbooks only).
 - Dry-run covers 32 of 47 tool modules and is not enforced in CI; per-tool RBAC scopes do not exist yet.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
+
+### 2.3 API specification baseline (audited 2026-09-26)
+
+Official UniFi API specs are published at `developer.ui.com/{service}/{version}/` as human-readable pages plus machine-readable artifacts: `openapi.json`, `llms.txt`, and Postman collections. Canonical spec snapshots for this audit are committed under `scripts/` (`scraped-api-spec-v10.6.106.json`, `protect-api-spec-v7.3.68.json`, `mobility-api-spec-v1.0.0.json`, `innerspace-api-spec-v1.3.23.json`, `carrier-fabric-api-spec-v1.0.0.json`). Note: only the *current* version of each spec is hosted; older versions are not retrievable, so version-to-version spec diffs require keeping prior snapshots.
+
+Findings from the Network v10.6.106 / Protect v7.3.68 audit:
+
+- **Network Integration API is endpoint-stable**: 73 operations across 44 paths — unchanged in count since v10.3.55, and every spec path is already covered by `docs/UNIFI_API.md`. No new implementation work; the doc needs a version bump (10.3.55 → 10.6.106 header, version history) and cleanup of embedded v10.1.68 artifacts (example blobs ~lines 2697/2845, reference links ~line 3793).
+- **Protect shipped a major version (v6.2.83 → v7.3.68)**: 74 operations across 55 paths, of which **39 operations are absent from the docs and implementation**. New surface: arm profiles with alarm enable/disable (7 ops), sirens (6), speakers (4), fobs (3), relays (4), bridges (3), link stations (3), alarm hubs (4), Protect users (2), UniFi Identity/ULP users (2), POS transaction ingestion (1).
+- **Three entirely new APIs are now published** and unknown to the codebase: **Mobility v1.0.0** (8 ops: device configuration, workspaces, devices, clients), **InnerSpace v1.3.23** (6 ops via Cloud Connector proxy for indoor-location/analytics), **Carrier Fabric v1.0.0** (11 ops: subscribers, service state, service plans).
+- **Scraper tooling**: `scripts/update-api-docs.js` pins were bumped to Network v10.6.106 / Protect v7.3.68 (Site Manager v1.0.0 unchanged). The puppeteer-based scrapers (`scrape-api-docs.js` authenticates to the UniFi portal; `update-api-docs.js` appends "new endpoint" sections) are legacy — the direct-download `openapi.json` artifacts above are the modern path and should replace them (Phase 4 item).
 
 ---
 
@@ -123,9 +137,13 @@ Describe how to execute the plan without losing sight of the current production 
 
 | ID | Gap | Priority | Outcome |
 |---|---|---:|---|
-| G1 | Protect API | Highest | Native camera, NVR, viewer, event, and device support |
-| G2 | Access API | Highest | Doors, credentials, visitors, and policy support |
+| G1 | Protect API | Highest | v6 surface native (cameras, NVR, viewers, events); **v7.3.68 expansion outstanding — 39 ops unmapped** |
+| G2 | Access API | Highest | Doors, credentials, visitors, and policy support — **blocked: no official spec published as of 2026-09-26** |
 | G3 | Multi-controller orchestration | Highest | Single-server fleet operations across controllers |
+| G4 | Protect v7 expansion | High | Arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion |
+| G5 | Mobility API | Medium | Workspace/device/client config for UniFi Mobility |
+| G6 | InnerSpace API | Medium | Indoor-location/analytics data via Cloud Connector proxy |
+| G7 | Carrier Fabric API | Medium | Subscriber, service-plan, and service-state management for carrier deployments |
 
 ### 3.2 Platform gaps
 
@@ -140,6 +158,7 @@ Describe how to execute the plan without losing sight of the current production 
 | P7 | Tool exposure profiles | Medium | Reduce context-window bloat |
 | P8 | AI skills / runbooks | Medium | Give agents reusable operational knowledge |
 | P9 | Developer workflow standardization | Medium | Make local dev, build, and release consistent |
+| P10 | Spec-drift guardrail | High | Pin spec snapshots per release, keep scraper pins current, re-audit quarterly against `developer.ui.com` |
 
 ---
 
@@ -148,6 +167,8 @@ Describe how to execute the plan without losing sight of the current production 
 ### Phase 3: Protect API integration (complete)
 
 **Goal:** deliver native Protect coverage on top of the existing Network and Site Manager foundation.
+
+> **Superseded in part:** this phase covers the v6-era Protect surface. Protect v7.3.68 (2026) added a 39-operation device/alarm expansion that is *not* part of this phase — it is queued as Phase 5a (§4.5a).
 
 #### Deliverables
 
@@ -189,6 +210,11 @@ Describe how to execute the plan without losing sight of the current production 
 - `skills/` domain knowledge packs — done
 - `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md` — done
 - Documentation synchronization across README, API, UNIFI_API, and changelog — open
+- API-spec alignment wave (§2.3) — in progress:
+  - `docs/UNIFI_API.md` version bump 10.3.55 → 10.6.106 + version-history entry + removal of embedded v10.1.68 artifacts — open
+  - `docs/UNIFI_API.md` Protect section updated to v7.3.68 with the 39 new operations documented as planned (not yet implemented) — open
+  - Replace legacy puppeteer scrapers with direct-download spec artifacts (`openapi.json` / `llms.txt`) — open
+  - Field-level verification of existing tool payloads against v10.6.106 schemas (73 ops, endpoint-stable but schemas may drift within versions) — open
 
 #### Exit criteria
 
@@ -224,6 +250,68 @@ Describe how to execute the plan without losing sight of the current production 
 
 ---
 
+### Phase 5a: Protect v7 expansion (new — queued after Phase 4 docs alignment)
+
+**Goal:** bring the Protect module from the v6-era surface to full v7.3.68 coverage, per the spec audit in §2.3.
+
+#### Deliverables
+
+- `src/models/protect_*.py` models for the new v7 device categories
+- Tool modules for:
+  - Arm profiles (list, create, update, delete, set-current) and alarm enable/disable — **write tools must respect `UNIFI_READ_ONLY` and `confirm=True` conventions**
+  - Sirens (CRUD + play/stop/test-sound), speakers (CRUD + test-sound)
+  - Fobs, relays (incl. output activation), bridges, link stations, alarm hubs (incl. output trigger)
+  - Protect users and UniFi Identity (ULP) users (read)
+  - POS transaction ingestion (write; confirm-gated)
+- `docs/UNIFI_API.md` Protect section: 39 new operations documented with request/response shapes from `protect-api-spec-v7.3.68.json`
+- Mocked integration tests mirroring the Phase 3 pattern (no live hardware dependency)
+- Optional: alarm state exposed as MCP resources (arm status, active siren state)
+
+#### Scope
+
+- 39 new operations (of 74 total in v7.3.68); the other 35 are already covered by the Phase 3 surface — re-verify against the v7 spec for schema drift
+- No new transport work: reuse the existing Protect integration API client (`/proxy/protect/integration/v1/...`)
+
+#### Exit criteria
+
+- All 74 v7.3.68 spec operations are either implemented or explicitly documented as out-of-scope
+- New write tools are covered by dry-run interception and audit logging
+- Mocked tests cover every new tool and model
+- Docs mark the new surface as verified-against-spec v7.3.68
+
+---
+
+### Phase 6: New API domains — Mobility, InnerSpace, Carrier Fabric (new)
+
+**Goal:** extend the platform beyond Network/Protect with the three newly published UniFi APIs, each of which is small enough to land as a focused increment (25 operations total).
+
+#### 6.1 Mobility v1.0.0 (8 operations)
+
+- Cloud API against `api.ui.com` (same auth model as the existing Site Manager cloud client)
+- Ops: device configuration (3), workspaces (2), devices (2), clients (1)
+- Deliverables: `src/api/mobility_client.py`, `src/models/mobility_*.py`, tool module, docs section, mocked tests
+
+#### 6.2 InnerSpace v1.3.23 (6 operations)
+
+- Served via the **Cloud Connector proxy** pattern already used for Network/Protect proxying (`/v1/connector/consoles/{consoleId}/proxy/innerspace/integration`)
+- Indoor-location/analytics data (per spec tags); read-oriented surface
+- Deliverables: proxy routing extension, tool module, docs, mocked tests
+
+#### 6.3 Carrier Fabric v1.0.0 (11 operations)
+
+- Cloud API against `api.ui.com`; carrier/ISP domain: subscribers (7), service state (2), service plans (2)
+- Highest blast radius of the three (subscriber lifecycle management) — all writes confirm-gated and audited
+- Deliverables: `src/api/carrier_fabric_client.py`, models, tool module, docs, mocked tests
+
+#### Shared exit criteria
+
+- Each domain ships behind its own tool exposure profile (extends P7)
+- All writes respect `UNIFI_READ_ONLY`, `confirm=True`, dry-run, and audit
+- Docs separate implemented vs planned per domain; spec snapshots pinned in `scripts/`
+- Access API remains parked until Ubiquiti publishes a spec; if it appears, it slots into Phase 5/6 ahead of or alongside these domains
+
+---
+
 ## 5. Version roadmap
 
 | Version | Scope | Notes |
@@ -231,9 +319,10 @@ Describe how to execute the plan without losing sight of the current production 
 | v0.2.5 | Current package version | `pyproject.toml` version on `main` |
 | v0.3.0 | Phases 0–2 completion | Shipped on `main`; never tagged or version-bumped |
 | v0.4.0 | Phase 3 | Protect API integration; `CHANGELOG.md` has a `[0.4.0]` section, but no tag or version bump exists |
-| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience |
+| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience, API-spec alignment (v10.6.106 / v7.3.68) |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v1.1.0+ | Post-Phase 5 | Access expansion and follow-on domains |
+| v1.1.0 | Phase 5a | Protect v7 expansion (39 new operations) |
+| v1.2.0+ | Phase 6 | Mobility, InnerSpace, Carrier Fabric; Access if/when Ubiquiti publishes a spec |
 
 ---
 
@@ -276,7 +365,8 @@ New documents introduced by the roadmap:
 | Redis unavailable for webhook bus | Low | Medium | Graceful single-instance fallback |
 | RBAC misconfiguration grants too much access | Low | High | Default deny and explicit scope mapping |
 | Metrics cardinality grows too large | Low | Medium | Cap label cardinality and keep labels stable |
-| API/documentation drift returns | Medium | Medium | Phase gates require docs and implementation sync |
+| API/documentation drift returns | Medium | Medium | Phase gates require docs and implementation sync; spec snapshots pinned per release (P10) |
+| Spec snapshots rot (pins drift again, as v10.1.68 did) | Medium | Medium | Quarterly re-audit against `developer.ui.com` index; keep `openapi.json` artifacts in-repo; legacy scrapers replaced with direct-download path |
 
 ---
 

@@ -5,9 +5,11 @@ This roadmap is synchronized with `DEVELOPMENT_PLAN.md` and reflects the current
 ## Posture
 
 - Phase 3: Protect API integration
-- Phase 4: testing, polish, minor gaps, and developer experience
+- Phase 4: testing, polish, minor gaps, and developer experience (in progress — includes API-spec alignment to Network v10.6.106 / Protect v7.3.68)
 - Phase 5: enterprise scale and operational excellence
-- Phase 5+ follow-on: Access expansion and later domains
+- Phase 5a: Protect v7 expansion (39 new operations: arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion)
+- Phase 6: new API domains — Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0
+- Phase 5+ follow-on: Access expansion — **blocked** (no official Access spec published as of 2026-09-26)
 
 ## How to use this roadmap
 
@@ -100,8 +102,9 @@ Goal: turn the server into a multi-site, multi-team operating platform with stro
 - Prometheus metrics endpoint
 - A2A agent card and manifest
 - Webhook event bus with Redis pub/sub
-- Tool exposure profiles for network, protect, access, talk, drive, and read-only sessions
-- Access API implementation
+- Tool exposure profiles for network, protect, access, talk, drive, and read-only sessions — partial (read-only and protect done)
+- Protect v7 expansion — open (queued as Phase 5a per 2026-09-26 spec audit; 39 new operations)
+- Access API implementation — open (blocked: no official spec exists as of 2026-09-26)
 
 ### Exit criteria
 
@@ -120,6 +123,7 @@ Goal: turn the server into a multi-site, multi-team operating platform with stro
 | v0.2.5 | Current stable release | Baseline release artifact |
 | v0.3.0 | Phases 0–2 completion | Docs sync, Network refs, connector foundation |
 | v0.4.0 | Phase 3 | Protect API integration |
-| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience |
+| v0.5.0 | Phase 4 | Testing, polish, minor gaps, developer experience, API-spec alignment |
 | v1.0.0 | Phase 5 | Enterprise scale and operational excellence |
-| v1.1.0+ | Post-Phase 5 | Access expansion and later product domains |
+| v1.1.0 | Phase 5a | Protect v7 expansion (39 new operations) |
+| v1.2.0+ | Phase 6 | Mobility, InnerSpace, Carrier Fabric; Access if/when a spec is published |

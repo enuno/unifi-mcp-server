@@ -214,7 +214,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
   - `docs/UNIFI_API.md` version bump 10.3.55 → 10.6.106 + version-history entry + removal of embedded v10.1.68 artifacts — done
   - `docs/UNIFI_API.md` Protect section updated to v7.3.68 with the 39 new operations documented as planned (not yet implemented) — done
   - Replace legacy puppeteer scrapers with direct-download spec artifacts (`openapi.json` / `llms.txt`) — done (`scripts/fetch-specs.sh`; scrapers deprecated in `scripts/README.md`)
-  - Field-level verification of existing tool payloads against v10.6.106 schemas (73 ops, endpoint-stable but schemas may drift within versions) — open
+  - Field-level verification of existing tool payloads against v10.6.106 schemas (73 ops, endpoint-stable but schemas may drift within versions) — done (`.analysis-reports/api-spec-audit-2026-09-26.md`: 3 latent write-path defects F1-F3 — adopt endpoint non-existent, port-action path drift, client-action legacy shape; hardware verification required before fixes ship)
 
 #### Exit criteria
 
@@ -367,6 +367,7 @@ New documents introduced by the roadmap:
 | Metrics cardinality grows too large | Low | Medium | Cap label cardinality and keep labels stable |
 | API/documentation drift returns | Medium | Medium | Phase gates require docs and implementation sync; spec snapshots pinned per release (P10) |
 | Spec snapshots rot (pins drift again, as v10.1.68 did) | Medium | Medium | Quarterly re-audit against `developer.ui.com` index; keep `openapi.json` artifacts in-repo; legacy scrapers replaced with direct-download path |
+| Latent Integration API write defects (audit 2026-09-26: adopt, port-action, client-action paths) | High (verified by spec diff) | High | Mock tests assert code's own assumptions — verify F1-F3 on live hardware before release; see `.analysis-reports/api-spec-audit-2026-09-26.md` |
 
 ---
 

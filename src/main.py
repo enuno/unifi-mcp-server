@@ -51,10 +51,12 @@ from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
 from .tools import port_forwarding as port_fwd_tools
 from .tools import port_profiles as port_profile_tools
+from .tools import protect_alarm as protect_alarm_tools
 from .tools import protect_cameras as protect_cameras_tools
 from .tools import protect_devices as protect_devices_tools
 from .tools import protect_events as protect_events_tools
 from .tools import protect_nvr as protect_nvr_tools
+from .tools import protect_sirens as protect_sirens_tools
 from .tools import protect_views as protect_views_tools
 from .tools import qos as qos_tools
 from .tools import radius as radius_tools
@@ -293,6 +295,7 @@ _LOCAL_TOOL_MODULES = [
     protect_views_tools,
     protect_events_tools,
     protect_nvr_tools,
+    protect_sirens_tools,
     qos_tools,
     radius_tools,
     ref_tools,
@@ -367,6 +370,8 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_views_tools,
         protect_events_tools,
         protect_nvr_tools,
+        protect_sirens_tools,
+        protect_alarm_tools,
         traffic_flows_tools,
         tml_tools,
     ],
@@ -381,6 +386,8 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_views_tools,
         protect_events_tools,
         protect_nvr_tools,
+        protect_sirens_tools,
+        protect_alarm_tools,
     ],
 }
 

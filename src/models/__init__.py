@@ -62,6 +62,20 @@ from .protect_event import (
     ProtectEventMessage,
 )
 from .protect_nvr import ProtectNVR
+from .protect_v7 import (
+    ProtectAlarmHub,
+    ProtectArmProfile,
+    ProtectArmSchedule,
+    ProtectBridge,
+    ProtectFob,
+    ProtectLinkStation,
+    ProtectPosTransactionResult,
+    ProtectRelay,
+    ProtectSiren,
+    ProtectSpeaker,
+    ProtectUlpUser,
+    ProtectUser,
+)
 from .protect_view import ProtectLiveView, ProtectLiveViewSlot, ProtectMetaInfo, ProtectViewer
 from .qos_profile import TrafficRoute, TrafficRouteTargetDevice
 from .radius import RADIUSProfile
@@ -158,6 +172,18 @@ __all__ = [
     "ProtectEventMessage",
     "ProtectAlarmWebhookResult",
     "ProtectNVR",
+    "ProtectSiren",
+    "ProtectSpeaker",
+    "ProtectFob",
+    "ProtectRelay",
+    "ProtectBridge",
+    "ProtectLinkStation",
+    "ProtectAlarmHub",
+    "ProtectArmProfile",
+    "ProtectArmSchedule",
+    "ProtectUser",
+    "ProtectUlpUser",
+    "ProtectPosTransactionResult",
     "IntegrationSite",
     "IntegrationDevice",
     "IntegrationClient",

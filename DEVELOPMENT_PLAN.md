@@ -211,9 +211,9 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 - `Makefile`, `docker-compose.yml`, and `HARBOR_SETUP.md` — done
 - Documentation synchronization across README, API, UNIFI_API, and changelog — open
 - API-spec alignment wave (§2.3) — in progress:
-  - `docs/UNIFI_API.md` version bump 10.3.55 → 10.6.106 + version-history entry + removal of embedded v10.1.68 artifacts — open
-  - `docs/UNIFI_API.md` Protect section updated to v7.3.68 with the 39 new operations documented as planned (not yet implemented) — open
-  - Replace legacy puppeteer scrapers with direct-download spec artifacts (`openapi.json` / `llms.txt`) — open
+  - `docs/UNIFI_API.md` version bump 10.3.55 → 10.6.106 + version-history entry + removal of embedded v10.1.68 artifacts — done
+  - `docs/UNIFI_API.md` Protect section updated to v7.3.68 with the 39 new operations documented as planned (not yet implemented) — done
+  - Replace legacy puppeteer scrapers with direct-download spec artifacts (`openapi.json` / `llms.txt`) — done (`scripts/fetch-specs.sh`; scrapers deprecated in `scripts/README.md`)
   - Field-level verification of existing tool payloads against v10.6.106 schemas (73 ops, endpoint-stable but schemas may drift within versions) — open
 
 #### Exit criteria

@@ -1,5 +1,13 @@
 # UniFi API Documentation Scraper
 
+> **Deprecated (2026-09-26):** Ubiquiti now publishes machine-readable spec
+> artifacts directly at `https://developer.ui.com/{service}/{version}/`
+> (`openapi.json`, `llms.txt`, Postman collections) — no portal auth or
+> browser needed. Use **`./fetch-specs.sh`** to pull the pinned baseline
+> snapshots; keep them in git as the diff baseline for future audits
+> (see `DEVELOPMENT_PLAN.md` §2.3 and gap P10). The puppeteer toolchain
+> below is kept only for historical reference and legacy diff files.
+
 Puppeteer-based scraper for extracting API documentation from the UniFi Network portal.
 
 ## Overview

@@ -23,10 +23,18 @@ from ..utils import (
 async def get_device_details(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed information for a specific device.
 
-    Uses the integration API so ``device_id`` matches the UUIDs returned by
-    ``get_network_topology`` and other integration tools. Also accepts the
-    legacy internal-stats MongoDB ObjectId (``_id``) as a fallback, so callers
-    that already store the legacy ID continue to work.
+    Accepts any identifier a caller is likely to already hold, across the
+    three ID spaces UniFi uses (issue #183 — the integration API only keys
+    records by UUID, so a legacy ``_id`` or MAC input previously failed with
+    "device not found" even though the device existed):
+
+    * integration-API UUID (what ``get_network_topology`` returns) — direct
+      detail-lookup fast path, then list-scan fallback;
+    * legacy MongoDB ObjectId (``_id`` from the legacy stats surface) — the
+      integration records carry no ``_id``, so it is resolved to a MAC via the
+      legacy stats list and matched by MAC;
+    * MAC address — matched against ``macAddress`` (integration shape) or
+      ``mac`` (legacy shape), case/colon-insensitively.
 
     The response is parsed with ``IntegrationDevice`` rather than the legacy
     ``Device`` model, because the two endpoints report different shapes: the
@@ -36,72 +44,123 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
 
     Args:
         site_id: Site identifier
-        device_id: Device integration-API UUID (or legacy ``_id``)
+        device_id: Device integration-API UUID, legacy ``_id``, or MAC address
         settings: Application settings
 
     Returns:
         Device details dictionary
 
     Raises:
+        ValidationError: If ``device_id`` matches no known identifier format
         ResourceNotFoundError: If device not found
     """
     site_id = validate_site_id(site_id)
-    device_id = validate_device_id(device_id)
+    try:
+        device_id = validate_device_id(device_id)
+        is_mac = False
+    except ValidationError:
+        # Not a UUID/ObjectId — try the third ID space.
+        device_id = validate_mac_address(device_id)
+        is_mac = True
     logger = get_logger(__name__, settings.log_level)
+
+    def _norm_mac(value: str) -> str:
+        return value.lower().replace(":", "")
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
         resolved_site_id = await client.resolve_site_id(site_id)
 
-        # Fast path: direct lookup on the integration API.
-        try:
-            response = await client.get(
-                settings.get_integration_path(f"sites/{resolved_site_id}/devices/{device_id}")
-            )
-            if isinstance(response, dict):
-                device_data = response.get("data", response)
-                # Direct lookup returns a single device object; a list means
-                # we hit a collection endpoint (mocked or otherwise) — fall
-                # through to the list scan below.
-                if isinstance(device_data, dict) and device_data:
-                    logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
-                    return IntegrationDevice.model_validate(device_data).model_dump(
-                        exclude_none=True
-                    )
-        except (ResourceNotFoundError, APIError) as e:
-            # Direct lookup is a best-effort fast path. A 404 / missing-resource
-            # response just means we should fall through to the paginated list
-            # scan below. Any other exception (auth, network, pydantic) should
-            # propagate — we intentionally don't swallow it.
-            logger.debug(
-                sanitize_log_message(
-                    f"Direct device lookup returned no match, falling back to list scan: {e}"
+        async def _integration_devices() -> list[dict[str, Any]]:
+            devices: list[dict[str, Any]] = []
+            offset = 0
+            while True:
+                response = await client.get(
+                    settings.get_integration_path(f"sites/{resolved_site_id}/devices"),
+                    params={"offset": offset, "limit": 100},
                 )
-            )
+                batch = response if isinstance(response, list) else response.get("data", [])
+                if not batch:
+                    break
+                devices.extend(batch)
+                if len(batch) < 100:
+                    break
+                offset += len(batch)
+            return devices
 
-        # Fallback: page through the integration devices list and match on
-        # either ``id`` (integration UUID) or ``_id`` (legacy ObjectId).
-        offset = 0
-        while True:
-            response = await client.get(
-                settings.get_integration_path(f"sites/{resolved_site_id}/devices"),
-                params={"offset": offset, "limit": 100},
-            )
-            devices_data = response if isinstance(response, list) else response.get("data", [])
-            if not devices_data:
-                break
-            for device_data in devices_data:
-                if device_data.get("id") == device_id or device_data.get("_id") == device_id:
+        # Fast path: direct detail lookup. Only meaningful for UUID/ObjectId
+        # identifiers; a MAC is never a valid detail-route segment.
+        if not is_mac:
+            try:
+                response = await client.get(
+                    settings.get_integration_path(f"sites/{resolved_site_id}/devices/{device_id}")
+                )
+                if isinstance(response, dict):
+                    device_data = response.get("data", response)
+                    # A list means we hit a collection endpoint (mocked or
+                    # otherwise) — fall through to the list scan below.
+                    if isinstance(device_data, dict) and device_data:
+                        logger.info(
+                            sanitize_log_message(f"Retrieved device details for {device_id}")
+                        )
+                        return IntegrationDevice.model_validate(device_data).model_dump(
+                            exclude_none=True
+                        )
+            except (ResourceNotFoundError, APIError) as e:
+                # Best-effort fast path: a 404/missing-resource response just
+                # means we fall through to the list scan. Any other exception
+                # (auth, network, pydantic) propagates — not swallowed.
+                logger.debug(
+                    sanitize_log_message(
+                        f"Direct device lookup returned no match, falling back to list scan: {e}"
+                    )
+                )
+
+        devices = await _integration_devices()
+
+        # Legacy ObjectId resolution: integration records carry no ``_id``, so
+        # map the ObjectId to a MAC through the legacy stats list and match on
+        # MAC below.
+        mac_probe: str | None = _norm_mac(device_id) if is_mac else None
+        if mac_probe is None and len(device_id) == 24 and all(
+            c in "0123456789abcdef" for c in device_id
+        ):
+            try:
+                legacy = await client.get(f"/ea/sites/{resolved_site_id}/devices")
+                legacy_items = legacy if isinstance(legacy, list) else legacy.get("data", [])
+                for item in legacy_items:
+                    if item.get("_id") == device_id and item.get("mac"):
+                        mac_probe = _norm_mac(item["mac"])
+                        break
+            except (ResourceNotFoundError, APIError) as e:
+                logger.debug(
+                    sanitize_log_message(f"Legacy ObjectId resolution failed, continuing: {e}")
+                )
+
+        for device_data in devices:
+            if is_mac:
+                reported = device_data.get("macAddress") or device_data.get("mac") or ""
+                if reported and _norm_mac(reported) == mac_probe:
                     logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
                     return IntegrationDevice.model_validate(device_data).model_dump(
                         exclude_none=True
                     )
-            if len(devices_data) < 100:
-                break
-            offset += len(devices_data)
+            elif (
+                device_data.get("id") == device_id
+                or device_data.get("_id") == device_id
+                or (
+                    mac_probe is not None
+                    and bool(device_data.get("macAddress") or device_data.get("mac"))
+                    and _norm_mac(device_data.get("macAddress") or device_data["mac"]) == mac_probe
+                )
+            ):
+                logger.info(sanitize_log_message(f"Retrieved device details for {device_id}"))
+                return IntegrationDevice.model_validate(device_data).model_dump(exclude_none=True)
 
         raise ResourceNotFoundError("device", device_id)
+
+
 
 
 async def get_device_statistics(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:

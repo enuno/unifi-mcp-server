@@ -621,3 +621,73 @@ class TestExecutePortAction:
                 assert json_data == {"action": "POWER_CYCLE"}
                 assert "params" not in json_data
 
+
+
+class TestGetDeviceDetailsIdentifierResolution:
+    """Issue #183: get_device_details must resolve all three UniFi ID spaces.
+
+    The integration API only keys device records by UUID, so callers passing
+    a legacy ``_id`` (or a MAC) got "device not found" for devices that
+    existed. UUID, ObjectId, and MAC inputs must all resolve.
+    """
+
+    @pytest.mark.asyncio
+    async def test_mac_input_resolves_via_mac_address(self, mock_settings):
+        device = make_integration_device(DEVICE_UUID_1, "AP-Living")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            client = create_mock_client({"data": [device]})
+            mock_client_class.return_value = client
+
+            result = await get_device_details("site-1", "1C:6A:1B:5B:C7:85", mock_settings)
+
+        assert result["id"] == DEVICE_UUID_1
+        # MAC input must skip both the detail route and the legacy ObjectId
+        # mapping — a single integration-list call is the whole conversation.
+        assert len(client.get.call_args_list) == 1
+
+    @pytest.mark.asyncio
+    async def test_objectid_input_resolves_via_legacy_mapping(self, mock_settings):
+        from src.utils import APIError
+
+        legacy_id = "689d9f9ef4061b1ea839a6ec"
+        device = make_integration_device(DEVICE_UUID_1, "Gateway")
+
+        async def fake_get(endpoint, **kwargs):
+            # Integration endpoints come through as MagicMock on the mocked
+            # settings — only the legacy f-string path is a real string.
+            endpoint = str(endpoint)
+            if endpoint.startswith("/ea/sites/"):
+                return {"data": [{"_id": legacy_id, "mac": "1c:6a:1b:5b:c7:85"}]}
+            if endpoint.rstrip("/").endswith(f"devices/{legacy_id}"):
+                raise APIError("not found", status_code=400)
+            return {"data": [device]}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            client = create_mock_client({})
+            client.get = AsyncMock(side_effect=fake_get)
+            mock_client_class.return_value = client
+
+            result = await get_device_details("site-1", legacy_id, mock_settings)
+
+        assert result["id"] == DEVICE_UUID_1
+        assert result["name"] == "Gateway"
+
+    @pytest.mark.asyncio
+    async def test_invalid_identifier_raises(self, mock_settings):
+        from src.utils import ValidationError
+
+        with pytest.raises(ValidationError):
+            await get_device_details("site-1", "not-a-real-id", mock_settings)
+
+    @pytest.mark.asyncio
+    async def test_unknown_mac_raises_not_found(self, mock_settings):
+        from src.utils import ResourceNotFoundError
+
+        device = make_integration_device(DEVICE_UUID_1, "AP-Living")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client({"data": [device]})
+
+            with pytest.raises(ResourceNotFoundError):
+                await get_device_details("site-1", "aa:bb:cc:dd:ee:ff", mock_settings)

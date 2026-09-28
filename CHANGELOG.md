@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **`list_firewall_policies` (and friends) failed with `'enum'` validation errors on valid 200 responses** (issue #183): strict response-model enums (`action`, `matching_target`, `ip_version`, `connection_state_type`) rejected any controller-emitted value outside the modeled set, which breaks whenever a new Network release adds one — and some predefined policies carry `action: null`. Read models are now permissive (values preserved verbatim; the `PolicyAction`/`MatchingTarget`/`ConnectionStateType`/`IPVersion` enums remain exported for write-side validation and API consumers).
+- **`get_device_details` returned "device not found" for devices that existed** (issue #183): the integration API only keys records by UUID, so callers passing a legacy `_id` (or a MAC) never matched. The tool now accepts all three identifier spaces — integration UUID (direct detail lookup), legacy ObjectId (resolved to a MAC via the legacy stats list, then matched), and MAC address (matched case/colon-insensitively against `macAddress`/`mac`).
+
 ## [0.5.0] - 2026-09-27
 
 > Folds the never-tagged `[0.4.0]` changes and everything since into the first release cut from `main` since v0.2.5. `main` previously declared 0.2.5 while carrying Phase 3-6 work; `pyproject.toml` now matches the tag.

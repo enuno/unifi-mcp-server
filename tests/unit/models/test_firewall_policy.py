@@ -282,7 +282,7 @@ class TestFirewallPolicy:
 
         policy = FirewallPolicy(**sample_api_response)
         assert policy.name == "Block IOT to Internal"
-        assert policy.action.value == "BLOCK"
+        assert policy.action == "BLOCK"
         assert policy.enabled is True
         assert policy.predefined is False
 
@@ -293,21 +293,21 @@ class TestFirewallPolicy:
         policy = FirewallPolicy(**sample_api_response)
         assert policy.id == "682a0e42220317278bb0b2cb"
 
-    def test_action_enum_conversion(self, sample_api_response):
-        """Action string should convert to enum."""
-        from src.models.firewall_policy import FirewallPolicy, PolicyAction
+    def test_action_passthrough(self, sample_api_response):
+        """Action string passes through verbatim (permissive read, issue #183)."""
+        from src.models.firewall_policy import FirewallPolicy
 
         policy = FirewallPolicy(**sample_api_response)
-        assert policy.action == PolicyAction.BLOCK
-        assert isinstance(policy.action, PolicyAction)
+        assert policy.action == "BLOCK"
+        assert isinstance(policy.action, str)
 
-    def test_invalid_action_raises(self, sample_api_response):
-        """Invalid action should raise ValidationError."""
+    def test_unknown_action_preserved(self, sample_api_response):
+        """Unknown action values must not fail parsing (issue #183)."""
         from src.models.firewall_policy import FirewallPolicy
 
         sample_api_response["action"] = "INVALID"
-        with pytest.raises(ValidationError):
-            FirewallPolicy(**sample_api_response)
+        policy = FirewallPolicy(**sample_api_response)
+        assert policy.action == "INVALID"
 
     def test_source_destination_parsing(self, sample_api_response):
         """Source and destination should be parsed as MatchTarget."""
@@ -429,7 +429,7 @@ class TestFirewallPolicy:
         policy = FirewallPolicy(**app_rule)
         assert policy.destination.matching_target == MatchingTarget.APP
         assert policy.name == "Block Streaming Apps"
-        assert policy.action.value == "BLOCK"
+        assert policy.action == "BLOCK"
 
     def test_web_matching_target_rule(self):
         """Should parse rules with WEB matching target (Bug #106 fix)."""
@@ -448,7 +448,7 @@ class TestFirewallPolicy:
         policy = FirewallPolicy(**web_rule)
         assert policy.destination.matching_target == MatchingTarget.WEB
         assert policy.name == "Block Web Categories"
-        assert policy.action.value == "BLOCK"
+        assert policy.action == "BLOCK"
 
 
 class TestFirewallPolicyCreate:
@@ -508,3 +508,61 @@ class TestFirewallPolicyUpdate:
         update_data = FirewallPolicyUpdate(action="BLOCK")
         dumped = update_data.model_dump(exclude_none=True)
         assert dumped == {"action": "BLOCK"}
+
+
+class TestPermissiveReadParsing:
+    """Regression tests for issue #183.
+
+    Strict response-model enums rejected otherwise-valid 200 responses whenever
+    the controller emitted a value outside the modeled set (new Network
+    release values), and some predefined policies carry action=null. Reads now
+    accept and preserve any value; the Enum classes remain exported for
+    write-side validation and API consumers.
+    """
+
+    def _policy(self, **overrides):
+        from src.models.firewall_policy import FirewallPolicy
+
+        base = {
+            "_id": "pol-1",
+            "name": "Test Policy",
+            "action": "ALLOW",
+            "source": {"zone_id": "zone-1", "matching_target": "ANY"},
+            "destination": {"zone_id": "zone-2", "matching_target": "ANY"},
+        }
+        base.update(overrides)
+        return FirewallPolicy(**base)
+
+    def test_unknown_matching_target_preserved(self):
+        """A controller-introduced matching_target value must not fail parsing."""
+        policy = self._policy(
+            source={"zone_id": "zone-1", "matching_target": "PORT_GROUP"}
+        )
+        assert policy.source.matching_target == "PORT_GROUP"
+
+    def test_unknown_action_preserved(self):
+        policy = self._policy(action="REJECT")
+        assert policy.action == "REJECT"
+
+    def test_null_action_accepted(self):
+        """Predefined policies can carry action=null (see tools docstring note)."""
+        policy = self._policy(action=None)
+        assert policy.action is None
+
+    def test_unknown_ip_version_preserved(self):
+        policy = self._policy(ip_version="IPV4_ONLY")
+        assert policy.ip_version == "IPV4_ONLY"
+
+    def test_unknown_connection_state_type_preserved(self):
+        policy = self._policy(connection_state_type="ESTABLISHED")
+        assert policy.connection_state_type == "ESTABLISHED"
+
+    def test_known_values_still_parse(self):
+        policy = self._policy(
+            action="BLOCK",
+            ip_version="IPV6",
+            connection_state_type="CUSTOM",
+        )
+        assert policy.action == "BLOCK"
+        assert policy.ip_version == "IPV6"
+        assert policy.connection_state_type == "CUSTOM"

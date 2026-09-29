@@ -67,9 +67,7 @@ async def list_protect_alarm_hubs(
         )
 
     data = _extract_collection(response)
-    alarm_hubs = [
-        ProtectAlarmHub.model_validate(item).model_dump(by_alias=True) for item in data
-    ]
+    alarm_hubs = [ProtectAlarmHub.model_validate(item).model_dump(by_alias=True) for item in data]
     total_count = response.get("totalCount", len(data)) if isinstance(response, dict) else len(data)
     count = response.get("count", len(data)) if isinstance(response, dict) else len(data)
     logger.info(sanitize_log_message(f"Listed {len(alarm_hubs)} Protect alarm hubs"))
@@ -204,9 +202,7 @@ async def trigger_protect_alarm_hub_output(
         )
 
     logger.info(
-        sanitize_log_message(
-            f"Triggered output {output_id} on Protect alarm hub {alarm_hub_id}"
-        )
+        sanitize_log_message(f"Triggered output {output_id} on Protect alarm hub {alarm_hub_id}")
     )
     return {
         "success": True,

@@ -42,7 +42,7 @@ def _validate_pos_type(tx_type: str) -> str:
 
 
 def _validate_amount(amount: float | int) -> float | int:
-    if not isinstance(amount, (int, float)) or isinstance(amount, bool):
+    if not isinstance(amount, int | float) or isinstance(amount, bool):
         raise ValidationError("amount must be a number greater than 0")
     if amount <= 0:
         raise ValidationError("amount must be a number greater than 0")
@@ -131,8 +131,8 @@ async def ingest_pos_transaction(
         payload["lineItems"] = line_items
     if payment_types is not None:
         payload["paymentTypes"] = payment_types
-    payload["timestamp"] = _validate_timestamp(timestamp) if timestamp is not None else int(
-        time.time() * 1000
+    payload["timestamp"] = (
+        _validate_timestamp(timestamp) if timestamp is not None else int(time.time() * 1000)
     )
 
     if coerce_bool(dry_run):

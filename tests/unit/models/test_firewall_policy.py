@@ -5,7 +5,6 @@ Based on API discovery in docs/research/TRAFFIC_RULES_API_DISCOVERY.md
 """
 
 import pytest
-from pydantic import ValidationError
 
 
 class TestPolicyAction:
@@ -535,9 +534,7 @@ class TestPermissiveReadParsing:
 
     def test_unknown_matching_target_preserved(self):
         """A controller-introduced matching_target value must not fail parsing."""
-        policy = self._policy(
-            source={"zone_id": "zone-1", "matching_target": "PORT_GROUP"}
-        )
+        policy = self._policy(source={"zone_id": "zone-1", "matching_target": "PORT_GROUP"})
         assert policy.source.matching_target == "PORT_GROUP"
 
     def test_unknown_action_preserved(self):

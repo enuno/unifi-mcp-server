@@ -123,8 +123,10 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         # map the ObjectId to a MAC through the legacy stats list and match on
         # MAC below.
         mac_probe: str | None = _norm_mac(device_id) if is_mac else None
-        if mac_probe is None and len(device_id) == 24 and all(
-            c in "0123456789abcdef" for c in device_id
+        if (
+            mac_probe is None
+            and len(device_id) == 24
+            and all(c in "0123456789abcdef" for c in device_id)
         ):
             try:
                 legacy = await client.get(f"/ea/sites/{resolved_site_id}/devices")
@@ -159,8 +161,6 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
                 return IntegrationDevice.model_validate(device_data).model_dump(exclude_none=True)
 
         raise ResourceNotFoundError("device", device_id)
-
-
 
 
 async def get_device_statistics(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
@@ -394,11 +394,11 @@ async def adopt_device(
             logger.info(sanitize_log_message(f"[DRY RUN] Would adopt device {mac}"))
             return {"dry_run": True, "mac": mac, "payload": payload}
 
-        response = await client.post(
-            f"/integration/v1/sites/{site_id}/devices", json_data=payload
-        )
-        data = response[0] if isinstance(response, list) and response else (
-            response.get("data", response) if isinstance(response, dict) else {}
+        response = await client.post(f"/integration/v1/sites/{site_id}/devices", json_data=payload)
+        data = (
+            response[0]
+            if isinstance(response, list) and response
+            else (response.get("data", response) if isinstance(response, dict) else {})
         )
 
         await audit_action(
@@ -412,7 +412,6 @@ async def adopt_device(
 
         logger.info(sanitize_log_message(f"Successfully adopted device {mac}"))
         return {"success": True, "mac": mac, "result": data}
-
 
 
 async def execute_port_action(
@@ -502,7 +501,5 @@ async def execute_port_action(
             details={"action": "POWER_CYCLE"},
         )
 
-        logger.info(
-            sanitize_log_message(f"Successfully power-cycled port {port_idx}")
-        )
+        logger.info(sanitize_log_message(f"Successfully power-cycled port {port_idx}"))
         return {"success": True, "action": "POWER_CYCLE", "port_idx": port_idx, "result": data}

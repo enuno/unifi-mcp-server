@@ -46,8 +46,8 @@ from .tools import firewall as firewall_tools
 from .tools import firewall_groups as firewall_groups_tools
 from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
-from .tools import integration_api as integration_api_tools
 from .tools import innerspace as innerspace_tools
+from .tools import integration_api as integration_api_tools
 from .tools import mac_tags as mac_tags_tools
 from .tools import mobility as mobility_tools
 from .tools import network_config as network_config_tools

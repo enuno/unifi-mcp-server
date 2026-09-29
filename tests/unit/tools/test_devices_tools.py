@@ -493,16 +493,18 @@ class TestAdoptDevice:
                 mock_client = create_mock_client(mock_response)
                 mock_client_class.return_value = mock_client
 
-                result = await adopt_device("site-1", "00:11:22:33:44:55", mock_settings, confirm=True)
+                result = await adopt_device(
+                    "site-1", "00:11:22:33:44:55", mock_settings, confirm=True
+                )
 
                 assert result["success"] is True
                 call_args = mock_client.post.call_args
                 assert call_args[0][0] == "/integration/v1/sites/site-1/devices"
                 assert call_args[1]["json_data"] == {
-                    "macAddress": "00:11:22:33:44:55", "ignoreDeviceLimit": False
+                    "macAddress": "00:11:22:33:44:55",
+                    "ignoreDeviceLimit": False,
                 }
                 mock_audit.assert_called_once()
-
 
     @pytest.mark.asyncio
     async def test_adopt_device_dry_run(self, mock_settings):
@@ -516,9 +518,11 @@ class TestAdoptDevice:
 
             assert result["dry_run"] is True
             assert result["mac"] == "00:11:22:33:44:55"
-            assert result["payload"] == {"macAddress": "00:11:22:33:44:55", "ignoreDeviceLimit": False}
+            assert result["payload"] == {
+                "macAddress": "00:11:22:33:44:55",
+                "ignoreDeviceLimit": False,
+            }
             mock_client.post.assert_not_called()
-
 
     @pytest.mark.asyncio
     async def test_adopt_device_no_confirm(self, mock_settings):
@@ -535,8 +539,11 @@ class TestAdoptDevice:
                 mock_client_class.return_value = mock_client
 
                 await adopt_device(
-                    "site-1", "00:11:22:33:44:55", mock_settings,
-                    ignore_device_limit=True, confirm=True,
+                    "site-1",
+                    "00:11:22:33:44:55",
+                    mock_settings,
+                    ignore_device_limit=True,
+                    confirm=True,
                 )
 
                 call_args = mock_client.post.call_args
@@ -573,7 +580,6 @@ class TestExecutePortAction:
                 assert call_args[1]["json_data"] == {"action": "POWER_CYCLE"}
                 mock_audit.assert_called_once()
 
-
     @pytest.mark.asyncio
     async def test_execute_port_action_dry_run(self, mock_settings):
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
@@ -588,7 +594,6 @@ class TestExecutePortAction:
             assert result["port_idx"] == 2
             assert result["payload"] == {"action": "POWER_CYCLE"}
             mock_client.post.assert_not_called()
-
 
     @pytest.mark.asyncio
     async def test_execute_port_action_no_confirm(self, mock_settings):
@@ -613,14 +618,18 @@ class TestExecutePortAction:
                 mock_client_class.return_value = mock_client
 
                 await execute_port_action(
-                    "site-1", DEVICE_ID_1, 3, "POWER_CYCLE",
-                    mock_settings, params={"delay": 5}, confirm=True,
+                    "site-1",
+                    DEVICE_ID_1,
+                    3,
+                    "POWER_CYCLE",
+                    mock_settings,
+                    params={"delay": 5},
+                    confirm=True,
                 )
 
                 json_data = mock_client.post.call_args[1]["json_data"]
                 assert json_data == {"action": "POWER_CYCLE"}
                 assert "params" not in json_data
-
 
 
 class TestGetDeviceDetailsIdentifierResolution:

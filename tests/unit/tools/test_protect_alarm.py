@@ -66,10 +66,14 @@ CREATE_PAYLOAD = {
 @pytest.mark.asyncio
 async def test_list_protect_arm_profiles_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "profile-1", "name": "Night", "recordEverything": True},
-            {"id": "profile-2", "name": "Day", "recordEverything": False},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "profile-1", "name": "Night", "recordEverything": True},
+                {"id": "profile-2", "name": "Day", "recordEverything": False},
+            ],
+        }
     )
     with patch("src.tools.protect_alarm.ProtectClient", return_value=mock_client):
         result = await list_protect_arm_profiles(mock_settings, limit=10, offset=0)
@@ -115,9 +119,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_alarm.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_alarm, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_alarm, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 
@@ -130,9 +132,7 @@ async def test_create_protect_arm_profile_success(mock_settings, mock_client):
         return_value={"id": "profile-1", "name": "Night", "activationDelay": 60000}
     )
     with patch("src.tools.protect_alarm.ProtectClient", return_value=mock_client):
-        result = await create_protect_arm_profile(
-            mock_settings, confirm=True, **CREATE_KWARGS
-        )
+        result = await create_protect_arm_profile(mock_settings, confirm=True, **CREATE_KWARGS)
     mock_client.post.assert_awaited_once_with(
         "/integration/v1/arm-profiles", json_data=CREATE_PAYLOAD
     )
@@ -152,14 +152,13 @@ async def test_create_protect_arm_profile_dry_run(mock_settings, mock_client):
 
 
 @pytest.mark.asyncio
-async def test_create_protect_arm_profile_validates_activation_delay(
-    mock_settings, mock_client
-):
+async def test_create_protect_arm_profile_validates_activation_delay(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await create_protect_arm_profile(
-            mock_settings, confirm=True, activation_delay=30000, **{
-                k: v for k, v in CREATE_KWARGS.items() if k != "activation_delay"
-            }
+            mock_settings,
+            confirm=True,
+            activation_delay=30000,
+            **{k: v for k, v in CREATE_KWARGS.items() if k != "activation_delay"},
         )
 
 
@@ -170,9 +169,11 @@ async def test_create_protect_arm_profile_allowed_activation_delays(
 ):
     with patch("src.tools.protect_alarm.ProtectClient", return_value=mock_client):
         result = await create_protect_arm_profile(
-            mock_settings, confirm=True, dry_run=True, activation_delay=delay, **{
-                k: v for k, v in CREATE_KWARGS.items() if k != "activation_delay"
-            }
+            mock_settings,
+            confirm=True,
+            dry_run=True,
+            activation_delay=delay,
+            **{k: v for k, v in CREATE_KWARGS.items() if k != "activation_delay"},
         )
     assert result["payload"]["activationDelay"] == delay
 
@@ -219,9 +220,7 @@ async def test_update_protect_arm_profile_sends_camel_case(mock_settings, mock_c
     mock_client.patch.assert_awaited_once_with(
         "/integration/v1/arm-profiles/profile-1",
         json_data={
-            "schedules": [
-                {"mode": "away", "startCron": "0 22 * * *", "endCron": "0 6 * * *"}
-            ],
+            "schedules": [{"mode": "away", "startCron": "0 22 * * *", "endCron": "0 6 * * *"}],
             "activationDelay": 300000,
         },
     )
@@ -234,9 +233,7 @@ async def test_update_protect_arm_profile_requires_a_field(mock_settings, mock_c
 
 
 @pytest.mark.asyncio
-async def test_update_protect_arm_profile_validates_activation_delay(
-    mock_settings, mock_client
-):
+async def test_update_protect_arm_profile_validates_activation_delay(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await update_protect_arm_profile(
             "profile-1", mock_settings, activation_delay=15000, confirm=True
@@ -273,9 +270,7 @@ async def test_delete_protect_arm_profile_dry_run(mock_settings, mock_client):
 async def test_set_current_protect_arm_profile_success(mock_settings, mock_client):
     mock_client.patch = AsyncMock(return_value={"success": True})
     with patch("src.tools.protect_alarm.ProtectClient", return_value=mock_client):
-        result = await set_current_protect_arm_profile(
-            mock_settings, "profile-1", confirm=True
-        )
+        result = await set_current_protect_arm_profile(mock_settings, "profile-1", confirm=True)
     mock_client.patch.assert_awaited_once_with(
         "/integration/v1/arm-profiles/settings", json_data={"armProfileId": "profile-1"}
     )

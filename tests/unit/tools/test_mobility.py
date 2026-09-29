@@ -213,9 +213,7 @@ async def test_update_mobility_device_network_rejects_negative_lease(settings):
 @pytest.mark.asyncio
 async def test_update_mobility_device_network_rejects_empty_update(settings):
     with pytest.raises(Exception, match="No updates"):
-        await mobility.update_mobility_device_network(
-            _WORKSPACE, _DEVICE, settings, confirm=True
-        )
+        await mobility.update_mobility_device_network(_WORKSPACE, _DEVICE, settings, confirm=True)
 
 
 @pytest.mark.asyncio

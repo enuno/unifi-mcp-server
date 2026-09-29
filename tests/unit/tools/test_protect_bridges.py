@@ -41,10 +41,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_bridges_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "bridge-1", "name": "Front Bridge"},
-            {"id": "bridge-2", "name": "Back Bridge"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "bridge-1", "name": "Front Bridge"},
+                {"id": "bridge-2", "name": "Back Bridge"},
+            ],
+        }
     )
     with patch("src.tools.protect_bridges.ProtectClient", return_value=mock_client):
         result = await list_protect_bridges(mock_settings, limit=10, offset=0)
@@ -85,9 +89,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_bridges.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_bridges, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_bridges, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 

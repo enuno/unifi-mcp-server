@@ -10,10 +10,11 @@ from src.tools.protect_sirens import (
     list_protect_sirens,
     play_protect_siren,
     stop_protect_siren,
-    test_protect_siren_sound as run_test_sound,
     update_protect_siren,
 )
 from src.utils.exceptions import ValidationError
+
+run_test_sound = protect_sirens.test_protect_siren_sound
 
 
 @pytest.fixture
@@ -44,10 +45,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_sirens_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "siren-1", "name": "Yard Siren", "volume": 80},
-            {"id": "siren-2", "name": "Hall Siren", "volume": 50},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "siren-1", "name": "Yard Siren", "volume": 80},
+                {"id": "siren-2", "name": "Hall Siren", "volume": 50},
+            ],
+        }
     )
     with patch("src.tools.protect_sirens.ProtectClient", return_value=mock_client):
         result = await list_protect_sirens(mock_settings, limit=10, offset=0)
@@ -91,9 +96,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_sirens.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_sirens, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_sirens, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 

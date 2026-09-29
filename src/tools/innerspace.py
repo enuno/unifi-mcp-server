@@ -63,9 +63,7 @@ def _proxy_endpoint(console_id: str, path: str) -> str:
     return f"connector/consoles/{console_id}/proxy/innerspace/integration/{path}"
 
 
-async def list_innerspace_access_points(
-    console_id: str, settings: Settings
-) -> dict[str, Any]:
+async def list_innerspace_access_points(console_id: str, settings: Settings) -> dict[str, Any]:
     """List access points known to InnerSpace on a console.
 
     Args:
@@ -94,9 +92,7 @@ async def list_innerspace_access_points(
     return {"console_id": console_id, "count": len(access_points), "data": access_points}
 
 
-async def list_innerspace_floor_plans(
-    console_id: str, settings: Settings
-) -> dict[str, Any]:
+async def list_innerspace_floor_plans(console_id: str, settings: Settings) -> dict[str, Any]:
     """List InnerSpace floor plans on a console.
 
     Args:
@@ -125,9 +121,7 @@ async def list_innerspace_floor_plans(
     return {"console_id": console_id, "count": len(floor_plans), "data": floor_plans}
 
 
-async def list_innerspace_inventory(
-    console_id: str, settings: Settings
-) -> dict[str, Any]:
+async def list_innerspace_inventory(console_id: str, settings: Settings) -> dict[str, Any]:
     """List unplaced devices in InnerSpace inventory on a console.
 
     Args:
@@ -156,9 +150,7 @@ async def list_innerspace_inventory(
     return {"console_id": console_id, "count": len(inventory), "data": inventory}
 
 
-async def get_innerspace_project(
-    console_id: str, settings: Settings
-) -> dict[str, Any]:
+async def get_innerspace_project(console_id: str, settings: Settings) -> dict[str, Any]:
     """Get the InnerSpace project data for the integration on a console.
 
     Args:
@@ -176,9 +168,7 @@ async def get_innerspace_project(
         response = await client.get(_proxy_endpoint(console_id, "v1/project"))
 
     project = InnerSpaceProject.model_validate(_extract_item(response))
-    logger.info(
-        sanitize_log_message(f"Retrieved InnerSpace project on console {console_id}")
-    )
+    logger.info(sanitize_log_message(f"Retrieved InnerSpace project on console {console_id}"))
     return project.model_dump(by_alias=True)
 
 
@@ -210,13 +200,9 @@ async def list_innerspace_switches(
         )
 
     data = _extract_collection(response)
-    switches = [
-        InnerSpaceSwitch.model_validate(item).model_dump(by_alias=True) for item in data
-    ]
+    switches = [InnerSpaceSwitch.model_validate(item).model_dump(by_alias=True) for item in data]
     logger.info(
-        sanitize_log_message(
-            f"Listed {len(switches)} InnerSpace switches on console {console_id}"
-        )
+        sanitize_log_message(f"Listed {len(switches)} InnerSpace switches on console {console_id}")
     )
     return {
         "console_id": console_id,
@@ -247,9 +233,7 @@ async def download_innerspace_asset(
     filename = _validate_uuid(filename, "filename")
 
     async with SiteManagerClient(settings) as client:
-        response = await client.get(
-            _proxy_endpoint(console_id, f"v1/assets/{plan_id}/{filename}")
-        )
+        response = await client.get(_proxy_endpoint(console_id, f"v1/assets/{plan_id}/{filename}"))
 
     if isinstance(response, dict):
         content: Any = _extract_item(response)
@@ -257,8 +241,7 @@ async def download_innerspace_asset(
         content = {"raw": response}
     logger.info(
         sanitize_log_message(
-            f"Downloaded InnerSpace asset {filename} for plan {plan_id} "
-            f"on console {console_id}"
+            f"Downloaded InnerSpace asset {filename} for plan {plan_id} " f"on console {console_id}"
         )
     )
     return {"plan_id": plan_id, "filename": filename, "content": content}

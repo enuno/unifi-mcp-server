@@ -16,6 +16,31 @@ from ..utils import (
     validate_site_id,
 )
 
+_REDACTED = "***REDACTED***"
+_WLAN_SECRET_FIELDS = ("x_passphrase", "x_iapp_key")
+
+
+def _redact_wlan(wlan: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of a WLAN record with pre-shared keys masked.
+
+    The controller returns the plaintext WPA passphrase (``x_passphrase``) and
+    any per-client private pre-shared keys in WLAN records. Those must not be
+    handed to an MCP client, where they end up in model context and transcripts.
+    """
+    if not isinstance(wlan, dict):
+        return wlan
+    redacted = dict(wlan)
+    for field in _WLAN_SECRET_FIELDS:
+        if redacted.get(field):
+            redacted[field] = _REDACTED
+    keys = redacted.get("private_preshared_keys")
+    if isinstance(keys, list):
+        redacted["private_preshared_keys"] = [
+            {**key, "password": _REDACTED} if isinstance(key, dict) and key.get("password") else key
+            for key in keys
+        ]
+    return redacted
+
 
 async def list_wlans(
     site_id: str,
@@ -51,7 +76,7 @@ async def list_wlans(
         paginated = wlans_data[offset : offset + limit]
 
         logger.info(sanitize_log_message(f"Retrieved {len(paginated)} WLANs for site '{site_id}'"))
-        return paginated
+        return [_redact_wlan(wlan) for wlan in paginated]
 
 
 async def create_wlan(
@@ -289,7 +314,7 @@ async def create_wlan(
                 site_id=site_id,
             )
 
-            return created_wlan
+            return _redact_wlan(created_wlan)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to create WLAN '{name}': {e}"))
@@ -526,7 +551,7 @@ async def update_wlan(
                 site_id=site_id,
             )
 
-            return updated_wlan
+            return _redact_wlan(updated_wlan)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to update WLAN '{wlan_id}': {e}"))

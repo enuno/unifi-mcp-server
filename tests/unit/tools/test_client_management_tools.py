@@ -661,4 +661,3 @@ async def test_authorize_guest_minimal(mock_settings):
     assert result["success"] is True
     json_data = mock_client.post.call_args[1]["json_data"]
     assert json_data == {"action": "AUTHORIZE_GUEST_ACCESS"}
-

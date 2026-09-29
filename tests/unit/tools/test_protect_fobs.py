@@ -5,11 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.tools import protect_fobs
-from src.tools.protect_fobs import (
-    get_protect_fob,
-    list_protect_fobs,
-    update_protect_fob,
-)
+from src.tools.protect_fobs import get_protect_fob, list_protect_fobs, update_protect_fob
 from src.utils.exceptions import ValidationError
 
 
@@ -41,10 +37,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_fobs_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "fob-1", "name": "Front Door Fob"},
-            {"id": "fob-2", "name": "Back Door Fob"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "fob-1", "name": "Front Door Fob"},
+                {"id": "fob-2", "name": "Back Door Fob"},
+            ],
+        }
     )
     with patch("src.tools.protect_fobs.ProtectClient", return_value=mock_client):
         result = await list_protect_fobs(mock_settings, limit=10, offset=0)
@@ -85,9 +85,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_fobs.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_fobs, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_fobs, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 
@@ -108,7 +106,9 @@ async def test_update_protect_fob_success(mock_settings, mock_client):
 @pytest.mark.asyncio
 async def test_update_protect_fob_dry_run(mock_settings, mock_client):
     with patch("src.tools.protect_fobs.ProtectClient", return_value=mock_client):
-        result = await update_protect_fob("fob-1", mock_settings, name="New Name", confirm=True, dry_run=True)
+        result = await update_protect_fob(
+            "fob-1", mock_settings, name="New Name", confirm=True, dry_run=True
+        )
     assert result["dry_run"] is True
     assert result["payload"] == {"name": "New Name"}
     mock_client.patch.assert_not_called()

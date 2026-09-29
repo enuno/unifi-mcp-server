@@ -135,14 +135,10 @@ async def test_list_innerspace_switches_with_site_id(settings):
     response = {"data": [{"id": "sw-1", "name": "Switch 1", "siteId": "site-1"}]}
     client, cm = _make_client(response)
     with _patch_client(cm):
-        result = await innerspace.list_innerspace_switches(
-            _CONSOLE, settings, site_id="site-1"
-        )
+        result = await innerspace.list_innerspace_switches(_CONSOLE, settings, site_id="site-1")
 
     assert result["site_id"] == "site-1"
-    client.get.assert_called_once_with(
-        _endpoint("v1/switches"), params={"siteId": "site-1"}
-    )
+    client.get.assert_called_once_with(_endpoint("v1/switches"), params={"siteId": "site-1"})
 
 
 @pytest.mark.asyncio
@@ -155,9 +151,7 @@ async def test_list_innerspace_switches_rejects_empty_console_id(settings):
 async def test_download_innerspace_asset_dict_response(settings):
     client, cm = _make_client({"data": {"bytes": "..."}})
     with _patch_client(cm):
-        result = await innerspace.download_innerspace_asset(
-            _CONSOLE, _PLAN, _FILE, settings
-        )
+        result = await innerspace.download_innerspace_asset(_CONSOLE, _PLAN, _FILE, settings)
 
     assert result["plan_id"] == _PLAN
     assert result["filename"] == _FILE
@@ -169,9 +163,7 @@ async def test_download_innerspace_asset_dict_response(settings):
 async def test_download_innerspace_asset_raw_response(settings):
     client, cm = _make_client(b"\x89PNG\r\n\x1a\n")
     with _patch_client(cm):
-        result = await innerspace.download_innerspace_asset(
-            _CONSOLE, _PLAN, _FILE, settings
-        )
+        result = await innerspace.download_innerspace_asset(_CONSOLE, _PLAN, _FILE, settings)
 
     assert result["content"] == {"raw": b"\x89PNG\r\n\x1a\n"}
     client.get.assert_called_once_with(_endpoint(f"v1/assets/{_PLAN}/{_FILE}"))

@@ -212,9 +212,7 @@ async def create_carrier_subscriber(
         response = await client.post("carrier/subscribers", json_data=payload)
 
     subscriber = CarrierSubscriber.model_validate(_extract_item(response))
-    logger.info(
-        sanitize_log_message(f"Created Carrier subscriber {subscriber_number}")
-    )
+    logger.info(sanitize_log_message(f"Created Carrier subscriber {subscriber_number}"))
     return subscriber.model_dump(by_alias=True)
 
 
@@ -351,9 +349,7 @@ async def attach_carrier_subscriber_host(
         }
 
     async with SiteManagerClient(settings) as client:
-        response = await client.put(
-            f"carrier/subscribers/{subscriber_id}/host", json_data=payload
-        )
+        response = await client.put(f"carrier/subscribers/{subscriber_id}/host", json_data=payload)
 
     subscriber = CarrierSubscriber.model_validate(_extract_item(response))
     logger.info(
@@ -434,9 +430,7 @@ async def assign_carrier_subscriber_plan(
         }
 
     async with SiteManagerClient(settings) as client:
-        response = await client.put(
-            f"carrier/subscribers/{subscriber_id}/plan", json_data=payload
-        )
+        response = await client.put(f"carrier/subscribers/{subscriber_id}/plan", json_data=payload)
 
     subscriber = CarrierSubscriber.model_validate(_extract_item(response))
     logger.info(

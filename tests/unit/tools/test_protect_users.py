@@ -39,10 +39,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_users_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "user-1", "name": "Admin"},
-            {"id": "user-2", "name": "Viewer"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "user-1", "name": "Admin"},
+                {"id": "user-2", "name": "Viewer"},
+            ],
+        }
     )
     with patch("src.tools.protect_users.ProtectClient", return_value=mock_client):
         result = await list_protect_users(mock_settings, limit=10, offset=0)
@@ -68,10 +72,14 @@ async def test_get_protect_user_success(mock_settings, mock_client):
 @pytest.mark.asyncio
 async def test_list_protect_ulp_users_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "ulp-1", "name": "Identity One"},
-            {"id": "ulp-2", "name": "Identity Two"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "ulp-1", "name": "Identity One"},
+                {"id": "ulp-2", "name": "Identity Two"},
+            ],
+        }
     )
     with patch("src.tools.protect_users.ProtectClient", return_value=mock_client):
         result = await list_protect_ulp_users(mock_settings, limit=10, offset=0)

@@ -61,6 +61,44 @@ async def test_list_wlans_success(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_list_wlans_redacts_secrets(mock_settings):
+    """WPA passphrases and private PSKs must not be returned to MCP clients."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "wlan1",
+                "name": "Home WiFi",
+                "x_passphrase": "hunter2hunter2",
+                "x_iapp_key": "abcdef",
+                "private_preshared_keys": [
+                    {"password": "per-client-secret", "networkconf_id": "net1"}
+                ],
+            },
+            {"_id": "wlan2", "name": "Open WiFi", "security": "open"},
+        ]
+    }
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(wifi_module, "UniFiClient", return_value=mock_client):
+        result = await list_wlans("default", mock_settings)
+
+    assert result[0]["x_passphrase"] == "***REDACTED***"
+    assert result[0]["x_iapp_key"] == "***REDACTED***"
+    assert result[0]["private_preshared_keys"][0]["password"] == "***REDACTED***"
+    assert result[0]["private_preshared_keys"][0]["networkconf_id"] == "net1"
+    assert "x_passphrase" not in result[1]
+    for leaked in ("hunter2hunter2", "per-client-secret", "abcdef"):
+        assert leaked not in str(result)
+    # The source response must not be mutated.
+    assert mock_response["data"][0]["x_passphrase"] == "hunter2hunter2"
+
+
+@pytest.mark.asyncio
 async def test_list_wlans_pagination(mock_settings):
     """Test WLANs listing with pagination."""
     mock_response = {

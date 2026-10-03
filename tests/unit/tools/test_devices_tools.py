@@ -100,6 +100,17 @@ def make_device(
     }
 
 
+def make_listed_device(
+    device_id="ap-1", name="Test Device", model="U7-Pro", capability="accessPoint"
+):
+    """Build a device as the integration API lists it, with one capability under ``features``."""
+    return {
+        **make_integration_device(device_id, name),
+        "model": model,
+        "features": {capability: {}},
+    }
+
+
 class TestGetDeviceDetails:
     @pytest.mark.asyncio
     async def test_get_device_details_success(self, mock_settings):
@@ -257,9 +268,9 @@ class TestListDevicesByType:
     async def test_list_devices_by_type_success(self, mock_settings):
         mock_response = {
             "data": [
-                make_device("ap-1", "AP-1", device_type="uap"),
-                make_device("sw-1", "Switch-1", device_type="usw"),
-                make_device("ap-2", "AP-2", device_type="uap"),
+                make_listed_device("ap-1", "AP-1"),
+                make_listed_device("sw-1", "Switch-1", capability="switching"),
+                make_listed_device("ap-2", "AP-2"),
             ]
         }
 
@@ -268,12 +279,11 @@ class TestListDevicesByType:
 
             result = await list_devices_by_type("site-1", "uap", mock_settings)
 
-            assert len(result) == 2
-            assert all(d["type"] == "uap" for d in result)
+            assert [d["id"] for d in result] == ["ap-1", "ap-2"]
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_case_insensitive(self, mock_settings):
-        mock_response = {"data": [make_device("ap-1", device_type="uap")]}
+        mock_response = {"data": [make_listed_device("ap-1")]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -284,7 +294,9 @@ class TestListDevicesByType:
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_match_model(self, mock_settings):
-        mock_response = {"data": [make_device("sw-1", device_type="usw", model="USW-Pro-24")]}
+        mock_response = {
+            "data": [make_listed_device("sw-1", model="USW-Pro-24", capability="switching")]
+        }
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -295,7 +307,7 @@ class TestListDevicesByType:
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_with_pagination(self, mock_settings):
-        mock_response = {"data": [make_device(f"ap-{i}", device_type="uap") for i in range(10)]}
+        mock_response = {"data": [make_listed_device(f"ap-{i}") for i in range(10)]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -306,7 +318,7 @@ class TestListDevicesByType:
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_empty(self, mock_settings):
-        mock_response = {"data": [make_device("sw-1", device_type="usw")]}
+        mock_response = {"data": [make_listed_device("sw-1", capability="switching")]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -315,14 +327,79 @@ class TestListDevicesByType:
 
             assert result == []
 
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_reads_the_integration_api(self, mock_settings):
+        """Issue #187: use the integration API, local mode rejects keys on the legacy route."""
+        mock_settings.get_integration_path.side_effect = (
+            lambda endpoint: f"/proxy/network/integration/v1/{endpoint}"
+        )
+        access_point = make_integration_device(DEVICE_UUID_1, "AP-Living")
+        switch = {
+            **make_integration_device(DEVICE_UUID_2, "Switch-Main"),
+            "model": "USW-Pro-24",
+            "features": {"switching": {}},
+        }
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [access_point, switch]})
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site")
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("default", "uap", mock_settings)
+
+        mock_client.get.assert_called_once_with(
+            "/proxy/network/integration/v1/sites/resolved-site/devices",
+            params={"offset": 0, "limit": 100},
+        )
+        assert [d["id"] for d in result] == [DEVICE_UUID_1]
+        assert result[0]["mac_address"] == "1c:6a:1b:5b:c7:85"
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_accepts_feature_name_lists(self, mock_settings):
+        """The list endpoint may send capability names instead of feature objects (issue #170)."""
+        access_point = {**make_integration_device(DEVICE_UUID_1, "AP"), "features": ["accessPoint"]}
+        switch = {**make_integration_device(DEVICE_UUID_2, "Switch"), "features": ["switching"]}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client({"data": [access_point, switch]})
+
+            result = await list_devices_by_type("site-1", "usw", mock_settings)
+
+        assert [d["id"] for d in result] == [DEVICE_UUID_2]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_reads_every_integration_page(self, mock_settings):
+        """The integration API pages 100 devices at a time, so a site can span several pages."""
+
+        def access_point(index):
+            return make_integration_device(f"00000000-0000-4000-8000-{index:012d}", f"AP-{index}")
+
+        pages = [
+            {"data": [access_point(i) for i in range(100)]},
+            {"data": [access_point(i) for i in range(100, 120)]},
+        ]
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client(None)
+            mock_client.get = AsyncMock(side_effect=pages)
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings, limit=200)
+
+        assert len(result) == 120
+        assert [c.kwargs["params"] for c in mock_client.get.call_args_list] == [
+            {"offset": 0, "limit": 100},
+            {"offset": 100, "limit": 100},
+        ]
+
 
 class TestSearchDevices:
     @pytest.mark.asyncio
     async def test_search_devices_by_name(self, mock_settings):
         mock_response = {
             "data": [
-                make_device("ap-1", "Office AP"),
-                make_device("ap-2", "Living Room AP"),
+                make_listed_device("ap-1", "Office AP"),
+                make_listed_device("ap-2", "Living Room AP"),
             ]
         }
 
@@ -336,8 +413,8 @@ class TestSearchDevices:
 
     @pytest.mark.asyncio
     async def test_search_devices_by_mac(self, mock_settings):
-        device = make_device("ap-1")
-        device["mac"] = "aa:bb:cc:dd:ee:ff"
+        device = make_listed_device("ap-1")
+        device["macAddress"] = "aa:bb:cc:dd:ee:ff"
         mock_response = {"data": [device]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
@@ -349,8 +426,8 @@ class TestSearchDevices:
 
     @pytest.mark.asyncio
     async def test_search_devices_by_ip(self, mock_settings):
-        device = make_device("ap-1")
-        device["ip"] = "192.168.10.50"
+        device = make_listed_device("ap-1")
+        device["ipAddress"] = "192.168.10.50"
         mock_response = {"data": [device]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
@@ -364,8 +441,8 @@ class TestSearchDevices:
     async def test_search_devices_by_model(self, mock_settings):
         mock_response = {
             "data": [
-                make_device("ap-1", model="U7-Pro"),
-                make_device("sw-1", model="USW-Lite"),
+                make_listed_device("ap-1", model="U7-Pro"),
+                make_listed_device("sw-1", model="USW-Lite", capability="switching"),
             ]
         }
 
@@ -379,7 +456,7 @@ class TestSearchDevices:
 
     @pytest.mark.asyncio
     async def test_search_devices_with_pagination(self, mock_settings):
-        mock_response = {"data": [make_device(f"ap-{i}", f"AP-{i}") for i in range(10)]}
+        mock_response = {"data": [make_listed_device(f"ap-{i}", f"AP-{i}") for i in range(10)]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -390,7 +467,7 @@ class TestSearchDevices:
 
     @pytest.mark.asyncio
     async def test_search_devices_no_match(self, mock_settings):
-        mock_response = {"data": [make_device("ap-1", "Office AP")]}
+        mock_response = {"data": [make_listed_device("ap-1", "Office AP")]}
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -401,7 +478,7 @@ class TestSearchDevices:
 
     @pytest.mark.asyncio
     async def test_search_devices_list_response(self, mock_settings):
-        mock_response = [make_device("ap-1", "Test AP")]
+        mock_response = [make_listed_device("ap-1", "Test AP")]
 
         with patch("src.tools.devices.UniFiClient") as mock_client_class:
             mock_client_class.return_value = create_mock_client(mock_response)
@@ -409,6 +486,54 @@ class TestSearchDevices:
             result = await search_devices("site-1", "test", mock_settings)
 
             assert len(result) == 1
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("query", "expected_id"),
+        [
+            ("living", DEVICE_UUID_1),
+            ("aa:bb:cc", DEVICE_UUID_2),
+            ("192.168.1.20", DEVICE_UUID_2),
+        ],
+    )
+    async def test_search_devices_reads_the_integration_api(
+        self, mock_settings, query, expected_id
+    ):
+        """Issue #187: use the integration API and match its macAddress / ipAddress keys."""
+        mock_settings.get_integration_path.side_effect = (
+            lambda endpoint: f"/proxy/network/integration/v1/{endpoint}"
+        )
+        switch = {
+            **make_integration_device(DEVICE_UUID_2, "Switch-Main"),
+            "macAddress": "aa:bb:cc:00:11:22",
+            "ipAddress": "192.168.1.20",
+        }
+        devices = [make_integration_device(DEVICE_UUID_1, "AP-Living"), switch]
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": devices})
+            mock_client.resolve_site_id = AsyncMock(return_value="resolved-site")
+            mock_client_class.return_value = mock_client
+
+            result = await search_devices("default", query, mock_settings)
+
+        mock_client.get.assert_called_once_with(
+            "/proxy/network/integration/v1/sites/resolved-site/devices",
+            params={"offset": 0, "limit": 100},
+        )
+        assert [d["id"] for d in result] == [expected_id]
+
+    @pytest.mark.asyncio
+    async def test_search_devices_ignores_null_fields(self, mock_settings):
+        """A device that reports null for its name or model must not break the search."""
+        device = {"id": DEVICE_UUID_1, "name": None, "model": None, "macAddress": None}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client({"data": [device]})
+
+            result = await search_devices("site-1", "ap", mock_settings)
+
+        assert result == []
 
 
 class TestListPendingDevices:

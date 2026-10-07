@@ -1014,6 +1014,95 @@ class TestUniFiClientBackupMethods:
         assert result == {}
         await client.close()
 
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_super_mgmt_fallback(self, mock_settings_local):
+        """UniFi OS consoles: schedule is read from super_mgmt when auto_backup is absent."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        super_mgmt = {
+            "_id": "sm-1",
+            "autobackup_enabled": True,
+            "autobackup_cron_expr": "30 0 1 * *",
+            "autobackup_timezone": "America/Denver",
+            "autobackup_days": 30,
+            "autobackup_max_files": 10,
+        }
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client,
+                "get",
+                new=AsyncMock(side_effect=[APIError("api.err.Invalid"), {"data": [super_mgmt]}]),
+            ) as mock_get:
+                result = await client.get_backup_schedule("default")
+
+        assert result == {
+            "key": "auto_backup",
+            "_id": "sm-1",
+            "auto_backup_enabled": True,
+            "auto_backup_cron_expr": "30 0 1 * *",
+            "auto_backup_timezone": "America/Denver",
+            "auto_backup_days": 30,
+            "auto_backup_max_files": 10,
+        }
+        # Two GETs: auto_backup (failed), then super_mgmt
+        assert mock_get.await_count == 2
+        assert "super_mgmt" in mock_get.await_args_list[1].args[0]
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_super_mgmt_absent(self, mock_settings_local):
+        """No autobackup fields in super_mgmt means console-managed; report {}."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client,
+                "get",
+                new=AsyncMock(
+                    side_effect=[APIError("api.err.Invalid"), {"data": [{"_id": "sm-1"}]}]
+                ),
+            ):
+                result = await client.get_backup_schedule("default")
+
+        assert result == {}
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_super_mgmt_real_error_reraises(self, mock_settings_local):
+        """A real error from the super_mgmt fallback must surface, not be swallowed."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client,
+                "get",
+                new=AsyncMock(
+                    side_effect=[APIError("api.err.Invalid"), APIError("HTTP 500: boom")]
+                ),
+            ):
+                with pytest.raises(APIError, match="500"):
+                    await client.get_backup_schedule("default")
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_backup_schedule_cloud_skips_super_mgmt(self, mock_settings):
+        """Cloud mode keeps the old behavior: absence is {}, with no second GET."""
+        client = UniFiClient(mock_settings)
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
+            with patch.object(
+                client, "get", new=AsyncMock(side_effect=APIError("api.err.Invalid"))
+            ) as mock_get:
+                result = await client.get_backup_schedule("site-uuid")
+
+        assert result == {}
+        assert mock_get.await_count == 1
+        await client.close()
+
 
 class TestUniFiClientHelpers:
     def test_looks_like_uuid_valid(self):

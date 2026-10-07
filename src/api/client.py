@@ -1009,17 +1009,25 @@ class UniFiClient:
         Note:
             For local API: GET
             /proxy/network/api/s/{site}/get/setting/auto_backup
+
+            UniFi OS consoles (UDM/UCG) do not expose the ``auto_backup``
+            settings section -- the request fails with ``api.err.Invalid`` --
+            but the autobackup schedule still exists, stored inside the
+            ``super_mgmt`` site setting under ``autobackup_*`` field names
+            (verified on UniFi OS 5.1.33 / Network 10.6.106, see issue #190).
+            When the primary section is absent, fall back to ``super_mgmt``
+            and normalize its fields so callers see one shape either way.
         """
         site_id = await self.resolve_site_id(site_id)
 
         # The schedule is the auto_backup settings section. Absence (or the
         # api.err.Invalid a UniFi OS console answers with) means scheduled
-        # backups are managed at the console level, not through this API --
-        # report that as an empty dict and let callers decide how loud to be.
+        # backups may be managed at the console level, not through this API.
         if self.settings.api_type == APIType.LOCAL:
             site_name = self._site_uuid_to_name.get(site_id, site_id)
             endpoint = f"/proxy/network/api/s/{site_name}/get/setting/auto_backup"
         else:
+            site_name = site_id
             endpoint = f"/ea/sites/{site_id}/get/setting/auto_backup"
 
         try:
@@ -1033,6 +1041,8 @@ class UniFiClient:
                 marker in message
                 for marker in ("api.err.Invalid", "api.err.NotFound", "api.err.NoSuchObject")
             ):
+                if self.settings.api_type == APIType.LOCAL:
+                    return await self._get_backup_schedule_from_super_mgmt(site_name)
                 return {}
             raise
 
@@ -1043,3 +1053,66 @@ class UniFiClient:
                     return item
             return items[0] if items and isinstance(items[0], dict) else {}
         return items if isinstance(items, dict) else {}
+
+    async def _get_backup_schedule_from_super_mgmt(self, site_name: str) -> dict[str, Any]:
+        """Read the autobackup schedule from the ``super_mgmt`` site setting.
+
+        UniFi OS consoles reject ``get/setting/auto_backup`` with
+        ``api.err.Invalid`` but keep the configured schedule in
+        ``super_mgmt`` under ``autobackup_*`` names. This fallback only runs
+        after the primary section was proven absent, and it only reports a
+        schedule when autobackup fields are actually present -- a super_mgmt
+        response without them means backups really are console-managed.
+
+        Args:
+            site_name: Resolved site short name for the legacy path
+
+        Returns:
+            Schedule normalized to ``auto_backup_*`` field names, or {} when
+            no autobackup configuration exists
+        """
+        endpoint = f"/proxy/network/api/s/{site_name}/get/setting/super_mgmt"
+        try:
+            response = await self.get(endpoint)
+        except APIError as exc:
+            message = str(exc)
+            if any(
+                marker in message
+                for marker in ("api.err.Invalid", "api.err.NotFound", "api.err.NoSuchObject")
+            ):
+                return {}
+            raise
+
+        items = response if isinstance(response, list) else response.get("data", [])
+        candidates: list[Any]
+        if isinstance(items, dict):
+            candidates = [items]
+        elif isinstance(items, list):
+            candidates = [item for item in items if isinstance(item, dict)]
+        else:
+            candidates = []
+
+        # The schedule fields live directly on the super_mgmt object; prefer
+        # an entry that actually carries them, and accept a single-object
+        # envelope otherwise.
+        super_mgmt = next(
+            (item for item in candidates if "autobackup_enabled" in item),
+            candidates[0] if len(candidates) == 1 else None,
+        )
+
+        if not super_mgmt or "autobackup_enabled" not in super_mgmt:
+            return {}
+
+        # Normalize autobackup_* -> auto_backup_* so the tool layer consumes
+        # one field shape regardless of which section answered.
+        normalized: dict[str, Any] = {"key": "auto_backup", "_id": super_mgmt.get("_id", "")}
+        for target, source in (
+            ("auto_backup_enabled", "autobackup_enabled"),
+            ("auto_backup_cron_expr", "autobackup_cron_expr"),
+            ("auto_backup_timezone", "autobackup_timezone"),
+            ("auto_backup_days", "autobackup_days"),
+            ("auto_backup_max_files", "autobackup_max_files"),
+        ):
+            if source in super_mgmt:
+                normalized[target] = super_mgmt[source]
+        return normalized

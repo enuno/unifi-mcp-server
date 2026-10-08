@@ -46,8 +46,8 @@ from .tools import firewall as firewall_tools
 from .tools import firewall_groups as firewall_groups_tools
 from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
-from .tools import integration_api as integration_api_tools
 from .tools import innerspace as innerspace_tools
+from .tools import integration_api as integration_api_tools
 from .tools import mac_tags as mac_tags_tools
 from .tools import mobility as mobility_tools
 from .tools import network_config as network_config_tools
@@ -219,6 +219,48 @@ def register_a2a_routes(server: FastMCP, state: A2AState, auth_provider: Any) ->
         ("/a2a/audit", ["GET"], _a2a_audit),
     ):
         server.custom_route(path, methods=methods)(_bearer_required(handler))
+
+
+def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
+    """Register the GET /metrics endpoint on a FastMCP server.
+
+    Serves the ``unifi_mcp_*`` counters from :data:`src.utils.metrics.REGISTRY`
+    in Prometheus text exposition format (``text/plain; version=0.0.4``).
+    Like the /a2a routes, FastMCP's auth provider does not guard custom
+    routes, so the same bearer token as ``/mcp`` is verified here when a
+    provider exists. When *auth_provider* is None the endpoint is served
+    unauthenticated — reachable only on stdio deployments, which expose no
+    HTTP surface; network transports refuse to start without a token (see
+    :func:`ensure_network_transport_authenticated`).
+
+    Args:
+        server: The FastMCP server to register the route on
+        auth_provider: The provider returned by :func:`build_auth_provider`,
+            or None when no token is configured
+    """
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, PlainTextResponse, Response
+
+    from .utils.metrics import REGISTRY
+
+    async def _metrics(request: Request) -> Response:
+        if auth_provider is not None:
+            scheme, _, token = request.headers.get("authorization", "").partition(" ")
+            verified = (
+                scheme.lower() == "bearer"
+                and token.strip() != ""
+                and await auth_provider.verify_token(token.strip()) is not None
+            )
+            if not verified:
+                return JSONResponse(
+                    {"error": "invalid_token", "error_description": "Authentication required"},
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+        body = REGISTRY.render(version=_SERVER_VERSION, api_type=settings.api_type.value)
+        return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
+
+    server.custom_route("/metrics", methods=["GET"])(_metrics)
 
 
 mcp_auth = build_auth_provider(settings)
@@ -742,6 +784,9 @@ def main() -> None:
             "A2A endpoints (bearer token required): /a2a/agent-card, /a2a/discover, "
             "/a2a/delegate, /a2a/confirm, /a2a/audit"
         )
+        if settings.metrics_enabled:
+            register_metrics_route(mcp, mcp_auth)
+            logger.info("Metrics endpoint: /metrics (Prometheus text format)")
 
         # FastMCP's run() only recognizes "streamable-http" (hyphen); our own
         # config, env var, and docs all use "streamable_http" (underscore) to

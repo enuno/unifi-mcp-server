@@ -334,13 +334,14 @@ unifi-mcp-server
 - **Event Handlers**: Built-in handlers for device, client, and alert events
 - **Performance Tracking**: Optional agnost.ai integration for monitoring MCP tool performance and usage analytics
 - **Operator Memory**: Optional Supermemory integration for persisting operator notes/context across tool calls, scoped per site
-- **Roadmap-aligned controls**: planned dry-run, RBAC, audit logging, metrics, and A2A discovery
+- **Roadmap-aligned controls**: RBAC and audit logging planned; dry-run and metrics shipped (see Safety & Security)
 
 ### Safety & Security
 
 - **Read-Only Mode**: Set `UNIFI_READ_ONLY=true` to register only non-mutating tools — state-changing tools are then absent from the MCP tool list entirely, rather than relying on a caller-supplied `confirm` flag
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
-- **Dry-Run Mode**: Planned change-safe preview path for all write and destructive operations
+- **Global Dry-Run Mode**: Set `UNIFI_DRY_RUN=true` to force every `dry_run`-gated tool into preview mode at call time (caller-supplied values are overridden), and to withhold registration of mutating tools that have no dry-run gate — no write can reach the controller
+- **Metrics Endpoint**: Set `UNIFI_METRICS_ENABLED=true` to serve `GET /metrics` (Prometheus text exposition: `unifi_mcp_tool_calls_total`, `unifi_mcp_tool_call_duration_seconds` histogram, `unifi_mcp_tools_registered`) on network transports; bearer-token protected like `/mcp`
 - **Audit Logging**: Planned append-only audit trail for mutation paths
 - **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages

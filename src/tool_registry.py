@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import time
 import types
 from typing import Any
 
@@ -21,6 +22,7 @@ from fastmcp import FastMCP
 
 from .config import Settings
 from .utils.logger import get_logger
+from .utils.metrics import REGISTRY as METRICS
 
 #: Parameters that mark a tool as state-changing.
 #:
@@ -118,19 +120,52 @@ def _make_tool_wrapper(fn: Any, settings: Settings) -> Any:
     public_params = [p for name, p in params.items() if name != "settings"]
     public_sig = sig.replace(parameters=public_params)
 
+    # Global change-safe mode: a tool that declares a dry_run parameter can be
+    # forced into preview mode regardless of what the caller passes. Tools
+    # without a dry_run gate never reach this point in dry-run mode (they are
+    # filtered at registration), so forcing here is always safe.
+    force_dry_run = "dry_run" in params
+
+    # Metric labels must match the public MCP tool name, not the private
+    # module-level spelling (tools are defined as ``_list_devices`` but
+    # registered as ``list_devices``).
+    metric_tool_name = fn.__name__.lstrip("_")
+
     if inspect.iscoroutinefunction(fn):
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if force_dry_run and getattr(settings, "dry_run", False):
+                kwargs["dry_run"] = True
             kwargs["settings"] = settings
-            return await fn(*args, **kwargs)
+            if not getattr(settings, "metrics_enabled", False):
+                return await fn(*args, **kwargs)
+            start = time.perf_counter()
+            try:
+                result = await fn(*args, **kwargs)
+            except Exception:
+                METRICS.record_tool_call(metric_tool_name, "error", time.perf_counter() - start)
+                raise
+            METRICS.record_tool_call(metric_tool_name, "success", time.perf_counter() - start)
+            return result
 
     else:
 
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            if force_dry_run and getattr(settings, "dry_run", False):
+                kwargs["dry_run"] = True
             kwargs["settings"] = settings
-            return fn(*args, **kwargs)
+            if not getattr(settings, "metrics_enabled", False):
+                return fn(*args, **kwargs)
+            start = time.perf_counter()
+            try:
+                result = fn(*args, **kwargs)
+            except Exception:
+                METRICS.record_tool_call(metric_tool_name, "error", time.perf_counter() - start)
+                raise
+            METRICS.record_tool_call(metric_tool_name, "success", time.perf_counter() - start)
+            return result
 
     wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
     return wrapper
@@ -165,6 +200,7 @@ def register_module_tools(
     """
     registered: list[str] = []
     skipped: list[str] = []
+    skipped_dry_run: list[str] = []
     exclude_set = set(exclude or [])
     registered_names = _get_registered_tool_names(mcp)
 
@@ -188,6 +224,17 @@ def register_module_tools(
             skipped.append(name)
             continue
 
+        # Global dry-run mode: gated tools get dry_run forced on at call time,
+        # but a mutating tool with no dry_run parameter at all cannot honour
+        # the "no write reaches the controller" promise — leave it out.
+        if (
+            getattr(settings, "dry_run", False)
+            and "dry_run" not in inspect.signature(obj).parameters
+            and is_mutating_tool(obj)
+        ):
+            skipped_dry_run.append(name)
+            continue
+
         params = inspect.signature(obj).parameters
         if "settings" in params:
             tool_fn = _make_tool_wrapper(obj, settings)
@@ -201,6 +248,7 @@ def register_module_tools(
 
         mcp.tool()(tool_fn)
         registered_names.add(name)
+        METRICS.note_tool_registered()
         registered.append(name)
 
     if skipped:
@@ -209,6 +257,13 @@ def register_module_tools(
             len(skipped),
             module.__name__,
             ", ".join(sorted(skipped)),
+        )
+    if skipped_dry_run:
+        get_logger(__name__).info(
+            "Dry-run mode: skipped %d mutating tool(s) without a dry_run gate from %s: %s",
+            len(skipped_dry_run),
+            module.__name__,
+            ", ".join(sorted(skipped_dry_run)),
         )
 
     return registered

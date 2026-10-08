@@ -375,6 +375,7 @@ CMD ["python", "src/main.py"]
 - **Dependency Scanning:** Automated vulnerability scanning with Safety and Bandit
 - **Container Security:** Docker images scanned with Trivy
 - **Input Validation:** All user inputs validated with Pydantic models
+- **Audit Log Encryption:** Optional Fernet at-rest encryption of audit payload fields (`UNIFI_AUDIT_LOG_KEY`), with non-destructive key rotation
 
 ### Phase 4 Mutating Tools Safety Mechanisms
 
@@ -409,8 +410,71 @@ CMD ["python", "src/main.py"]
    - Includes timestamp, operation, parameters, result, user (if available)
    - Separate log for security audit trail
    - Format: JSON lines for easy parsing
+   - File created mode 0600 (owner-readable only)
 
-4. **Input Validation:**
+4. **Audit Log Encryption (issue #22):**
+
+   Audit records contain operation parameters and controller error text that
+   can carry sensitive identifiers (MAC addresses, IPs, client names, site
+   UUIDs) and, despite credential redaction, benefit from confidentiality at
+   rest. Operators can enable at-rest encryption of the sensitive payload
+   fields by setting `UNIFI_AUDIT_LOG_KEY`:
+
+   ```bash
+   # Generate a key
+   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+   # Configure (comma-separated, NEWEST first, for rotation)
+   UNIFI_AUDIT_LOG_KEY=gAAAA...,gAAAA...-old
+   ```
+
+   **What is encrypted vs. what stays readable:**
+
+   | Field | Treatment | Why |
+   |-------|-----------|-----|
+   | `parameters` | encrypted (after credential redaction) | carries request payloads |
+   | `error` | encrypted | controller errors quote offending values (MACs, IDs) back |
+   | `timestamp`, `operation`, `result`, `dry_run`, `site_id`, `user` | plaintext | filtering/pagination must work without the key |
+
+   **Guarantees and behavior:**
+
+   - **Backward compatible.** With no key configured, the on-disk format is
+     byte-identical to historical plaintext records. Encryption only
+     activates when a key is present.
+   - **Redaction first, encryption second.** `sanitize_credentials()` runs
+     before encryption, so a decrypted entry is exactly the redacted record
+     an operator would see today. Encryption complements redaction; it never
+     replaces or weakens it.
+   - **Non-destructive rotation.** `MultiFernet` semantics: the newest key
+     writes, all listed keys are tried on read. Retiring a key never
+     destroys the historical trail. Pre-existing plaintext entries stay
+     readable after enabling encryption.
+   - **Fail closed on misconfiguration.** A configured-but-unusable key
+     raises `AuditEncryptionError` at logger creation instead of silently
+     writing plaintext the operator believed was encrypted.
+   - **Key hygiene.** The key is never written to the audit file, never
+     logged, and never included in exception messages (errors name the
+     environment variable only). Store it in a secrets manager; never
+     commit it.
+   - **Undecryptable entries are reported, not dropped.** A record that no
+     configured key can decrypt (e.g. after key loss) surfaces as a
+     `<undecryptable: field>` placeholder with a logged warning; the rest of
+     the trail remains intact.
+
+   **Decrypting a log file** (operators / forensics):
+
+   ```bash
+   UNIFI_AUDIT_LOG_KEY=... python -m src.utils.audit_decrypt /var/log/unifi-mcp/audit.log
+   # filters: --operation create_wlan --limit 50
+   ```
+
+   Key shape: a 44-character urlsafe-base64 `Fernet.generate_key()` value is
+   used directly; any other string is treated as a passphrase and stretched
+   with PBKDF2-HMAC-SHA256 (600k iterations, fixed application salt) — use
+   high-entropy passphrases. `UNIFI_AUDIT_ENCRYPTION_KEY` is accepted as a
+   legacy alias when the primary variable is unset.
+
+5. **Input Validation:**
    - All parameters validated before execution
    - Type checking via Pydantic models
    - Custom validators for MAC addresses, IPs, VLANs, etc.
@@ -439,6 +503,7 @@ CMD ["python", "src/main.py"]
 ### Planned Security Enhancements
 
 - [x] Audit logging for all mutating operations (✅ Phase 4)
+- [x] At-rest encryption of audit-log payload fields, key rotation via MultiFernet (✅ issue #22)
 - [x] Confirmation requirements for dangerous operations (✅ Phase 4)
 - [x] Dry-run mode for safe testing (✅ Phase 4)
 - [ ] Role-based access control (RBAC) for MCP tools

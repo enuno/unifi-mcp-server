@@ -341,7 +341,7 @@ unifi-mcp-server
 - **Read-Only Mode**: Set `UNIFI_READ_ONLY=true` to register only non-mutating tools — state-changing tools are then absent from the MCP tool list entirely, rather than relying on a caller-supplied `confirm` flag
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Dry-Run Mode**: Planned change-safe preview path for all write and destructive operations
-- **Audit Logging**: Planned append-only audit trail for mutation paths
+- **Audit Logging**: Append-only JSON-lines audit trail for mutation paths; optional at-rest Fernet encryption of sensitive payload fields via `UNIFI_AUDIT_LOG_KEY` with non-destructive key rotation (see SECURITY.md; decrypt with `python -m src.utils.audit_decrypt`)
 - **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages
 - **Password Masking**: Sensitive data automatically masked in logs

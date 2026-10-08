@@ -170,6 +170,28 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_READ_ONLY",
     )
 
+    dry_run: bool = Field(
+        default=False,
+        description=(
+            "Global change-safe mode: every tool carrying a dry_run parameter "
+            "executes as a preview (dry_run is forced on), and mutating tools "
+            "without a dry_run gate are not registered. No write reaches the "
+            "controller."
+        ),
+        validation_alias="UNIFI_DRY_RUN",
+    )
+
+    metrics_enabled: bool = Field(
+        default=False,
+        description=(
+            "Record per-tool call counters and durations and expose them on a "
+            "GET /metrics endpoint in Prometheus text exposition format. On "
+            "network transports the endpoint requires the same bearer token "
+            "as /mcp."
+        ),
+        validation_alias="UNIFI_METRICS_ENABLED",
+    )
+
     # Audit Logging
     audit_log_enabled: bool = Field(
         default=True,

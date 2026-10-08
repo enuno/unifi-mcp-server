@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Global dry-run mode** (`UNIFI_DRY_RUN=false`): when enabled, every tool that declares a `dry_run` parameter is forced into preview mode at call time — the caller-supplied value is overridden in the tool wrapper, so no write can slip through a forgotten flag. Mutating tools that have no `dry_run` gate at all are withheld from registration entirely (logged alongside read-only skips), mirroring how `UNIFI_READ_ONLY` makes unwanted tools absent from the MCP tool list rather than merely discouraged.
+- **Prometheus metrics endpoint** (`UNIFI_METRICS_ENABLED=false`): serves `GET /metrics` in Prometheus text exposition format (`text/plain; version=0.0.4`) on network transports (streamable-http, sse, http). Metrics are recorded at the single tool-wrapper choke point, so coverage cannot drift as tool modules are added: `unifi_mcp_tool_calls_total` (counter by tool + success/error status), `unifi_mcp_tool_call_duration_seconds` (histogram, 0.1/0.5/1.0/5.0/10.0s buckets), plus `unifi_mcp_tools_registered`, `unifi_mcp_process_start_time_seconds`, and `unifi_mcp_server_info`. Implemented dependency-free in `src/utils/metrics.py` — no `prometheus_client` dependency. On network transports the endpoint verifies the same bearer token as `/mcp` (FastMCP's auth provider does not guard custom routes); on stdio it is unauthenticated, which is safe because stdio exposes no HTTP surface. Metric families with no recorded samples are omitted from the exposition.
+
 ### Fixed
 
 - **`list_firewall_policies` (and friends) failed with `'enum'` validation errors on valid 200 responses** (issue #183): strict response-model enums (`action`, `matching_target`, `ip_version`, `connection_state_type`) rejected any controller-emitted value outside the modeled set, which breaks whenever a new Network release adds one — and some predefined policies carry `action: null`. Read models are now permissive (values preserved verbatim; the `PolicyAction`/`MatchingTarget`/`ConnectionStateType`/`IPVersion` enums remain exported for write-side validation and API consumers).

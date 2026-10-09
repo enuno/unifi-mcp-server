@@ -23,8 +23,7 @@ def _validate_arm_profile_id(arm_profile_id: str) -> str:
 def _validate_activation_delay(activation_delay: int) -> int:
     if activation_delay not in _ALLOWED_ACTIVATION_DELAYS:
         raise ValidationError(
-            "activation_delay must be one of "
-            f"{_ALLOWED_ACTIVATION_DELAYS} milliseconds"
+            "activation_delay must be one of " f"{_ALLOWED_ACTIVATION_DELAYS} milliseconds"
         )
     return activation_delay
 
@@ -259,9 +258,7 @@ async def delete_protect_arm_profile(
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        await client.delete(
-            settings.get_protect_integration_path(f"arm-profiles/{arm_profile_id}")
-        )
+        await client.delete(settings.get_protect_integration_path(f"arm-profiles/{arm_profile_id}"))
 
     logger.info(sanitize_log_message(f"Deleted Protect arm profile {arm_profile_id}"))
     return {"success": True, "arm_profile_id": arm_profile_id}
@@ -329,9 +326,7 @@ async def enable_protect_alarm(
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        response = await client.post(
-            settings.get_protect_integration_path("arm-profiles/enable")
-        )
+        response = await client.post(settings.get_protect_integration_path("arm-profiles/enable"))
 
     logger.info(sanitize_log_message("Enabled Protect alarm"))
     return {"success": True, "response": _extract_item(response)}
@@ -360,9 +355,7 @@ async def disable_protect_alarm(
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        response = await client.post(
-            settings.get_protect_integration_path("arm-profiles/disable")
-        )
+        response = await client.post(settings.get_protect_integration_path("arm-profiles/disable"))
 
     logger.info(sanitize_log_message("Disabled Protect alarm"))
     return {"success": True, "response": _extract_item(response)}

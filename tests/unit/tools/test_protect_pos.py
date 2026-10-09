@@ -54,9 +54,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client):
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client):
     with patch("src.tools.protect_pos.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await ingest_pos_transaction(
-                "cam-1", mock_settings, confirm="false", **VALID_KWARGS
-            )
+            await ingest_pos_transaction("cam-1", mock_settings, confirm="false", **VALID_KWARGS)
         client_cls.assert_not_called()
 
 
@@ -135,9 +133,11 @@ async def test_ingest_pos_transaction_success(mock_settings, mock_client):
 async def test_rejects_invalid_type(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await ingest_pos_transaction(
-            "cam-1", mock_settings, confirm=True, type="exchange", **{
-                k: v for k, v in VALID_KWARGS.items() if k != "type"
-            }
+            "cam-1",
+            mock_settings,
+            confirm=True,
+            type="exchange",
+            **{k: v for k, v in VALID_KWARGS.items() if k != "type"},
         )
 
 
@@ -145,9 +145,11 @@ async def test_rejects_invalid_type(mock_settings, mock_client):
 async def test_rejects_non_positive_amount(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await ingest_pos_transaction(
-            "cam-1", mock_settings, confirm=True, amount=0, **{
-                k: v for k, v in VALID_KWARGS.items() if k != "amount"
-            }
+            "cam-1",
+            mock_settings,
+            confirm=True,
+            amount=0,
+            **{k: v for k, v in VALID_KWARGS.items() if k != "amount"},
         )
 
 
@@ -155,9 +157,11 @@ async def test_rejects_non_positive_amount(mock_settings, mock_client):
 async def test_rejects_negative_amount(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await ingest_pos_transaction(
-            "cam-1", mock_settings, confirm=True, amount=-1.5, **{
-                k: v for k, v in VALID_KWARGS.items() if k != "amount"
-            }
+            "cam-1",
+            mock_settings,
+            confirm=True,
+            amount=-1.5,
+            **{k: v for k, v in VALID_KWARGS.items() if k != "amount"},
         )
 
 
@@ -165,9 +169,11 @@ async def test_rejects_negative_amount(mock_settings, mock_client):
 async def test_rejects_missing_location_id(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await ingest_pos_transaction(
-            "cam-1", mock_settings, confirm=True, location_id="   ", **{
-                k: v for k, v in VALID_KWARGS.items() if k != "location_id"
-            }
+            "cam-1",
+            mock_settings,
+            confirm=True,
+            location_id="   ",
+            **{k: v for k, v in VALID_KWARGS.items() if k != "location_id"},
         )
 
 
@@ -206,8 +212,14 @@ async def test_validation_happens_before_dry_run_return(mock_settings, mock_clie
     with patch("src.tools.protect_pos.ProtectClient", return_value=mock_client):
         with pytest.raises(ValidationError):
             await ingest_pos_transaction(
-                "cam-1", mock_settings, confirm=True, dry_run=True,
-                type="bogus", external_id="tx-1", amount=1, location_id="reg-1",
+                "cam-1",
+                mock_settings,
+                confirm=True,
+                dry_run=True,
+                type="bogus",
+                external_id="tx-1",
+                amount=1,
+                location_id="reg-1",
             )
         mock_client.post.assert_not_called()
 

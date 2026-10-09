@@ -41,10 +41,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_link_stations_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "link-1", "name": "Garage Link"},
-            {"id": "link-2", "name": "Basement Link"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "link-1", "name": "Garage Link"},
+                {"id": "link-2", "name": "Basement Link"},
+            ],
+        }
     )
     with patch("src.tools.protect_link_stations.ProtectClient", return_value=mock_client):
         result = await list_protect_link_stations(mock_settings, limit=10, offset=0)

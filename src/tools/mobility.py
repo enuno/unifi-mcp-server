@@ -13,12 +13,7 @@ from typing import Any
 
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
-from ..models import (
-    MobilityDevice,
-    MobilityDeviceClient,
-    MobilityWorkspace,
-    MobilityWorkspaceAdmin,
-)
+from ..models import MobilityDevice, MobilityDeviceClient, MobilityWorkspace, MobilityWorkspaceAdmin
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
 from ..utils.validators import coerce_bool, validate_confirmation
 
@@ -68,16 +63,12 @@ async def list_mobility_workspaces(settings: Settings) -> dict[str, Any]:
         response = await client.get("mobility/workspaces")
 
     data = _extract_collection(response)
-    workspaces = [
-        MobilityWorkspace.model_validate(item).model_dump(by_alias=True) for item in data
-    ]
+    workspaces = [MobilityWorkspace.model_validate(item).model_dump(by_alias=True) for item in data]
     logger.info(sanitize_log_message(f"Listed {len(workspaces)} Mobility workspaces"))
     return {"count": len(workspaces), "data": workspaces}
 
 
-async def list_mobility_workspace_admins(
-    workspace_id: str, settings: Settings
-) -> dict[str, Any]:
+async def list_mobility_workspace_admins(workspace_id: str, settings: Settings) -> dict[str, Any]:
     """List admins of a UniFi Mobility workspace."""
     _require_cloud_api(settings)
     logger = get_logger(__name__, settings.log_level)
@@ -90,9 +81,7 @@ async def list_mobility_workspace_admins(
     admins = [
         MobilityWorkspaceAdmin.model_validate(item).model_dump(by_alias=True) for item in data
     ]
-    logger.info(
-        sanitize_log_message(f"Listed {len(admins)} admins for workspace {workspace_id}")
-    )
+    logger.info(sanitize_log_message(f"Listed {len(admins)} admins for workspace {workspace_id}"))
     return {"workspace_id": workspace_id, "count": len(admins), "data": admins}
 
 
@@ -118,9 +107,7 @@ async def list_mobility_devices(
 
     data = _extract_collection(response)
     devices = [MobilityDevice.model_validate(item).model_dump(by_alias=True) for item in data]
-    logger.info(
-        sanitize_log_message(f"Listed {len(devices)} devices in workspace {workspace_id}")
-    )
+    logger.info(sanitize_log_message(f"Listed {len(devices)} devices in workspace {workspace_id}"))
     return {
         "workspace_id": workspace_id,
         "offset": final_offset,
@@ -217,9 +204,7 @@ async def list_mobility_device_clients(
         )
 
     data = _extract_collection(response)
-    clients = [
-        MobilityDeviceClient.model_validate(item).model_dump(by_alias=True) for item in data
-    ]
+    clients = [MobilityDeviceClient.model_validate(item).model_dump(by_alias=True) for item in data]
     logger.info(
         sanitize_log_message(f"Listed {len(clients)} clients on Mobility device {device_id}")
     )

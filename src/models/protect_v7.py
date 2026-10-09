@@ -8,8 +8,6 @@ returns far more than we model, and unknown fields must not break parsing.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -63,8 +61,12 @@ class ProtectArmSchedule(BaseModel):
     """Arm schedule entry within an arm profile."""
 
     mode: str | None = Field(None, description="Arm mode for the schedule window")
-    start_cron: str | None = Field(None, alias="startCron", description="Cron expression for window start")
-    end_cron: str | None = Field(None, alias="endCron", description="Cron expression for window end")
+    start_cron: str | None = Field(
+        None, alias="startCron", description="Cron expression for window start"
+    )
+    end_cron: str | None = Field(
+        None, alias="endCron", description="Cron expression for window end"
+    )
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 

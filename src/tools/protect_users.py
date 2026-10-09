@@ -119,7 +119,9 @@ async def get_protect_ulp_user(ulp_user_id: str, settings: Settings) -> dict[str
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        response = await client.get(settings.get_protect_integration_path(f"ulp-users/{ulp_user_id}"))
+        response = await client.get(
+            settings.get_protect_integration_path(f"ulp-users/{ulp_user_id}")
+        )
 
     user = ProtectUlpUser.model_validate(_extract_item(response))
     logger.info(sanitize_log_message(f"Retrieved Protect ULP user {ulp_user_id}"))

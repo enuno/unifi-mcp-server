@@ -123,8 +123,10 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         # map the ObjectId to a MAC through the legacy stats list and match on
         # MAC below.
         mac_probe: str | None = _norm_mac(device_id) if is_mac else None
-        if mac_probe is None and len(device_id) == 24 and all(
-            c in "0123456789abcdef" for c in device_id
+        if (
+            mac_probe is None
+            and len(device_id) == 24
+            and all(c in "0123456789abcdef" for c in device_id)
         ):
             try:
                 legacy = await client.get(f"/ea/sites/{resolved_site_id}/devices")
@@ -159,8 +161,6 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
                 return IntegrationDevice.model_validate(device_data).model_dump(exclude_none=True)
 
         raise ResourceNotFoundError("device", device_id)
-
-
 
 
 async def get_device_statistics(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
@@ -204,6 +204,68 @@ async def get_device_statistics(site_id: str, device_id: str, settings: Settings
         raise ResourceNotFoundError("device", device_id)
 
 
+_INTEGRATION_PAGE_SIZE = 100
+
+# The integration API reports no ``type``. The capability names under ``features`` stand in for
+# the legacy ``uap`` / ``usw`` values.
+_TYPE_FEATURES = {"uap": "accessPoint", "usw": "switching"}
+
+
+async def _list_integration_devices(
+    client: UniFiClient, settings: Settings, site_id: str
+) -> list[dict[str, Any]]:
+    """List every device of a site through the integration API.
+
+    In local mode the client rewrites ``/ea/sites/{site}/devices`` to the controller's legacy
+    route, which does not accept an API key (issue #187). The integration API does, in every
+    API mode.
+
+    Args:
+        client: Authenticated UniFi client
+        settings: Application settings
+        site_id: Site identifier, resolved to the controller's UUID before the request
+
+    Returns:
+        Device records in the integration API's shape
+    """
+    resolved_site_id = await client.resolve_site_id(site_id)
+    devices: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        response = await client.get(
+            settings.get_integration_path(f"sites/{resolved_site_id}/devices"),
+            params={"offset": offset, "limit": _INTEGRATION_PAGE_SIZE},
+        )
+        batch = response if isinstance(response, list) else response.get("data", [])
+        if not batch:
+            break
+        devices.extend(batch)
+        if len(batch) < _INTEGRATION_PAGE_SIZE:
+            break
+        offset += len(batch)
+    return devices
+
+
+def _device_matches_type(device: dict[str, Any], device_type: str) -> bool:
+    """Check whether a device matches a requested type.
+
+    Args:
+        device: Device record from the integration API
+        device_type: ``uap`` or ``usw``, a capability name, or part of the model
+
+    Returns:
+        True if the device matches
+    """
+    wanted = device_type.lower()
+    # ``features`` is an object of capabilities or, on some devices, a list of their names
+    capabilities = {str(name).lower() for name in device.get("features") or []}
+    return (
+        wanted == (device.get("type") or "").lower()
+        or _TYPE_FEATURES.get(wanted, wanted).lower() in capabilities
+        or wanted in (device.get("model") or "").lower()
+    )
+
+
 async def list_devices_by_type(
     site_id: str,
     device_type: str,
@@ -213,9 +275,13 @@ async def list_devices_by_type(
 ) -> list[dict[str, Any]]:
     """Filter devices by type (AP, switch, gateway).
 
+    Devices are read from the integration API, which reports no ``type`` field. ``uap`` and
+    ``usw`` match the ``accessPoint`` and ``switching`` capabilities. Any other value matches a
+    capability name or part of the model, for example ``udm``.
+
     Args:
         site_id: Site identifier
-        device_type: Device type filter (uap, usw, ugw, etc.)
+        device_type: Device type filter (uap, usw, a capability name, or part of the model)
         settings: Application settings
         limit: Maximum number of devices to return
         offset: Number of devices to skip
@@ -230,22 +296,18 @@ async def list_devices_by_type(
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", []) if isinstance(response, dict) else response
+        devices_data = await _list_integration_devices(client, settings, site_id)
 
         # Filter by type
-        filtered = [
-            d
-            for d in devices_data
-            if d.get("type", "").lower() == device_type.lower()
-            or device_type.lower() in d.get("model", "").lower()
-        ]
+        filtered = [d for d in devices_data if _device_matches_type(d, device_type)]
 
         # Apply pagination
         paginated = filtered[offset : offset + limit]
 
-        # Parse into Device models
-        devices = [Device(**d).model_dump() for d in paginated]
+        # Parse into IntegrationDevice models, the shape the integration API reports
+        devices = [
+            IntegrationDevice.model_validate(d).model_dump(exclude_none=True) for d in paginated
+        ]
 
         logger.info(
             sanitize_log_message(
@@ -264,6 +326,9 @@ async def search_devices(
 ) -> list[dict[str, Any]]:
     """Search devices by name, MAC, or IP address.
 
+    Devices are read from the integration API, which reports ``macAddress`` and ``ipAddress``.
+    The legacy ``mac`` and ``ip`` keys are matched as well.
+
     Args:
         site_id: Site identifier
         query: Search query string
@@ -281,25 +346,32 @@ async def search_devices(
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
-        response = await client.get(f"/ea/sites/{site_id}/devices")
-        devices_data = response.get("data", []) if isinstance(response, dict) else response
+        devices_data = await _list_integration_devices(client, settings, site_id)
 
-        # Search by name, MAC, or IP
+        # Search by name, MAC, IP or model, ignoring fields the controller reports as null
         query_lower = query.lower()
         filtered = [
             d
             for d in devices_data
-            if query_lower in d.get("name", "").lower()
-            or query_lower in d.get("mac", "").lower()
-            or query_lower in d.get("ip", "").lower()
-            or query_lower in d.get("model", "").lower()
+            if any(
+                query_lower in str(value).lower()
+                for value in (
+                    d.get("name"),
+                    d.get("macAddress") or d.get("mac"),
+                    d.get("ipAddress") or d.get("ip"),
+                    d.get("model"),
+                )
+                if value
+            )
         ]
 
         # Apply pagination
         paginated = filtered[offset : offset + limit]
 
-        # Parse into Device models
-        devices = [Device(**d).model_dump() for d in paginated]
+        # Parse into IntegrationDevice models, the shape the integration API reports
+        devices = [
+            IntegrationDevice.model_validate(d).model_dump(exclude_none=True) for d in paginated
+        ]
 
         logger.info(
             sanitize_log_message(
@@ -394,11 +466,11 @@ async def adopt_device(
             logger.info(sanitize_log_message(f"[DRY RUN] Would adopt device {mac}"))
             return {"dry_run": True, "mac": mac, "payload": payload}
 
-        response = await client.post(
-            f"/integration/v1/sites/{site_id}/devices", json_data=payload
-        )
-        data = response[0] if isinstance(response, list) and response else (
-            response.get("data", response) if isinstance(response, dict) else {}
+        response = await client.post(f"/integration/v1/sites/{site_id}/devices", json_data=payload)
+        data = (
+            response[0]
+            if isinstance(response, list) and response
+            else (response.get("data", response) if isinstance(response, dict) else {})
         )
 
         await audit_action(
@@ -412,7 +484,6 @@ async def adopt_device(
 
         logger.info(sanitize_log_message(f"Successfully adopted device {mac}"))
         return {"success": True, "mac": mac, "result": data}
-
 
 
 async def execute_port_action(
@@ -502,7 +573,5 @@ async def execute_port_action(
             details={"action": "POWER_CYCLE"},
         )
 
-        logger.info(
-            sanitize_log_message(f"Successfully power-cycled port {port_idx}")
-        )
+        logger.info(sanitize_log_message(f"Successfully power-cycled port {port_idx}"))
         return {"success": True, "action": "POWER_CYCLE", "port_idx": port_idx, "result": data}

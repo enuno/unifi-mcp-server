@@ -36,7 +36,9 @@ class MatchTarget(BaseModel):
     # releases and strict enums here rejected otherwise-valid 200 responses
     # (issue #183; same class of bug as #72). Known values: ANY, IP, NETWORK,
     # REGION, CLIENT, APP, WEB. Unknown values are preserved verbatim.
-    matching_target: str = Field(..., description="Target matching type (e.g. ANY/IP/NETWORK/REGION/CLIENT/APP/WEB)")
+    matching_target: str = Field(
+        ..., description="Target matching type (e.g. ANY/IP/NETWORK/REGION/CLIENT/APP/WEB)"
+    )
     matching_target_type: str | None = Field(None, description="Target type qualifier")
     port_matching_type: str | None = Field(
         None,
@@ -81,13 +83,17 @@ class FirewallPolicy(BaseModel):
     # whenever Ubiquiti emits a value outside the modeled set (issue #183),
     # and some predefined policies carry action=null. Values pass through
     # verbatim; known values: ALLOW/BLOCK, BOTH/IPV4/IPV6, ALL/CUSTOM/RESPOND_ONLY.
-    action: str | None = Field(None, description="Policy action (ALLOW/BLOCK; null on some predefined policies)")
+    action: str | None = Field(
+        None, description="Policy action (ALLOW/BLOCK; null on some predefined policies)"
+    )
     enabled: bool = Field(True, description="Whether policy is active")
     predefined: bool = Field(False, description="Whether this is a system rule")
     index: int = Field(10000, description="Priority order (lower = higher priority)")
     protocol: str = Field("all", description="Protocol (all/tcp/udp/tcp_udp/icmpv6)")
     ip_version: str = Field("BOTH", description="IP version filter (BOTH/IPV4/IPV6)")
-    connection_state_type: str = Field("ALL", description="Connection state matching type (ALL/CUSTOM/RESPOND_ONLY)")
+    connection_state_type: str = Field(
+        "ALL", description="Connection state matching type (ALL/CUSTOM/RESPOND_ONLY)"
+    )
     connection_states: list[str] | None = Field(
         None, description="Connection states when type is CUSTOM"
     )

@@ -42,10 +42,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_relays_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "relay-1", "name": "Gate Relay"},
-            {"id": "relay-2", "name": "Door Relay"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "relay-1", "name": "Gate Relay"},
+                {"id": "relay-2", "name": "Door Relay"},
+            ],
+        }
     )
     with patch("src.tools.protect_relays.ProtectClient", return_value=mock_client):
         result = await list_protect_relays(mock_settings, limit=10, offset=0)
@@ -87,9 +91,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_relays.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_relays, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_relays, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 
@@ -151,7 +153,9 @@ async def test_activate_protect_relay_output_success(mock_settings, mock_client)
 async def test_activate_protect_relay_output_toggle_only(mock_settings, mock_client):
     mock_client.post = AsyncMock(return_value={"success": True})
     with patch("src.tools.protect_relays.ProtectClient", return_value=mock_client):
-        result = await activate_protect_relay_output("relay-1", "out-1", mock_settings, confirm=True)
+        result = await activate_protect_relay_output(
+            "relay-1", "out-1", mock_settings, confirm=True
+        )
     mock_client.post.assert_awaited_once_with(
         "/integration/v1/relays/relay-1/outputs/out-1/activate", json_data=None
     )

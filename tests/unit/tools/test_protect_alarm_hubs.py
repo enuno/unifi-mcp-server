@@ -42,10 +42,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_alarm_hubs_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "hub-1", "name": "Main Hub"},
-            {"id": "hub-2", "name": "Backup Hub"},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "hub-1", "name": "Main Hub"},
+                {"id": "hub-2", "name": "Backup Hub"},
+            ],
+        }
     )
     with patch("src.tools.protect_alarm_hubs.ProtectClient", return_value=mock_client):
         result = await list_protect_alarm_hubs(mock_settings, limit=10, offset=0)

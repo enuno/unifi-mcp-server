@@ -42,6 +42,12 @@ from .integration_api import (
     WifiNetworkRef,
     WifiSecurityConfiguration,
 )
+from .mobility import (
+    MobilityDevice,
+    MobilityDeviceClient,
+    MobilityWorkspace,
+    MobilityWorkspaceAdmin,
+)
 from .network import Network
 from .port_profile import PortOverride, PortProfile, PortTableEntry
 from .protect_camera import ProtectCamera
@@ -61,7 +67,6 @@ from .protect_event import (
     ProtectDeviceUpdateMessage,
     ProtectEventMessage,
 )
-from .mobility import MobilityDevice, MobilityDeviceClient, MobilityWorkspace, MobilityWorkspaceAdmin
 from .protect_nvr import ProtectNVR
 from .protect_v7 import (
     ProtectAlarmHub,

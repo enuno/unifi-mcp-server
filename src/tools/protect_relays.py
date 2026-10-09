@@ -194,7 +194,9 @@ async def activate_protect_relay_output(
     async with ProtectClient(settings) as client:
         await client.authenticate()
         response = await client.post(
-            settings.get_protect_integration_path(f"relays/{relay_id}/outputs/{output_id}/activate"),
+            settings.get_protect_integration_path(
+                f"relays/{relay_id}/outputs/{output_id}/activate"
+            ),
             json_data=payload or None,
         )
 

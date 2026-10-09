@@ -8,10 +8,11 @@ from src.tools import protect_speakers
 from src.tools.protect_speakers import (
     get_protect_speaker,
     list_protect_speakers,
-    test_protect_speaker_sound as run_test_sound,
     update_protect_speaker,
 )
 from src.utils.exceptions import ValidationError
+
+run_test_sound = protect_speakers.test_protect_speaker_sound
 
 
 @pytest.fixture
@@ -42,10 +43,14 @@ def mock_client():
 @pytest.mark.asyncio
 async def test_list_protect_speakers_success(mock_settings, mock_client):
     mock_client.get = AsyncMock(
-        return_value={"count": 2, "totalCount": 2, "data": [
-            {"id": "speaker-1", "name": "Porch Speaker", "volume": 80},
-            {"id": "speaker-2", "name": "Garage Speaker", "volume": 50},
-        ]}
+        return_value={
+            "count": 2,
+            "totalCount": 2,
+            "data": [
+                {"id": "speaker-1", "name": "Porch Speaker", "volume": 80},
+                {"id": "speaker-2", "name": "Garage Speaker", "volume": 50},
+            ],
+        }
     )
     with patch("src.tools.protect_speakers.ProtectClient", return_value=mock_client):
         result = await list_protect_speakers(mock_settings, limit=10, offset=0)
@@ -87,9 +92,7 @@ async def test_write_refused_without_confirm(mock_settings, mock_client, name, k
 async def test_write_refused_with_string_false_confirm(mock_settings, mock_client, name, kwargs):
     with patch("src.tools.protect_speakers.ProtectClient") as client_cls:
         with pytest.raises(ValidationError):
-            await getattr(protect_speakers, name)(
-                settings=mock_settings, confirm="false", **kwargs
-            )
+            await getattr(protect_speakers, name)(settings=mock_settings, confirm="false", **kwargs)
         client_cls.assert_not_called()
 
 
@@ -99,7 +102,13 @@ async def test_write_refused_with_string_false_confirm(mock_settings, mock_clien
 @pytest.mark.asyncio
 async def test_update_protect_speaker_success(mock_settings, mock_client):
     mock_client.patch = AsyncMock(
-        return_value={"id": "speaker-1", "name": "New Name", "volume": 70, "micVolume": 40, "isMicEnabled": True}
+        return_value={
+            "id": "speaker-1",
+            "name": "New Name",
+            "volume": 70,
+            "micVolume": 40,
+            "isMicEnabled": True,
+        }
     )
     with patch("src.tools.protect_speakers.ProtectClient", return_value=mock_client):
         result = await update_protect_speaker(

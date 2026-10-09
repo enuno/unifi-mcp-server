@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`get_backup_schedule` reported "no schedule configured" on UniFi OS consoles that have one** (issue #190): UDM/UCG consoles reject `get/setting/auto_backup` with `api.err.Invalid` and store the autobackup schedule inside the `super_mgmt` site setting under `autobackup_*` field names (verified on UniFi OS 5.1.33 / Network 10.6.106). The client now falls back to `get/setting/super_mgmt` in local API mode and normalizes `autobackup_*` fields to the `auto_backup_*` shape the tool layer already consumes; a `super_mgmt` response without autobackup fields still reports "not configured" (console-managed), and real errors from either endpoint still surface.
 
+- **The `/metrics` duration histogram had no `le="+Inf"` bucket** (issue #195): `unifi_mcp_tool_call_duration_seconds` listed only the finite buckets and treated `+Inf` as implicit, but the Prometheus text exposition format requires it, with a value equal to `_count`. Without it `histogram_quantile()` can return incorrect results and stricter parsers can reject the series. `render()` now emits the `+Inf` bucket for every tool.
+
 ## [0.5.0] - 2026-09-27
 
 > Folds the never-tagged `[0.4.0]` changes and everything since into the first release cut from `main` since v0.2.5. `main` previously declared 0.2.5 while carrying Phase 3-6 work; `pyproject.toml` now matches the tag.

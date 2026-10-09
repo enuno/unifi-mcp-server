@@ -7,6 +7,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege: every job in this workflow only needs to read the repo.
+# Explicitly declaring this also makes fork-PR runs safe, since they receive
+# a read-only GITHUB_TOKEN by default.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

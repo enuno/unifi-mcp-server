@@ -125,6 +125,19 @@ jobs:
         run: |
           detect-secrets scan --baseline .secrets.baseline --all-files
 
+      - name: Fail on new secrets (baseline drift)
+        # `detect-secrets scan` rewrites the baseline in place and always
+        # exits 0, so without this diff-check the job can never fail and new
+        # leaked secrets would pass silently. Any diff here means new
+        # findings were added to the baseline (or the baseline is stale).
+        run: |
+          if ! git diff --exit-code -- .secrets.baseline; then
+            echo "::error::New potential secrets detected, or .secrets.baseline is out of date."
+            echo "Run 'detect-secrets scan --baseline .secrets.baseline --all-files' locally,"
+            echo "audit the findings with 'detect-secrets audit .secrets.baseline', and commit."
+            exit 1
+          fi
+
       - name: TruffleHog OSS
         uses: trufflesecurity/trufflehog@main
         if: github.event_name == 'pull_request'

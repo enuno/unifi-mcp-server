@@ -64,6 +64,35 @@ def test_duration_histogram_buckets_are_cumulative() -> None:
     assert 'unifi_mcp_tool_call_duration_seconds_count{tool="get_device"} 2' in body
 
 
+def test_duration_histogram_has_inf_bucket_equal_to_count() -> None:
+    registry = MetricsRegistry()
+    _record(registry, "get_device", "success", 0.05)
+    _record(registry, "get_device", "success", 7.0)
+    _record(registry, "get_device", "error", 60.0)  # above the largest finite bucket
+
+    lines = registry.render(version="0.5.0", api_type="local").splitlines()
+    prefix = "unifi_mcp_tool_call_duration_seconds"
+    buckets = [line for line in lines if line.startswith(f"{prefix}_bucket")]
+
+    # the finite buckets do not include the 60s call; +Inf does, and it comes last
+    assert buckets[-2] == f'{prefix}_bucket{{tool="get_device",le="10"}} 2'
+    assert buckets[-1] == f'{prefix}_bucket{{tool="get_device",le="+Inf"}} 3'
+    assert f'{prefix}_count{{tool="get_device"}} 3' in lines
+    # +Inf must be the last bucket before _sum and _count
+    assert lines.index(buckets[-1]) + 1 == lines.index(f'{prefix}_sum{{tool="get_device"}} 67.05')
+
+
+def test_inf_bucket_is_emitted_for_every_tool() -> None:
+    registry = MetricsRegistry()
+    _record(registry, "tool_a", "success", 0.01)
+    _record(registry, "tool_b", "success", 0.01, times=4)
+
+    body = registry.render(version="0.5.0", api_type="local")
+
+    assert 'unifi_mcp_tool_call_duration_seconds_bucket{tool="tool_a",le="+Inf"} 1' in body
+    assert 'unifi_mcp_tool_call_duration_seconds_bucket{tool="tool_b",le="+Inf"} 4' in body
+
+
 def test_negative_duration_is_clamped_to_zero() -> None:
     registry = MetricsRegistry()
     _record(registry, "tool_a", "success", -1.0)
@@ -90,6 +119,6 @@ def test_snapshot_isolated_from_later_mutation() -> None:
     body = registry.render(version="0.5.0", api_type="local")
     _record(registry, "tool_b", "success", 9.9, times=5)
 
-    assert body.count("tool_b") == 8  # total + 5 buckets + sum + count
+    assert body.count("tool_b") == 9  # total + 5 buckets + +Inf bucket + sum + count
     new_body = registry.render(version="0.5.0", api_type="local")
     assert 'unifi_mcp_tool_calls_total{tool="tool_b",status="success"} 6' in new_body

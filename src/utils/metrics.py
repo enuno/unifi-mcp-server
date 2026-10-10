@@ -17,8 +17,9 @@ import threading
 import time
 
 #: Duration histogram buckets in seconds. A tool call that lands in the
-#: smallest bucket covers sub-100ms controller answers; the +Inf bucket is
-#: implicit (its count equals ``_count`` and is not emitted separately).
+#: smallest bucket covers sub-100ms controller answers. The ``+Inf`` bucket is
+#: not listed here: ``render`` emits it from the call count, as the exposition
+#: format requires.
 _DURATION_BUCKETS: tuple[float, ...] = (0.1, 0.5, 1.0, 5.0, 10.0)
 
 #: Process start, exported as ``unifi_mcp_process_start_time_seconds`` so
@@ -140,6 +141,10 @@ class MetricsRegistry:
                         f'unifi_mcp_tool_call_duration_seconds_bucket{{tool="{escaped_tool}",'
                         f'le="{boundary:g}"}} {duration_buckets[tool][index]}'
                     )
+                lines.append(
+                    f'unifi_mcp_tool_call_duration_seconds_bucket{{tool="{escaped_tool}",'
+                    f'le="+Inf"}} {duration_count[tool]}'
+                )
                 lines.append(
                     f'unifi_mcp_tool_call_duration_seconds_sum{{tool="{escaped_tool}"}} '
                     f"{duration_sum[tool]:g}"

@@ -194,7 +194,7 @@ def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
         registered = getattr(mcp, "_registered_tool_names", None)
         if registered is None:
             registered = set()
-            mcp._registered_tool_names = registered
+            mcp._registered_tool_names = registered  # type: ignore[attr-defined]
         return registered
 
     registered = registry.get("_registered_tool_names")
@@ -288,6 +288,7 @@ def _make_tool_wrapper(
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            _coerce_dry_run(kwargs)
             requested = kwargs.pop("controller", None)
             fresh = coerce_bool(kwargs.pop("fresh", False)) if family is not None else False
             principal = request_principal(local_role)
@@ -433,6 +434,7 @@ def _make_tool_wrapper(
 
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
+            _coerce_dry_run(kwargs)
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
             kwargs["settings"] = settings
@@ -449,6 +451,21 @@ def _make_tool_wrapper(
 
     wrapper.__signature__ = public_sig  # type: ignore[attr-defined]
     return wrapper
+
+
+def _coerce_dry_run(kwargs: dict[str, Any]) -> None:
+    """Normalise a caller-supplied ``dry_run`` to a bool in place.
+
+    MCP clients may send ``"false"``; tools typed ``bool | str`` test the raw
+    value with a bare ``if``, where any non-empty string is truthy. A string
+    that is not clearly false stays a preview rather than becoming a change.
+    """
+    if "dry_run" in kwargs:
+        value = kwargs["dry_run"]
+        if isinstance(value, str):
+            kwargs["dry_run"] = value.strip().lower() not in ("false", "0", "no", "")
+        else:
+            kwargs["dry_run"] = coerce_bool(value)
 
 
 def _with_controller_param(sig: inspect.Signature) -> inspect.Signature:

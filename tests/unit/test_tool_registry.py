@@ -301,6 +301,45 @@ async def test_default_mode_respects_caller_dry_run(settings: MagicMock) -> None
     assert result == {"dry_run": False}
 
 
+@pytest.mark.parametrize(
+    ("sent", "expected"),
+    [("false", False), ("False", False), ("0", False), ("true", True), ("preview", True)],
+)
+async def test_string_dry_run_is_coerced_before_the_tool_sees_it(
+    settings: MagicMock, sent: str, expected: bool
+) -> None:
+    """MCP clients may send dry_run as a string; tools test it with a bare ``if``.
+
+    Without coercion ``"false"`` is truthy, so a confirmed call would return a
+    preview while the wrapper's audit recorded it as a successful change.
+    """
+    seen: list[Any] = []
+
+    async def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
+        seen.append(dry_run)
+        return {}
+
+    from src.tool_registry import _make_tool_wrapper
+
+    await _make_tool_wrapper(_spy_tool, settings)("default", dry_run=sent)
+
+    assert seen == [expected]
+
+
+def test_sync_wrapper_coerces_string_dry_run(settings: MagicMock) -> None:
+    seen: list[Any] = []
+
+    def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
+        seen.append(dry_run)
+        return {}
+
+    from src.tool_registry import _make_tool_wrapper
+
+    _make_tool_wrapper(_spy_tool, settings)("default", dry_run="false")
+
+    assert seen == [False]
+
+
 # ---------------------------------------------------------------------------
 # Metrics recording
 # ---------------------------------------------------------------------------

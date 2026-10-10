@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -308,8 +308,7 @@ class TestWebhookEventHandler:
             data={"mac": "00:11:22:33:44:55", "name": "Access Point"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_device_online(event)
+        await handler.handle_device_online(event)
 
     @pytest.mark.asyncio
     async def test_handle_device_offline(self, handler):
@@ -320,8 +319,7 @@ class TestWebhookEventHandler:
             data={"mac": "00:11:22:33:44:55", "name": "Switch"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_device_offline(event)
+        await handler.handle_device_offline(event)
 
     @pytest.mark.asyncio
     async def test_handle_client_connected(self, handler):
@@ -332,8 +330,7 @@ class TestWebhookEventHandler:
             data={"mac": "aa:bb:cc:dd:ee:ff", "hostname": "laptop", "essid": "Corp-WiFi"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_client_connected(event)
+        await handler.handle_client_connected(event)
 
     @pytest.mark.asyncio
     async def test_handle_client_disconnected(self, handler):
@@ -344,8 +341,7 @@ class TestWebhookEventHandler:
             data={"mac": "aa:bb:cc:dd:ee:ff", "hostname": "phone"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_client_disconnected(event)
+        await handler.handle_client_disconnected(event)
 
     @pytest.mark.asyncio
     async def test_handle_alert_raised(self, handler):

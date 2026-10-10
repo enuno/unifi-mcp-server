@@ -3122,7 +3122,10 @@ secret configured (receiver mounted by hand only).
 - `event.occurred` - Generic event
 
 **Event Handlers:**
-Webhooks automatically invalidate relevant caches and can trigger custom handlers.
+`device.*` and `client.*` events clear the server's read cache (when Redis is
+configured). A payload does not say which controller sent it, so the cached
+reads of every controller are cleared. Custom handlers can be registered with
+`receiver.register_handler(event_type, handler)`.
 
 ## MCP Resources
 

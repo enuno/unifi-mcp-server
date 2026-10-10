@@ -221,6 +221,20 @@ class TestReadThrough:
 
         assert calls == 2
 
+    async def test_invalidate_all_clears_every_controller(self, settings, router, cache):
+        controller = Controller()
+        read, _ = _tools(controller, settings, router, cache)
+        await read("default", controller="hq")
+        await read("default", controller="branch")
+        await cache._redis().set("unrelated:key", "1")
+
+        await cache.invalidate_all()
+
+        await read("default", controller="hq")
+        await read("default", controller="branch")
+        assert controller.reads == 4  # both re-read from the controller
+        assert await cache._redis().get("unrelated:key") == "1"  # other keys untouched
+
     async def test_redis_down_bypasses_the_cache(self, monkeypatch, router):
         monkeypatch.setenv("UNIFI_API_KEY", "k")  # pragma: allowlist secret
         monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")

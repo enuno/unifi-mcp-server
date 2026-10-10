@@ -325,7 +325,9 @@ def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     webhook endpoint at all. The route is not behind the MCP bearer token:
     UniFi cannot send one, and every delivery must instead carry a valid
     ``X-UniFi-Signature`` (HMAC-SHA256 of the body, keyed with the secret).
-    The default handlers (cache invalidation and event logging) are registered.
+    The default handlers are registered: event logging, and clearing the
+    module's ``read_cache`` (when Redis is configured) on device and client
+    state changes.
 
     Args:
         server: The FastMCP server to register the route on
@@ -340,7 +342,7 @@ def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     from .webhooks import WebhookEventHandler, WebhookReceiver
 
     receiver = WebhookReceiver(current_settings)
-    WebhookEventHandler(current_settings).register_default_handlers(receiver)
+    WebhookEventHandler(current_settings, read_cache=read_cache).register_default_handlers(receiver)
     server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
     return receiver
 

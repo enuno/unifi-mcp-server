@@ -245,6 +245,14 @@ Each phase is independently shippable, keeps the zero-config path identical, and
 - `search_audit_log`, `verify_audit_chain`, `export_audit_log` (`fleet-admin` only).
 - **Verify:** a role × tier matrix test that runs every role against a sample tool of every tier, plus module and controller filters, and checks allowed calls succeed and denied ones neither reach the (mocked) controller nor skip the `denied` record. A revoked token stops working on every replica within 30 seconds. With the audit store down, mutating calls are refused and reads still work. The database role can't `UPDATE` or `DELETE` `audit_log` (tested against real Postgres). No token secret appears in any log, audit record or tool output.
 
+- **Status (2026-10-10): done.** Notes from implementation:
+  - Decisions: break-glass callers (`MCP_AUTH_TOKEN`, stdio) are `fleet-admin`, not `admin`, so enforcement removes nothing they could do; `UNIFI_STDIO_ROLE` lowers stdio. Tokens default to a 90-day lifetime. With DATABASE_URL, audit records go to Postgres only.
+  - Append-only is a trigger refusing UPDATE/DELETE/TRUNCATE for every role, plus an optional least-privilege runtime role (`MIGRATION_DATABASE_URL` for the schema owner; grants in SECURITY.md) rather than a required one. A tamper test bypasses the trigger as a superuser and the hash chain still catches the edit.
+  - Revocation propagates through the verifier's 30-second cache rather than `tokens:changed` pub/sub (Phase 4).
+  - `audit_log` is not partitioned yet; partitioning and the archive-then-drop retention arrive together in Phase 5.
+  - Optional per-session tool hiding is not implemented; enforcement does not depend on it.
+  - Refusals of reads are audited too (the plan listed RBAC refusals without limiting them to writes).
+
 ### Phase 3: Connection pool and caching on the hot path
 - `ClientPool` with LRU/idle eviction and circuit breakers (§3.4). Auth/site-map caching (§3.3).
 - Wrapper-level read-through cache for an allowlist of high-traffic read tools (devices, clients, sites, networks, WLANs), plus mutation-driven invalidation.

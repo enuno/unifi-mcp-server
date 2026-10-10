@@ -22,6 +22,7 @@ Exit codes: 0 intact, 1 problems found, 2 usage error or missing key.
 import argparse
 import json
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -61,61 +62,77 @@ def verify_file(path: Path, key: bytes | None) -> VerifyReport:
     Raises:
         ChainKeyMissingError: If the file has HMAC-chained records and no key
     """
+    with open(path, encoding="utf-8") as f:
+        return verify_records(
+            ((f"line {number}", line) for number, line in enumerate(f, start=1)), key
+        )
+
+
+def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> VerifyReport:
+    """Verify every chain in a sequence of stored records, in storage order.
+
+    Args:
+        records: ``(location, stored JSON)`` pairs, e.g. ``("line 3", ...)``
+            for a file or ``("row 17", ...)`` for the Postgres audit store
+        key: The chain HMAC key, needed for ``hmac-sha256`` records
+
+    Returns:
+        What was checked and any problems, each naming its location
+
+    Raises:
+        ChainKeyMissingError: If there are HMAC-chained records and no key
+    """
     report = VerifyReport()
     heads: dict[str, tuple[int, str]] = {}
     seen_chained = False
 
-    with open(path, encoding="utf-8") as f:
-        for number, line in enumerate(f, start=1):
-            if not line.strip():
-                continue
-            report.records += 1
-            try:
-                record: dict[str, Any] = json.loads(line)
-            except json.JSONDecodeError:
-                report.problems.append(f"line {number}: not valid JSON")
-                continue
+    for number, line in records:
+        if not line.strip():
+            continue
+        report.records += 1
+        try:
+            record: dict[str, Any] = json.loads(line)
+        except json.JSONDecodeError:
+            report.problems.append(f"{number}: not valid JSON")
+            continue
 
-            if "hash" not in record:
-                if seen_chained:
-                    report.problems.append(f"line {number}: unchained record after chained ones")
-                else:
-                    report.legacy += 1
-                continue
-            seen_chained = True
-
-            if record.get("hash_alg") == "hmac-sha256":
-                if key is None:
-                    raise ChainKeyMissingError(
-                        "The file has HMAC-chained records: set UNIFI_AUDIT_CHAIN_KEY or pass --key"
-                    )
-                expected = record_hash(record, key)
+        if "hash" not in record:
+            if seen_chained:
+                report.problems.append(f"{number}: unchained record after chained ones")
             else:
-                expected = record_hash(record, None)
-            if record["hash"] != expected:
-                report.problems.append(f"line {number}: hash does not match the record")
+                report.legacy += 1
+            continue
+        seen_chained = True
 
-            chain_id = str(record.get("chain_id"))
-            seq = record.get("seq")
-            if chain_id not in heads:
-                report.chains += 1
-                if seq != 0 or record.get("prev_hash") != GENESIS_HASH:
-                    report.problems.append(
-                        f"line {number}: chain {chain_id[:8]} does not start at seq 0"
-                    )
-            else:
-                last_seq, last_hash = heads[chain_id]
-                if seq != last_seq + 1:
-                    report.problems.append(
-                        f"line {number}: chain {chain_id[:8]} expected seq {last_seq + 1}, "
-                        f"found {seq}"
-                    )
-                if record.get("prev_hash") != last_hash:
-                    report.problems.append(
-                        f"line {number}: chain {chain_id[:8]} prev_hash does not match the "
-                        "previous record"
-                    )
-            heads[chain_id] = (seq if isinstance(seq, int) else -1, record["hash"])
+        if record.get("hash_alg") == "hmac-sha256":
+            if key is None:
+                raise ChainKeyMissingError(
+                    "The file has HMAC-chained records: set UNIFI_AUDIT_CHAIN_KEY or pass --key"
+                )
+            expected = record_hash(record, key)
+        else:
+            expected = record_hash(record, None)
+        if record["hash"] != expected:
+            report.problems.append(f"{number}: hash does not match the record")
+
+        chain_id = str(record.get("chain_id"))
+        seq = record.get("seq")
+        if chain_id not in heads:
+            report.chains += 1
+            if seq != 0 or record.get("prev_hash") != GENESIS_HASH:
+                report.problems.append(f"{number}: chain {chain_id[:8]} does not start at seq 0")
+        else:
+            last_seq, last_hash = heads[chain_id]
+            if seq != last_seq + 1:
+                report.problems.append(
+                    f"{number}: chain {chain_id[:8]} expected seq {last_seq + 1}, " f"found {seq}"
+                )
+            if record.get("prev_hash") != last_hash:
+                report.problems.append(
+                    f"{number}: chain {chain_id[:8]} prev_hash does not match the "
+                    "previous record"
+                )
+        heads[chain_id] = (seq if isinstance(seq, int) else -1, record["hash"])
 
     return report
 

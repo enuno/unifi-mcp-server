@@ -113,9 +113,13 @@ fleet_router = FleetRouter(settings, fleet_registry)
 
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
-    """Start the Postgres registry with the server (schema check, seed, first load)."""
+    """Start the Postgres registry and audit store with the server, then audit the start."""
     if hasattr(fleet_registry, "start"):
+        from .fleet.db import audit_store
+
+        audit_store.install(settings, fleet_registry.store.engine)
         await fleet_registry.start()
+    await audit_server_start()
     try:
         yield
     finally:
@@ -123,10 +127,12 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
             await fleet_registry.stop()
 
 
-def build_auth_provider(current_settings: Settings) -> Any:
+def build_auth_provider(current_settings: Settings, token_store: Any = None) -> Any:
     """Build the MCP authentication provider from settings.
 
-    Returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
+    With a fleet registry (``token_store``), returns a ``FleetTokenVerifier``
+    accepting ``MCP_AUTH_TOKEN`` tokens and server-issued API tokens. Otherwise
+    returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
     ``MCP_AUTH_TOKEN`` when at least one is configured, otherwise ``None``.
     Over stdio the provider is ignored; over a network transport ``None``
     means the server refuses to start (see
@@ -134,11 +140,16 @@ def build_auth_provider(current_settings: Settings) -> Any:
 
     Args:
         current_settings: Loaded application settings
+        token_store: The fleet registry's ``TokenStore``, when DATABASE_URL is set
 
     Returns:
         A FastMCP auth provider, or None when no token is configured
     """
     tokens = current_settings.mcp_auth_tokens
+    if token_store is not None:
+        from .fleet.tokens import FleetTokenVerifier
+
+        return FleetTokenVerifier(tokens, token_store)
     if not tokens:
         return None
 
@@ -293,7 +304,12 @@ def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
     server.custom_route("/metrics", methods=["GET"])(_metrics)
 
 
-mcp_auth = build_auth_provider(settings)
+if settings.database_url:
+    from .fleet.tokens import TokenStore
+
+    mcp_auth = build_auth_provider(settings, TokenStore(fleet_registry.store.engine))
+else:
+    mcp_auth = build_auth_provider(settings)
 mcp = FastMCP("UniFi MCP Server", auth=mcp_auth, lifespan=_lifespan)
 
 # ---------------------------------------------------------------------------
@@ -789,11 +805,11 @@ async def get_site_manager_internet_health_resource() -> str:
 # ---------------------------------------------------------------------------
 
 
-def audit_server_start() -> None:
+async def audit_server_start() -> None:
     """Write a ``system`` audit record with the server's effective safety configuration."""
     if not settings.audit_log_enabled:
         return
-    get_tool_audit_logger(settings.audit_log_file).log_event(
+    await get_tool_audit_logger(settings.audit_log_file).alog_event(
         "system",
         "server_start",
         "success",
@@ -805,6 +821,8 @@ def audit_server_start() -> None:
             "dry_run": settings.dry_run,
             "profile": _active_profile or None,
             "audit_fail_closed": settings.audit_fail_closed,
+            "audit_store": "postgres" if settings.database_url else "jsonl",
+            "stdio_role": settings.stdio_role,
             "controller_registry": type(fleet_router.registry).__name__,
             "tools_registered": len(TOOL_TIERS),
         },
@@ -813,7 +831,6 @@ def audit_server_start() -> None:
 
 def main() -> None:
     """Main entry point for the MCP server."""
-    audit_server_start()
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")

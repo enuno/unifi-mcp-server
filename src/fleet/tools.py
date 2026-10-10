@@ -4,6 +4,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from ..access import ROLES, PermissionDeniedError, Principal, request_principal
 from ..config import APIType
 from .registry import ControllerProfile
 from .router import FleetRouter
@@ -20,6 +21,11 @@ def _describe(profile: ControllerProfile, router: FleetRouter) -> dict[str, Any]
         "default_site": settings.default_site,
         "labels": dict(profile.labels),
     }
+
+
+def _caller(router: FleetRouter) -> Principal:
+    role = getattr(router.base, "stdio_role", None)
+    return request_principal(role if role in ROLES else "fleet-admin")
 
 
 def register_fleet_tools(mcp: FastMCP, router: FleetRouter) -> list[str]:
@@ -44,7 +50,12 @@ def register_fleet_tools(mcp: FastMCP, router: FleetRouter) -> list[str]:
             Controllers (name, API type, host, default site, labels), the
             default controller, and this session's selection
         """
-        profiles = await router.registry.list_controllers()
+        caller = _caller(router)
+        profiles = [
+            p
+            for p in await router.registry.list_controllers()
+            if caller.allows_controller(p.labels)
+        ]
         return {
             "controllers": [_describe(p, router) for p in profiles],
             "default": await router.registry.default_controller(),
@@ -62,6 +73,11 @@ def register_fleet_tools(mcp: FastMCP, router: FleetRouter) -> list[str]:
         Returns:
             The selected controller
         """
+        profile = await router.registry.get_controller(name)
+        if not _caller(router).allows_controller(profile.labels):
+            raise PermissionDeniedError(
+                f"Permission denied: controller '{name}' is outside this caller's scope"
+            )
         profile = await router.select(name)
         return {"selected": profile.name}
 

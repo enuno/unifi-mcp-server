@@ -217,3 +217,8 @@ MagicMock/
 .mcpregistry_github_token
 .mcpregistry_registry_token
 bandit-report.json
+
+# Personal / Tool-specific configs (xerj, cursor rules are kept at project level but personal MCP overrides cleaned)
+.mcp.json
+.xerj/
+

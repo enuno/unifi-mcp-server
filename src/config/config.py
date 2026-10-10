@@ -198,6 +198,15 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_REGISTRY_REFRESH_SECONDS",
     )
 
+    stdio_role: Literal["viewer", "operator", "admin", "fleet-admin"] = Field(
+        default="fleet-admin",
+        description=(
+            "Role of the local stdio caller. stdio is a single-user channel, so it "
+            "defaults to full access; lower it to restrict what a local client may run."
+        ),
+        validation_alias="UNIFI_STDIO_ROLE",
+    )
+
     # Logging Configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",

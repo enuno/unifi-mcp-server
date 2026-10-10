@@ -61,7 +61,7 @@ class PostgresRegistry:
         if await self.store.seed_from_settings(self._settings):
             logger.info("Fleet registry was empty: registered the UNIFI_* controller as 'default'")
             if self._settings.audit_log_enabled:
-                get_audit_logger(self._settings.audit_log_file).log_event(
+                await get_audit_logger(self._settings.audit_log_file).alog_event(
                     "admin", "registry_seeded", "success", controller="default"
                 )
         await self.refresh(strict=True)

@@ -16,13 +16,13 @@ import functools
 import inspect
 import time
 import types
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, cast
 
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_context
 from pydantic import Field
 
-from .access import current_principal, request_principal
+from .access import ROLES, PermissionDeniedError, Role, Tier, current_principal, request_principal
 from .config import Settings
 from .fleet import DEFAULT_CONTROLLER_NAME
 from .fleet.router import FleetRouter, current_controller
@@ -69,9 +69,6 @@ MUTATING_TOOLS_WITHOUT_GATE = frozenset(
     }
 )
 
-
-#: Risk tier of a tool; roles grant tiers (docs/FLEET_SCALING_PLAN.md §3.6).
-Tier = Literal["read", "write", "destructive", "fleet-admin"]
 
 #: Mutating tools whose name starts with one of these are always destructive,
 #: so a newly added delete tool cannot land in a lower tier by omission.
@@ -208,6 +205,8 @@ def _make_tool_wrapper(
     routed: bool = True,
     tier: Tier | None = None,
     event_type: str = "tool_call",
+    module: str | None = None,
+    always_audit: bool = False,
 ) -> Any:
     """Return an async wrapper for *fn* with ``settings`` bound.
 
@@ -228,6 +227,10 @@ def _make_tool_wrapper(
             controller: no ``controller`` argument and no resolution.
         tier: Overrides the tier derived from *fn* (e.g. ``fleet-admin``).
         event_type: Audit event type of the tool's records.
+        module: Module name checked against a caller's module filters
+            (default: the last component of *fn*'s module).
+        always_audit: Audit the call even though the tool does not mutate
+            (e.g. audit log queries).
 
     Returns:
         An async callable with the ``settings`` parameter removed from its
@@ -253,6 +256,9 @@ def _make_tool_wrapper(
     metric_tool_name = fn.__name__.lstrip("_")
     mutating = is_mutating_tool(fn)
     tier = tier or tool_tier(fn)
+    module = module or fn.__module__.rsplit(".", 1)[-1]
+    role_setting = getattr(settings, "stdio_role", None)
+    local_role = cast(Role, role_setting if role_setting in ROLES else "fleet-admin")
 
     if inspect.iscoroutinefunction(fn):
         if routed:
@@ -261,9 +267,10 @@ def _make_tool_wrapper(
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             requested = kwargs.pop("controller", None)
-            principal = request_principal()
-            # Reads are not audited; every mutating call is (plan §3.7).
-            audit = _audit_logger_for(settings) if mutating else None
+            principal = request_principal(local_role)
+            audit = _audit_logger_for(settings)
+            # Reads are not audited unless refused; every mutating call is (plan §3.7).
+            audited = audit is not None and (mutating or always_audit)
             context: dict[str, Any] = {}
             if audit is not None:
                 session_id, request_id = _request_ids()
@@ -272,12 +279,7 @@ def _make_tool_wrapper(
                     "operation": metric_tool_name,
                     "tool": metric_tool_name,
                     "tier": tier,
-                    "principal": {
-                        "id": principal.id,
-                        "name": principal.name,
-                        "role": principal.role,
-                        "break_glass": principal.break_glass,
-                    },
+                    "principal": principal.audit_view(),
                     "user": principal.id,
                     "site_id": arguments.get("site_id"),
                     "session_id": session_id,
@@ -285,6 +287,27 @@ def _make_tool_wrapper(
                     "parameters": arguments,
                 }
 
+            async def record_denied(error: Exception, target: str | None) -> None:
+                if audit is not None:
+                    await audit.alog_event(
+                        "denied", result="denied", error=str(error), controller=target, **context
+                    )
+
+            refusal = None
+            if not principal.can_use(tier):
+                refusal = PermissionDeniedError(
+                    f"Permission denied: {metric_tool_name} needs the '{tier}' tier"
+                )
+            elif not principal.allows_module(module):
+                refusal = PermissionDeniedError(
+                    f"Permission denied: tools from module '{module}' are not allowed "
+                    "for this caller"
+                )
+            if refusal is not None:
+                await record_denied(refusal, requested)
+                raise refusal
+
+            labels: dict[str, str] = {}
             try:
                 if not routed:
                     controller, call_settings = None, settings
@@ -295,18 +318,25 @@ def _make_tool_wrapper(
                 else:
                     resolution = await router.resolve(requested, mutating=mutating)
                     controller, call_settings = resolution.name, resolution.settings
+                    labels = dict(resolution.labels)
             except (ResourceNotFoundError, ValidationError) as e:
-                if audit is not None:
-                    audit.log_event(
-                        "denied", result="denied", error=str(e), controller=requested, **context
-                    )
+                if mutating:
+                    await record_denied(e, requested)
                 raise
+
+            if controller is not None and not principal.allows_controller(labels):
+                refusal = PermissionDeniedError(
+                    f"Permission denied: controller '{controller}' is outside this caller's scope"
+                )
+                await record_denied(refusal, controller)
+                raise refusal
 
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
             kwargs["settings"] = call_settings
             recorder = None
-            if audit is not None:
+            if audited:
+                assert audit is not None  # noqa: S101 - implied by `audited`
                 recorder = ToolCallRecorder(
                     audit,
                     fail_closed=getattr(settings, "audit_fail_closed", True) is not False,
@@ -314,7 +344,7 @@ def _make_tool_wrapper(
                     controller=controller,
                     **context,
                 )
-                recorder.attempt()
+                await recorder.attempt()
 
             metrics_on = getattr(settings, "metrics_enabled", False)
             token = current_controller.set(controller)
@@ -331,7 +361,7 @@ def _make_tool_wrapper(
                             metric_tool_name, "error", time.perf_counter() - start
                         )
                     if recorder is not None:
-                        recorder.outcome("error", error=str(e))
+                        await recorder.outcome("error", error=str(e))
                     raise
                 if metrics_on:
                     METRICS.record_tool_call(
@@ -339,7 +369,7 @@ def _make_tool_wrapper(
                     )
                 if recorder is not None:
                     dry_run = coerce_bool(kwargs.get("dry_run", False))
-                    recorder.outcome("dry_run" if dry_run else "success")
+                    await recorder.outcome("dry_run" if dry_run else "success")
                 return result
             finally:
                 current_principal.reset(principal_token)

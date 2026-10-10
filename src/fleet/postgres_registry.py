@@ -2,7 +2,8 @@
 
 Lookups never query the database: they read an in-memory snapshot that is
 reloaded every ``UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`` and right after a
-registry change made through this server. If the database becomes
+registry change made through this server; with Redis configured, the other
+replicas are told to reload at once (``registry:changed``, src/fleet/bus.py). If the database becomes
 unreachable, the last snapshot keeps serving and a warning is logged; writes
 fail with the database error.
 """
@@ -14,6 +15,7 @@ from ..config import Settings
 from ..utils.audit import get_audit_logger
 from ..utils.exceptions import ConfigurationError, ResourceNotFoundError
 from ..utils.logger import get_logger
+from .bus import RegistryBus
 from .credentials import CredentialCipher
 from .db.schema import ensure_current, make_engine
 from .db.store import FleetStore
@@ -37,6 +39,8 @@ class PostgresRegistry:
         self._profiles: dict[str, ControllerProfile] | None = None
         self._default: str | None = None
         self._task: asyncio.Task[None] | None = None
+        self._bus: RegistryBus | None = None
+        self._listener: asyncio.Task[None] | None = None
 
     @classmethod
     def from_settings(cls, settings: Settings) -> "PostgresRegistry":
@@ -49,7 +53,9 @@ class PostgresRegistry:
         if not settings.database_url:
             raise ConfigurationError("DATABASE_URL is not set")
         cipher = CredentialCipher.from_env()
-        return cls(FleetStore(make_engine(settings.database_url), cipher), settings)
+        registry = cls(FleetStore(make_engine(settings.database_url), cipher), settings)
+        registry._bus = RegistryBus.from_settings(settings)
+        return registry
 
     async def start(self) -> None:
         """Check the schema, seed an empty registry, load it, and start refreshing.
@@ -66,14 +72,17 @@ class PostgresRegistry:
                 )
         await self.refresh(strict=True)
         self._task = asyncio.create_task(self._refresh_loop())
+        if self._bus is not None:
+            self._listener = asyncio.create_task(self._bus.listen(self.refresh))
 
     async def stop(self) -> None:
         """Stop refreshing and close database connections."""
-        if self._task is not None:
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
+        for task in (self._task, self._listener):
+            if task is not None:
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
+        self._task = self._listener = None
         await self.store.engine.dispose()
 
     async def refresh(self, *, strict: bool = False) -> bool:
@@ -95,6 +104,16 @@ class PostgresRegistry:
         self._profiles = {profile.name: profile for profile in profiles}
         self._default = default
         return True
+
+    async def changed(self) -> None:
+        """Reload after a change made through this replica, and tell the others.
+
+        Other replicas reload at once when Redis is configured, and otherwise
+        at their next periodic refresh.
+        """
+        await self.refresh()
+        if self._bus is not None:
+            await self._bus.publish()
 
     async def _refresh_loop(self) -> None:
         while True:

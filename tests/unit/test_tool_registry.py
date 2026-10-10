@@ -222,6 +222,27 @@ def test_read_only_mode_exposes_no_mutating_tool_across_all_modules(
     assert not leaked, f"mutating tools registered in read-only mode: {sorted(leaked)}"
 
 
+def test_every_mutating_tool_declares_dry_run() -> None:
+    """Regression guard: UNIFI_DRY_RUN withholds any mutating tool it cannot gate.
+
+    A new write tool without a ``dry_run`` parameter would silently vanish
+    from dry-run sessions, so every mutating tool must declare one.
+    """
+    import inspect as _inspect
+
+    ungated = [
+        f"{module.__name__}.{name}"
+        for module in _iter_tool_modules()
+        for name, obj in _inspect.getmembers(module, _inspect.isfunction)
+        if obj.__module__ == module.__name__
+        and not name.startswith("_")
+        and is_mutating_tool(obj)
+        and "dry_run" not in _inspect.signature(obj).parameters
+    ]
+
+    assert not ungated, f"mutating tools without a dry_run parameter: {sorted(ungated)}"
+
+
 def test_read_only_mode_registers_fewer_tools_than_default(
     settings: MagicMock, read_only_settings: MagicMock
 ) -> None:

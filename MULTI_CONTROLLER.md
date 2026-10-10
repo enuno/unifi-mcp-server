@@ -102,6 +102,34 @@ If a controller registry change causes ambiguity or cross-target confusion:
 - Keep any comparison or diff output clearly labeled by controller.
 - Re-run isolation checks after controller registry edits.
 
+## Running several replicas
+
+A stateful Streamable HTTP session exists only in the memory of the replica
+that created it; any other replica answers `404 Session not found`. Choose one:
+
+- **Sticky routing (recommended).** Route every request carrying the same
+  `mcp-session-id` header to the same replica. `select_controller` works as on
+  one server. If that replica dies, the client starts a new session and selects
+  again. With nginx:
+
+  ```nginx
+  upstream unifi_mcp {
+      hash $http_mcp_session_id consistent;
+      server mcp-1:3000;
+      server mcp-2:3000;
+      server mcp-3:3000;
+  }
+  ```
+
+- **Stateless (`MCP_STATELESS_HTTP=true`).** No sessions, so any replica can
+  answer any request and no affinity is needed. `select_controller` is refused;
+  pass `controller=<name>` to each call (or rely on the registry default for
+  reads).
+
+With Redis configured (`REDIS_URL`), replicas also share each controller's
+rate limit (one budget per controller, one per API key for api.ui.com) and
+reload the controller registry as soon as any replica changes it.
+
 ## Status
 
 Phase-5 documentation.

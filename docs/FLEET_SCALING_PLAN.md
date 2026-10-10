@@ -106,7 +106,7 @@ All keys are namespaced `unifi:v1:{controller_id}:...` (the version segment lets
 |---|---|
 | **Read-through cache** | Rewrite `src/cache.py` around one shared `redis.asyncio` connection pool created at startup (no connect/ping per call). Settings fields: `REDIS_URL` (plus the documented `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` as aliases, fixing the current bug). Key = `unifi:v1:{controller}:{resource}:{site}:{args-hash}`. Single-flight lock (`SET NX PX`) to prevent stampedes on the same key. Keep `CacheConfig` TTLs. Apply caching **in the wrapper** for tools on an explicit read-only allowlist, never by default. |
 | **Invalidation** | After a mutating tool succeeds (`confirm=True`, not dry-run), the wrapper deletes `unifi:v1:{controller}:{resource}:*` for that tool's resource family, then publishes `cache:invalidate`. Webhook events map to their controller and do the same. TTLs remain the backstop. |
-| **Session state** | Pass a Redis-backed store to `FastMCP(session_state_store=...)`, so `select_controller` survives replica hops. |
+| **Session state** | ~~Pass a Redis-backed store to `FastMCP(session_state_store=...)`, so `select_controller` survives replica hops.~~ Dropped after the Phase 4 spike: a shared store cannot make a session survive a replica hop (see Phase 4). |
 | **Distributed rate limiting** | Per-controller token bucket in Redis (a Lua script, atomic), replacing the per-process bucket when Redis is configured. Cloud accounts get a **shared** bucket per API key, because api.ui.com limits per key and not per console. |
 | **Auth/site-map cache** | `unifi:v1:{controller}:auth_ok` (short TTL) and site map, so `authenticate()` doesn't re-probe `/ea/sites` on every call. |
 | **Leases** | `SET NX PX` leases for worker shard ownership and singleton jobs (cloud-account discovery). |
@@ -268,8 +268,21 @@ Each phase is independently shippable, keeps the zero-config path identical, and
   - Statistics and RF-health tools are not cached (live metrics). `ProtectClient` shares the pooled connection but keeps its own auth probe and has no breaker; `SiteManagerClient` (one cloud endpoint) is not pooled.
 
 ### Phase 4: Horizontal scale
-- Redis `session_state_store`, distributed rate limiting, pub/sub invalidation.
-- **Session affinity decision** (needs a spike): FastMCP's Streamable HTTP keeps transport sessions in replica memory. Option A: sticky load balancing on `mcp-session-id` (simplest; state in Redis covers failover re-selection). Option B: `stateless_http=True` plus Redis session state (any replica serves any request; loses server-initiated streams). Recommendation: **A by default, B as a documented mode**, chosen after the spike.
+- ~~Redis `session_state_store`~~ (dropped, see the spike below), distributed rate limiting, pub/sub invalidation.
+- **Session affinity decision: spike done (2026-10-10).** Two FastMCP 3.2 replicas sharing one state store, driven with real MCP JSON-RPC:
+
+  | Mode | Same replica | Other replica |
+  |---|---|---|
+  | Stateful (default) | `select_controller` persists | `404 Session not found`: the transport session lives in one replica's memory |
+  | `stateless_http=True` | Lost on the next call | Lost |
+
+  FastMCP keys session state by the `mcp-session-id` header, and falls back to a fresh UUID when it is missing. A stateless server never issues one, so every request gets a new key. That rules out both options as written: a shared Redis store cannot carry a session across replicas (the session itself is gone, so the client re-initializes with a new id), and Option B would break `select_controller` even on one replica.
+
+  **Decision:** sticky routing on `mcp-session-id` is the supported multi-replica mode (`MULTI_CONTROLLER.md` has a load-balancer example). `MCP_STATELESS_HTTP=true` runs without sessions so any replica can answer any request; there `select_controller` is refused with a clear error and calls pass `controller=<name>` (or use the registry default). The Redis `session_state_store` item is dropped.
+- **Done in 4a:**
+  - `MCP_STATELESS_HTTP`; the session guard (issue #173) is skipped in that mode, since it would refuse every sessionless call.
+  - Per-controller rate limits shared through Redis: a sliding window in a `MULTI` transaction, one window per API key for api.ui.com, and a local fallback when Redis is down.
+  - `registry:changed` pub/sub, so every replica reloads its snapshot right after a change.
 - Worker tier (§3.5) with lease-based sharding and staggered sync. `fleet_*` fan-out read tools over snapshots.
 - **Verify:** a 3-replica + 2-worker compose test. Killing a worker leads to its shard being reassigned within lease TTL + 1 interval. Rate-limit test: 3 replicas combined never exceed one controller's budget. Fan-out over 1,000 mocked controllers with 5% failing returns partial results within the configured deadline.
 
@@ -288,7 +301,7 @@ Each phase is independently shippable, keeps the zero-config path identical, and
 | Per-controller `Settings` copies diverge from base settings (e.g. `read_only`, `dry_run` must be global) | Profiles may only override connection fields (`api_type`, `local_host`, `local_port`, `local_verify_ssl`, `api_key`, `default_site`, rate limits). Safety flags are not overridable, enforced by a test. |
 | Metric cardinality at fleet scale | No controller label on per-tool series; per-controller gauges only, capped. |
 | Mixed Network/Protect versions across the fleet | `controllers.capabilities` from health checks; tools can gate on capability instead of failing remotely. |
-| FastMCP `session_state_store` backend options | Confirm which key-value backends 3.2 ships (Redis via `py-key-value`?) in the Phase 4 spike; fall back to a thin custom store if needed. |
+| FastMCP `session_state_store` backend options | Resolved by the Phase 4 spike: `py-key-value` ships a Redis store, but a shared store does not let a session move between replicas, so it is not used. Sticky routing (or `MCP_STATELESS_HTTP`) instead. |
 | Cloud API rate limits are per key across all its consoles | Shared bucket per `cloud_account` (§3.3). |
 | CI is currently blocked (account billing lock) | Postgres/Redis integration tests need Actions. Until then, `make ci` runs locally against `docker-compose.fleet.yml`. |
 | A tool gets the wrong risk tier (e.g. a destructive tool classed as `write`) | The tier map is derived from the registry and snapshot-tested; the deletion/reset name check flags likely misses for review. |

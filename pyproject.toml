@@ -55,9 +55,14 @@ dev = [
     "bandit>=1.7.0",
     "types-PyYAML>=6.0.0",
     "types-requests>=2.31.0",
-    "types-redis>=4.6.0",
     "interrogate>=1.5.0",
     "pip-audit>=2.6.0",
+]
+
+fleet = [
+    # Multi-controller scaling (docs/FLEET_SCALING_PLAN.md). Redis backs the
+    # response cache; aclose() needs >= 5.0.1.
+    "redis>=5.0.1",
 ]
 
 [project.urls]

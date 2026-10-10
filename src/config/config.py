@@ -147,6 +147,40 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_CACHE_TTL",
     )
 
+    # Redis Configuration (cache). REDIS_URL, when set, takes precedence over
+    # the individual host/port/db/password fields.
+    redis_url: str | None = Field(
+        default=None,
+        description="Redis connection URL, e.g. redis://:password@host:6379/0",
+        validation_alias="REDIS_URL",
+        repr=False,
+    )
+
+    redis_host: str = Field(
+        default="localhost",
+        description="Redis host (ignored when REDIS_URL is set)",
+        validation_alias="REDIS_HOST",
+    )
+
+    redis_port: int = Field(
+        default=6379,
+        description="Redis port (ignored when REDIS_URL is set)",
+        validation_alias="REDIS_PORT",
+    )
+
+    redis_db: int = Field(
+        default=0,
+        description="Redis database number (ignored when REDIS_URL is set)",
+        validation_alias="REDIS_DB",
+    )
+
+    redis_password: str | None = Field(
+        default=None,
+        description="Redis password (ignored when REDIS_URL is set)",
+        validation_alias="REDIS_PASSWORD",
+        repr=False,
+    )
+
     # Logging Configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",
@@ -266,6 +300,18 @@ class Settings(BaseSettings):
         ),
         validation_alias="MCP_AUTH_TOKEN",
     )
+
+    @field_validator("redis_url", "redis_password", mode="before")
+    @classmethod
+    def blank_redis_secret_is_unset(cls, v: str | None) -> str | None:
+        """Treat a blank value as unset.
+
+        docker-compose forwards unset variables as empty strings
+        (``${REDIS_PASSWORD:-}``), which must not become an empty password.
+        """
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     @field_validator("api_type", mode="before")
     @classmethod

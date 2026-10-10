@@ -76,8 +76,8 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 
 - [ ] Add multi-controller / multi-site orchestration (runbook only: `MULTI_CONTROLLER.md`)
 - [ ] Add dry-run / change-safe mode (partial: `dry_run` exists in 32 of 47 tool modules; not yet universal or enforced in CI)
-- [ ] Add tool-level RBAC via API key scopes (partial: bearer auth required on network transports and `/a2a/*`; no per-tool scopes)
-- [ ] Add append-only audit logging (partial: `src/utils/audit.py` appends JSONL with credential redaction and 0600 permissions; encryption / tamper evidence tracked in issue #22)
+- [ ] Add tool-level RBAC: roles over risk tiers, server-issued API tokens (partial: bearer auth required on network transports and `/a2a/*`; design: `docs/FLEET_SCALING_PLAN.md` §3.6)
+- [ ] Add append-only audit logging (partial: `src/utils/audit.py` appends JSONL with credential redaction, 0600 permissions and payload encryption from #193; wrapper-level coverage, hash chain, Postgres store, SIEM export and retention designed in `docs/FLEET_SCALING_PLAN.md` §3.7)
 - [ ] Add Prometheus metrics endpoint (runbook only: `METRICS.md`)
 - [x] Add A2A agent card and manifest (`src/a2a/`, `agent-card.json`, served behind bearer auth)
 - [ ] Add webhook event bus with Redis pub/sub (partial: `src/webhooks/` receiver with signature verification; no Redis fan-out)

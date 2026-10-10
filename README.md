@@ -743,7 +743,8 @@ UNIFI_LOCAL_VERIFY_SSL=false
 # Optional settings
 UNIFI_DEFAULT_SITE=default
 
-# Redis caching (optional - improves performance)
+# Redis caching (optional - improves performance; pip install 'unifi-mcp-server[fleet]')
+# REDIS_URL=redis://:password@localhost:6379/0  # Takes precedence over the fields below
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_DB=0

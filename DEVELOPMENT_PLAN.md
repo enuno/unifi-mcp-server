@@ -106,7 +106,7 @@ Describe how to execute the plan without losing sight of the current production 
 | Protect | Partial (v6) | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests. **v7.3.68 (2026) added 39 operations** — arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion — all unmapped (§2.3, Phase 5a) |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
 | Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
-| Audit logging | Partial | JSONL append-mode log with credential redaction and 0600 permissions; encryption / tamper evidence open (issue #22) |
+| Audit logging | Partial | JSONL append-mode log with credential redaction, 0600 permissions and optional payload encryption (#193); wrapper-level coverage, tamper evidence, Postgres store and SIEM export planned in `docs/FLEET_SCALING_PLAN.md` §3.7 |
 
 ### 2.2 Known limitations
 
@@ -150,8 +150,8 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 | ID | Gap | Priority | Outcome |
 |---|---|---:|---|
 | P1 | Dry-run / change-safe mode | High | Preview write actions before execution |
-| P2 | Tool-level RBAC | High | Scope tool access by API key |
-| P3 | Append-only audit log | High | Trace every write/destructive operation |
+| P2 | Tool-level RBAC | High | Built-in roles over registry-derived risk tiers, server-issued API tokens (`docs/FLEET_SCALING_PLAN.md` §3.6) |
+| P3 | Append-only audit log | High | Every write, denial and admin event, hash-chained, in Postgres or JSONL, exported to SIEM (`docs/FLEET_SCALING_PLAN.md` §3.7) |
 | P4 | Prometheus metrics | High | Observe server and tool health |
 | P5 | A2A agent card | Medium | Enable machine-readable discovery |
 | P6 | Webhook event bus | Medium | Convert webhooks into normalized events |
@@ -232,8 +232,8 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 - Multi-controller / multi-site orchestration — open (runbook only)
 - Dry-run / change-safe mode — partial
-- Tool-level RBAC via API key scopes — partial (transport-level bearer auth only)
-- Append-only audit log — partial (issue #22 open)
+- Tool-level RBAC via roles and API tokens — partial (transport-level bearer auth only); design in `docs/FLEET_SCALING_PLAN.md` §3.6, Phases 1 and 2b
+- Append-only audit log — partial (payload encryption done in #193); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5
 - Prometheus metrics endpoint — open (runbook only)
 - A2A agent card and manifest — done
 - Webhook event bus with Redis pub/sub — partial (receiver only)

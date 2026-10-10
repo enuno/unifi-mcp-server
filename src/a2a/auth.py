@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..config import APIType
+from ..tool_registry import TOOL_TIERS
 from ..utils import get_logger
 
 
@@ -170,6 +171,11 @@ class AuthManager:
     @staticmethod
     def _required_permission(tool_name: str) -> str:
         normalized = tool_name.strip().lower()
+        # Registered tools carry a tier from the tool registry; the name
+        # heuristics below only cover names the server does not know.
+        tier = TOOL_TIERS.get(normalized)
+        if tier is not None:
+            return tier
         if normalized.startswith(("delete_", "remove_", "reset_", "revoke_", "purge_", "wipe_")):
             return "destructive"
         if normalized.startswith(

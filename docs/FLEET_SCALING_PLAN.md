@@ -218,6 +218,12 @@ Each phase is independently shippable, keeps the zero-config path identical, and
 - **Wrapper-level audit** (§3.7) with schema v2 and the attempt/outcome pattern, written to `JsonlSink` with the HMAC chain, plus `unifi-mcp audit verify`. Start migrating the manual audit calls.
 - Record `controller` in every audit record and log line. Expose a per-controller **call-count gauge only**, with no controller label on the per-tool histogram (275 tools × 1,000 controllers would be a cardinality blow-up; see DEVELOPMENT_PLAN risk register).
 - **Verify:** concurrency tests where two sessions with different selected controllers interleave 1,000 calls and every request hits its own controller (respx-mocked hosts). A mutating tool with only a registry default and ≥2 controllers fails with a clear error. Tool JSON schemas are snapshot-tested: only the added optional `controller` field changes. Every mutating tool produces exactly one audit record per call, including dry-run and error paths. Editing, deleting or reordering a JSONL line makes `audit verify` fail.
+- **Status (2026-10-09): done.** Notes from implementation:
+  - Each call writes an `attempt` and an outcome record sharing a `call_id`, so "one record per call" is one record *pair*; manual `log_audit` calls inside a call fold into the outcome's `details`. The 167 manual calls remain and are harmless; removing them is cleanup, not a correctness need.
+  - The verifier is `python -m src.utils.audit_verify` (matching `audit_decrypt`) rather than a `unifi-mcp audit verify` subcommand. Without `UNIFI_AUDIT_CHAIN_KEY` the chain uses plain SHA-256.
+  - Tiers implemented: `read`, `write`, `destructive` (45 tools). `fleet-admin` arrives with the first admin tools in Phase 2a/2b.
+  - Classifying tiers surfaced that A2A delegation treated `restore_backup`, `upgrade_device` and other mutating tools as reads with no confirmation; A2A now uses the registry tiers.
+  - MCP resources still read the default controller.
 
 ### Phase 2a: Postgres registry and encrypted credentials
 - Alembic baseline migration for the §3.2 tables.

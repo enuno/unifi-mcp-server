@@ -458,3 +458,17 @@ class TestSettingsWebhookSecret:
     def test_not_in_repr(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("WEBHOOK_SECRET", "hook-secret")  # pragma: allowlist secret
         assert "hook-secret" not in repr(Settings())
+
+
+class TestSettingsStatelessHttp:
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("MCP_STATELESS_HTTP", raising=False)
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+
+    def test_default_off(self):
+        assert Settings().mcp_stateless_http is False
+
+    def test_reads_env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        assert Settings().mcp_stateless_http is True

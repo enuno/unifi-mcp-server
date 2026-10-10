@@ -928,7 +928,14 @@ def main() -> None:
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
         run_kwargs: dict[str, Any] = {}
-        if settings.server_transport != TransportMode.SSE:
+        if settings.server_transport != TransportMode.SSE and settings.mcp_stateless_http:
+            # No MCP sessions: any replica can answer any request, but
+            # select_controller is refused (see FleetRouter.stateless). Every
+            # request is sessionless here, so the session guard below would
+            # refuse them all; stateless transports end with each response,
+            # so the session leak it prevents cannot happen.
+            run_kwargs["stateless_http"] = True
+        elif settings.server_transport != TransportMode.SSE:
             # Stop sessionless, non-initialize requests (health checks, probes)
             # from each leaking a registered session in the MCP SDK (issue #173).
             import fastmcp

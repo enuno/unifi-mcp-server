@@ -346,6 +346,18 @@ class Settings(BaseSettings):
         validation_alias="MCP_SERVER_PORT",
     )
 
+    mcp_stateless_http: bool = Field(
+        default=False,
+        description=(
+            "Serve Streamable HTTP without MCP sessions, so any replica can answer any "
+            "request. No session survives between requests: select_controller is "
+            "refused and every controller-bound call needs controller=<name> (or the "
+            "registry default). The default, stateful mode needs sticky routing on "
+            "mcp-session-id behind a load balancer."
+        ),
+        validation_alias="MCP_STATELESS_HTTP",
+    )
+
     mcp_auth_token: str | None = Field(
         default=None,
         description=(

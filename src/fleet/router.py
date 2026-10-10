@@ -66,8 +66,15 @@ class FleetRouter:
         self.registry = registry
         self._derived: dict[str, tuple[ControllerProfile, Settings]] = {}
 
+    @property
+    def stateless(self) -> bool:
+        """Whether the server runs without MCP sessions (``MCP_STATELESS_HTTP``)."""
+        return bool(getattr(self.base, "mcp_stateless_http", False))
+
     async def session_controller(self) -> str | None:
         """Return the controller selected in this MCP session, if any."""
+        if self.stateless:
+            return None
         ctx = _session_context()
         if ctx is None:
             return None
@@ -85,14 +92,26 @@ class FleetRouter:
 
         Raises:
             ResourceNotFoundError: If no controller has that name
-            ValidationError: Outside an MCP session
+            ValidationError: Outside an MCP session, or when the server runs
+                stateless (no session would remember the choice)
         """
+        if self.stateless:
+            raise ValidationError(
+                "select_controller is not available: this server runs stateless "
+                "(MCP_STATELESS_HTTP), so no session remembers a choice. Pass "
+                "controller=<name> to each tool call instead."
+            )
         profile = await self.registry.get_controller(name)
         ctx = _session_context()
         if ctx is None:
             raise ValidationError("select_controller needs an MCP session to remember the choice")
         await ctx.set_state(SESSION_KEY, profile.name)
         return profile
+
+    def _how_to_target(self) -> str:
+        if self.stateless:
+            return "pass controller=<name>"
+        return "pass controller=<name> or call select_controller first"
 
     async def resolve(self, requested: str | None, *, mutating: bool) -> Resolution:
         """Resolve the controller for one call.
@@ -117,14 +136,12 @@ class FleetRouter:
         elif (default := await self.registry.default_controller()) is not None:
             name, source = default, "default"
         else:
-            raise ValidationError(
-                "No controller specified: pass controller=<name> or call select_controller"
-            )
+            raise ValidationError(f"No controller specified: {self._how_to_target()}")
 
         if mutating and source == "default" and len(await self.registry.list_controllers()) > 1:
             raise ValidationError(
                 "This tool changes controller state and several controllers are registered: "
-                "pass controller=<name> or call select_controller first"
+                f"{self._how_to_target()}"
             )
 
         profile = await self.registry.get_controller(name)

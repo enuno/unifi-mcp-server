@@ -1,8 +1,8 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-09-26
+**Document Version:** 2026-10-10
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
-**Repository Baseline:** 275 MCP tools registered in local mode across 47 tool modules; 2,240 unit tests passing
+**Repository Baseline:** 343 MCP tools registered in local mode across 60 tool modules; 3,152 unit tests passing; 93% line coverage
 **API Spec Baseline** (audited 2026-09-26): UniFi Network **v10.6.106**, UniFi Protect **v7.3.68**, Site Manager v1.0.0; newly published: Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
 **Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started; API-spec alignment wave in progress)
 
@@ -103,19 +103,21 @@ Describe how to execute the plan without losing sight of the current production 
 | Dynamic DNS | Complete | Full CRUD |
 | Tagged MACs | Complete | Device tag CRUD on legacy `rest/tag` (local only) |
 | Device Migration | Complete | Move between sites (`move-device`), migrate to another controller (`migrate` / `cancel-migrate`); local only |
-| Protect | Partial (v6) | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests. **v7.3.68 (2026) added 39 operations** — arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion — all unmapped (§2.3, Phase 5a) |
+| Protect | Complete (v7.3.68, mock-tested) | Cameras, devices, NVR, views, events, MCP resources, plus the v7 surface (Phase 5a): arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion. Write paths await hardware verification |
+| Mobility / InnerSpace / Carrier Fabric | Complete (mock-tested) | Phase 6: 8 + 6 + 11 tools over the Site Manager client and Cloud Connector proxy |
+| Fleet | Partial | Per-call `controller` routing, Postgres controller registry, shared connection pool, Redis read cache (fleet Phases 0–3); horizontal scale pending |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
-| Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
-| Audit logging | Partial | JSONL append-mode log with credential redaction, 0600 permissions and optional payload encryption (#193); wrapper-level coverage, tamper evidence, Postgres store and SIEM export planned in `docs/FLEET_SCALING_PLAN.md` §3.7 |
+| Access controls | Complete | Bearer auth on network transports, roles over risk tiers with server-issued tokens (fleet Phase 2b), `UNIFI_READ_ONLY`, `UNIFI_DRY_RUN`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` and `dry_run` on every write tool |
+| Audit logging | Partial | Wrapper-level records for every mutating call, credential redaction, optional payload encryption, HMAC hash chain, append-only Postgres store with `DATABASE_URL`; SIEM export and retention planned in `docs/FLEET_SCALING_PLAN.md` §3.7 |
 
 ### 2.2 Known limitations
 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
-- Multi-controller orchestration is not yet implemented (runbook only).
-- Prometheus metrics and the Redis webhook event bus are not yet implemented (runbooks only).
-- Dry-run covers 32 of 47 tool modules and is not enforced in CI; per-tool RBAC scopes do not exist yet.
+- Multi-controller orchestration is partial: fleet Phases 0–3 (per-call routing, Postgres registry, connection pool, read cache) shipped; horizontal scale (fleet Phase 4) is pending.
+- The Redis webhook event bus is not yet implemented (runbook only). `src/webhooks/receiver.py` imports `fastapi`, which is not a declared dependency, so the receiver cannot be imported in a standard install.
+- SIEM export and audit retention (fleet Phase 5) do not exist yet.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 
 ### 2.3 API specification baseline (audited 2026-09-26)
@@ -202,7 +204,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### Deliverables
 
-- Full test coverage for new Phase 1–3 modules — in progress
+- Full test coverage for new Phase 1–3 modules — done (2026-10-10: every module at 80%+ except `src/webhooks/receiver.py`)
 - Dynamic DNS full CRUD — done
 - Tagged MAC management — done
 - Device migration tools — done
@@ -317,7 +319,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Next release (prepped 2026-09-27, tag pending)**: 364 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
+| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Next release (prepped 2026-09-27, tag pending)**: 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
 | v0.2.5 | Last tagged release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
 | v0.6.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; Phase 5 items as they land |

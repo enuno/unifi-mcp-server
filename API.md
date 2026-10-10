@@ -118,6 +118,11 @@ Configure the MCP server using environment variables:
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
 | `UNIFI_FLEET_MAX_OPEN_CLIENTS` | Most controller connections each server keeps open; least recently used idle ones are closed beyond this (controller state such as cached auth is kept) | No | `256` |
+| `UNIFI_FLEET_WORKER_HEALTH_SECONDS` | Worker (`python -m src.worker`): how often each controller is health-checked | No | `60` |
+| `UNIFI_FLEET_WORKER_SYNC_SECONDS` | Worker: how often each controller's sites and device inventory are refreshed | No | `900` |
+| `UNIFI_FLEET_WORKER_CONCURRENCY` | Worker: most controller jobs one worker runs at once | No | `20` |
+| `UNIFI_FLEET_WORKER_LEASE_SECONDS` | Worker: how long membership and controller leases last without renewal; a dead worker's controllers move to the others after this | No | `30` |
+| `UNIFI_FLEET_WORKER_DOWN_AFTER` | Worker: consecutive failed health checks before a controller is `down` (earlier failures mark it `degraded`) | No | `3` |
 | `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
 | `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |

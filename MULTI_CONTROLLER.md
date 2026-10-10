@@ -130,6 +130,28 @@ With Redis configured (`REDIS_URL`), replicas also share each controller's
 rate limit (one budget per controller, one per API key for api.ui.com) and
 reload the controller registry as soon as any replica changes it.
 
+## Fleet workers
+
+`python -m src.worker` (same image, different command) keeps a snapshot of
+the fleet in Postgres so API replicas never poll controllers:
+
+- **Health** every `UNIFI_FLEET_WORKER_HEALTH_SECONDS` (60): the same
+  authentication probe tools use, plus the Network application version on
+  local controllers. Stored on `controllers` as `health` (`ok`; `degraded`
+  after a failure; `down` after `UNIFI_FLEET_WORKER_DOWN_AFTER` in a row),
+  `health_detail`, `last_seen_at` and `capabilities`.
+- **Sites and devices** every `UNIFI_FLEET_WORKER_SYNC_SECONDS` (900): the
+  `sites` table for every controller, and `device_inventory` per site for
+  local controllers (the cloud APIs list devices per host, not per site).
+  Each sync replaces the previous snapshot; a failed sync leaves it as it was.
+
+With Redis configured, run as many workers as needed: they split the
+controllers by rendezvous hashing and hold a lease on each, so a dead worker's
+controllers move to the others within `UNIFI_FLEET_WORKER_LEASE_SECONDS` (30)
+and a stopped one hands them over at once. Without Redis, run exactly one.
+First runs are spread over each interval by a hash of the controller name and
+later ones jittered by ±10%, so a large fleet is not polled all at once.
+
 ## Status
 
 Phase-5 documentation.

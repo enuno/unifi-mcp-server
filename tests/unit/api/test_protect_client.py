@@ -128,3 +128,143 @@ class TestProtectClientLocalPathing:
         assert args[0] == "GET"
         assert args[1].startswith("https://192.168.2.1:443/proxy/protect/integration/v1/cameras")
         await client.close()
+
+
+def _mock_transport_client(settings, handler):
+    import httpx
+
+    client = ProtectClient(settings)
+    client.client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    return client
+
+
+def _recorder(status=200, **response_kwargs):
+    import httpx
+
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        if not response_kwargs:
+            return httpx.Response(status, json={"data": []})
+        return httpx.Response(status, **response_kwargs)
+
+    return seen, handler
+
+
+class TestProtectClientPooling:
+    @pytest.mark.asyncio
+    async def test_reuses_pooled_connection_and_releases_it(self, mock_settings):
+        from src.api.pool import active_pool
+
+        pool = MagicMock()
+        connection = MagicMock()
+        pool.acquire.return_value = connection
+        token = active_pool.set(pool)
+        try:
+            client = ProtectClient(mock_settings)
+        finally:
+            active_pool.reset(token)
+
+        pool.acquire.assert_called_once_with(mock_settings)
+        assert client.client is connection.client
+        await client.close()
+        pool.release.assert_called_once_with(connection)
+        connection.client.aclose.assert_not_called()
+
+        # A second close falls through to closing the (pooled) client.
+        connection.client.aclose = AsyncMock()
+        await client.close()
+        pool.release.assert_called_once()
+
+
+class TestProtectClientHttp:
+    @pytest.mark.parametrize(
+        ("endpoint", "path"),
+        [
+            ("cameras", "/integration/v1/cameras"),
+            ("/v1/meta", "/v1/meta"),
+            ("integration/v1/nvrs", "/integration/v1/nvrs"),
+            ("proxy/protect/x", "/proxy/protect/x"),
+        ],
+    )
+    def test_build_url(self, mock_settings, endpoint, path):
+        assert ProtectClient(mock_settings)._build_url(endpoint) == f"https://api.ui.com{path}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("method", ["post", "put", "patch"])
+    async def test_write_methods_send_json_and_params(self, mock_settings, method):
+        import json
+
+        seen, handler = _recorder(json={"id": "x"})
+        client = _mock_transport_client(mock_settings, handler)
+
+        result = await getattr(client, method)("cameras/x", json_data={"a": 1}, params={"q": "1"})
+
+        assert result == {"id": "x"}
+        assert seen[0].method == method.upper()
+        assert seen[0].url.path == "/integration/v1/cameras/x"
+        assert seen[0].url.params["q"] == "1"
+        assert json.loads(seen[0].content) == {"a": 1}
+
+    @pytest.mark.asyncio
+    async def test_delete(self, mock_settings):
+        seen, handler = _recorder(json={})
+        client = _mock_transport_client(mock_settings, handler)
+
+        assert await client.delete("cameras/x") == {}
+        assert seen[0].method == "DELETE"
+
+    @pytest.mark.asyncio
+    async def test_error_status_raises_api_error(self, mock_settings):
+        from src.utils.exceptions import APIError
+
+        _, handler = _recorder(status=403, text="forbidden")
+        client = _mock_transport_client(mock_settings, handler)
+
+        with pytest.raises(APIError, match=r"\(403\): forbidden"):
+            await client.get("cameras")
+
+    @pytest.mark.asyncio
+    async def test_undecodable_body_raises_api_error(self, mock_settings):
+        from src.utils.exceptions import APIError
+
+        _, handler = _recorder(text="<html>")
+        client = _mock_transport_client(mock_settings, handler)
+
+        with pytest.raises(APIError, match="Failed to decode"):
+            await client.get("cameras")
+
+    @pytest.mark.asyncio
+    async def test_transport_error_wrapped(self, mock_settings):
+        import httpx
+
+        from src.utils.exceptions import APIError
+
+        def handler(request):
+            raise httpx.ConnectError("down", request=request)
+
+        client = _mock_transport_client(mock_settings, handler)
+        with pytest.raises(APIError, match="Unexpected Protect API error: down"):
+            await client.get("cameras")
+
+
+class TestProtectClientAuthenticateShapes:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("body", "expected"),
+        [
+            ([], True),
+            ({"meta": {"rc": "ok"}}, True),
+            ({"count": 0}, True),
+            ({"meta": {"rc": "error"}}, False),
+            ("text", False),
+        ],
+    )
+    async def test_response_shapes(self, mock_settings, body, expected):
+        client = ProtectClient(mock_settings)
+        client.get = AsyncMock(return_value=body)
+
+        await client.authenticate()
+
+        assert client.is_authenticated is expected

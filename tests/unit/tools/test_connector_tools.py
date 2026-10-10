@@ -386,3 +386,74 @@ class TestConnectorProtectDelete:
                 settings=mock_settings,
                 confirm=False,
             )
+
+
+# =============================================================================
+# Write tools: shared behaviour across both applications
+# =============================================================================
+
+WRITE_TOOLS = [
+    # (tool, app, client method, dry-run key, sends body)
+    (connector_network_post, "network", "post", "would_post_to", True),
+    (connector_network_put, "network", "put", "would_put_to", True),
+    (connector_network_patch, "network", "patch", "would_patch_to", True),
+    (connector_network_delete, "network", "delete", "would_delete", False),
+    (connector_protect_post, "protect", "post", "would_post_to", True),
+    (connector_protect_put, "protect", "put", "would_put_to", True),
+    (connector_protect_patch, "protect", "patch", "would_patch_to", True),
+    (connector_protect_delete, "protect", "delete", "would_delete", False),
+]
+WRITE_IDS = [t[0].__name__ for t in WRITE_TOOLS]
+
+
+def _write_kwargs(sends_body: bool, **extra):
+    kwargs = {"console_id": "c1", "path": "/v1/thing", **extra}
+    if sends_body:
+        kwargs["body"] = {"name": "x"}
+    return kwargs
+
+
+@pytest.mark.parametrize(
+    ("tool", "app", "method", "dry_key", "sends_body"), WRITE_TOOLS, ids=WRITE_IDS
+)
+class TestConnectorWriteTools:
+    @pytest.mark.asyncio
+    async def test_site_manager_disabled_raises(
+        self, mock_settings_disabled, tool, app, method, dry_key, sends_body
+    ):
+        with pytest.raises(ValueError, match="Site Manager API is not enabled"):
+            await tool(settings=mock_settings_disabled, **_write_kwargs(sends_body, confirm=True))
+
+    @pytest.mark.asyncio
+    async def test_executes_against_app_proxy(
+        self, mock_settings, tool, app, method, dry_key, sends_body
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client({"ok": True})
+            result = await tool(settings=mock_settings, **_write_kwargs(sends_body, confirm=True))
+
+        call = getattr(mock_cls.return_value, method)
+        endpoint = f"connector/consoles/c1/proxy/{app}/v1/thing"
+        if sends_body:
+            call.assert_awaited_once_with(endpoint, json_data={"name": "x"})
+        else:
+            call.assert_awaited_once_with(endpoint)
+        assert result == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_dry_run_previews_without_confirm(
+        self, mock_settings, tool, app, method, dry_key, sends_body
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            result = await tool(settings=mock_settings, **_write_kwargs(sends_body, dry_run=True))
+
+        mock_cls.assert_not_called()
+        assert result["dry_run"] is True
+        assert result[dry_key] == f"connector/consoles/c1/proxy/{app}/v1/thing"
+
+    @pytest.mark.asyncio
+    async def test_blank_path_rejected(self, mock_settings, tool, app, method, dry_key, sends_body):
+        kwargs = _write_kwargs(sends_body, confirm=True)
+        kwargs["path"] = "  "
+        with pytest.raises(ValidationError, match="path must not be empty"):
+            await tool(settings=mock_settings, **kwargs)

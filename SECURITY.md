@@ -378,6 +378,8 @@ CMD ["python", "src/main.py"]
 - **Audit Log Encryption:** Optional Fernet at-rest encryption of audit payload fields (`UNIFI_AUDIT_LOG_KEY`), with non-destructive key rotation
 - **Wrapper-Level Audit:** Every mutating tool call is recorded by the tool wrapper (an `attempt` record before the controller is contacted, then the outcome), along with denied calls and server start, naming the caller and target controller. If the attempt record cannot be written, the call is refused (`UNIFI_AUDIT_FAIL_CLOSED`, default on)
 - **Encrypted Controller Credentials:** With the Postgres fleet registry, controller and cloud-account API keys are Fernet-encrypted with `UNIFI_FLEET_CREDENTIAL_KEY` before they reach the database; the key never does. The server refuses to start without it, a key that cannot decrypt a credential skips that controller instead of failing the fleet, and `rotate_fleet_credentials` re-encrypts under a new key
+- **Role-Based Access Control:** With the fleet registry, callers use server-issued API tokens (only SHA-256 hashes stored, 90-day default lifetime) with a role (`viewer`, `operator`, `admin`, `fleet-admin`) that grants tool risk tiers, optionally narrowed by tool-module patterns and controller labels. Enforcement happens in the tool wrapper before any controller is contacted, and every refusal is audited. Revocation takes effect within 30 seconds; a database error refuses the token. `MCP_AUTH_TOKEN` and stdio remain break-glass `fleet-admin` callers, flagged in audit records
+- **Append-Only Postgres Audit Store:** With DATABASE_URL, audit records go to `audit_log`, where a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and each server's hash chain is kept with its head in `audit_chain_heads`. `verify_audit_chain` and `search_audit_log` are `fleet-admin` tools, and every query is audited
 - **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records
 
 ### Phase 4 Mutating Tools Safety Mechanisms
@@ -491,6 +493,24 @@ CMD ["python", "src/main.py"]
    alone; exporting chain heads off the server (planned SIEM export) closes
    that gap. Use a different value from the payload key and keep it in your
    secret manager, never in the repository.
+
+   **Least-privilege database role (optional):** the server needs no DDL and
+   no UPDATE/DELETE on the audit table. Run migrations as the schema owner
+   (`MIGRATION_DATABASE_URL`) and point `DATABASE_URL` at a role granted only
+   what it uses:
+
+   ```sql
+   CREATE ROLE unifi_mcp_runtime LOGIN PASSWORD '...';
+   GRANT SELECT, INSERT, UPDATE ON credentials, cloud_accounts, controllers, api_tokens
+     TO unifi_mcp_runtime;
+   GRANT SELECT, INSERT ON audit_log TO unifi_mcp_runtime;
+   GRANT SELECT, INSERT, UPDATE ON audit_chain_heads TO unifi_mcp_runtime;
+   GRANT USAGE ON SEQUENCE audit_log_id_seq TO unifi_mcp_runtime;
+   GRANT SELECT ON unifi_mcp_alembic_version TO unifi_mcp_runtime;
+   ```
+
+   The append-only trigger then backs up the missing grants rather than
+   being the only control.
 
 5. **Input Validation:**
    - All parameters validated before execution

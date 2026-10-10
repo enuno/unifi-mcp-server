@@ -117,6 +117,8 @@ Configure the MCP server using environment variables:
 | `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
+| `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
+| `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
@@ -493,12 +495,43 @@ Re-encrypt every stored API key under the newest `UNIFI_FLEET_CREDENTIAL_KEY` ke
 
 **Parameters:** `confirm`, `dry_run`
 
+#### Access control
+
+Every tool has a risk tier: `read`, `write`, `destructive` or `fleet-admin`. A caller's role grants tiers: `viewer` (read), `operator` (+ write), `admin` (+ destructive), `fleet-admin` (+ registry, token and audit tools). A token can be narrowed further by `allow_modules`/`deny_modules` (patterns over tool module names, e.g. `protect_*`) and `controller_labels` (a controller must carry all of them). A refused call fails with `Permission denied: <tool> needs the '<tier>' tier` and is recorded as a `denied` audit event. `MCP_AUTH_TOKEN` tokens and stdio are break-glass `fleet-admin` callers (stdio's role is set by `UNIFI_STDIO_ROLE`).
+
+#### `create_api_token`
+
+Issue a bearer token; its value is returned only in this result (only a hash is stored). **Parameters:** `name`, `role` (required), `expires_in_days` (default 90; 0 never expires), `allow_modules`, `deny_modules`, `controller_labels`, `confirm`, `dry_run`
+
+#### `list_api_tokens`
+
+Token names, roles, filters and dates, never values. **Parameters:** None
+
+#### `revoke_api_token` / `update_api_token_role`
+
+Revoke a token, or change its role. Every server applies the change within 30 seconds. **Parameters:** `name` (and `role`), `confirm`, `dry_run`
+
+#### `search_audit_log`
+
+Search the Postgres audit trail, newest first, with payloads decrypted when the audit key is set. Each search is itself audited. **Parameters:** `since`, `until` (ISO 8601), `event_type`, `operation`, `principal`, `controller`, `result`, `limit` (max 1000), `cursor`
+
+#### `verify_audit_chain`
+
+Check every server's hash chain for edited, missing or reordered records; returns the chain heads to keep off the server. **Parameters:** None
+
+#### `export_audit_log`
+
+Export stored records (payloads still encrypted) as JSON lines, verifiable with `python -m src.utils.audit_verify`. **Parameters:** `since`, `until`, `limit` (max 1000)
+
 **Operator CLI** (needs only `DATABASE_URL`, except `import`):
 
 ```bash
 python -m src.fleet.cli migrate              # create or upgrade the schema
 python -m src.fleet.cli status               # exit 1 if the schema is behind
 python -m src.fleet.cli import --name hq     # register the UNIFI_* controller
+python -m src.fleet.cli tokens create --name first-admin --role fleet-admin
+python -m src.fleet.cli tokens list
+python -m src.fleet.cli tokens revoke --name first-admin
 ```
 
 ### Protect Phase 3 Tools

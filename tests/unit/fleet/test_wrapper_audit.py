@@ -88,8 +88,8 @@ class TestWhatIsRecorded:
             assert record["principal"] == {
                 "id": "local",
                 "name": "stdio",
-                "role": "admin",
-                "break_glass": False,
+                "role": "fleet-admin",
+                "break_glass": True,
             }
             assert record["parameters"]["passphrase"] != "hunter2"  # pragma: allowlist secret
         assert outcome["duration_ms"] >= 0

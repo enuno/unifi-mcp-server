@@ -93,7 +93,7 @@ class TestHealthCheck:
         assert result["status"] == "healthy"
 
 
-def test_server_start_is_audited(tmp_path, monkeypatch) -> None:
+async def test_server_start_is_audited(tmp_path, monkeypatch) -> None:
     """main() records the effective safety configuration as a system event."""
     import json
 
@@ -104,7 +104,7 @@ def test_server_start_is_audited(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("src.utils.audit._audit_logger", None)
     main_mod = _reload_main()
 
-    main_mod.audit_server_start()
+    await main_mod.audit_server_start()
 
     (record,) = [json.loads(line) for line in log_path.read_text().splitlines()]
     assert (record["event_type"], record["operation"]) == ("system", "server_start")

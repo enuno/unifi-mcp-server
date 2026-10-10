@@ -8,6 +8,7 @@ be recomputed by someone who can only edit the file. ``python -m
 src.utils.audit_verify`` checks a file (docs/FLEET_SCALING_PLAN.md §3.7).
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -72,6 +73,17 @@ def record_hash(record: dict[str, Any], key: bytes | None) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def seal_record(
+    record: dict[str, Any], *, chain_id: str, seq: int, prev_hash: str, key: bytes | None
+) -> None:
+    """Add the chain fields and the record's own hash, in place."""
+    record["chain_id"] = chain_id
+    record["seq"] = seq
+    record["prev_hash"] = prev_hash
+    record["hash_alg"] = "hmac-sha256" if key is not None else "sha256"
+    record["hash"] = record_hash(record, key)
+
+
 class _Chain:
     """Position of this process's chain in one audit file."""
 
@@ -125,6 +137,10 @@ class AuditLogger:
         # caller) skips re-resolution so tests and embeddings control wiring.
         self.cipher = resolve_audit_cipher() if encryption is None else encryption
         self.chain_key = resolve_chain_key()
+        # A Postgres sink (src/fleet/db/audit_store.py) replaces the file when
+        # the fleet registry is configured; records then go there only.
+        self.sink: Any = None
+        self._pending: set[asyncio.Task[None]] = set()
 
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -200,7 +216,10 @@ class AuditLogger:
         if error:
             audit_record["error"] = error
 
-        self._write(audit_record, strict=False)
+        if self.sink is not None:
+            self._schedule(audit_record)
+        else:
+            self._write(audit_record, strict=False)
 
         # Log to application logger
         log_message = f"AUDIT: {operation} - {result}"
@@ -214,6 +233,31 @@ class AuditLogger:
         else:
             self.logger.info(log_message, extra=audit_record)
 
+    def _event(
+        self,
+        event_type: str,
+        operation: str,
+        result: str,
+        parameters: dict[str, Any] | None,
+        error: str | None,
+        fields: dict[str, Any],
+    ) -> dict[str, Any]:
+        record: dict[str, Any] = {
+            "v": 2,
+            "event_id": uuid.uuid4().hex,
+            "timestamp": get_iso_timestamp(),
+            "event_type": event_type,
+            "operation": operation,
+            "result": result,
+            "instance_id": INSTANCE_ID,
+        }
+        if parameters is not None:
+            record["parameters"] = sanitize_credentials(parameters)
+        if error:
+            record["error"] = error
+        record.update({key: value for key, value in fields.items() if value is not None})
+        return record
+
     def log_event(
         self,
         event_type: str,
@@ -225,7 +269,7 @@ class AuditLogger:
         strict: bool = False,
         **fields: Any,
     ) -> dict[str, Any]:
-        """Write one schema-v2 audit record.
+        """Write one schema-v2 audit record to the file (see :meth:`alog_event`).
 
         Args:
             event_type: ``tool_call``, ``denied``, ``admin`` or ``system``
@@ -242,35 +286,52 @@ class AuditLogger:
         Returns:
             The record as written
         """
-        record: dict[str, Any] = {
-            "v": 2,
-            "event_id": uuid.uuid4().hex,
-            "timestamp": get_iso_timestamp(),
-            "event_type": event_type,
-            "operation": operation,
-            "result": result,
-            "instance_id": INSTANCE_ID,
-        }
-        if parameters is not None:
-            record["parameters"] = sanitize_credentials(parameters)
-        if error:
-            record["error"] = error
-        record.update({key: value for key, value in fields.items() if value is not None})
-        self._write(record, strict=strict)
+        record = self._event(event_type, operation, result, parameters, error, fields)
+        if self.sink is not None:
+            self._schedule(record)
+        else:
+            self._write(record, strict=strict)
         self.logger.info(f"AUDIT: {event_type} {operation} - {result}")
         return record
 
-    def _write(self, record: dict[str, Any], *, strict: bool) -> None:
-        """Encrypt payload fields, chain the record, and append it to the file.
+    async def alog_event(
+        self,
+        event_type: str,
+        operation: str,
+        result: str,
+        *,
+        parameters: dict[str, Any] | None = None,
+        error: str | None = None,
+        strict: bool = False,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Write one schema-v2 audit record to the configured store.
 
-        Args:
-            record: The record; payload fields must already be redacted
-            strict: Raise :class:`AuditUnavailableError` on failure instead
-                of logging it
-
-        Raises:
-            AuditUnavailableError: When ``strict`` and the record was not written
+        Same arguments as :meth:`log_event`; awaits the Postgres sink when one
+        is configured, so ``strict`` can refuse a call whose record failed.
         """
+        record = self._event(event_type, operation, result, parameters, error, fields)
+        if self.sink is not None:
+            self._encrypt_payload(record)
+            await self.sink.append(record, key=self.chain_key, strict=strict)
+        else:
+            self._write(record, strict=strict)
+        self.logger.info(f"AUDIT: {event_type} {operation} - {result}")
+        return record
+
+    def _schedule(self, record: dict[str, Any]) -> None:
+        """Hand a record from synchronous code to the Postgres sink."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.logger.error("Audit record dropped: no event loop to reach the audit store")
+            return
+        self._encrypt_payload(record)
+        task = loop.create_task(self.sink.append(record, key=self.chain_key, strict=False))
+        self._pending.add(task)
+        task.add_done_callback(self._pending.discard)
+
+    def _encrypt_payload(self, record: dict[str, Any]) -> None:
         # At-rest encryption for the sensitive payloads (issue #22). This
         # runs on the already-redacted record: encryption complements
         # redaction, it does not replace it, so a decrypted entry is exactly
@@ -287,13 +348,27 @@ class AuditLogger:
                     record[field] = encrypt_field(self.cipher, record[field])
                     record[f"{field}_encrypted"] = True
 
+    def _write(self, record: dict[str, Any], *, strict: bool) -> None:
+        """Encrypt payload fields, chain the record, and append it to the file.
+
+        Args:
+            record: The record; payload fields must already be redacted
+            strict: Raise :class:`AuditUnavailableError` on failure instead
+                of logging it
+
+        Raises:
+            AuditUnavailableError: When ``strict`` and the record was not written
+        """
+        self._encrypt_payload(record)
         with _chain_lock:
             chain = _chains.setdefault(str(self.log_file.resolve()), _Chain())
-            record["chain_id"] = INSTANCE_ID
-            record["seq"] = chain.seq
-            record["prev_hash"] = chain.prev_hash
-            record["hash_alg"] = "hmac-sha256" if self.chain_key is not None else "sha256"
-            record["hash"] = record_hash(record, self.chain_key)
+            seal_record(
+                record,
+                chain_id=INSTANCE_ID,
+                seq=chain.seq,
+                prev_hash=chain.prev_hash,
+                key=self.chain_key,
+            )
             try:
                 with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
                     f.write(json.dumps(record) + "\n")
@@ -417,20 +492,20 @@ class ToolCallRecorder:
         self._token: Any = None
         self._started = 0.0
 
-    def attempt(self) -> None:
+    async def attempt(self) -> None:
         """Write the attempt record and start collecting tool reports.
 
         Raises:
             AuditUnavailableError: If the record cannot be written and the
                 recorder fails closed
         """
-        self._logger.log_event(
+        await self._logger.alog_event(
             self._event_type, result="attempt", strict=self._fail_closed, **self._fields
         )
         self._token = _active_tool_call.set(self._reports)
         self._started = time.perf_counter()
 
-    def outcome(self, result: str, error: str | None = None) -> None:
+    async def outcome(self, result: str, error: str | None = None) -> None:
         """Write the outcome record.
 
         Args:
@@ -441,7 +516,7 @@ class ToolCallRecorder:
             _active_tool_call.reset(self._token)
             self._token = None
         duration_ms = round((time.perf_counter() - self._started) * 1000, 3)
-        self._logger.log_event(
+        await self._logger.alog_event(
             self._event_type,
             result=result,
             error=error,

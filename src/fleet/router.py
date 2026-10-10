@@ -12,8 +12,9 @@ controller is registered: it must name its target or use a selection made in
 the same session, so a write never lands on a controller by accident.
 """
 
+from collections.abc import Mapping
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from fastmcp.server.dependencies import get_context
@@ -40,6 +41,7 @@ class Resolution:
     name: str
     settings: Settings
     source: Source
+    labels: Mapping[str, str] = field(default_factory=dict)
 
 
 def _session_context() -> Any | None:
@@ -126,7 +128,12 @@ class FleetRouter:
             )
 
         profile = await self.registry.get_controller(name)
-        return Resolution(name=profile.name, settings=self.settings_for(profile), source=source)
+        return Resolution(
+            name=profile.name,
+            settings=self.settings_for(profile),
+            source=source,
+            labels=dict(profile.labels),
+        )
 
     def settings_for(self, profile: ControllerProfile) -> Settings:
         """Return (and cache) the settings for ``profile``.

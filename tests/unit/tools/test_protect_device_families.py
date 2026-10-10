@@ -133,7 +133,8 @@ class TestList:
             result = await list_tool(mock_settings, limit=2, offset=1)
 
         mock_client.authenticate.assert_awaited_once()
-        assert mock_client.get.await_args.args[0] == f"/integration/v1/{endpoint}"
+        # One full fetch, paginated locally: no limit/offset sent to the API.
+        mock_client.get.assert_awaited_once_with(f"/integration/v1/{endpoint}")
         assert result["count"] == 2
         assert result["totalCount"] == 5
         assert (result["offset"], result["limit"]) == (1, 2)

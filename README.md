@@ -354,7 +354,7 @@ unifi-mcp-server
 - **Async Support**: Built with async/await for high performance and concurrency
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
 - **Comprehensive Testing**: 3,152 unit tests at 93% line coverage, all passing across Python 3.10–3.13
-- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (18 checks)
+- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (25 checks)
 - **Multi-Architecture**: Docker images for amd64, arm64, arm/v7 (32-bit ARM), and arm64/v8
 - **Security Hardened**: Updated critical dependencies (FastMCP, MCP SDK, cryptography)
 - **Quality Metrics**: Black formatting, Ruff linting, comprehensive type hints, Pydantic validation
@@ -1461,7 +1461,7 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 **Quality Achievements:**
 
 - [x] 3,152 unit tests passing
-- [x] 18/18 CI/CD checks passing
+- [x] 25/25 CI/CD checks passing
 - [x] Zero security vulnerabilities
 - [x] 30+ AI assistant example prompts
 - [x] Comprehensive documentation (docs/archive/VERIFICATION_REPORT.md, API.md)

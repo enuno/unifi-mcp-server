@@ -241,3 +241,23 @@ async def test_remembered_states_are_bounded(fleet, monkeypatch):
         await _call(pool, _settings(monkeypatch, f"10.0.0.{i}"))
 
     assert len(pool._states) == 2
+
+
+async def test_closing_a_pooled_client_twice_never_closes_the_shared_connection(monkeypatch):
+    from unittest.mock import AsyncMock, MagicMock
+
+    pool = MagicMock()
+    connection = MagicMock()
+    connection.client.aclose = AsyncMock()
+    pool.acquire.return_value = connection
+    token = active_pool.set(pool)
+    try:
+        client = UniFiClient(_settings(monkeypatch))
+    finally:
+        active_pool.reset(token)
+
+    await client.close()
+    await client.close()
+
+    pool.release.assert_called_once_with(connection)
+    connection.client.aclose.assert_not_called()

@@ -8,10 +8,11 @@ router and its ASGI entry point dispatch requests.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -71,6 +72,23 @@ class TestPayloadFromRequest:
                 return raw
 
         assert await h._payload_from_request(Body()) == {"c": 3}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("raw", [b"[]", b'"text"', b"3"])
+    async def test_non_object_body_is_empty_payload(self, raw: bytes) -> None:
+        class Body:
+            async def body(self) -> bytes:
+                return raw
+
+        assert await h._payload_from_request(Body()) == {}
+
+    @pytest.mark.asyncio
+    async def test_non_object_json_is_empty_payload(self) -> None:
+        class Json:
+            async def json(self) -> list:
+                return [["tool_name", "x"]]
+
+        assert await h._payload_from_request(Json()) == {}
 
     @pytest.mark.asyncio
     async def test_empty_body_and_unknown_object(self) -> None:
@@ -355,7 +373,7 @@ class TestAsgi:
             sent.append(message)
 
         receive = self._receive(
-            {"type": "http.disconnect"},
+            {"type": "lifespan.unrelated"},
             {"type": "http.request", "body": b'{"tool_', "more_body": True},
             {"type": "http.request", "body": b'name": "list_sites"}'},
         )
@@ -368,6 +386,21 @@ class TestAsgi:
         body = json.loads(sent[1]["body"])
         assert body["status"] == "ok"
         assert body["tool_name"] == "list_sites"
+
+    @pytest.mark.asyncio
+    async def test_disconnect_ends_the_request_without_a_response(self) -> None:
+        # http.disconnect is terminal: receive() keeps returning it, so waiting
+        # for more body would spin forever.
+        send = AsyncMock()
+
+        async def receive() -> dict:
+            await asyncio.sleep(0)  # yield like a real server, so wait_for can time out
+            return {"type": "http.disconnect"}
+
+        scope = {"type": "http", "method": "POST", "path": "/a2a/delegate"}
+        await asyncio.wait_for(h.A2AHTTPRouter(_state())(scope, receive, send), timeout=1)
+
+        send.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_empty_body_defaults(self) -> None:

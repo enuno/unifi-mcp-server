@@ -172,10 +172,11 @@ class TestProtectClientPooling:
         pool.release.assert_called_once_with(connection)
         connection.client.aclose.assert_not_called()
 
-        # A second close falls through to closing the (pooled) client.
+        # A second close must not close the shared client the pool still holds.
         connection.client.aclose = AsyncMock()
         await client.close()
         pool.release.assert_called_once()
+        connection.client.aclose.assert_not_called()
 
 
 class TestProtectClientHttp:

@@ -114,6 +114,9 @@ Configure the MCP server using environment variables:
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
 | `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
+| `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
+| `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
+| `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
@@ -461,6 +464,42 @@ Choose the controller this session's later tool calls target. A call's own `cont
 Show which controller a call without `controller` would target, and whether it comes from the session (`select_controller`) or the default.
 
 **Parameters:** None
+
+### Fleet Registry Administration
+
+Available only when `DATABASE_URL` is set, and never in read-only mode. These tools manage the controller registry rather than a controller, so they take no `controller` argument. They are `fleet-admin` tier, need `confirm=true`, accept `dry_run`, and every call is audited as an `admin` event with API keys redacted. A change is routable on the server that made it immediately, and on other servers within `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`.
+
+#### `register_controller`
+
+Register a controller. Give it its own `api_key` (stored encrypted), or name a `cloud_account` to share that account's key.
+
+**Parameters:** `name` (required), `api_type` (`local`, `cloud-ea`, `cloud-v1`; required), `local_host` (required for `local`), `local_port`, `local_verify_ssl`, `cloud_api_url`, `default_site`, `api_key`, `cloud_account`, `labels`, `make_default`, `confirm`, `dry_run`
+
+#### `update_controller`
+
+Change a controller; only the fields passed change. `enabled=false` takes it out of routing without deleting it; `make_default=true` moves the default to it.
+
+**Parameters:** `name` (required), `local_host`, `local_port`, `local_verify_ssl`, `cloud_api_url`, `default_site`, `labels`, `enabled`, `api_key`, `make_default`, `confirm`, `dry_run`
+
+#### `register_cloud_account`
+
+Register a cloud (Site Manager) API key that cloud controllers can share.
+
+**Parameters:** `name` (required), `api_key` (required), `api_type` (default `cloud-ea`), `cloud_api_url`, `labels`, `confirm`, `dry_run`
+
+#### `rotate_fleet_credentials`
+
+Re-encrypt every stored API key under the newest `UNIFI_FLEET_CREDENTIAL_KEY` key. Put the new key first (`new,old`), run this, then remove the old key.
+
+**Parameters:** `confirm`, `dry_run`
+
+**Operator CLI** (needs only `DATABASE_URL`, except `import`):
+
+```bash
+python -m src.fleet.cli migrate              # create or upgrade the schema
+python -m src.fleet.cli status               # exit 1 if the schema is behind
+python -m src.fleet.cli import --name hq     # register the UNIFI_* controller
+```
 
 ### Protect Phase 3 Tools
 

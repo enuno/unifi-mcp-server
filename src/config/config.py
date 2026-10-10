@@ -181,6 +181,23 @@ class Settings(BaseSettings):
         repr=False,
     )
 
+    # Fleet registry (docs/FLEET_SCALING_PLAN.md Phase 2a). Setting DATABASE_URL
+    # switches the controller registry from the single UNIFI_* controller to
+    # Postgres; UNIFI_FLEET_CREDENTIAL_KEY must then be set as well.
+    database_url: str | None = Field(
+        default=None,
+        description="Postgres URL for the controller registry, e.g. postgresql://user:pw@host/db",  # pragma: allowlist secret
+        validation_alias="DATABASE_URL",
+        repr=False,
+    )
+
+    fleet_registry_refresh_seconds: int = Field(
+        default=30,
+        ge=1,
+        description="How often each server reloads the controller registry from Postgres",
+        validation_alias="UNIFI_FLEET_REGISTRY_REFRESH_SECONDS",
+    )
+
     # Logging Configuration
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(
         default="INFO",
@@ -311,9 +328,9 @@ class Settings(BaseSettings):
         validation_alias="MCP_AUTH_TOKEN",
     )
 
-    @field_validator("redis_url", "redis_password", mode="before")
+    @field_validator("redis_url", "redis_password", "database_url", mode="before")
     @classmethod
-    def blank_redis_secret_is_unset(cls, v: str | None) -> str | None:
+    def blank_secret_is_unset(cls, v: str | None) -> str | None:
         """Treat a blank value as unset.
 
         docker-compose forwards unset variables as empty strings

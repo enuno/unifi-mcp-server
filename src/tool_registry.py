@@ -71,7 +71,7 @@ MUTATING_TOOLS_WITHOUT_GATE = frozenset(
 
 
 #: Risk tier of a tool; roles grant tiers (docs/FLEET_SCALING_PLAN.md §3.6).
-Tier = Literal["read", "write", "destructive"]
+Tier = Literal["read", "write", "destructive", "fleet-admin"]
 
 #: Mutating tools whose name starts with one of these are always destructive,
 #: so a newly added delete tool cannot land in a lower tier by omission.
@@ -200,7 +200,15 @@ def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
     return registered
 
 
-def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None = None) -> Any:
+def _make_tool_wrapper(
+    fn: Any,
+    settings: Settings,
+    router: FleetRouter | None = None,
+    *,
+    routed: bool = True,
+    tier: Tier | None = None,
+    event_type: str = "tool_call",
+) -> Any:
     """Return an async wrapper for *fn* with ``settings`` bound.
 
     The wrapper's ``__signature__`` is set to the public signature (all
@@ -216,6 +224,10 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
         fn: The original async tool function.
         settings: Application settings instance to bind.
         router: Resolves each call to a controller (see ``src/fleet/router.py``).
+        routed: False for tools that manage the registry rather than act on a
+            controller: no ``controller`` argument and no resolution.
+        tier: Overrides the tier derived from *fn* (e.g. ``fleet-admin``).
+        event_type: Audit event type of the tool's records.
 
     Returns:
         An async callable with the ``settings`` parameter removed from its
@@ -240,10 +252,11 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
     # registered as ``list_devices``).
     metric_tool_name = fn.__name__.lstrip("_")
     mutating = is_mutating_tool(fn)
-    tier = tool_tier(fn)
+    tier = tier or tool_tier(fn)
 
     if inspect.iscoroutinefunction(fn):
-        public_sig = _with_controller_param(public_sig)
+        if routed:
+            public_sig = _with_controller_param(public_sig)
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -273,7 +286,9 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
                 }
 
             try:
-                if router is None:
+                if not routed:
+                    controller, call_settings = None, settings
+                elif router is None:
                     if requested not in (None, DEFAULT_CONTROLLER_NAME):
                         raise ResourceNotFoundError("controller", requested)
                     controller, call_settings = DEFAULT_CONTROLLER_NAME, settings
@@ -295,6 +310,7 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
                 recorder = ToolCallRecorder(
                     audit,
                     fail_closed=getattr(settings, "audit_fail_closed", True) is not False,
+                    event_type=event_type,
                     controller=controller,
                     **context,
                 )
@@ -304,7 +320,7 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
             token = current_controller.set(controller)
             principal_token = current_principal.set(principal)
             try:
-                if metrics_on:
+                if metrics_on and controller is not None:
                     METRICS.record_controller_call(controller)
                 start = time.perf_counter()
                 try:
@@ -331,7 +347,8 @@ def _make_tool_wrapper(fn: Any, settings: Settings, router: FleetRouter | None =
 
         # functools.wraps shares fn's annotation dict; give the wrapper its own
         # so the added parameter reaches the schema without touching fn.
-        wrapper.__annotations__ = {**fn.__annotations__, "controller": ControllerArg}
+        if routed:
+            wrapper.__annotations__ = {**fn.__annotations__, "controller": ControllerArg}
 
     else:
 

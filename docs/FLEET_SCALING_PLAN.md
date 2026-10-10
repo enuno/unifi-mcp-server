@@ -232,6 +232,13 @@ Each phase is independently shippable, keeps the zero-config path identical, and
 - `unifi-mcp fleet import` CLI that seeds the registry from the current env config, for migration.
 - **Verify:** migration up/down tests against a real Postgres (testcontainers, in CI when Actions is unblocked). No API key or plaintext credential ever appears in logs, audit, errors, or tool output (property test modeled on the PR #193 key-never-leaks tests). Registry outage → the last snapshot keeps serving reads, and registry writes fail loudly.
 
+- **Status (2026-10-09): done.** Notes from implementation:
+  - Tables created: `credentials`, `cloud_accounts`, `controllers`. `sites`, `device_inventory`, `api_tokens` and the audit tables come with the phases that use them (2b, 4), as the Phase 0 rule requires. `controllers` has no `console_id`, `health` or `capabilities` yet (Phase 4 discovery and health checks).
+  - First start with an empty registry seeds the `UNIFI_*` controller as `default` (audited); `python -m src.fleet.cli import` registers it under another name. Migrations run only through `python -m src.fleet.cli migrate`; the server checks the revision at startup and refuses to run on an older schema.
+  - The snapshot refreshes on an interval and right after this server's own changes. Cross-replica `registry:changed` pub/sub is deferred to Phase 4 with the rest of the multi-replica work; until then other servers see a change within the refresh interval.
+  - `disable_controller` is `update_controller(enabled=false)`.
+  - Tests run against a real Postgres 16 started by `pgserver` (a dev dependency), so CI needs no Docker. The `docker-compose.fleet.yml` image build was not exercised locally (Docker Hub pulls fail on the development machine).
+
 ### Phase 2b: Access control and the audit store
 - `api_tokens`, roles and enforcement (§3.6): `create/list/revoke/update_api_token` tools and the `unifi-mcp tokens` CLI, module filters, `controller_selector`, revocation via `tokens:changed`, `PermissionDeniedError` and `denied` records, optional per-session tool hiding.
 - `PostgresSink` as primary audit store with the INSERT/SELECT-only role, `audit_chain_heads`, fail-closed write-ahead, and admin/config events.

@@ -1,0 +1,68 @@
+# Fleet deployment: the MCP server with its controller registry in Postgres
+# (docs/FLEET_SCALING_PLAN.md). Required in the environment or .env:
+#   UNIFI_API_KEY, UNIFI_API_TYPE (+ UNIFI_LOCAL_HOST for local), MCP_AUTH_TOKEN,
+#   POSTGRES_PASSWORD, UNIFI_FLEET_CREDENTIAL_KEY
+# The UNIFI_* controller is registered as "default" on first start.
+#
+#   docker compose -f docker-compose.fleet.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: unifi_mcp
+      POSTGRES_USER: unifi_mcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U unifi_mcp -d unifi_mcp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: bring the registry schema up to date before the server starts.
+  migrate:
+    build:
+      context: .
+      args:
+        EXTRAS: fleet
+    command: ["python", "-m", "src.fleet.cli", "migrate"]
+    environment:
+      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  unifi-mcp:
+    build:
+      context: .
+      args:
+        EXTRAS: fleet
+    restart: unless-stopped
+    ports:
+      # Loopback only; put an authenticating TLS proxy in front to expose it.
+      - "127.0.0.1:${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"
+    environment:
+      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      UNIFI_FLEET_CREDENTIAL_KEY: ${UNIFI_FLEET_CREDENTIAL_KEY:?UNIFI_FLEET_CREDENTIAL_KEY required}
+      UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}
+      UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
+      UNIFI_LOCAL_PORT: ${UNIFI_LOCAL_PORT:-443}
+      UNIFI_LOCAL_VERIFY_SSL: ${UNIFI_LOCAL_VERIFY_SSL:-true}
+      UNIFI_AUDIT_LOG_PATH: /app/logs/audit.log
+      UNIFI_AUDIT_CHAIN_KEY: ${UNIFI_AUDIT_CHAIN_KEY:-}
+      MCP_SERVER_TRANSPORT: streamable_http
+      MCP_SERVER_HOST: 0.0.0.0
+      MCP_SERVER_PORT: ${MCP_SERVER_PORT:-3000}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:?MCP_AUTH_TOKEN required}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:

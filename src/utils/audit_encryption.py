@@ -68,7 +68,9 @@ class AuditEncryptionError(Exception):
     """Raised when audit encryption cannot be initialised or used."""
 
 
-def _load_single_key(secret: str) -> Fernet:
+def _load_single_key(
+    secret: str, source: str = f"{ENV_VAR}/{ENV_VAR_ALIAS}", salt: bytes = _KDF_SALT
+) -> Fernet:
     """Build a ``Fernet`` from one key entry.
 
     A 44-char urlsafe-base64 value is a raw Fernet key and is used verbatim;
@@ -76,6 +78,9 @@ def _load_single_key(secret: str) -> Fernet:
 
     Args:
         secret: One non-empty entry from the key environment variable.
+        source: Name of the variable, for error messages.
+        salt: PBKDF2 salt for passphrases; distinct per key purpose so one
+            passphrase never yields the same key for two uses.
 
     Returns:
         A ``Fernet`` instance for this entry.
@@ -86,8 +91,7 @@ def _load_single_key(secret: str) -> Fernet:
     candidate = secret.strip()
     if not candidate:
         raise AuditEncryptionError(
-            f"Empty key entry in {ENV_VAR}/{ENV_VAR_ALIAS}; "
-            "remove the extra comma or provide a key."
+            f"Empty key entry in {source}; remove the extra comma or provide a key."
         )
     # Raw Fernet key path — Fernet validates urlsafe-b64 / 32 bytes itself.
     try:
@@ -98,7 +102,7 @@ def _load_single_key(secret: str) -> Fernet:
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=_KDF_SALT,
+        salt=salt,
         iterations=_KDF_ITERATIONS,
     )
     derived = base64.urlsafe_b64encode(kdf.derive(candidate.encode("utf-8")))
@@ -131,15 +135,35 @@ def resolve_audit_cipher(env: dict[str, str] | None = None) -> MultiFernet | Non
         raw = source.get(ENV_VAR_ALIAS)
     if raw is None or not raw.strip():
         return None
+    return build_cipher(raw, ENV_VAR)
 
-    entries = raw.split(",")
+
+def build_cipher(
+    raw: str, source: str, salt: bytes = _KDF_SALT, *, alias: str | None = ENV_VAR_ALIAS
+) -> MultiFernet:
+    """Build a ``MultiFernet`` from a comma-separated, newest-first key list.
+
+    Args:
+        raw: The variable's value
+        source: The variable's name, for error messages
+        salt: PBKDF2 salt for passphrase entries
+        alias: Alias named in empty-entry errors, if the variable has one
+
+    Returns:
+        A cipher that encrypts with the first key and decrypts with any
+
+    Raises:
+        AuditEncryptionError: If an entry is invalid. The message names the
+            variable but never includes key material.
+    """
+    label = f"{source}/{alias}" if alias else source
     try:
-        keys = [_load_single_key(entry) for entry in entries]
+        keys = [_load_single_key(entry, label, salt) for entry in raw.split(",")]
     except AuditEncryptionError:
         raise
     except Exception as exc:  # pragma: no cover - defensive: never leak key material
         raise AuditEncryptionError(
-            f"Invalid audit encryption key in {ENV_VAR}: {type(exc).__name__}"
+            f"Invalid encryption key in {source}: {type(exc).__name__}"
         ) from exc
     return MultiFernet(keys)
 

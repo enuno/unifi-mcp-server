@@ -390,12 +390,20 @@ class ToolCallRecorder:
     outcome record that share a ``call_id``.
     """
 
-    def __init__(self, logger: AuditLogger, *, fail_closed: bool, **fields: Any) -> None:
+    def __init__(
+        self,
+        logger: AuditLogger,
+        *,
+        fail_closed: bool,
+        event_type: str = "tool_call",
+        **fields: Any,
+    ) -> None:
         """Prepare the records for one call.
 
         Args:
             logger: Where records are written
             fail_closed: Refuse the call if the attempt record cannot be written
+            event_type: ``tool_call``, or ``admin`` for registry management tools
             **fields: Fields common to both records: ``operation``,
                 ``parameters`` and context such as ``tool``, ``tier``,
                 ``controller``, ``principal``, ``user``, ``site_id``,
@@ -403,6 +411,7 @@ class ToolCallRecorder:
         """
         self._logger = logger
         self._fail_closed = fail_closed
+        self._event_type = event_type
         self._fields = {"call_id": uuid.uuid4().hex, **fields}
         self._reports: list[dict[str, Any]] = []
         self._token: Any = None
@@ -416,7 +425,7 @@ class ToolCallRecorder:
                 recorder fails closed
         """
         self._logger.log_event(
-            "tool_call", result="attempt", strict=self._fail_closed, **self._fields
+            self._event_type, result="attempt", strict=self._fail_closed, **self._fields
         )
         self._token = _active_tool_call.set(self._reports)
         self._started = time.perf_counter()
@@ -433,7 +442,7 @@ class ToolCallRecorder:
             self._token = None
         duration_ms = round((time.perf_counter() - self._started) * 1000, 3)
         self._logger.log_event(
-            "tool_call",
+            self._event_type,
             result=result,
             error=error,
             details=self._reports or None,

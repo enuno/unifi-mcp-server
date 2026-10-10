@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.metadata
 import json
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Any
 
 try:
@@ -96,10 +97,30 @@ from .utils.audit import get_audit_logger as get_tool_audit_logger
 settings = Settings()
 logger = get_logger(__name__, settings.log_level)
 
-# Resolves each tool call to a controller (docs/FLEET_SCALING_PLAN.md). The
-# environment registry holds one ``default`` controller built from UNIFI_*,
-# which hands every tool the same ``settings`` object as before.
-fleet_router = FleetRouter(settings, EnvRegistry(settings))
+# Resolves each tool call to a controller (docs/FLEET_SCALING_PLAN.md). Without
+# DATABASE_URL the environment registry holds one ``default`` controller built
+# from UNIFI_*, which hands every tool the same ``settings`` object as before.
+# With it, controllers come from Postgres (imported lazily: the base install
+# has no database driver).
+if settings.database_url:
+    from .fleet.postgres_registry import PostgresRegistry
+
+    fleet_registry: Any = PostgresRegistry.from_settings(settings)
+else:
+    fleet_registry = EnvRegistry(settings)
+fleet_router = FleetRouter(settings, fleet_registry)
+
+
+@contextlib.asynccontextmanager
+async def _lifespan(server: Any) -> AsyncIterator[None]:
+    """Start the Postgres registry with the server (schema check, seed, first load)."""
+    if hasattr(fleet_registry, "start"):
+        await fleet_registry.start()
+    try:
+        yield
+    finally:
+        if hasattr(fleet_registry, "stop"):
+            await fleet_registry.stop()
 
 
 def build_auth_provider(current_settings: Settings) -> Any:
@@ -273,7 +294,7 @@ def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
 
 
 mcp_auth = build_auth_provider(settings)
-mcp = FastMCP("UniFi MCP Server", auth=mcp_auth)
+mcp = FastMCP("UniFi MCP Server", auth=mcp_auth, lifespan=_lifespan)
 
 # ---------------------------------------------------------------------------
 # Optional: agnost tracking
@@ -547,6 +568,10 @@ else:
         register_module_tools(mcp, _module, settings, router=fleet_router)
 
 register_fleet_tools(mcp, fleet_router)
+if settings.database_url:
+    from .fleet.admin_tools import register_admin_tools
+
+    register_admin_tools(mcp, fleet_registry, settings)
 
 # ---------------------------------------------------------------------------
 # Resource handlers

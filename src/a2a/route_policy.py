@@ -139,7 +139,7 @@ class SafetyController:
         # heuristics below only cover names the server does not know.
         tier = TOOL_TIERS.get(normalized)
         if (
-            tier == "destructive"
+            tier in ("destructive", "fleet-admin")
             or tier is None
             and (
                 normalized.startswith(self._DESTRUCTIVE_PREFIXES)

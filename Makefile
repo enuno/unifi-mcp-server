@@ -4,11 +4,11 @@
 # so no virtualenv activation is needed. `make ci` runs the same blocking
 # checks as .github/workflows/ci.yml.
 #
-# Without uv, install with `pip install -e ".[dev]"` in an active virtualenv
+# Without uv, install with `pip install -e ".[dev,fleet]"` in an active virtualenv
 # and pass an empty runner:  make test RUN=
 
 UV            ?= uv
-RUN           ?= $(UV) run --frozen --extra dev
+RUN           ?= $(UV) run --frozen --extra dev --extra fleet
 SRC           := src/
 TESTS         := tests/
 IMAGE         ?= unifi-mcp-server
@@ -23,7 +23,7 @@ PRECOMMIT_SKIP ?= mypy,end-of-file-fixer,markdownlint
 
 .PHONY: install
 install: ## Create .venv from uv.lock with the dev extra
-	$(UV) sync --frozen --extra dev
+	$(UV) sync --frozen --extra dev --extra fleet
 
 .PHONY: hooks
 hooks: ## Install the git pre-commit and commit-msg hooks

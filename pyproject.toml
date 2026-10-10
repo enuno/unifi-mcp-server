@@ -57,12 +57,18 @@ dev = [
     "types-requests>=2.31.0",
     "interrogate>=1.5.0",
     "pip-audit>=2.6.0",
+    # Throwaway Postgres for the fleet registry tests (no Docker needed).
+    "pgserver>=0.1.4",
 ]
 
 fleet = [
     # Multi-controller scaling (docs/FLEET_SCALING_PLAN.md). Redis backs the
-    # response cache; aclose() needs >= 5.0.1.
+    # response cache; aclose() needs >= 5.0.1. Postgres holds the controller
+    # registry (Phase 2a).
     "redis>=5.0.1",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
 ]
 
 [project.urls]

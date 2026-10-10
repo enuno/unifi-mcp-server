@@ -28,10 +28,12 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-# Install dependencies and build package
+# Install dependencies and build package. Optional extras, e.g.
+# --build-arg EXTRAS=fleet for the Postgres controller registry.
+ARG EXTRAS=""
 RUN uv venv /opt/venv && \
     . /opt/venv/bin/activate && \
-    uv pip install --no-cache .
+    uv pip install --no-cache ".${EXTRAS:+[$EXTRAS]}"
 
 # Final stage - minimal runtime image
 FROM python:3.13-alpine

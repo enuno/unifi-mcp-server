@@ -377,6 +377,7 @@ CMD ["python", "src/main.py"]
 - **Input Validation:** All user inputs validated with Pydantic models
 - **Audit Log Encryption:** Optional Fernet at-rest encryption of audit payload fields (`UNIFI_AUDIT_LOG_KEY`), with non-destructive key rotation
 - **Wrapper-Level Audit:** Every mutating tool call is recorded by the tool wrapper (an `attempt` record before the controller is contacted, then the outcome), along with denied calls and server start, naming the caller and target controller. If the attempt record cannot be written, the call is refused (`UNIFI_AUDIT_FAIL_CLOSED`, default on)
+- **Encrypted Controller Credentials:** With the Postgres fleet registry, controller and cloud-account API keys are Fernet-encrypted with `UNIFI_FLEET_CREDENTIAL_KEY` before they reach the database; the key never does. The server refuses to start without it, a key that cannot decrypt a credential skips that controller instead of failing the fleet, and `rotate_fleet_credentials` re-encrypts under a new key
 - **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records
 
 ### Phase 4 Mutating Tools Safety Mechanisms

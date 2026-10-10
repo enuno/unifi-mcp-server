@@ -20,6 +20,7 @@ from .a2a import A2AState
 from .a2a.audit import get_audit_logger
 from .a2a.auth import AuthManager
 from .a2a.route_policy import ConfirmationWorkflow, SafetyController
+from .api.pool import ClientPool
 from .config import APIType, Settings, TransportMode
 from .fleet import EnvRegistry
 from .fleet.router import FleetRouter
@@ -110,6 +111,18 @@ else:
     fleet_registry = EnvRegistry(settings)
 fleet_router = FleetRouter(settings, fleet_registry)
 
+# One long-lived connection per controller, shared by every tool call
+# (connection reuse, one rate limiter, cached auth probe, circuit breaker).
+client_pool = ClientPool(max_open=settings.fleet_max_open_clients)
+
+# Read-through cache in Redis, only when Redis is configured explicitly (imported
+# lazily so an unconfigured server never loads the redis package).
+read_cache: Any = None
+if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.model_fields_set):
+    from .cache import ReadCache
+
+    read_cache = ReadCache.from_settings(settings)
+
 
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
@@ -123,6 +136,7 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        await client_pool.aclose()
         if hasattr(fleet_registry, "stop"):
             await fleet_registry.stop()
 
@@ -564,10 +578,18 @@ if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
     for _module in _TOOL_MODULES:
         if _module is sites_tools:
             register_module_tools(
-                mcp, _module, settings, exclude=["get_site_statistics"], router=fleet_router
+                mcp,
+                _module,
+                settings,
+                exclude=["get_site_statistics"],
+                router=fleet_router,
+                pool=client_pool,
+                read_cache=read_cache,
             )
         else:
-            register_module_tools(mcp, _module, settings, router=fleet_router)
+            register_module_tools(
+                mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+            )
 else:
     _all_local = list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES)
     if _active_profile and _active_profile not in ("all", ""):
@@ -581,7 +603,9 @@ else:
         + f" - registering {len(_TOOL_MODULES)} tool module(s)"
     )
     for _module in _TOOL_MODULES:
-        register_module_tools(mcp, _module, settings, router=fleet_router)
+        register_module_tools(
+            mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+        )
 
 register_fleet_tools(mcp, fleet_router)
 if settings.database_url:

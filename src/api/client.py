@@ -22,6 +22,7 @@ from ..utils import (
     log_api_request,
     validate_backup_filename,
 )
+from .pool import AuthState, active_pool
 
 
 class RateLimiter:
@@ -71,6 +72,26 @@ class UniFiClient:
         self.settings = settings
         self.logger = get_logger(__name__, settings.log_level)
 
+        self._authenticated = False
+        self._site_id_cache: dict[str, str] = {}
+        # Cache for site UUID -> internalReference mapping (needed for local API)
+        self._site_uuid_to_name: dict[str, str] = {}
+        # Reverse mapping, for endpoints that key off the UUID instead
+        self._site_name_to_uuid: dict[str, str] = {}
+
+        # Inside a tool call with a connection pool (src/api/pool.py), share the
+        # controller's long-lived HTTP client, rate limiter and circuit breaker.
+        self._pool = active_pool.get()
+        self._connection = self._pool.acquire(settings) if self._pool is not None else None
+        if self._connection is not None:
+            self.client = self._connection.client
+            if self._connection.rate_limiter is None:
+                self._connection.rate_limiter = RateLimiter(
+                    settings.rate_limit_requests, settings.rate_limit_period
+                )
+            self.rate_limiter = self._connection.rate_limiter
+            return
+
         # Initialize HTTP client
         # Note: We construct full URLs explicitly in _request() to ensure HTTPS is preserved
         # Using base_url can cause protocol downgrade issues with httpx
@@ -87,13 +108,6 @@ class UniFiClient:
             settings.rate_limit_period,
         )
 
-        self._authenticated = False
-        self._site_id_cache: dict[str, str] = {}
-        # Cache for site UUID -> internalReference mapping (needed for local API)
-        self._site_uuid_to_name: dict[str, str] = {}
-        # Reverse mapping, for endpoints that key off the UUID instead
-        self._site_name_to_uuid: dict[str, str] = {}
-
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
         return self
@@ -103,7 +117,11 @@ class UniFiClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the HTTP client."""
+        """Close the HTTP client (or hand a pooled connection back to the pool)."""
+        if self._connection is not None and self._pool is not None:
+            self._pool.release(self._connection)
+            self._connection = None
+            return
         await self.client.aclose()
 
     @property
@@ -242,6 +260,15 @@ class UniFiClient:
         Raises:
             AuthenticationError: If authentication fails
         """
+        if self._connection is not None and self._pool is not None:
+            state = self._pool.fresh_auth(self._connection)
+            if state is not None:
+                self._site_uuid_to_name = state.site_uuid_to_name
+                self._site_name_to_uuid = state.site_name_to_uuid
+                self._site_id_cache = state.site_id_cache
+                self._authenticated = True
+                return
+
         try:
             # Test authentication with a simple API call
             # Use appropriate endpoint based on API type
@@ -280,6 +307,12 @@ class UniFiClient:
             self.logger.info(
                 f"Successfully authenticated with UniFi API (response type: {type(response).__name__})"
             )
+            if self._authenticated and self._connection is not None:
+                self._connection.auth = AuthState(
+                    site_uuid_to_name=self._site_uuid_to_name,
+                    site_name_to_uuid=self._site_name_to_uuid,
+                    site_id_cache=self._site_id_cache,
+                )
         except Exception as e:
             self.logger.error(f"Authentication failed: {e}")
             raise AuthenticationError(f"Failed to authenticate with UniFi API: {e}") from e
@@ -362,6 +395,36 @@ class UniFiClient:
         return wait
 
     async def _request(
+        self,
+        method: str,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        json_data: dict[str, Any] | None = None,
+        retry_count: int = 0,
+        started_at: float | None = None,
+    ) -> dict[str, Any]:
+        """Make an HTTP request, through the controller's circuit breaker when pooled.
+
+        The breaker sees one outcome per call (retries included): a
+        ``NetworkError`` counts as the controller being unreachable; any
+        answer, even an error status, counts as reachable.
+        """
+        connection = self._connection
+        if connection is None or retry_count:
+            return await self._send(method, endpoint, params, json_data, retry_count, started_at)
+        connection.breaker.check(connection.label)
+        try:
+            result = await self._send(method, endpoint, params, json_data, 0, started_at)
+        except NetworkError:
+            connection.breaker.record_failure()
+            raise
+        except Exception:
+            connection.breaker.record_success()
+            raise
+        connection.breaker.record_success()
+        return result
+
+    async def _send(
         self,
         method: str,
         endpoint: str,

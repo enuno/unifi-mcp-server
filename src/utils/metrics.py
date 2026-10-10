@@ -56,6 +56,7 @@ class MetricsRegistry:
         self._duration_buckets: dict[str, list[int]] = {}
         self._registered_tools = 0
         self._controller_calls: dict[str, int] = {}
+        self._cache_requests: dict[str, int] = {}
 
     def note_tool_registered(self, count: int = 1) -> None:
         """Record *count* tools registered on the server.
@@ -80,6 +81,11 @@ class MetricsRegistry:
             ):
                 controller = "other"
             self._controller_calls[controller] = self._controller_calls.get(controller, 0) + 1
+
+    def record_cache(self, result: str) -> None:
+        """Count one read-cache lookup (``hit`` or ``miss``)."""
+        with self._lock:
+            self._cache_requests[result] = self._cache_requests.get(result, 0) + 1
 
     def record_tool_call(self, tool: str, status: str, duration: float) -> None:
         """Record one completed tool call.
@@ -135,6 +141,7 @@ class MetricsRegistry:
             duration_count = dict(self._duration_count)
             duration_buckets = {tool: list(b) for tool, b in self._duration_buckets.items()}
             controller_calls = dict(self._controller_calls)
+            cache_requests = dict(self._cache_requests)
 
         lines.append("# HELP unifi_mcp_tools_registered Tools registered on the server.")
         lines.append("# TYPE unifi_mcp_tools_registered gauge")
@@ -160,6 +167,14 @@ class MetricsRegistry:
                 lines.append(
                     f'unifi_mcp_controller_calls_total{{controller="{_escape_label(controller)}"}}'
                     f" {count}"
+                )
+
+        if cache_requests:
+            lines.append("# HELP unifi_mcp_cache_requests_total Read-cache lookups by result.")
+            lines.append("# TYPE unifi_mcp_cache_requests_total counter")
+            for result, count in sorted(cache_requests.items()):
+                lines.append(
+                    f'unifi_mcp_cache_requests_total{{result="{_escape_label(result)}"}} {count}'
                 )
 
         if duration_count:

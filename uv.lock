@@ -856,6 +856,20 @@ wheels = [
 ]
 
 [[package]]
+name = "fakeredis"
+version = "2.39.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "redis" },
+    { name = "sortedcontainers" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2f/27/3ed3eee5e5a929345c37024b814a70f6e2452ffdab77a2680c2ebba3614a/fakeredis-2.39.0.tar.gz", hash = "sha256:e89c3410f290330042638ff5cca3e22788fa267dcaf28a64b4f483e14577208d", size = 301722, upload-time = "2026-10-01T12:35:19.404Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/ca/8bf657139922808196e6480ec6ed94008897e23d603abd5b27538cfdf811/fakeredis-2.39.0-py3-none-any.whl", hash = "sha256:acd1450575259634db2942d5bae93e383aac32bb9968aab29fe7b0c2ab880bb8", size = 186508, upload-time = "2026-10-01T12:35:17.899Z" },
+]
+
+[[package]]
 name = "fasteners"
 version = "0.20"
 source = { registry = "https://pypi.org/simple" }
@@ -3141,6 +3155,7 @@ dependencies = [
 dev = [
     { name = "bandit" },
     { name = "black" },
+    { name = "fakeredis" },
     { name = "flake8" },
     { name = "interrogate" },
     { name = "isort" },
@@ -3180,6 +3195,7 @@ requires-dist = [
     { name = "bandit", marker = "extra == 'dev'", specifier = ">=1.7.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=26.3.1" },
     { name = "cryptography", specifier = ">=46.0.5" },
+    { name = "fakeredis", marker = "extra == 'dev'", specifier = ">=2.25" },
     { name = "fastmcp", specifier = ">=3.1.0" },
     { name = "flake8", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },

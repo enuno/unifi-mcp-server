@@ -258,6 +258,15 @@ Each phase is independently shippable, keeps the zero-config path identical, and
 - Wrapper-level read-through cache for an allowlist of high-traffic read tools (devices, clients, sites, networks, WLANs), plus mutation-driven invalidation.
 - **Verify:** benchmark harness with 500 simulated controllers on a mock server: p50/p95 tool latency and controller-side request count before vs. after (target: ≥80% fewer controller requests for repeated reads; no `/ea/sites` probe per call). A stale-read test confirms a mutation is visible on the next read.
 
+- **Status (2026-10-10): done.** Notes from implementation:
+  - Decisions: the read cache is active only with explicit Redis configuration; TTLs are the existing `CacheConfig` values; cached tools gain an optional `fresh` argument.
+  - Benchmark (`scripts/benchmark_fleet.py`, 500 controllers × 5 reads, 20 ms simulated latency): baseline 5,000 controller requests and 2,500 auth probes; pool 3,000 and 500 (p50 43 → 22 ms); pool + cache 1,000 and 500, an 80% reduction. Latency with the cache is not representative there (fakeredis runs in the benchmark's process).
+  - The benchmark exposed that a pool smaller than the fleet gave no benefit for round-robin access, because evicting a connection dropped its auth state. Per-controller state (auth, rate limiter, breaker) now lives in a separate LRU of up to 10,000 controllers, independent of open connections.
+  - Shared connections make `UNIFI_RATE_LIMIT_REQUESTS` effective for the first time (each call used to get a fresh limiter); recorded under Changed.
+  - Invalidation clears all of a controller's cached reads on any write instead of per resource family: simpler, and writes are rare next to reads.
+  - The auth/site-map cache is in-process rather than in Redis, and single-flight is per process; both become cross-replica concerns in Phase 4.
+  - Statistics and RF-health tools are not cached (live metrics). `ProtectClient` shares the pooled connection but keeps its own auth probe and has no breaker; `SiteManagerClient` (one cloud endpoint) is not pooled.
+
 ### Phase 4: Horizontal scale
 - Redis `session_state_store`, distributed rate limiting, pub/sub invalidation.
 - **Session affinity decision** (needs a spike): FastMCP's Streamable HTTP keeps transport sessions in replica memory. Option A: sticky load balancing on `mcp-session-id` (simplest; state in Redis covers failover re-selection). Option B: `stateless_http=True` plus Redis session state (any replica serves any request; loses server-initiated streams). Recommendation: **A by default, B as a documented mode**, chosen after the spike.

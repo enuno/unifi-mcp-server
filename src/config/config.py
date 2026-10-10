@@ -198,6 +198,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_REGISTRY_REFRESH_SECONDS",
     )
 
+    fleet_max_open_clients: int = Field(
+        default=256,
+        ge=1,
+        description=(
+            "Most controller connections each server keeps open; the least recently "
+            "used idle ones are closed beyond this"
+        ),
+        validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
+    )
+
     stdio_role: Literal["viewer", "operator", "admin", "fleet-admin"] = Field(
         default="fleet-admin",
         description=(

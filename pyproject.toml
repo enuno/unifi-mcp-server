@@ -59,6 +59,8 @@ dev = [
     "pip-audit>=2.6.0",
     # Throwaway Postgres for the fleet registry tests (no Docker needed).
     "pgserver>=0.1.4",
+    # Redis protocol server for the read-cache tests.
+    "fakeredis>=2.25",
 ]
 
 fleet = [

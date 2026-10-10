@@ -161,9 +161,13 @@ class TestLifespan:
 
 class TestMainEntryPoint:
     def test_stdio(self, main_mod: ModuleType) -> None:
-        with patch.object(main_mod.mcp, "run") as run:
+        with (
+            patch.object(main_mod.mcp, "run") as run,
+            patch.object(main_mod, "register_webhook_route") as webhook,
+        ):
             main_mod.main()
         run.assert_called_once_with()
+        webhook.assert_not_called()  # stdio serves no HTTP
 
     def test_streamable_http_adds_session_guard(self) -> None:
         mod = _reload_main(
@@ -176,11 +180,13 @@ class TestMainEntryPoint:
             patch.object(mod.mcp, "run") as run,
             patch.object(mod, "register_a2a_routes") as a2a,
             patch.object(mod, "register_metrics_route") as metrics,
+            patch.object(mod, "register_webhook_route", return_value=None) as webhook,
         ):
             mod.main()
 
         a2a.assert_called_once()
         metrics.assert_called_once()
+        webhook.assert_called_once_with(mod.mcp, mod.settings)
         kwargs = run.call_args.kwargs
         assert kwargs["transport"] == "streamable-http"
         assert [m.cls.__name__ for m in kwargs["middleware"]] == ["SessionlessRequestGuard"]

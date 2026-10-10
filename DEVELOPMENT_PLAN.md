@@ -116,7 +116,7 @@ Describe how to execute the plan without losing sight of the current production 
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
 - Multi-controller orchestration is partial: fleet Phases 0–3 (per-call routing, Postgres registry, connection pool, read cache) shipped; horizontal scale (fleet Phase 4) is pending.
-- The Redis webhook event bus is not yet implemented (runbook only), and the server does not mount the webhook receiver (`src/webhooks/receiver.py`, a Starlette endpoint) by itself.
+- The Redis webhook event bus is not yet implemented (runbook only). The webhook receiver is served at `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set.
 - SIEM export and audit retention (fleet Phase 5) do not exist yet.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 

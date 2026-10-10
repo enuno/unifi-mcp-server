@@ -318,6 +318,33 @@ def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
     server.custom_route("/metrics", methods=["GET"])(_metrics)
 
 
+def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
+    """Mount ``POST /webhooks/unifi`` when ``WEBHOOK_SECRET`` is set.
+
+    Without a secret nothing is mounted, so an unconfigured server exposes no
+    webhook endpoint at all. The route is not behind the MCP bearer token:
+    UniFi cannot send one, and every delivery must instead carry a valid
+    ``X-UniFi-Signature`` (HMAC-SHA256 of the body, keyed with the secret).
+    The default handlers (cache invalidation and event logging) are registered.
+
+    Args:
+        server: The FastMCP server to register the route on
+        current_settings: Loaded application settings
+
+    Returns:
+        The mounted ``WebhookReceiver``, or None when no secret is configured
+    """
+    if not current_settings.webhook_secret:
+        return None
+
+    from .webhooks import WebhookEventHandler, WebhookReceiver
+
+    receiver = WebhookReceiver(current_settings)
+    WebhookEventHandler(current_settings).register_default_handlers(receiver)
+    server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
+    return receiver
+
+
 if settings.database_url:
     from .fleet.tokens import TokenStore
 
@@ -889,6 +916,8 @@ def main() -> None:
         if settings.metrics_enabled:
             register_metrics_route(mcp, mcp_auth)
             logger.info("Metrics endpoint: /metrics (Prometheus text format)")
+        if register_webhook_route(mcp, settings) is not None:
+            logger.info("Webhook endpoint: POST /webhooks/unifi (X-UniFi-Signature required)")
 
         # FastMCP's run() only recognizes "streamable-http" (hyphen); our own
         # config, env var, and docs all use "streamable_http" (underscore) to

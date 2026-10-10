@@ -72,7 +72,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Synchronize README, API.md, UNIFI_API.md, and CHANGELOG.md (2026-09-27; tool and test counts refreshed 2026-10-10)
 - [ ] Prepare release prep notes and version bump (prepped 2026-09-27: `pyproject.toml` at 0.5.0, `CHANGELOG.md` `[0.5.0]`; tag pending hardware verification, see `DEVELOPMENT_PLAN.md` §5)
 - [x] Fix the webhook receiver (2026-10-10: Starlette endpoint instead of the undeclared `fastapi`, `WEBHOOK_SECRET` read into `Settings`, fails closed without it, real 401/429 responses)
-- [ ] Decide whether the server mounts `POST /webhooks/unifi` itself (the receiver is a library component today; nothing in `src/main.py` mounts it)
+- [x] Mount `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set (`register_webhook_route` in `src/main.py`)
 
 ### Phase 5 — Enterprise scale & operational excellence
 

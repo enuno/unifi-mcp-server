@@ -3086,8 +3086,17 @@ Caches are automatically invalidated when mutating operations are performed on r
 
 ### Webhooks (Optional)
 
-`src/webhooks/` provides a receiver for UniFi webhooks. It is a Starlette
-endpoint you mount on an app; the MCP server does not mount it by itself.
+On a network transport (`http`, `sse`, `streamable_http`) the server serves
+`POST /webhooks/unifi` when `WEBHOOK_SECRET` is set, with the default handlers
+below registered. Without the secret the route is not mounted at all; over
+stdio there is no HTTP surface.
+
+**Authentication:** the route does not use the MCP bearer token (UniFi cannot
+send one). Each request must carry `X-UniFi-Signature`: the hex HMAC-SHA256 of
+the raw request body, keyed with `WEBHOOK_SECRET`.
+
+The receiver (`src/webhooks/`) is a Starlette endpoint and can also be mounted
+on another app:
 
 ```python
 from src.webhooks import WebhookEventHandler, WebhookReceiver
@@ -3096,15 +3105,12 @@ receiver = WebhookReceiver(settings, app=starlette_app)  # POST /webhooks/unifi
 WebhookEventHandler(settings).register_default_handlers(receiver)
 ```
 
-**Configuration:**
-`WEBHOOK_SECRET` is required. Without it the receiver refuses every request
-(`503`). Each request must carry `X-UniFi-Signature`: the hex HMAC-SHA256 of
-the raw request body, keyed with `WEBHOOK_SECRET`.
+An unconfigured receiver mounted this way refuses every request (`503`).
 
 **Responses:** `200` processed (or `{"status": "duplicate"}` for a repeated
 `event_id` within 5 minutes), `400` invalid JSON or event, `401` missing or
 invalid signature, `429` more than 100 events per site per minute, `503` no
-secret configured.
+secret configured (receiver mounted by hand only).
 
 **Supported Events:**
 

@@ -433,3 +433,28 @@ class TestSettingsRedis:
         text = repr(Settings())
         assert "s3cret" not in text
         assert "urlsecret" not in text
+
+
+class TestSettingsWebhookSecret:
+    """WEBHOOK_SECRET is documented in README, API.md and docker-compose.yml."""
+
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+
+    def test_default_unset(self):
+        assert Settings().webhook_secret is None
+
+    def test_reads_documented_env_name(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("WEBHOOK_SECRET", "hook-secret")  # pragma: allowlist secret
+        assert Settings().webhook_secret == "hook-secret"  # pragma: allowlist secret
+
+    def test_blank_means_unset(self, monkeypatch: pytest.MonkeyPatch):
+        # docker-compose forwards ``${WEBHOOK_SECRET:-}`` as an empty string
+        monkeypatch.setenv("WEBHOOK_SECRET", " ")
+        assert Settings().webhook_secret is None
+
+    def test_not_in_repr(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("WEBHOOK_SECRET", "hook-secret")  # pragma: allowlist secret
+        assert "hook-secret" not in repr(Settings())

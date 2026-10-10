@@ -2,26 +2,13 @@
 
 import hashlib
 import hmac
-import sys
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-mock_fastapi = MagicMock()
-mock_fastapi.FastAPI = MagicMock
-mock_fastapi.Header = MagicMock
-mock_fastapi.HTTPException = Exception
-mock_fastapi.Request = MagicMock
-mock_fastapi.status = MagicMock()
-mock_fastapi.status.HTTP_401_UNAUTHORIZED = 401
-mock_fastapi.status.HTTP_400_BAD_REQUEST = 400
-mock_fastapi.status.HTTP_429_TOO_MANY_REQUESTS = 429
-mock_fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR = 500
-sys.modules["fastapi"] = mock_fastapi
-
-from src.webhooks.handlers import WebhookEventHandler  # noqa: E402
-from src.webhooks.receiver import WebhookEvent, WebhookReceiver  # noqa: E402
+from src.webhooks.handlers import WebhookEventHandler
+from src.webhooks.receiver import WebhookEvent, WebhookReceiver
 
 
 @pytest.fixture

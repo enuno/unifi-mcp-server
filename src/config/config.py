@@ -181,6 +181,16 @@ class Settings(BaseSettings):
         repr=False,
     )
 
+    webhook_secret: str | None = Field(
+        default=None,
+        description=(
+            "HMAC-SHA256 key for verifying X-UniFi-Signature on incoming webhooks. "
+            "Without it the webhook receiver refuses every request."
+        ),
+        validation_alias="WEBHOOK_SECRET",
+        repr=False,
+    )
+
     # Fleet registry (docs/FLEET_SCALING_PLAN.md Phase 2a). Setting DATABASE_URL
     # switches the controller registry from the single UNIFI_* controller to
     # Postgres; UNIFI_FLEET_CREDENTIAL_KEY must then be set as well.
@@ -347,7 +357,7 @@ class Settings(BaseSettings):
         validation_alias="MCP_AUTH_TOKEN",
     )
 
-    @field_validator("redis_url", "redis_password", "database_url", mode="before")
+    @field_validator("redis_url", "redis_password", "database_url", "webhook_secret", mode="before")
     @classmethod
     def blank_secret_is_unset(cls, v: str | None) -> str | None:
         """Treat a blank value as unset.

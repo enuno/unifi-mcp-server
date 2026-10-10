@@ -3,6 +3,11 @@
 This module provides a webhook receiver that listens for UniFi events
 and processes them asynchronously. It includes signature verification,
 event validation, and rate limiting.
+
+The route is a plain Starlette endpoint, so it mounts on any app with
+``add_route`` (Starlette, FastAPI, or the Starlette app behind FastMCP's HTTP
+transport). It fails closed: without ``WEBHOOK_SECRET`` every request is
+refused, and every request must carry a valid ``X-UniFi-Signature``.
 """
 
 import hashlib
@@ -12,8 +17,9 @@ from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, SecretStr, ValidationError, field_validator
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from ..config import Settings
 from ..utils import get_logger
@@ -28,7 +34,8 @@ class WebhookEvent(BaseModel):
     data: dict[str, Any] = Field(..., description="Event data")
     event_id: str | None = Field(None, description="Unique event identifier")
 
-    @validator("event_type")
+    @field_validator("event_type")
+    @classmethod
     def validate_event_type(cls, v: str) -> str:
         """Validate event type format."""
         if not v or "." not in v:
@@ -42,14 +49,14 @@ class WebhookReceiver:
     def __init__(
         self,
         settings: Settings,
-        app: FastAPI | None = None,
+        app: Any | None = None,
         path: str = "/webhooks/unifi",
     ):
         """Initialize webhook receiver.
 
         Args:
             settings: Application settings
-            app: Optional FastAPI app instance
+            app: Optional app to mount the route on (anything with ``add_route``)
             path: Webhook endpoint path
         """
         self.settings = settings
@@ -59,96 +66,90 @@ class WebhookReceiver:
         self._event_cache: dict[str, datetime] = {}
         self._rate_limit_cache: dict[str, list[datetime]] = {}
 
-        # Get webhook secret from settings
-        self.webhook_secret = getattr(settings, "webhook_secret", None)
+        secret = getattr(settings, "webhook_secret", None)
+        if isinstance(secret, SecretStr):
+            secret = secret.get_secret_value()
+        self.webhook_secret: str | None = secret or None
         if not self.webhook_secret:
             self.logger.warning(
-                "WEBHOOK_SECRET not configured. Signature verification disabled. "
-                "Set WEBHOOK_SECRET environment variable for production use."
+                "WEBHOOK_SECRET not configured: the webhook receiver will refuse every "
+                "request. Set WEBHOOK_SECRET to accept signed UniFi webhooks."
             )
 
-        if app:
+        if app is not None:
             self.register_routes(app)
 
-    def register_routes(self, app: FastAPI) -> None:
-        """Register webhook routes with FastAPI app.
+    def register_routes(self, app: Any) -> None:
+        """Mount the webhook endpoint (POST only) on an app.
 
         Args:
-            app: FastAPI application instance
+            app: A Starlette-compatible application exposing ``add_route``
         """
-
-        @app.post(self.path)
-        async def receive_webhook(
-            request: Request,
-            x_unifi_signature: str | None = Header(None),
-        ) -> dict[str, Any]:
-            """Receive and process UniFi webhook."""
-            try:
-                # Get request body
-                body = await request.body()
-                body_str = body.decode("utf-8")
-
-                # Verify signature if secret is configured
-                if self.webhook_secret and x_unifi_signature:
-                    if not self._verify_signature(body_str, x_unifi_signature):
-                        self.logger.warning("Invalid webhook signature")
-                        raise HTTPException(
-                            status_code=status.HTTP_401_UNAUTHORIZED,
-                            detail="Invalid signature",
-                        )
-                elif self.webhook_secret and not x_unifi_signature:
-                    self.logger.warning("Missing webhook signature")
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Missing signature",
-                    )
-
-                # Parse event
-                event_data = json.loads(body_str)
-                event = WebhookEvent(**event_data)
-
-                # Check for duplicate events
-                if self._is_duplicate(event):
-                    self.logger.debug(f"Ignoring duplicate event: {event.event_id}")
-                    return {"status": "duplicate", "event_id": event.event_id}
-
-                # Rate limiting check
-                if not self._check_rate_limit(event.site_id):
-                    self.logger.warning(f"Rate limit exceeded for site: {event.site_id}")
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail="Rate limit exceeded",
-                    )
-
-                # Process event
-                await self._process_event(event)
-
-                return {
-                    "status": "success",
-                    "event_id": event.event_id,
-                    "event_type": event.event_type,
-                }
-
-            except json.JSONDecodeError as e:
-                self.logger.error(f"Invalid JSON in webhook payload: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid JSON payload",
-                ) from e
-            except ValueError as e:
-                self.logger.error(f"Invalid webhook event: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=str(e),
-                ) from e
-            except Exception as e:
-                self.logger.error(f"Error processing webhook: {e}")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Internal server error",
-                ) from e
-
+        app.add_route(self.path, self.handle_request, methods=["POST"])
         self.logger.info(f"Webhook receiver registered at {self.path}")
+
+    async def handle_request(self, request: Request) -> JSONResponse:
+        """Starlette endpoint: verify, parse and dispatch one webhook delivery."""
+        body = await request.body()
+        status_code, payload = await self.receive(body, request.headers.get("x-unifi-signature"))
+        return JSONResponse(payload, status_code=status_code)
+
+    async def receive(self, body: bytes, signature: str | None) -> tuple[int, dict[str, Any]]:
+        """Verify and process a raw webhook delivery.
+
+        Args:
+            body: Raw request body
+            signature: Value of the ``X-UniFi-Signature`` header, if any
+
+        Returns:
+            HTTP status code and JSON response body
+        """
+        if not self.webhook_secret:
+            return 503, {"detail": "Webhook receiver is not configured"}
+        if not signature:
+            self.logger.warning("Missing webhook signature")
+            return 401, {"detail": "Missing signature"}
+        try:
+            body_str = body.decode("utf-8")
+        except UnicodeDecodeError:
+            return 400, {"detail": "Webhook payload must be UTF-8"}
+        if not self._verify_signature(body_str, signature):
+            self.logger.warning("Invalid webhook signature")
+            return 401, {"detail": "Invalid signature"}
+
+        try:
+            event_data = json.loads(body_str)
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON in webhook payload: {e}")
+            return 400, {"detail": "Invalid JSON payload"}
+        if not isinstance(event_data, dict):
+            return 400, {"detail": "Webhook payload must be a JSON object"}
+        try:
+            event = WebhookEvent(**event_data)
+        except ValidationError as e:
+            fields = ", ".join(".".join(str(p) for p in err["loc"]) for err in e.errors())
+            self.logger.error(f"Invalid webhook event: {fields}")
+            return 400, {"detail": f"Invalid webhook event: {fields}"}
+
+        if self._is_duplicate(event):
+            self.logger.debug(f"Ignoring duplicate event: {event.event_id}")
+            return 200, {"status": "duplicate", "event_id": event.event_id}
+
+        if not self._check_rate_limit(event.site_id):
+            self.logger.warning(f"Rate limit exceeded for site: {event.site_id}")
+            return 429, {"detail": "Rate limit exceeded"}
+
+        try:
+            await self._process_event(event)
+        except Exception as e:
+            self.logger.error(f"Error processing webhook: {e}")
+            return 500, {"detail": "Internal server error"}
+
+        return 200, {
+            "status": "success",
+            "event_id": event.event_id,
+            "event_type": event.event_type,
+        }
 
     def register_handler(self, event_type: str, handler: Callable) -> None:
         """Register an event handler.

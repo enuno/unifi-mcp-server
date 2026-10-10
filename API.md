@@ -3086,16 +3086,25 @@ Caches are automatically invalidated when mutating operations are performed on r
 
 ### Webhooks (Optional)
 
-The MCP server can receive webhooks from UniFi for real-time event processing.
+`src/webhooks/` provides a receiver for UniFi webhooks. It is a Starlette
+endpoint you mount on an app; the MCP server does not mount it by itself.
+
+```python
+from src.webhooks import WebhookEventHandler, WebhookReceiver
+
+receiver = WebhookReceiver(settings, app=starlette_app)  # POST /webhooks/unifi
+WebhookEventHandler(settings).register_default_handlers(receiver)
+```
 
 **Configuration:**
-Set `WEBHOOK_SECRET` environment variable for signature verification.
+`WEBHOOK_SECRET` is required. Without it the receiver refuses every request
+(`503`). Each request must carry `X-UniFi-Signature`: the hex HMAC-SHA256 of
+the raw request body, keyed with `WEBHOOK_SECRET`.
 
-**Webhook Endpoint:**
-
-```
-POST /webhooks/unifi
-```
+**Responses:** `200` processed (or `{"status": "duplicate"}` for a repeated
+`event_id` within 5 minutes), `400` invalid JSON or event, `401` missing or
+invalid signature, `429` more than 100 events per site per minute, `503` no
+secret configured.
 
 **Supported Events:**
 

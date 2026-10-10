@@ -43,7 +43,7 @@ lint: ## Check formatting, import order, and lint (CI "Lint and Format Check")
 	$(RUN) ruff check $(SRC) $(TESTS)
 
 .PHONY: typecheck
-typecheck: ## Type check with mypy (non-blocking in CI: pre-existing errors)
+typecheck: ## Type check with mypy (CI "Lint and Format Check")
 	$(RUN) mypy $(SRC)
 
 .PHONY: security
@@ -74,7 +74,7 @@ test-cov: ## Run non-integration tests with the CI coverage gate
 		--cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
 
 .PHONY: ci
-ci: lint security docs-coverage pre-commit test-cov ## Run every blocking CI check locally
+ci: lint typecheck security docs-coverage pre-commit test-cov ## Run every blocking CI check locally
 
 ##@ Run
 

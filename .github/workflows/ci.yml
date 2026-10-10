@@ -60,7 +60,6 @@ jobs:
         run: |
           source .venv/bin/activate
           mypy src/
-        continue-on-error: true  # 147 pre-existing type errors — non-blocking until fixed incrementally
 
   test:
     name: Test (Python ${{ matrix.python-version }})

@@ -218,6 +218,48 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
     )
 
+    # Worker tier (python -m src.worker, docs/FLEET_SCALING_PLAN.md §3.5).
+    fleet_worker_health_seconds: int = Field(
+        default=60,
+        ge=5,
+        description="How often the worker health-checks each controller",
+        validation_alias="UNIFI_FLEET_WORKER_HEALTH_SECONDS",
+    )
+
+    fleet_worker_sync_seconds: int = Field(
+        default=900,
+        ge=30,
+        description="How often the worker refreshes each controller's sites and device inventory",
+        validation_alias="UNIFI_FLEET_WORKER_SYNC_SECONDS",
+    )
+
+    fleet_worker_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controller jobs one worker runs at once",
+        validation_alias="UNIFI_FLEET_WORKER_CONCURRENCY",
+    )
+
+    fleet_worker_lease_seconds: int = Field(
+        default=30,
+        ge=3,
+        description=(
+            "How long a worker's membership and controller leases last without renewal; "
+            "a dead worker's controllers move to the others after this"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_LEASE_SECONDS",
+    )
+
+    fleet_worker_down_after: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Consecutive failed health checks before a controller is marked down "
+            "(earlier failures mark it degraded)"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_DOWN_AFTER",
+    )
+
     stdio_role: Literal["viewer", "operator", "admin", "fleet-admin"] = Field(
         default="fleet-admin",
         description=(

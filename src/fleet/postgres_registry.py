@@ -57,14 +57,18 @@ class PostgresRegistry:
         registry._bus = RegistryBus.from_settings(settings)
         return registry
 
-    async def start(self) -> None:
+    async def start(self, *, seed: bool = True) -> None:
         """Check the schema, seed an empty registry, load it, and start refreshing.
+
+        Args:
+            seed: Register the UNIFI_* controller when the registry is empty
+                (the worker passes False: only servers seed)
 
         Raises:
             FleetSchemaError: If the schema is not at this code's revision
         """
         await ensure_current(self.store.engine)
-        if await self.store.seed_from_settings(self._settings):
+        if seed and await self.store.seed_from_settings(self._settings):
             logger.info("Fleet registry was empty: registered the UNIFI_* controller as 'default'")
             if self._settings.audit_log_enabled:
                 await get_audit_logger(self._settings.audit_log_file).alog_event(

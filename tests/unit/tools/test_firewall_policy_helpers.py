@@ -448,3 +448,10 @@ class TestDeleteFirewallPolicy:
                 await fp.delete_firewall_policy(POLICY_ID, "default", local_settings, confirm=True)
         finally:
             patcher.stop()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", [fp.update_firewall_policy, fp.delete_firewall_policy])
+async def test_settings_is_required(tool) -> None:
+    with pytest.raises(ValueError, match="settings is required"):
+        await tool(POLICY_ID, "default", None, confirm=True)

@@ -1,7 +1,7 @@
 """Site Manager API tools for multi-site management."""
 
 from functools import wraps
-from typing import Any
+from typing import Any, cast
 
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
@@ -762,7 +762,7 @@ async def get_host(settings: Settings, host_id: str) -> dict[str, Any]:
             _raw = response.get("data", response)
             data = _raw[0] if isinstance(_raw, list) else _raw
 
-        return data
+        return cast(dict[str, Any], data)
 
 
 # Version Control Tool (added 2026-02-16)

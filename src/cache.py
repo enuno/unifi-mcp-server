@@ -21,11 +21,10 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    from typing import Any
-
-    redis = None  # type: Any
-    Redis: Any = None
-    RedisError: Any = Exception
+    # Placeholders; every use is guarded by REDIS_AVAILABLE.
+    redis = None  # type: ignore[assignment, unused-ignore]
+    Redis = None  # type: ignore[assignment, misc, unused-ignore]
+    RedisError = Exception  # type: ignore[assignment, misc, unused-ignore]
 
 from .config import Settings
 from .utils import get_logger

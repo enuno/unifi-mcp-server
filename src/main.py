@@ -334,8 +334,8 @@ if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
     agnost_org_id = os.getenv("AGNOST_ORG_ID")
     if agnost_org_id:
         try:
-            from agnost import config as agnost_config  # type: ignore[import-untyped]
-            from agnost import track  # type: ignore[import-untyped]
+            from agnost import config as agnost_config
+            from agnost import track
 
             disable_input = os.getenv("AGNOST_DISABLE_INPUT", "false").lower() in (
                 "true",

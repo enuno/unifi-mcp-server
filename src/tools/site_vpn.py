@@ -70,7 +70,7 @@ async def update_site_to_site_vpn(
             raise ResourceNotFoundError("vpn", vpn_id)
 
         # Build update payload
-        updates = {}
+        updates: dict[str, Any] = {}
         if name is not None:
             updates["name"] = name
         if enabled is not None:

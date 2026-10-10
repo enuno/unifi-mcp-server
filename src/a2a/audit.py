@@ -49,7 +49,7 @@ class AuditLogger:
         if isinstance(value, set):
             return sorted(value)
         if hasattr(value, "model_dump"):
-            return value.model_dump()  # type: ignore[no-any-return]
+            return value.model_dump()
         if hasattr(value, "__dict__") and not isinstance(value, type):
             try:
                 return dict(value.__dict__)

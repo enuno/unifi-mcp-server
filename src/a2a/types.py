@@ -19,7 +19,7 @@ class A2AJSONEncoder(JSONEncoder):
 
     def default(self, o: Any) -> Any:
         """Convert supported types into JSON-serializable values."""
-        if is_dataclass(o):
+        if is_dataclass(o) and not isinstance(o, type):
             return asdict(o)
         if isinstance(o, Enum):
             return o.value

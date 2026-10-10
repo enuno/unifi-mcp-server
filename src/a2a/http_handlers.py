@@ -74,9 +74,10 @@ async def _payload_from_request(request: Any) -> dict[str, Any]:
         body = request.body()
         raw = await body if hasattr(body, "__await__") else body
         if isinstance(raw, bytes) and raw:
-            return json.loads(raw.decode("utf-8"))
+            raw = raw.decode("utf-8")
         if isinstance(raw, str) and raw:
-            return json.loads(raw)
+            payload: dict[str, Any] = json.loads(raw)
+            return payload
     return {}
 
 
@@ -208,7 +209,7 @@ async def delegate_handler(
     else:
         result = executor(tool_name, params)
         if hasattr(result, "__await__"):
-            result = await result  # type: ignore[func-returns-value]
+            result = await result
 
     duration_ms = (datetime.now(tz=timezone.utc) - started).total_seconds() * 1000.0
     active_state.audit_logger.log_invocation(

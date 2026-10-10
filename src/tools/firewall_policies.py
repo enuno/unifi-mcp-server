@@ -794,7 +794,7 @@ async def create_firewall_policy(
 async def update_firewall_policy(
     policy_id: str,
     site_id: str = "default",
-    settings: Settings = None,
+    settings: Settings | None = None,
     name: str | None = None,
     action: Literal["ALLOW", "BLOCK"] | None = None,
     enabled: bool | None = None,
@@ -902,6 +902,8 @@ async def update_firewall_policy(
         ResourceNotFoundError: If policy not found
     """
     site_id = validate_site_id(site_id)
+    if settings is None:
+        raise ValueError("settings is required")
     _ensure_local_api(settings)
 
     confirm_bool = coerce_bool(confirm)
@@ -1125,7 +1127,7 @@ async def update_firewall_policy(
 async def delete_firewall_policy(
     policy_id: str,
     site_id: str = "default",
-    settings: Settings = None,
+    settings: Settings | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -1149,6 +1151,8 @@ async def delete_firewall_policy(
         ResourceNotFoundError: If policy not found
     """
     site_id = validate_site_id(site_id)
+    if settings is None:
+        raise ValueError("settings is required")
     _ensure_local_api(settings)
 
     if not coerce_bool(dry_run) and not coerce_bool(confirm):

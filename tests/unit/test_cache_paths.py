@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import src.cache as cache_module
-from src.cache import CacheClient, ReadCache, cached, warm_cache
 from src.config import Settings
 
 
@@ -44,8 +43,8 @@ def redis_instance() -> AsyncMock:
         yield instance
 
 
-async def _connected(settings: MagicMock) -> CacheClient:
-    client = CacheClient(settings)
+async def _connected(settings: MagicMock) -> cache_module.CacheClient:
+    client = cache_module.CacheClient(settings)
     assert await client.connect()
     return client
 
@@ -65,7 +64,7 @@ class TestCacheClientErrorPaths:
     async def test_connect_logs_redis_url_without_its_value(self, settings, redis_instance) -> None:
         settings.redis_url = "redis://:secret@host:6379/0"  # pragma: allowlist secret
         logger = MagicMock()
-        client = CacheClient(settings, logger=logger)
+        client = cache_module.CacheClient(settings, logger=logger)
 
         assert await client.connect()
 
@@ -156,7 +155,7 @@ class TestCacheClientErrorPaths:
 class TestCachedDecorator:
     @pytest.mark.asyncio
     async def test_without_settings_calls_through(self, redis_instance) -> None:
-        @cached("sites")
+        @cache_module.cached("sites")
         async def fn(x: int) -> int:
             return x * 2
 
@@ -168,7 +167,7 @@ class TestCachedDecorator:
         redis_instance.get.return_value = '{"cached": true}'
         inner = AsyncMock(return_value={"cached": False})
 
-        @cached("sites", ttl=60)
+        @cache_module.cached("sites", ttl=60)
         async def get_sites(settings: Any, site_id: str) -> Any:
             return await inner()
 
@@ -181,7 +180,7 @@ class TestCachedDecorator:
     async def test_miss_stores_with_configured_ttl(self, settings, redis_instance) -> None:
         redis_instance.get.return_value = None
 
-        @cached("devices")
+        @cache_module.cached("devices")
         async def list_devices(settings: Any) -> list:
             return [1, 2]
 
@@ -200,7 +199,7 @@ class TestCachedDecorator:
         real_settings.redis_port = 6379
         redis_instance.get.return_value = None
 
-        @cached("sites", ttl=5, key_builder=lambda s, n: f"custom:{n}")
+        @cache_module.cached("sites", ttl=5, key_builder=lambda s, n: f"custom:{n}")
         async def fn(s: Any, n: int) -> int:
             return n
 
@@ -228,7 +227,7 @@ class TestWarmCache:
     @pytest.mark.asyncio
     async def test_skipped_without_redis(self, settings) -> None:
         with patch("src.cache.REDIS_AVAILABLE", False):
-            assert await warm_cache(settings) == {}
+            assert await cache_module.warm_cache(settings) == {}
 
     @pytest.mark.asyncio
     async def test_warms_sites_and_devices(self, settings, redis_instance) -> None:
@@ -240,7 +239,7 @@ class TestWarmCache:
             }
         )
         with patch("src.api.UniFiClient", return_value=unifi):
-            result = await warm_cache(settings)
+            result = await cache_module.warm_cache(settings)
 
         assert result == {"sites": 2, "devices": 2, "networks": 0}
         redis_instance.aclose.assert_awaited()
@@ -250,7 +249,7 @@ class TestWarmCache:
         unifi = self._unifi({})
         unifi.authenticate.side_effect = RuntimeError("auth failed")
         with patch("src.api.UniFiClient", return_value=unifi):
-            result = await warm_cache(settings)
+            result = await cache_module.warm_cache(settings)
 
         assert result == {"sites": 0, "devices": 0, "networks": 0}
         redis_instance.aclose.assert_awaited()
@@ -262,12 +261,12 @@ class TestReadCacheEdges:
         settings.cache_enabled = True
         settings.redis_url = "redis://cache:6379/0"
         with patch("src.cache.REDIS_AVAILABLE", False):
-            assert ReadCache.from_settings(settings) is None
+            assert cache_module.ReadCache.from_settings(settings) is None
 
     @pytest.mark.asyncio
     async def test_store_failure_still_returns_value(self, settings, redis_instance) -> None:
         redis_instance.setex.side_effect = _error()
-        read_cache = ReadCache(settings)
+        read_cache = cache_module.ReadCache(settings)
 
         assert await read_cache._load_and_store("k", 10, AsyncMock(return_value={"a": 1})) == {
             "a": 1
@@ -275,7 +274,7 @@ class TestReadCacheEdges:
 
     @pytest.mark.asyncio
     async def test_uncacheable_value_is_not_stored(self, settings, redis_instance) -> None:
-        read_cache = ReadCache(settings)
+        read_cache = cache_module.ReadCache(settings)
 
         value = object()
         assert await read_cache._load_and_store("k", 10, AsyncMock(return_value=value)) is value

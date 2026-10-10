@@ -183,7 +183,9 @@ class TestMutate:
         seen, handler = _recorder(httpx.Response(204))
         client = _client(settings, handler)
 
-        assert await client.delete("hosts/h1") == {}
+        result = await client.delete("hosts/h1")
+
+        assert result == {}
         assert seen[0].method == "DELETE"
 
     @pytest.mark.asyncio

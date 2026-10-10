@@ -212,7 +212,9 @@ class TestProtectClientHttp:
         seen, handler = _recorder(json={})
         client = _mock_transport_client(mock_settings, handler)
 
-        assert await client.delete("cameras/x") == {}
+        result = await client.delete("cameras/x")
+
+        assert result == {}
         assert seen[0].method == "DELETE"
 
     @pytest.mark.asyncio

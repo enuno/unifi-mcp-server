@@ -17,7 +17,11 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-spec_path = Path(sys.argv[sys.argv.index("--spec") + 1]) if "--spec" in sys.argv else ROOT / "scripts/scraped-api-spec-v10.6.106.json"
+spec_path = (
+    Path(sys.argv[sys.argv.index("--spec") + 1])
+    if "--spec" in sys.argv
+    else ROOT / "scripts/scraped-api-spec-v10.6.106.json"
+)
 spec = json.load(open(spec_path))
 comps = spec.get("components", {}).get("schemas", {})
 
@@ -32,6 +36,7 @@ def resolve(schema, depth=0):
 
 
 def norm(p: str) -> str:
+    """Replace every {param} in a path with {} so call sites match spec paths."""
     return re.sub(r"\{[^}]+\}", "{}", p)
 
 
@@ -42,12 +47,26 @@ for path, methods in spec.get("paths", {}).items():
         if m.lower() not in ("get", "post", "put", "patch", "delete"):
             continue
         rb = op.get("requestBody", {}).get("content", {})
-        body = next((rb[ct]["schema"] for ct in ("application/json", "application/*+json")
-                     if ct in rb and "schema" in rb[ct]), None)
+        body = next(
+            (
+                rb[ct]["schema"]
+                for ct in ("application/json", "application/*+json")
+                if ct in rb and "schema" in rb[ct]
+            ),
+            None,
+        )
         props, req = resolve(body) if body else ({}, [])
-        ops.append({"method": m.upper(), "path": path, "summary": op.get("summary", ""),
-                    "tags": op.get("tags", []), "has_body": bool(body),
-                    "body_props": sorted(props), "body_req": req})
+        ops.append(
+            {
+                "method": m.upper(),
+                "path": path,
+                "summary": op.get("summary", ""),
+                "tags": op.get("tags", []),
+                "has_body": bool(body),
+                "body_props": sorted(props),
+                "body_req": req,
+            }
+        )
 
 # 2. Code literals (canonical cloud form carries the /integration prefix;
 #    spec paths drop it — normalize both away)
@@ -65,8 +84,10 @@ print("=== A. Spec operations vs code matches (NO-CODE-MATCH = not called via In
 for op in ops:
     hits = code_paths.get(norm(op["path"]), [])
     locs = "; ".join(f"{h[0]}:{h[1]}" for h in hits[:3])
-    print(f"{op['method']:6s} {op['path']:58s} body={op['has_body']!s:5s} "
-          f"{'NO-CODE-MATCH' if not hits else locs}")
+    print(
+        f"{op['method']:6s} {op['path']:58s} body={op['has_body']!s:5s} "
+        f"{'NO-CODE-MATCH' if not hits else locs}"
+    )
 
 print("\n=== B. Code Integration-API literals NOT in spec (path drift suspects) ===")
 spec_norms = {norm(o["path"]) for o in ops}
@@ -82,4 +103,6 @@ if not drift:
 print("\n=== C. Spec request-body field sets (comparison targets) ===")
 for op in ops:
     if op["has_body"]:
-        print(f"{op['method']:6s} {op['path']:50s} required={op['body_req']} props={op['body_props']}")
+        print(
+            f"{op['method']:6s} {op['path']:50s} required={op['body_req']} props={op['body_props']}"
+        )

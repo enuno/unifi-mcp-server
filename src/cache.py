@@ -4,8 +4,10 @@ This module provides caching capabilities to reduce API calls and improve perfor
 Supports configurable TTL per resource type and graceful degradation if Redis is unavailable.
 """
 
+import asyncio
 import json
 import logging
+import weakref
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -26,6 +28,55 @@ except ImportError:
 
 from .config import Settings
 from .utils import get_logger
+
+#: Connection pools shared by every CacheClient, one per event loop and Redis
+#: location. ``@cached`` builds a CacheClient per call; sharing the pool keeps
+#: that from opening a new TCP connection each time. Keyed by loop because an
+#: asyncio connection must not be reused from a different loop, and weakly so a
+#: closed loop's pools are dropped with it.
+_pools: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[tuple[Any, ...], Any]]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _shared_pool(settings: Settings) -> Any:
+    """Return the connection pool for the configured Redis location.
+
+    ``REDIS_URL`` takes precedence over the individual host/port/db/password
+    settings.
+
+    Args:
+        settings: Application settings
+
+    Returns:
+        A ``redis.asyncio.ConnectionPool`` bound to the running event loop
+    """
+    pools = _pools.setdefault(asyncio.get_running_loop(), {})
+    key: tuple[Any, ...]
+    if settings.redis_url:
+        key = ("url", settings.redis_url)
+    else:
+        key = (settings.redis_host, settings.redis_port, settings.redis_db, settings.redis_password)
+
+    pool = pools.get(key)
+    if pool is None:
+        options: dict[str, Any] = {
+            "decode_responses": True,
+            "socket_timeout": 5.0,
+            "socket_connect_timeout": 5.0,
+        }
+        if settings.redis_url:
+            pool = redis.ConnectionPool.from_url(settings.redis_url, **options)
+        else:
+            pool = redis.ConnectionPool(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                db=settings.redis_db,
+                password=settings.redis_password,
+                **options,
+            )
+        pools[key] = pool
+    return pool
 
 
 class CacheConfig:
@@ -99,26 +150,18 @@ class CacheClient:
             return True
 
         try:
-            # Get Redis settings from environment or use defaults
-            redis_host = getattr(self.settings, "redis_host", "localhost")
-            redis_port = getattr(self.settings, "redis_port", 6379)
-            redis_db = getattr(self.settings, "redis_db", 0)
-            redis_password = getattr(self.settings, "redis_password", None)
-
-            self._redis = redis.Redis(
-                host=redis_host,
-                port=redis_port,
-                db=redis_db,
-                password=redis_password,
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=5.0,
-            )
+            self._redis = redis.Redis(connection_pool=_shared_pool(self.settings))
 
             # Test connection
             await self._redis.ping()
             self._connected = True
-            self.logger.info(f"Connected to Redis at {redis_host}:{redis_port}")
+            # Never log REDIS_URL: it can carry the password.
+            location = (
+                "REDIS_URL"
+                if self.settings.redis_url
+                else f"{self.settings.redis_host}:{self.settings.redis_port}"
+            )
+            self.logger.info(f"Connected to Redis at {location}")
             return True
 
         except Exception as e:
@@ -131,10 +174,10 @@ class CacheClient:
             return False
 
     async def disconnect(self) -> None:
-        """Disconnect from Redis."""
+        """Disconnect from Redis, leaving the shared connection pool open."""
         if self._redis:
             try:
-                await self._redis.close()
+                await self._redis.aclose(close_connection_pool=False)
                 self.logger.info("Disconnected from Redis")
             except Exception as e:
                 self.logger.error(f"Error disconnecting from Redis: {e}")

@@ -25,7 +25,18 @@ def mock_settings():
     settings.redis_port = 6379
     settings.redis_db = 0
     settings.redis_password = None
+    settings.redis_url = None
     return settings
+
+
+@pytest.fixture(autouse=True)
+def _reset_pools():
+    """Each test starts without shared connection pools."""
+    import src.cache
+
+    src.cache._pools.clear()
+    yield
+    src.cache._pools.clear()
 
 
 class TestCacheConfig:
@@ -121,6 +132,74 @@ class TestCacheClientConnect:
 
                 assert result is True
                 assert mock_redis_instance.ping.call_count == 1
+
+
+class TestCacheClientConnectionSettings:
+    """CacheClient must honor the configured Redis location (it used to
+    ignore it and always dial localhost:6379)."""
+
+    @pytest.mark.asyncio
+    async def test_pool_built_from_host_settings(self, mock_settings):
+        mock_settings.redis_host = "redis.internal"
+        mock_settings.redis_port = 6380
+        mock_settings.redis_db = 2
+        mock_settings.redis_password = "s3cret"  # pragma: allowlist secret
+
+        with (
+            patch("src.cache.REDIS_AVAILABLE", True),
+            patch("src.cache.redis.ConnectionPool") as pool_cls,
+            patch("src.cache.redis.Redis", return_value=AsyncMock()) as redis_cls,
+        ):
+            assert await CacheClient(mock_settings).connect() is True
+
+        kwargs = pool_cls.call_args.kwargs
+        assert (kwargs["host"], kwargs["port"], kwargs["db"]) == ("redis.internal", 6380, 2)
+        assert kwargs["password"] == "s3cret"  # pragma: allowlist secret
+        assert redis_cls.call_args.kwargs["connection_pool"] is pool_cls.return_value
+
+    @pytest.mark.asyncio
+    async def test_redis_url_takes_precedence(self, mock_settings):
+        mock_settings.redis_url = "redis://:pw@cache:6379/1"
+
+        with (
+            patch("src.cache.REDIS_AVAILABLE", True),
+            patch("src.cache.redis.ConnectionPool") as pool_cls,
+            patch("src.cache.redis.Redis", return_value=AsyncMock()),
+        ):
+            await CacheClient(mock_settings).connect()
+
+        pool_cls.from_url.assert_called_once()
+        assert pool_cls.from_url.call_args.args[0] == "redis://:pw@cache:6379/1"
+        pool_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_clients_share_one_pool(self, mock_settings):
+        with (
+            patch("src.cache.REDIS_AVAILABLE", True),
+            patch("src.cache.redis.ConnectionPool") as pool_cls,
+            patch("src.cache.redis.Redis", return_value=AsyncMock()),
+        ):
+            first, second = CacheClient(mock_settings), CacheClient(mock_settings)
+            await first.connect()
+            await first.disconnect()
+            await second.connect()
+
+        assert pool_cls.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_disconnect_keeps_shared_pool_open(self, mock_settings):
+        redis_instance = AsyncMock()
+        with (
+            patch("src.cache.REDIS_AVAILABLE", True),
+            patch("src.cache.redis.ConnectionPool") as pool_cls,
+            patch("src.cache.redis.Redis", return_value=redis_instance),
+        ):
+            client = CacheClient(mock_settings)
+            await client.connect()
+            await client.disconnect()
+
+        redis_instance.aclose.assert_awaited_once_with(close_connection_pool=False)
+        pool_cls.return_value.disconnect.assert_not_called()
 
 
 class TestCacheClientGetSet:
@@ -372,7 +451,7 @@ class TestCacheClientDisconnect:
     async def test_disconnect_success(self, mock_settings):
         mock_redis_instance = AsyncMock()
         mock_redis_instance.ping = AsyncMock()
-        mock_redis_instance.close = AsyncMock()
+        mock_redis_instance.aclose = AsyncMock()
 
         with patch("src.cache.REDIS_AVAILABLE", True):
             with patch("src.cache.redis.Redis", return_value=mock_redis_instance):
@@ -382,7 +461,7 @@ class TestCacheClientDisconnect:
 
                 assert client._redis is None
                 assert client._connected is False
-                mock_redis_instance.close.assert_called_once()
+                mock_redis_instance.aclose.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_disconnect_when_not_connected(self, mock_settings):

@@ -114,6 +114,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
+| `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | Redis location for the response cache | No | `localhost` / `6379` / `0` / unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address for `http`/`sse`/`streamable_http` | No | `127.0.0.1` |
@@ -2959,8 +2961,9 @@ stats = await mcp.call_tool("get_topology_statistics", {
 The MCP server includes optional Redis-based caching to reduce API calls and improve performance.
 
 **Configuration:**
-Set these environment variables to enable caching:
+Install the `redis` client with `pip install 'unifi-mcp-server[fleet]'`, then set these environment variables to enable caching:
 
+- `REDIS_URL` (optional; e.g. `redis://:password@host:6379/0`, takes precedence over the fields below)
 - `REDIS_HOST` (default: localhost)
 - `REDIS_PORT` (default: 6379)
 - `REDIS_DB` (default: 0)

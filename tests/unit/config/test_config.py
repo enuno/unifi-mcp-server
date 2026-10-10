@@ -385,3 +385,51 @@ class TestSettingsTransportConfiguration:
         with pytest.raises(ValueError) as exc_info:
             Settings()
         assert "Server port must be between 1 and 65535" in str(exc_info.value)
+
+
+class TestSettingsRedis:
+    """Redis settings: the documented REDIS_* names must reach Settings."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_redis_env(self, monkeypatch: pytest.MonkeyPatch):
+        for name in ("REDIS_URL", "REDIS_HOST", "REDIS_PORT", "REDIS_DB", "REDIS_PASSWORD"):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+
+    def test_defaults(self):
+        settings = Settings()
+        assert settings.redis_url is None
+        assert settings.redis_host == "localhost"
+        assert settings.redis_port == 6379
+        assert settings.redis_db == 0
+        assert settings.redis_password is None
+
+    def test_reads_documented_env_names(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("REDIS_HOST", "redis.internal")
+        monkeypatch.setenv("REDIS_PORT", "6380")
+        monkeypatch.setenv("REDIS_DB", "2")
+        monkeypatch.setenv("REDIS_PASSWORD", "s3cret")
+        settings = Settings()
+        assert settings.redis_host == "redis.internal"
+        assert settings.redis_port == 6380
+        assert settings.redis_db == 2
+        assert settings.redis_password == "s3cret"  # pragma: allowlist secret
+
+    def test_reads_redis_url(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("REDIS_URL", "redis://:pw@cache:6379/1")
+        assert Settings().redis_url == "redis://:pw@cache:6379/1"
+
+    def test_blank_values_mean_unset(self, monkeypatch: pytest.MonkeyPatch):
+        # docker-compose forwards ``${REDIS_PASSWORD:-}`` as an empty string
+        monkeypatch.setenv("REDIS_PASSWORD", "")
+        monkeypatch.setenv("REDIS_URL", "  ")
+        settings = Settings()
+        assert settings.redis_password is None
+        assert settings.redis_url is None
+
+    def test_secrets_not_in_repr(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("REDIS_PASSWORD", "s3cret")
+        monkeypatch.setenv("REDIS_URL", "redis://:urlsecret@cache:6379/0")
+        text = repr(Settings())
+        assert "s3cret" not in text
+        assert "urlsecret" not in text

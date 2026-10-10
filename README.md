@@ -342,7 +342,7 @@ unifi-mcp-server
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Global Dry-Run Mode**: Set `UNIFI_DRY_RUN=true` to force every `dry_run`-gated tool into preview mode at call time (caller-supplied values are overridden), and to withhold registration of mutating tools that have no dry-run gate — no write can reach the controller
 - **Metrics Endpoint**: Set `UNIFI_METRICS_ENABLED=true` to serve `GET /metrics` (Prometheus text exposition: `unifi_mcp_tool_calls_total`, `unifi_mcp_tool_call_duration_seconds` histogram, `unifi_mcp_tools_registered`) on network transports; bearer-token protected like `/mcp`
-- **Audit Logging**: Planned append-only audit trail for mutation paths
+- **Audit Logging**: Append-only JSON-lines audit trail for mutation paths; optional at-rest Fernet encryption of sensitive payload fields via `UNIFI_AUDIT_LOG_KEY` with non-destructive key rotation (see SECURITY.md; decrypt with `python -m src.utils.audit_decrypt`)
 - **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages
 - **Password Masking**: Sensitive data automatically masked in logs

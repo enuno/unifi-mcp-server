@@ -1,6 +1,7 @@
 """Utility modules for UniFi MCP Server."""
 
 from .audit import AuditLogger, audit_action, get_audit_logger, log_audit
+from .audit_encryption import AuditEncryptionError, resolve_audit_cipher
 from .exceptions import (
     APIError,
     AuthenticationError,
@@ -62,6 +63,8 @@ __all__ = [
     "get_audit_logger",
     "log_audit",
     "audit_action",
+    "AuditEncryptionError",
+    "resolve_audit_cipher",
     # Logger
     "get_logger",
     "log_api_request",

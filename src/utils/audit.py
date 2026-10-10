@@ -5,6 +5,14 @@ import os
 from pathlib import Path
 from typing import Any
 
+from cryptography.fernet import MultiFernet
+
+from .audit_encryption import (
+    AuditEncryptionError,
+    decrypt_field,
+    encrypt_field,
+    resolve_audit_cipher,
+)
 from .helpers import get_iso_timestamp
 from .logger import get_logger
 from .sanitize import sanitize_credentials
@@ -13,15 +21,36 @@ from .sanitize import sanitize_credentials
 class AuditLogger:
     """Audit logger for tracking mutating operations."""
 
-    def __init__(self, log_file: str | Path | None = None, log_level: str = "INFO"):
+    def __init__(
+        self,
+        log_file: str | Path | None = None,
+        log_level: str = "INFO",
+        encryption: MultiFernet | None = None,
+    ):
         """Initialize audit logger.
 
         Args:
             log_file: Path to audit log file. If None, uses default location.
             log_level: Logging level
+            encryption: Optional ``MultiFernet`` for at-rest encryption of
+                sensitive payload fields (``parameters``, ``error``). When
+                omitted, the key is resolved from the
+                ``UNIFI_AUDIT_LOG_KEY`` environment variable; when neither
+                is present, records are written in the historical plaintext
+                format (backward compatible). When a key *is* configured
+                but invalid, construction fails closed with
+                :class:`AuditEncryptionError` rather than silently writing
+                plaintext the operator believed was encrypted.
+
+        Raises:
+            AuditEncryptionError: If a key is configured but unusable.
         """
         self.log_file = Path(log_file) if log_file else Path("audit.log")
         self.logger = get_logger(__name__, log_level)
+        # None means "not specified" → resolve from the environment.
+        # Explicitly passing a cipher (including one built from env by a
+        # caller) skips re-resolution so tests and embeddings control wiring.
+        self.cipher = resolve_audit_cipher() if encryption is None else encryption
 
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +110,23 @@ class AuditLogger:
         if error:
             audit_record["error"] = error
 
+        # At-rest encryption for the sensitive payloads (issue #22). This
+        # runs on the already-redacted record: encryption complements the
+        # redaction above, it does not replace it, so a decrypted entry is
+        # exactly the redacted record an operator would see without a key.
+        # Controller error text is encrypted too — errors quote offending
+        # values back (e.g. "api.err.MacUsed for aa:bb:cc:dd:ee:ff"), so
+        # encrypting parameters alone would still leak identifiers to disk.
+        # The same ciphertext record is also passed to the application
+        # logger below, keeping plaintext payloads out of stdout/stderr logs
+        # when encryption is enabled (CodeQL py/clear-text-logging).
+        if self.cipher is not None:
+            audit_record["parameters"] = encrypt_field(self.cipher, audit_record["parameters"])
+            audit_record["parameters_encrypted"] = True
+            if "error" in audit_record:
+                audit_record["error"] = encrypt_field(self.cipher, audit_record["error"])
+                audit_record["error_encrypted"] = True
+
         # Log to file
         try:
             with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
@@ -100,6 +146,38 @@ class AuditLogger:
         else:
             self.logger.info(log_message, extra=audit_record)
 
+    def _decrypt_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
+        """Decrypt the encrypted payload fields of one audit entry, in place.
+
+        Args:
+            entry: A parsed audit record. Records without encryption
+                markers are returned unchanged (historical plaintext stays
+                readable after enabling encryption, and after rotation).
+
+        Returns:
+            The entry with ``parameters`` / ``error`` decrypted and the
+            ``*_encrypted`` markers removed. If a field cannot be decrypted
+            (wrong key, tampered token, or no key configured), the field is
+            replaced with a ``<undecryptable: field>`` placeholder and a
+            warning is logged — one bad line must not cost the rest of the
+            trail, but it must not pass silently either.
+        """
+        for field in ("parameters", "error"):
+            if not entry.get(f"{field}_encrypted"):
+                continue
+            token = entry[field]
+            try:
+                if self.cipher is None:
+                    raise AuditEncryptionError(
+                        f"Audit log entry has encrypted {field} but no key is configured."
+                    )
+                entry[field] = decrypt_field(self.cipher, token)
+            except AuditEncryptionError as e:
+                self.logger.warning(f"Cannot decrypt audit log {field}: {e}")
+                entry[field] = f"<undecryptable: {field}>"
+            del entry[f"{field}_encrypted"]
+        return entry
+
     def get_recent_operations(
         self, limit: int = 100, operation: str | None = None
     ) -> list[dict[str, Any]]:
@@ -110,7 +188,9 @@ class AuditLogger:
             operation: Filter by operation name (optional)
 
         Returns:
-            List of audit log entries
+            List of audit log entries. Encrypted payload fields are
+            decrypted when a usable key is configured; metadata stays
+            readable either way.
         """
         if not self.log_file.exists():
             return []
@@ -127,7 +207,7 @@ class AuditLogger:
                     try:
                         entry = json.loads(line)
                         if operation is None or entry.get("operation") == operation:
-                            entries.append(entry)
+                            entries.append(self._decrypt_entry(entry))
 
                         if len(entries) >= limit:
                             break

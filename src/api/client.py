@@ -87,9 +87,10 @@ class UniFiClient:
         if self._connection is not None:
             self.client = self._connection.client
             if self._connection.rate_limiter is None:
-                self._connection.rate_limiter = RateLimiter(
-                    settings.rate_limit_requests, settings.rate_limit_period
-                )
+                from .rate_limit import make_rate_limiter
+
+                # Shared across replicas when Redis is configured.
+                self._connection.rate_limiter = make_rate_limiter(settings)
             self.rate_limiter = self._connection.rate_limiter
             return
 

@@ -1,7 +1,21 @@
-"""Audit logging for mutating operations."""
+"""Audit logging for mutating operations.
 
+Every record appended to the audit file is hash-chained: it carries the
+writer's ``chain_id``, a ``seq`` number, the previous record's hash, and its
+own ``hash`` over the stored (redacted, possibly encrypted) record. With
+``UNIFI_AUDIT_CHAIN_KEY`` set the hash is an HMAC-SHA256, so the chain cannot
+be recomputed by someone who can only edit the file. ``python -m
+src.utils.audit_verify`` checks a file (docs/FLEET_SCALING_PLAN.md §3.7).
+"""
+
+import hashlib
+import hmac
 import json
 import os
+import threading
+import time
+import uuid
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +27,68 @@ from .audit_encryption import (
     encrypt_field,
     resolve_audit_cipher,
 )
+from .exceptions import UniFiMCPException
 from .helpers import get_iso_timestamp
 from .logger import get_logger
 from .sanitize import sanitize_credentials
+
+#: Environment variable holding the HMAC key for the audit hash chain.
+CHAIN_KEY_ENV = "UNIFI_AUDIT_CHAIN_KEY"
+
+#: ``prev_hash`` of the first record in a chain.
+GENESIS_HASH = "0" * 64
+
+#: Identifies this process's chain in a shared audit file.
+INSTANCE_ID = uuid.uuid4().hex
+
+#: Payload fields that carry operation data and are encrypted at rest.
+_PAYLOAD_FIELDS = ("parameters", "error", "details")
+
+
+class AuditUnavailableError(UniFiMCPException):
+    """Raised when a required audit record cannot be written."""
+
+
+def resolve_chain_key(env: dict[str, str] | None = None) -> bytes | None:
+    """Return the audit chain HMAC key from the environment, if set."""
+    raw = (os.environ if env is None else env).get(CHAIN_KEY_ENV, "").strip()
+    return raw.encode("utf-8") if raw else None
+
+
+def record_hash(record: dict[str, Any], key: bytes | None) -> str:
+    """Hash a stored audit record (every field except ``hash`` itself).
+
+    Args:
+        record: The record as written to disk
+        key: HMAC key; plain SHA-256 when None
+
+    Returns:
+        Hex digest
+    """
+    body = {k: v for k, v in record.items() if k != "hash"}
+    canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    if key is not None:
+        return hmac.new(key, canonical.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+class _Chain:
+    """Position of this process's chain in one audit file."""
+
+    def __init__(self) -> None:
+        self.seq = 0
+        self.prev_hash = GENESIS_HASH
+
+
+#: Chains by resolved audit file path; one lock orders seq numbers and writes.
+_chains: dict[str, _Chain] = {}
+_chain_lock = threading.Lock()
+
+#: Detail reports collected for the wrapper-level record of the tool call in
+#: progress; ``None`` outside such a call. See :class:`ToolCallRecorder`.
+_active_tool_call: ContextVar[list[dict[str, Any]] | None] = ContextVar(
+    "unifi_active_tool_call", default=None
+)
 
 
 class AuditLogger:
@@ -51,6 +124,7 @@ class AuditLogger:
         # Explicitly passing a cipher (including one built from env by a
         # caller) skips re-resolution so tests and embeddings control wiring.
         self.cipher = resolve_audit_cipher() if encryption is None else encryption
+        self.chain_key = resolve_chain_key()
 
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -85,6 +159,22 @@ class AuditLogger:
             site_id: Site ID where operation was performed
             dry_run: Whether this was a dry run
         """
+        reports = _active_tool_call.get()
+        if reports is not None:
+            # Inside a wrapper-audited tool call: the wrapper writes one record
+            # for the whole call; this report becomes part of it.
+            report: dict[str, Any] = {
+                "operation": operation,
+                "result": result,
+                "parameters": sanitize_credentials(parameters),
+            }
+            if site_id:
+                report["site_id"] = site_id
+            if error:
+                report["error"] = error
+            reports.append(report)
+            return
+
         timestamp = get_iso_timestamp()
 
         # Redact credentials because tools pass their request payloads
@@ -110,29 +200,7 @@ class AuditLogger:
         if error:
             audit_record["error"] = error
 
-        # At-rest encryption for the sensitive payloads (issue #22). This
-        # runs on the already-redacted record: encryption complements the
-        # redaction above, it does not replace it, so a decrypted entry is
-        # exactly the redacted record an operator would see without a key.
-        # Controller error text is encrypted too — errors quote offending
-        # values back (e.g. "api.err.MacUsed for aa:bb:cc:dd:ee:ff"), so
-        # encrypting parameters alone would still leak identifiers to disk.
-        # The same ciphertext record is also passed to the application
-        # logger below, keeping plaintext payloads out of stdout/stderr logs
-        # when encryption is enabled (CodeQL py/clear-text-logging).
-        if self.cipher is not None:
-            audit_record["parameters"] = encrypt_field(self.cipher, audit_record["parameters"])
-            audit_record["parameters_encrypted"] = True
-            if "error" in audit_record:
-                audit_record["error"] = encrypt_field(self.cipher, audit_record["error"])
-                audit_record["error_encrypted"] = True
-
-        # Log to file
-        try:
-            with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
-                f.write(json.dumps(audit_record) + "\n")
-        except Exception as e:
-            self.logger.error(f"Failed to write audit log: {e}")
+        self._write(audit_record, strict=False)
 
         # Log to application logger
         log_message = f"AUDIT: {operation} - {result}"
@@ -145,6 +213,97 @@ class AuditLogger:
             self.logger.warning(log_message, extra=audit_record)
         else:
             self.logger.info(log_message, extra=audit_record)
+
+    def log_event(
+        self,
+        event_type: str,
+        operation: str,
+        result: str,
+        *,
+        parameters: dict[str, Any] | None = None,
+        error: str | None = None,
+        strict: bool = False,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Write one schema-v2 audit record.
+
+        Args:
+            event_type: ``tool_call``, ``denied``, ``admin`` or ``system``
+            operation: Tool or event name (kept as ``operation`` so v1 readers
+                and filters still work)
+            result: Outcome, e.g. ``attempt``, ``success``, ``error``,
+                ``dry_run``, ``denied``
+            parameters: Call arguments; credentials are redacted
+            error: Error text, if any
+            strict: Raise :class:`AuditUnavailableError` if the write fails
+                instead of logging the failure
+            **fields: Further record fields; ``None`` values are omitted
+
+        Returns:
+            The record as written
+        """
+        record: dict[str, Any] = {
+            "v": 2,
+            "event_id": uuid.uuid4().hex,
+            "timestamp": get_iso_timestamp(),
+            "event_type": event_type,
+            "operation": operation,
+            "result": result,
+            "instance_id": INSTANCE_ID,
+        }
+        if parameters is not None:
+            record["parameters"] = sanitize_credentials(parameters)
+        if error:
+            record["error"] = error
+        record.update({key: value for key, value in fields.items() if value is not None})
+        self._write(record, strict=strict)
+        self.logger.info(f"AUDIT: {event_type} {operation} - {result}")
+        return record
+
+    def _write(self, record: dict[str, Any], *, strict: bool) -> None:
+        """Encrypt payload fields, chain the record, and append it to the file.
+
+        Args:
+            record: The record; payload fields must already be redacted
+            strict: Raise :class:`AuditUnavailableError` on failure instead
+                of logging it
+
+        Raises:
+            AuditUnavailableError: When ``strict`` and the record was not written
+        """
+        # At-rest encryption for the sensitive payloads (issue #22). This
+        # runs on the already-redacted record: encryption complements
+        # redaction, it does not replace it, so a decrypted entry is exactly
+        # the redacted record an operator would see without a key. Controller
+        # error text is encrypted too — errors quote offending values back
+        # (e.g. "api.err.MacUsed for aa:bb:cc:dd:ee:ff"), so encrypting
+        # parameters alone would still leak identifiers to disk. The caller
+        # passes the same ciphertext record to the application logger,
+        # keeping plaintext payloads out of stdout/stderr logs when
+        # encryption is enabled (CodeQL py/clear-text-logging).
+        if self.cipher is not None:
+            for field in _PAYLOAD_FIELDS:
+                if field in record:
+                    record[field] = encrypt_field(self.cipher, record[field])
+                    record[f"{field}_encrypted"] = True
+
+        with _chain_lock:
+            chain = _chains.setdefault(str(self.log_file.resolve()), _Chain())
+            record["chain_id"] = INSTANCE_ID
+            record["seq"] = chain.seq
+            record["prev_hash"] = chain.prev_hash
+            record["hash_alg"] = "hmac-sha256" if self.chain_key is not None else "sha256"
+            record["hash"] = record_hash(record, self.chain_key)
+            try:
+                with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
+                    f.write(json.dumps(record) + "\n")
+            except Exception as e:
+                if strict:
+                    raise AuditUnavailableError(f"Audit log unavailable: {e}") from e
+                self.logger.error(f"Failed to write audit log: {e}")
+                return
+            chain.seq += 1
+            chain.prev_hash = record["hash"]
 
     def _decrypt_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Decrypt the encrypted payload fields of one audit entry, in place.
@@ -162,7 +321,7 @@ class AuditLogger:
             warning is logged — one bad line must not cost the rest of the
             trail, but it must not pass silently either.
         """
-        for field in ("parameters", "error"):
+        for field in _PAYLOAD_FIELDS:
             if not entry.get(f"{field}_encrypted"):
                 continue
             token = entry[field]
@@ -219,6 +378,68 @@ class AuditLogger:
             self.logger.error(f"Failed to read audit log: {e}")
 
         return entries
+
+
+class ToolCallRecorder:
+    """Writes the wrapper-level audit records of one mutating tool call.
+
+    :meth:`attempt` writes a record before the tool contacts a controller;
+    :meth:`outcome` writes the result. Manual ``log_audit`` calls the tool
+    makes in between are folded into the outcome record's ``details`` instead
+    of becoming records of their own, so each call yields one attempt and one
+    outcome record that share a ``call_id``.
+    """
+
+    def __init__(self, logger: AuditLogger, *, fail_closed: bool, **fields: Any) -> None:
+        """Prepare the records for one call.
+
+        Args:
+            logger: Where records are written
+            fail_closed: Refuse the call if the attempt record cannot be written
+            **fields: Fields common to both records: ``operation``,
+                ``parameters`` and context such as ``tool``, ``tier``,
+                ``controller``, ``principal``, ``user``, ``site_id``,
+                ``session_id``, ``request_id``
+        """
+        self._logger = logger
+        self._fail_closed = fail_closed
+        self._fields = {"call_id": uuid.uuid4().hex, **fields}
+        self._reports: list[dict[str, Any]] = []
+        self._token: Any = None
+        self._started = 0.0
+
+    def attempt(self) -> None:
+        """Write the attempt record and start collecting tool reports.
+
+        Raises:
+            AuditUnavailableError: If the record cannot be written and the
+                recorder fails closed
+        """
+        self._logger.log_event(
+            "tool_call", result="attempt", strict=self._fail_closed, **self._fields
+        )
+        self._token = _active_tool_call.set(self._reports)
+        self._started = time.perf_counter()
+
+    def outcome(self, result: str, error: str | None = None) -> None:
+        """Write the outcome record.
+
+        Args:
+            result: ``success``, ``error`` or ``dry_run``
+            error: Error text when the tool raised
+        """
+        if self._token is not None:
+            _active_tool_call.reset(self._token)
+            self._token = None
+        duration_ms = round((time.perf_counter() - self._started) * 1000, 3)
+        self._logger.log_event(
+            "tool_call",
+            result=result,
+            error=error,
+            details=self._reports or None,
+            duration_ms=duration_ms,
+            **self._fields,
+        )
 
 
 # Global audit logger instance

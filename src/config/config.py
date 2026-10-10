@@ -243,6 +243,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_LOG_PATH",
     )
 
+    audit_fail_closed: bool = Field(
+        default=True,
+        description=(
+            "Refuse a mutating tool call when its audit record cannot be "
+            "written, so no change reaches a controller unrecorded. Set to "
+            "false only as a break-glass measure."
+        ),
+        validation_alias="UNIFI_AUDIT_FAIL_CLOSED",
+    )
+
     # Backup download location
     backup_download_dir: str = Field(
         default=".",

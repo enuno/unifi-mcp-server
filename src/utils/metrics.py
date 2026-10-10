@@ -26,6 +26,11 @@ _DURATION_BUCKETS: tuple[float, ...] = (0.1, 0.5, 1.0, 5.0, 10.0)
 #: Prometheus can derive uptime without a restart counter.
 PROCESS_START_TIME = time.time()
 
+#: Most distinct ``controller`` label values kept; calls to further
+#: controllers count under ``other``, so a large fleet cannot blow up series
+#: cardinality.
+MAX_CONTROLLER_LABELS = 1000
+
 
 def _escape_label(value: str) -> str:
     """Escape a string for use as a Prometheus label value."""
@@ -50,6 +55,7 @@ class MetricsRegistry:
         # One bucket-count list per tool, aligned with _DURATION_BUCKETS.
         self._duration_buckets: dict[str, list[int]] = {}
         self._registered_tools = 0
+        self._controller_calls: dict[str, int] = {}
 
     def note_tool_registered(self, count: int = 1) -> None:
         """Record *count* tools registered on the server.
@@ -59,6 +65,21 @@ class MetricsRegistry:
         """
         with self._lock:
             self._registered_tools += count
+
+    def record_controller_call(self, controller: str) -> None:
+        """Count one tool call routed to *controller*.
+
+        Args:
+            controller: Controller name (the ``controller`` label); names past
+                :data:`MAX_CONTROLLER_LABELS` distinct values count as ``other``
+        """
+        with self._lock:
+            if (
+                controller not in self._controller_calls
+                and len(self._controller_calls) >= MAX_CONTROLLER_LABELS
+            ):
+                controller = "other"
+            self._controller_calls[controller] = self._controller_calls.get(controller, 0) + 1
 
     def record_tool_call(self, tool: str, status: str, duration: float) -> None:
         """Record one completed tool call.
@@ -113,6 +134,7 @@ class MetricsRegistry:
             duration_sum = dict(self._duration_sum)
             duration_count = dict(self._duration_count)
             duration_buckets = {tool: list(b) for tool, b in self._duration_buckets.items()}
+            controller_calls = dict(self._controller_calls)
 
         lines.append("# HELP unifi_mcp_tools_registered Tools registered on the server.")
         lines.append("# TYPE unifi_mcp_tools_registered gauge")
@@ -127,6 +149,17 @@ class MetricsRegistry:
                 lines.append(
                     f'unifi_mcp_tool_calls_total{{tool="{_escape_label(tool)}",'
                     f'status="{_escape_label(status)}"}} {count}'
+                )
+
+        if controller_calls:
+            lines.append(
+                "# HELP unifi_mcp_controller_calls_total Tool calls routed to each controller."
+            )
+            lines.append("# TYPE unifi_mcp_controller_calls_total counter")
+            for controller, count in sorted(controller_calls.items()):
+                lines.append(
+                    f'unifi_mcp_controller_calls_total{{controller="{_escape_label(controller)}"}}'
+                    f" {count}"
                 )
 
         if duration_count:

@@ -112,6 +112,8 @@ Configure the MCP server using environment variables:
 | `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
 | `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
+| `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
+| `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
 | `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
@@ -437,6 +439,28 @@ result = await mcp.call_tool("health_check", {})
   "api_type": "cloud"
 }
 ```
+
+### Controller Selection
+
+Every controller-bound tool accepts an optional `controller` argument naming the controller to run against. Without it, a call goes to the controller chosen with `select_controller` in the current MCP session, then to the server's default. A **mutating** tool may not fall back to the server default when more than one controller is registered: it needs `controller=` or a `select_controller` in the same session. Until the controller registry ships (see `docs/FLEET_SCALING_PLAN.md`), the server has one controller, `default`, built from the `UNIFI_*` settings. MCP resources (`sites://` and friends) always use the default controller.
+
+#### `list_controllers`
+
+List the controllers this server can reach: name, API type, host, default site and labels (never credentials), plus the default controller and this session's selection.
+
+**Parameters:** None
+
+#### `select_controller`
+
+Choose the controller this session's later tool calls target. A call's own `controller` argument still takes precedence.
+
+**Parameters:** `name` (string, required) — a name from `list_controllers`
+
+#### `get_active_controller`
+
+Show which controller a call without `controller` would target, and whether it comes from the session (`select_controller`) or the default.
+
+**Parameters:** None
 
 ### Protect Phase 3 Tools
 

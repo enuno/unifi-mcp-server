@@ -16,6 +16,7 @@ from threading import RLock
 from typing import Any
 
 from ..config import Settings
+from ..tool_registry import TOOL_TIERS
 from ..utils import get_logger
 
 
@@ -134,17 +135,27 @@ class SafetyController:
 
     def _classify_tool(self, tool_name: str, params: Mapping[str, Any]) -> tuple[str, RoutePolicy]:
         normalized = self._normalize_tool_name(tool_name)
-        if normalized.startswith(self._DESTRUCTIVE_PREFIXES) or any(
-            keyword in normalized
-            for keyword in (
-                "delete",
-                "remove",
-                "reset",
-                "factory_reset",
-                "revoke",
-                "purge",
-                "wipe",
-                "destroy",
+        # Registered tools carry a tier from the tool registry; the name
+        # heuristics below only cover names the server does not know.
+        tier = TOOL_TIERS.get(normalized)
+        if (
+            tier == "destructive"
+            or tier is None
+            and (
+                normalized.startswith(self._DESTRUCTIVE_PREFIXES)
+                or any(
+                    keyword in normalized
+                    for keyword in (
+                        "delete",
+                        "remove",
+                        "reset",
+                        "factory_reset",
+                        "revoke",
+                        "purge",
+                        "wipe",
+                        "destroy",
+                    )
+                )
             )
         ):
             return "destructive", RoutePolicy(
@@ -155,24 +166,31 @@ class SafetyController:
                 rateLimit=max(1, (self.settings.rate_limit_requests // 20) if self.settings else 5),
             )
 
-        if normalized.startswith(self._WRITE_PREFIXES) or any(
-            keyword in normalized
-            for keyword in (
-                "create",
-                "update",
-                "patch",
-                "set",
-                "enable",
-                "disable",
-                "execute",
-                "assign",
-                "unassign",
-                "start",
-                "stop",
-                "restart",
-                "reboot",
-                "adopt",
-                "sync",
+        if (
+            tier == "write"
+            or tier is None
+            and (
+                normalized.startswith(self._WRITE_PREFIXES)
+                or any(
+                    keyword in normalized
+                    for keyword in (
+                        "create",
+                        "update",
+                        "patch",
+                        "set",
+                        "enable",
+                        "disable",
+                        "execute",
+                        "assign",
+                        "unassign",
+                        "start",
+                        "stop",
+                        "restart",
+                        "reboot",
+                        "adopt",
+                        "sync",
+                    )
+                )
             )
         ):
             return "write", RoutePolicy(

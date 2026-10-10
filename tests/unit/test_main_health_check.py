@@ -91,3 +91,22 @@ class TestHealthCheck:
             f"got '{result['version']}' instead."
         )
         assert result["status"] == "healthy"
+
+
+def test_server_start_is_audited(tmp_path, monkeypatch) -> None:
+    """main() records the effective safety configuration as a system event."""
+    import json
+
+    log_path = tmp_path / "audit.log"
+    monkeypatch.setenv("UNIFI_API_KEY", "test-key")  # pragma: allowlist secret
+    monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(log_path))
+    monkeypatch.setenv("UNIFI_READ_ONLY", "true")
+    monkeypatch.setattr("src.utils.audit._audit_logger", None)
+    main_mod = _reload_main()
+
+    main_mod.audit_server_start()
+
+    (record,) = [json.loads(line) for line in log_path.read_text().splitlines()]
+    assert (record["event_type"], record["operation"]) == ("system", "server_start")
+    assert record["config"]["read_only"] is True
+    assert record["config"]["controller_registry"] == "EnvRegistry"

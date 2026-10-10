@@ -20,10 +20,13 @@ from .a2a.audit import get_audit_logger
 from .a2a.auth import AuthManager
 from .a2a.route_policy import ConfirmationWorkflow, SafetyController
 from .config import APIType, Settings, TransportMode
+from .fleet import EnvRegistry
+from .fleet.router import FleetRouter
+from .fleet.tools import register_fleet_tools
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
 from .resources import protect as protect_resource
 from .resources import site_manager as site_manager_resource
-from .tool_registry import register_module_tools
+from .tool_registry import TOOL_TIERS, register_module_tools
 from .tools import acls as acls_tools
 from .tools import application as application_tools
 from .tools import backups as backups_tools
@@ -84,6 +87,7 @@ from .tools import vpn as vpn_tools
 from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
 from .utils import get_logger
+from .utils.audit import get_audit_logger as get_tool_audit_logger
 
 # ---------------------------------------------------------------------------
 # Initialisation
@@ -91,6 +95,11 @@ from .utils import get_logger
 
 settings = Settings()
 logger = get_logger(__name__, settings.log_level)
+
+# Resolves each tool call to a controller (docs/FLEET_SCALING_PLAN.md). The
+# environment registry holds one ``default`` controller built from UNIFI_*,
+# which hands every tool the same ``settings`` object as before.
+fleet_router = FleetRouter(settings, EnvRegistry(settings))
 
 
 def build_auth_provider(current_settings: Settings) -> Any:
@@ -517,9 +526,11 @@ if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
     # which all 404 on the live Cloud API
     for _module in _TOOL_MODULES:
         if _module is sites_tools:
-            register_module_tools(mcp, _module, settings, exclude=["get_site_statistics"])
+            register_module_tools(
+                mcp, _module, settings, exclude=["get_site_statistics"], router=fleet_router
+            )
         else:
-            register_module_tools(mcp, _module, settings)
+            register_module_tools(mcp, _module, settings, router=fleet_router)
 else:
     _all_local = list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES)
     if _active_profile and _active_profile not in ("all", ""):
@@ -533,7 +544,9 @@ else:
         + f" - registering {len(_TOOL_MODULES)} tool module(s)"
     )
     for _module in _TOOL_MODULES:
-        register_module_tools(mcp, _module, settings)
+        register_module_tools(mcp, _module, settings, router=fleet_router)
+
+register_fleet_tools(mcp, fleet_router)
 
 # ---------------------------------------------------------------------------
 # Resource handlers
@@ -751,8 +764,31 @@ async def get_site_manager_internet_health_resource() -> str:
 # ---------------------------------------------------------------------------
 
 
+def audit_server_start() -> None:
+    """Write a ``system`` audit record with the server's effective safety configuration."""
+    if not settings.audit_log_enabled:
+        return
+    get_tool_audit_logger(settings.audit_log_file).log_event(
+        "system",
+        "server_start",
+        "success",
+        config={
+            "version": _SERVER_VERSION,
+            "api_type": settings.api_type.value,
+            "transport": settings.server_transport.value,
+            "read_only": settings.read_only,
+            "dry_run": settings.dry_run,
+            "profile": _active_profile or None,
+            "audit_fail_closed": settings.audit_fail_closed,
+            "controller_registry": type(fleet_router.registry).__name__,
+            "tools_registered": len(TOOL_TIERS),
+        },
+    )
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
+    audit_server_start()
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")

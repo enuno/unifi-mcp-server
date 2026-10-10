@@ -122,3 +122,29 @@ def test_snapshot_isolated_from_later_mutation() -> None:
     assert body.count("tool_b") == 9  # total + 5 buckets + +Inf bucket + sum + count
     new_body = registry.render(version="0.5.0", api_type="local")
     assert 'unifi_mcp_tool_calls_total{tool="tool_b",status="success"} 6' in new_body
+
+
+def test_controller_calls_are_counted_per_controller() -> None:
+    registry = MetricsRegistry()
+    registry.record_controller_call("hq")
+    registry.record_controller_call("hq")
+    registry.record_controller_call("branch")
+
+    body = registry.render(version="0.5.0", api_type="local")
+
+    assert "# TYPE unifi_mcp_controller_calls_total counter" in body
+    assert 'unifi_mcp_controller_calls_total{controller="hq"} 2' in body
+    assert 'unifi_mcp_controller_calls_total{controller="branch"} 1' in body
+
+
+def test_controller_label_cardinality_is_capped(monkeypatch) -> None:
+    monkeypatch.setattr("src.utils.metrics.MAX_CONTROLLER_LABELS", 2)
+    registry = MetricsRegistry()
+    for name in ("a", "b", "c", "d", "a"):
+        registry.record_controller_call(name)
+
+    body = registry.render(version="0.5.0", api_type="local")
+
+    assert 'unifi_mcp_controller_calls_total{controller="a"} 2' in body
+    assert 'unifi_mcp_controller_calls_total{controller="other"} 2' in body
+    assert 'controller="c"' not in body

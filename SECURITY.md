@@ -376,6 +376,8 @@ CMD ["python", "src/main.py"]
 - **Container Security:** Docker images scanned with Trivy
 - **Input Validation:** All user inputs validated with Pydantic models
 - **Audit Log Encryption:** Optional Fernet at-rest encryption of audit payload fields (`UNIFI_AUDIT_LOG_KEY`), with non-destructive key rotation
+- **Wrapper-Level Audit:** Every mutating tool call is recorded by the tool wrapper (an `attempt` record before the controller is contacted, then the outcome), along with denied calls and server start, naming the caller and target controller. If the attempt record cannot be written, the call is refused (`UNIFI_AUDIT_FAIL_CLOSED`, default on)
+- **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records
 
 ### Phase 4 Mutating Tools Safety Mechanisms
 
@@ -473,6 +475,21 @@ CMD ["python", "src/main.py"]
    with PBKDF2-HMAC-SHA256 (600k iterations, fixed application salt) — use
    high-entropy passphrases. `UNIFI_AUDIT_ENCRYPTION_KEY` is accepted as a
    legacy alias when the primary variable is unset.
+
+   **Tamper evidence:** every record carries `chain_id`, `seq`, `prev_hash`
+   and `hash`, an HMAC-SHA256 over the stored record keyed by
+   `UNIFI_AUDIT_CHAIN_KEY` (plain SHA-256 when unset). Each server process
+   writes its own chain. The hash covers the stored, possibly encrypted,
+   record, so verifying needs the chain key but not the payload key:
+
+   ```bash
+   UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log
+   ```
+
+   Removing the last records of a chain is not detectable from the file
+   alone; exporting chain heads off the server (planned SIEM export) closes
+   that gap. Use a different value from the payload key and keep it in your
+   secret manager, never in the repository.
 
 5. **Input Validation:**
    - All parameters validated before execution

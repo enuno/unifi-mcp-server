@@ -122,8 +122,10 @@ jobs:
         run: pip install detect-secrets
 
       - name: Run detect-secrets scan
+        # Git-tracked files only, like the pre-commit hook: --all-files also
+        # reads untracked runner files such as .git/FETCH_HEAD.
         run: |
-          detect-secrets scan --baseline .secrets.baseline --all-files
+          detect-secrets scan --baseline .secrets.baseline
 
       - name: Fail on new secrets (baseline drift)
         # `detect-secrets scan` rewrites the baseline in place and always
@@ -134,7 +136,7 @@ jobs:
         run: |
           if ! git diff --exit-code -I '"generated_at":' -- .secrets.baseline; then
             echo "::error::New potential secrets detected, or .secrets.baseline is out of date."
-            echo "Run 'detect-secrets scan --baseline .secrets.baseline --all-files' locally,"
+            echo "Run 'detect-secrets scan --baseline .secrets.baseline' locally,"
             echo "audit the findings with 'detect-secrets audit .secrets.baseline', and commit."
             exit 1
           fi

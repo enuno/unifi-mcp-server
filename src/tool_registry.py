@@ -23,6 +23,7 @@ from fastmcp.server.dependencies import get_context
 from pydantic import Field
 
 from .access import ROLES, PermissionDeniedError, Role, Tier, current_principal, request_principal
+from .api.pool import ClientPool, active_pool
 from .config import Settings
 from .fleet import DEFAULT_CONTROLLER_NAME
 from .fleet.router import FleetRouter, current_controller
@@ -31,6 +32,12 @@ from .utils.exceptions import ResourceNotFoundError, ValidationError
 from .utils.logger import get_logger
 from .utils.metrics import REGISTRY as METRICS
 from .utils.validators import coerce_bool
+
+#: Type of the ``fresh`` argument cached read tools gain.
+FreshArg = Annotated[
+    bool,
+    Field(description="Skip cached results and read from the controller (refreshes the cache)."),
+]
 
 #: Type of the ``controller`` argument every controller-bound tool gains.
 ControllerArg = Annotated[
@@ -207,6 +214,8 @@ def _make_tool_wrapper(
     event_type: str = "tool_call",
     module: str | None = None,
     always_audit: bool = False,
+    pool: ClientPool | None = None,
+    read_cache: Any = None,
 ) -> Any:
     """Return an async wrapper for *fn* with ``settings`` bound.
 
@@ -231,6 +240,10 @@ def _make_tool_wrapper(
             (default: the last component of *fn*'s module).
         always_audit: Audit the call even though the tool does not mutate
             (e.g. audit log queries).
+        pool: Shared per-controller connections for the API clients the tool
+            builds (see ``src/api/pool.py``).
+        read_cache: ``src.cache.ReadCache``: caches this tool's results if it
+            is a cached read, or invalidates the controller's cache if it writes.
 
     Returns:
         An async callable with the ``settings`` parameter removed from its
@@ -257,16 +270,26 @@ def _make_tool_wrapper(
     mutating = is_mutating_tool(fn)
     tier = tier or tool_tier(fn)
     module = module or fn.__module__.rsplit(".", 1)[-1]
+    family: str | None = None
+    ttl = 0
+    if read_cache is not None and routed and not mutating:
+        from .cache import CacheConfig, cache_family
+
+        family = cache_family(module, metric_tool_name)
+        ttl = CacheConfig.get_ttl(family) if family else 0
     role_setting = getattr(settings, "stdio_role", None)
     local_role = cast(Role, role_setting if role_setting in ROLES else "fleet-admin")
 
     if inspect.iscoroutinefunction(fn):
         if routed:
             public_sig = _with_controller_param(public_sig)
+        if family is not None:
+            public_sig = _with_keyword_param(public_sig, "fresh", False, FreshArg)
 
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             requested = kwargs.pop("controller", None)
+            fresh = coerce_bool(kwargs.pop("fresh", False)) if family is not None else False
             principal = request_principal(local_role)
             audit = _audit_logger_for(settings)
             # Reads are not audited unless refused; every mutating call is (plan §3.7).
@@ -333,6 +356,16 @@ def _make_tool_wrapper(
 
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
+            cache_key = None
+            if family is not None and controller is not None:
+                cache_arguments = dict(public_sig.bind_partial(*args, **kwargs).arguments)
+                cache_key = read_cache.key(controller, family, metric_tool_name, cache_arguments)
+            invalidates = (
+                read_cache is not None
+                and mutating
+                and controller is not None
+                and not coerce_bool(kwargs.get("dry_run", False))
+            )
             kwargs["settings"] = call_settings
             recorder = None
             if audited:
@@ -349,13 +382,23 @@ def _make_tool_wrapper(
             metrics_on = getattr(settings, "metrics_enabled", False)
             token = current_controller.set(controller)
             principal_token = current_principal.set(principal)
+            pool_token = active_pool.set(pool)
             try:
                 if metrics_on and controller is not None:
                     METRICS.record_controller_call(controller)
                 start = time.perf_counter()
+
+                async def call() -> Any:
+                    return await fn(*args, **kwargs)
+
                 try:
-                    result = await fn(*args, **kwargs)
+                    if cache_key is not None:
+                        result = await read_cache.read_through(cache_key, ttl, call, fresh=fresh)
+                    else:
+                        result = await call()
                 except Exception as e:
+                    if invalidates:
+                        await read_cache.invalidate_controller(controller)
                     if metrics_on:
                         METRICS.record_tool_call(
                             metric_tool_name, "error", time.perf_counter() - start
@@ -363,6 +406,8 @@ def _make_tool_wrapper(
                     if recorder is not None:
                         await recorder.outcome("error", error=str(e))
                     raise
+                if invalidates:
+                    await read_cache.invalidate_controller(controller)
                 if metrics_on:
                     METRICS.record_tool_call(
                         metric_tool_name, "success", time.perf_counter() - start
@@ -372,13 +417,17 @@ def _make_tool_wrapper(
                     await recorder.outcome("dry_run" if dry_run else "success")
                 return result
             finally:
+                active_pool.reset(pool_token)
                 current_principal.reset(principal_token)
                 current_controller.reset(token)
 
         # functools.wraps shares fn's annotation dict; give the wrapper its own
         # so the added parameter reaches the schema without touching fn.
         if routed:
-            wrapper.__annotations__ = {**fn.__annotations__, "controller": ControllerArg}
+            annotations = {**fn.__annotations__, "controller": ControllerArg}
+            if family is not None:
+                annotations["fresh"] = FreshArg
+            wrapper.__annotations__ = annotations
 
     else:
 
@@ -404,14 +453,21 @@ def _make_tool_wrapper(
 
 def _with_controller_param(sig: inspect.Signature) -> inspect.Signature:
     """Return *sig* with an optional keyword-only ``controller`` parameter."""
-    controller = inspect.Parameter(
-        "controller", inspect.Parameter.KEYWORD_ONLY, default=None, annotation=ControllerArg
+    return _with_keyword_param(sig, "controller", None, ControllerArg)
+
+
+def _with_keyword_param(
+    sig: inspect.Signature, name: str, default: Any, annotation: Any
+) -> inspect.Signature:
+    """Return *sig* with an optional keyword-only parameter added."""
+    param = inspect.Parameter(
+        name, inspect.Parameter.KEYWORD_ONLY, default=default, annotation=annotation
     )
     params = list(sig.parameters.values())
     if params and params[-1].kind is inspect.Parameter.VAR_KEYWORD:
-        params.insert(len(params) - 1, controller)
+        params.insert(len(params) - 1, param)
     else:
-        params.append(controller)
+        params.append(param)
     return sig.replace(parameters=params)
 
 
@@ -423,6 +479,8 @@ def register_module_tools(
     include: list[str] | None = None,
     exclude: list[str] | None = None,
     router: FleetRouter | None = None,
+    pool: ClientPool | None = None,
+    read_cache: Any = None,
 ) -> list[str]:
     """Register all public async functions from *module* as MCP tools.
 
@@ -440,6 +498,8 @@ def register_module_tools(
         include: Optional explicit list of function names to register.
         exclude: Optional list of function names to skip.
         router: Resolves each call to a controller; see :func:`_make_tool_wrapper`.
+        pool: Shared per-controller connections; see :func:`_make_tool_wrapper`.
+        read_cache: Read-through cache; see :func:`_make_tool_wrapper`.
 
     Returns:
         List of registered tool names.
@@ -483,7 +543,7 @@ def register_module_tools(
 
         params = inspect.signature(obj).parameters
         if "settings" in params:
-            tool_fn = _make_tool_wrapper(obj, settings, router)
+            tool_fn = _make_tool_wrapper(obj, settings, router, pool=pool, read_cache=read_cache)
         else:
             tool_fn = obj
 

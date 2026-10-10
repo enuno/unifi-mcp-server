@@ -117,6 +117,7 @@ Configure the MCP server using environment variables:
 | `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
+| `UNIFI_FLEET_MAX_OPEN_CLIENTS` | Most controller connections each server keeps open; least recently used idle ones are closed beyond this (controller state such as cached auth is kept) | No | `256` |
 | `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
 | `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
@@ -3064,6 +3065,10 @@ Install the `redis` client with `pip install 'unifi-mcp-server[fleet]'`, then se
 - `REDIS_PORT` (default: 6379)
 - `REDIS_DB` (default: 0)
 - `REDIS_PASSWORD` (optional)
+
+The cache is used only when `REDIS_URL` or `REDIS_HOST` is set explicitly (a local Redis that merely exists is never used) and `UNIFI_CACHE_ENABLED` is not `false`. It covers the inventory and configuration reads of the device, client, site, network and WLAN tools (statistics and RF-health tools are live metrics and never cached). Those tools gain an optional `fresh` argument that skips the cache and refreshes it. Any write to a controller, successful or not (dry runs excepted), clears that controller's cached reads; changes made outside this server show up when entries expire. Redis errors bypass the cache instead of failing a call. Hits and misses are counted in `unifi_mcp_cache_requests_total`.
+
+Independently of Redis, every server keeps one long-lived connection per controller: tool calls share it, along with the controller's rate limiter (so `UNIFI_RATE_LIMIT_REQUESTS` applies across calls), its authentication probe and site map (reused for 5 minutes), and a circuit breaker that fails fast for 30 seconds after 5 consecutive calls the controller did not answer.
 
 **Cache TTL by Resource Type:**
 

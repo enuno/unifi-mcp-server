@@ -5,6 +5,7 @@ Supports configurable TTL per resource type and graceful degradation if Redis is
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import weakref
@@ -28,6 +29,7 @@ except ImportError:
 
 from .config import Settings
 from .utils import get_logger
+from .utils.metrics import REGISTRY as METRICS
 
 #: Connection pools shared by every CacheClient, one per event loop and Redis
 #: location. ``@cached`` builds a CacheClient per call; sharing the pool keeps
@@ -527,3 +529,137 @@ async def invalidate_cache(
 
     finally:
         await cache.disconnect()
+
+
+#: Tool modules whose read tools are cached, and the CacheConfig family that
+#: sets their TTL. Statistics and RF-health tools are live metrics: never cached.
+CACHED_MODULES = {
+    "devices": "devices",
+    "clients": "clients",
+    "sites": "sites",
+    "networks": "networks",
+    "wifi": "wlans",
+}
+
+_UNCACHED_MARKERS = ("statistics", "rf_health")
+
+#: Version segment of every read-cache key; bump to invalidate everything.
+KEY_VERSION = "v1"
+
+
+def cache_family(module: str, tool_name: str) -> str | None:
+    """Return the cache family of a read tool, or None if it is not cached."""
+    if any(marker in tool_name for marker in _UNCACHED_MARKERS):
+        return None
+    return CACHED_MODULES.get(module)
+
+
+def redis_configured(settings: Settings) -> bool:
+    """Whether Redis was configured explicitly (a local Redis is never used by accident)."""
+    return bool(settings.redis_url) or "redis_host" in settings.model_fields_set
+
+
+class ReadCache:
+    """Read-through cache for read tools, shared across servers through Redis.
+
+    Keys are ``unifi:v1:{controller}:{family}:{tool}:{args-hash}``. A
+    successful or failed write to a controller deletes every key of that
+    controller; TTLs (:class:`CacheConfig`) bound staleness for changes made
+    outside this server. Redis errors bypass the cache; they never fail a call.
+    Concurrent identical misses in one process share a single controller call.
+    """
+
+    def __init__(self, settings: Settings) -> None:
+        """Create a cache over the configured Redis."""
+        self._settings = settings
+        self.logger = get_logger(__name__, settings.log_level)
+        self._inflight: dict[str, asyncio.Task[Any]] = {}
+
+    @classmethod
+    def from_settings(cls, settings: Settings) -> "ReadCache | None":
+        """Return a cache if caching is enabled and Redis is explicitly configured."""
+        if not settings.cache_enabled or not redis_configured(settings):
+            return None
+        if not REDIS_AVAILABLE:
+            get_logger(__name__).warning(
+                "Redis is configured but the redis package is not installed; read caching is "
+                "off. Install with: pip install 'unifi-mcp-server[fleet]'"
+            )
+            return None
+        return cls(settings)
+
+    def _redis(self) -> Any:
+        return redis.Redis(connection_pool=_shared_pool(self._settings))
+
+    @staticmethod
+    def key(controller: str, family: str, tool: str, arguments: dict[str, Any]) -> str:
+        """Build the key of one read."""
+        digest = hashlib.sha256(
+            json.dumps(arguments, sort_keys=True, default=str).encode("utf-8")
+        ).hexdigest()[:32]
+        return f"unifi:{KEY_VERSION}:{controller}:{family}:{tool}:{digest}"
+
+    async def read_through(
+        self, key: str, ttl: int, loader: Callable[[], Any], *, fresh: bool = False
+    ) -> Any:
+        """Return the cached value of ``key``, or load, cache and return it.
+
+        Args:
+            key: From :meth:`key`
+            ttl: Seconds to keep a loaded value
+            loader: Zero-argument coroutine function calling the tool
+            fresh: Skip the cached value (the loaded one still replaces it)
+        """
+        if not fresh:
+            cached = await self._get(key)
+            if cached is not _MISS:
+                METRICS.record_cache("hit")
+                return cached
+            inflight = self._inflight.get(key)
+            if inflight is not None:
+                METRICS.record_cache("hit")
+                return await asyncio.shield(inflight)
+        METRICS.record_cache("miss")
+        task = asyncio.ensure_future(self._load_and_store(key, ttl, loader))
+        if not fresh:
+            self._inflight[key] = task
+            task.add_done_callback(lambda _: self._inflight.pop(key, None))
+        return await asyncio.shield(task)
+
+    async def _load_and_store(self, key: str, ttl: int, loader: Callable[[], Any]) -> Any:
+        value = await loader()
+        try:
+            serialized = json.dumps(value)
+            cacheable = json.loads(serialized) == value
+        except (TypeError, ValueError):
+            cacheable = False
+        if cacheable:
+            try:
+                await self._redis().setex(key, ttl, serialized)
+            except RedisError as e:
+                self.logger.warning(f"Read cache unavailable, not storing: {e}")
+        return value
+
+    async def _get(self, key: str) -> Any:
+        try:
+            raw = await self._redis().get(key)
+        except RedisError as e:
+            self.logger.warning(f"Read cache unavailable, reading from the controller: {e}")
+            return _MISS
+        return _MISS if raw is None else json.loads(raw)
+
+    async def invalidate_controller(self, controller: str) -> None:
+        """Delete every cached read of ``controller`` (after any write to it)."""
+        try:
+            client = self._redis()
+            keys = [k async for k in client.scan_iter(match=f"unifi:{KEY_VERSION}:{controller}:*")]
+            if keys:
+                await client.delete(*keys)
+        except RedisError as e:
+            self.logger.error(
+                f"Read cache invalidation for controller {controller} failed; cached reads may "
+                f"be stale until they expire: {e}"
+            )
+
+
+_MISS = object()

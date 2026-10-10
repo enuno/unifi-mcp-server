@@ -10,6 +10,7 @@ import httpx
 from ..config import Settings
 from ..utils.exceptions import APIError, AuthenticationError
 from ..utils.logger import get_logger
+from .pool import active_pool
 
 
 class ProtectClient:
@@ -19,13 +20,20 @@ class ProtectClient:
         """Initialize the Protect client with the given settings."""
         self.settings = settings
         self.logger = get_logger(__name__, settings.log_level)
+        self._authenticated = False
+        # Inside a pooled tool call, reuse the controller's long-lived HTTP
+        # client (see src/api/pool.py) instead of opening a new one.
+        self._pool = active_pool.get()
+        self._connection = self._pool.acquire(settings) if self._pool is not None else None
+        if self._connection is not None:
+            self.client = self._connection.client
+            return
         self.client = httpx.AsyncClient(
             headers=settings.get_headers(),
             timeout=settings.request_timeout,
             verify=settings.verify_ssl,
             follow_redirects=False,
         )
-        self._authenticated = False
 
     async def __aenter__(self) -> ProtectClient:
         """Enter the async context manager."""
@@ -36,7 +44,11 @@ class ProtectClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the underlying HTTP client."""
+        """Close the HTTP client (or hand a pooled connection back to the pool)."""
+        if self._connection is not None and self._pool is not None:
+            self._pool.release(self._connection)
+            self._connection = None
+            return
         await self.client.aclose()
 
     @property

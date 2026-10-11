@@ -84,6 +84,21 @@ _SCHEMES = {"syslog+tls", "syslog+tcp", "https", "http", "otlp+https", "otlp+htt
 # ---------------------------------------------------------------------------
 
 
+async def _wait_event(event: asyncio.Event, timeout: float) -> None:
+    """Wait until ``event`` is set or ``timeout`` passes, staying cancellable.
+
+    Before Python 3.12, cancelling a task inside
+    ``asyncio.wait_for(event.wait(), timeout)`` just as the timeout fires can
+    lose the cancellation, so ``SiemForwarder.stop()`` would wait forever.
+    ``asyncio.wait`` never swallows it.
+    """
+    waiter = asyncio.ensure_future(event.wait())
+    try:
+        await asyncio.wait({waiter}, timeout=timeout)
+    finally:
+        waiter.cancel()
+
+
 class Exporter(Protocol):
     """Sends a batch of stored audit records to one destination."""
 
@@ -589,8 +604,7 @@ class SiemForwarder:
     async def _deliver(self, target: _Target) -> None:
         backoff = 1.0
         while True:
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(target.wake.wait(), self.flush_seconds)
+            await _wait_event(target.wake, self.flush_seconds)
             target.wake.clear()
             target.seal()
             try:

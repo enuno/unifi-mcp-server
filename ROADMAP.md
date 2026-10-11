@@ -9,6 +9,7 @@ This roadmap is synchronized with `DEVELOPMENT_PLAN.md` and reflects the current
 - Phase 5: enterprise scale and operational excellence
 - Phase 5a: Protect v7 expansion (39 new operations: arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion)
 - Phase 6: new API domains — Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0
+- Phase 7: deployment automation (planned) — Ansible playbook for Docker hosts (single or clustered), Helm chart for Kubernetes, and agent setup prompts for server-only, single-server fleet and clustered installs
 - Phase 5+ follow-on: Access expansion — **blocked** (no official Access spec published as of 2026-09-26)
 
 ## How to use this roadmap

@@ -336,3 +336,47 @@ def test_a_chain_past_its_recorded_head_is_reported(audit_file: Path) -> None:
     chain_id, (seq, head_hash) = _head(audit_file)
     report = verify_file(audit_file, CHAIN_KEY, {chain_id: (seq - 2, head_hash)})
     assert any(f"past its recorded head at seq {seq - 2}" in p for p in report.problems)
+
+
+async def test_siem_anchors_catch_records_and_heads_rewritten_together(
+    migrated_engine: Any, tmp_path: Path
+) -> None:
+    """The 5a limit closed: anchors exported to a SIEM are outside the database."""
+    from src.utils.siem import SiemForwarder, load_anchors
+
+    class Collector:
+        name = "collector"
+
+        def __init__(self) -> None:
+            self.records: list[dict[str, Any]] = []
+
+        async def send(self, records: Any) -> None:
+            self.records.extend(dict(r) for r in records)
+
+    collector = Collector()
+    forwarder = SiemForwarder([collector], tmp_path / "spool")
+    sink = PostgresAuditSink(migrated_engine, chain_id=A)
+    for n in range(RECORDS):
+        record = {
+            "event_id": f"anchored-{n}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": "tool_call",
+            "operation": "update_network",
+            "result": "success",
+        }
+        assert await sink.append(record, key=CHAIN_KEY, strict=True)
+        forwarder.forward(record)
+    await forwarder.stop()  # sends the anchor
+    export = tmp_path / "siem-export.jsonl"
+    export.write_text("".join(json.dumps(r) + "\n" for r in collector.records))
+
+    await _as_superuser(
+        migrated_engine,
+        f"DELETE FROM audit_log WHERE seq = {RECORDS - 1}",
+        "UPDATE audit_chain_heads SET seq = sub.seq, hash = sub.hash FROM "
+        "(SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1) AS sub",
+    )
+
+    assert (await audit_store.verify(migrated_engine, CHAIN_KEY)).ok  # in-store check fooled
+    report = await audit_store.verify(migrated_engine, CHAIN_KEY, extra_heads=load_anchors(export))
+    assert any("missing from the end" in p for p in report.problems)

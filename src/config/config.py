@@ -377,6 +377,59 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_FAIL_CLOSED",
     )
 
+    # SIEM export (src/utils/siem.py, docs/FLEET_SCALING_PLAN.md §3.7).
+    audit_siem_targets: str | None = Field(
+        default=None,
+        description=(
+            "Comma-separated SIEM destinations for audit records: syslog+tls://host:6514, "
+            "https://host/path (signed webhook) or otlp+https://collector:4318"
+        ),
+        validation_alias="UNIFI_AUDIT_SIEM_TARGETS",
+        repr=False,
+    )
+
+    audit_siem_webhook_secret: str | None = Field(
+        default=None,
+        description="HMAC-SHA256 key signing webhook deliveries (required for https:// targets)",
+        validation_alias="UNIFI_AUDIT_SIEM_WEBHOOK_SECRET",
+        repr=False,
+    )
+
+    audit_siem_otlp_headers: str | None = Field(
+        default=None,
+        description="Extra headers for OTLP targets, as key=value,key=value (e.g. an API key)",
+        validation_alias="UNIFI_AUDIT_SIEM_OTLP_HEADERS",
+        repr=False,
+    )
+
+    audit_siem_ca_file: str | None = Field(
+        default=None,
+        description="CA bundle to verify SIEM targets with (system roots when unset)",
+        validation_alias="UNIFI_AUDIT_SIEM_CA_FILE",
+    )
+
+    audit_siem_buffer_dir: str | None = Field(
+        default=None,
+        description=(
+            "Where records wait for delivery (default: siem-buffer next to the audit log)"
+        ),
+        validation_alias="UNIFI_AUDIT_SIEM_BUFFER_DIR",
+    )
+
+    audit_siem_buffer_max_mb: int = Field(
+        default=100,
+        ge=1,
+        description="Most undelivered data kept per target; the oldest is dropped beyond it",
+        validation_alias="UNIFI_AUDIT_SIEM_BUFFER_MAX_MB",
+    )
+
+    audit_siem_anchor_seconds: int = Field(
+        default=300,
+        ge=10,
+        description="How often each audit chain's head is sent to the SIEM as an anchor",
+        validation_alias="UNIFI_AUDIT_SIEM_ANCHOR_SECONDS",
+    )
+
     # Backup download location
     backup_download_dir: str = Field(
         default=".",
@@ -447,7 +500,18 @@ class Settings(BaseSettings):
         validation_alias="MCP_AUTH_TOKEN",
     )
 
-    @field_validator("redis_url", "redis_password", "database_url", "webhook_secret", mode="before")
+    @field_validator(
+        "redis_url",
+        "redis_password",
+        "database_url",
+        "webhook_secret",
+        "audit_siem_targets",
+        "audit_siem_webhook_secret",
+        "audit_siem_otlp_headers",
+        "audit_siem_ca_file",
+        "audit_siem_buffer_dir",
+        mode="before",
+    )
     @classmethod
     def blank_secret_is_unset(cls, v: str | None) -> str | None:
         """Treat a blank value as unset.

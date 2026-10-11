@@ -114,6 +114,13 @@ Configure the MCP server using environment variables:
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
 | `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
+| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md) | No | unset |
+| `UNIFI_AUDIT_SIEM_WEBHOOK_SECRET` | HMAC-SHA256 key signing webhook deliveries; required for `https://` targets | With a webhook | unset |
+| `UNIFI_AUDIT_SIEM_OTLP_HEADERS` | Extra headers for OTLP targets, `key=value,key=value` | No | unset |
+| `UNIFI_AUDIT_SIEM_CA_FILE` | CA bundle used to verify SIEM targets | No | system roots |
+| `UNIFI_AUDIT_SIEM_BUFFER_DIR` | On-disk buffer for undelivered records | No | `siem-buffer` next to the audit log |
+| `UNIFI_AUDIT_SIEM_BUFFER_MAX_MB` | Most undelivered data kept per target; the oldest is dropped beyond it | No | `100` |
+| `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` | How often each chain's head is sent to the SIEM as an anchor | No | `300` |
 | `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |

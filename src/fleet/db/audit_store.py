@@ -51,8 +51,11 @@ class PostgresAuditSink:
         self._seq = 0
         self._prev_hash = GENESIS_HASH
 
-    async def append(self, record: dict[str, Any], *, key: bytes | None, strict: bool) -> None:
+    async def append(self, record: dict[str, Any], *, key: bytes | None, strict: bool) -> bool:
         """Chain and insert one record (payload fields already encrypted).
+
+        Returns:
+            True if the record was stored (False only when not ``strict``)
 
         Raises:
             AuditUnavailableError: When ``strict`` and the record was not stored
@@ -95,9 +98,10 @@ class PostgresAuditSink:
                 if strict:
                     raise AuditUnavailableError(f"Audit store unavailable: {e}") from e
                 logger.error("Failed to write audit record: %s", e)
-                return
+                return False
             self._seq += 1
             self._prev_hash = record["hash"]
+            return True
 
 
 def install(settings: Settings, engine: AsyncEngine) -> AuditLogger | None:

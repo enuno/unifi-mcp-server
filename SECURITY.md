@@ -380,7 +380,7 @@ CMD ["python", "src/main.py"]
 - **Encrypted Controller Credentials:** With the Postgres fleet registry, controller and cloud-account API keys are Fernet-encrypted with `UNIFI_FLEET_CREDENTIAL_KEY` before they reach the database; the key never does. The server refuses to start without it, a key that cannot decrypt a credential skips that controller instead of failing the fleet, and `rotate_fleet_credentials` re-encrypts under a new key
 - **Role-Based Access Control:** With the fleet registry, callers use server-issued API tokens (only SHA-256 hashes stored, 90-day default lifetime) with a role (`viewer`, `operator`, `admin`, `fleet-admin`) that grants tool risk tiers, optionally narrowed by tool-module patterns and controller labels. Enforcement happens in the tool wrapper before any controller is contacted, and every refusal is audited. Revocation takes effect within 30 seconds; a database error refuses the token. `MCP_AUTH_TOKEN` and stdio remain break-glass `fleet-admin` callers, flagged in audit records
 - **Append-Only Postgres Audit Store:** With DATABASE_URL, audit records go to `audit_log`, where a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and each server's hash chain is kept with its head in `audit_chain_heads`. `verify_audit_chain` and `search_audit_log` are `fleet-admin` tools, and every query is audited
-- **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records
+- **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records, and with an anchored head (`--head`) also records removed from the end. `verify_audit_chain` checks each Postgres chain against its `audit_chain_heads` entry, so deleting the newest records, a whole chain or the whole table is reported too. A drill (`tests/unit/fleet/test_drill_tamper.py`) makes each of these changes as the database superuser with triggers disabled and expects every one to be caught
 
 ### Phase 4 Mutating Tools Safety Mechanisms
 
@@ -490,9 +490,19 @@ CMD ["python", "src/main.py"]
    ```
 
    Removing the last records of a chain is not detectable from the file
-   alone; exporting chain heads off the server (planned SIEM export) closes
-   that gap. Use a different value from the payload key and keep it in your
-   secret manager, never in the repository.
+   alone. Pass a head recorded elsewhere and the chain must end exactly
+   there:
+
+   ```bash
+   python -m src.utils.audit_verify audit.log --head CHAIN_ID:SEQ:HASH
+   ```
+
+   In Postgres, `verify_audit_chain` compares every chain with its
+   `audit_chain_heads` entry. Someone with write access to the database could
+   rewrite the records and that table together; only a head kept off the
+   server (the planned SIEM anchors) catches that. Use a different value from
+   the payload key and keep it in your secret manager, never in the
+   repository.
 
    **Least-privilege database role (optional):** the server needs no DDL and
    no UPDATE/DELETE on the audit table. Run migrations as the schema owner

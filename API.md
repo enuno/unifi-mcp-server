@@ -118,6 +118,7 @@ Configure the MCP server using environment variables:
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
 | `UNIFI_FLEET_MAX_OPEN_CLIENTS` | Most controller connections each server keeps open; least recently used idle ones are closed beyond this (controller state such as cached auth is kept) | No | `256` |
+| `UNIFI_FLEET_EXPECTED_REPLICAS` | How many server replicas share each controller's rate limit. While Redis is unavailable each replica falls back to `UNIFI_RATE_LIMIT_REQUESTS` divided by this (at least 1), so the replicas together stay near the controller's budget | No | `1` |
 | `UNIFI_FLEET_FANOUT_CONCURRENCY` | Most controllers one `fleet_fanout` call reaches at once | No | `20` |
 | `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS` | Default per-controller timeout of `fleet_fanout` | No | `15` |
 | `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS` | Default overall deadline of `fleet_fanout`; controllers not done by then are reported as timed out | No | `60` |
@@ -527,7 +528,7 @@ Search the Postgres audit trail, newest first, with payloads decrypted when the 
 
 #### `verify_audit_chain`
 
-Check every server's hash chain for edited, missing or reordered records; returns the chain heads to keep off the server. **Parameters:** None
+Check every server's hash chain for edited, missing or reordered records, and that each chain ends exactly at its `audit_chain_heads` entry (so records deleted from the end of a chain, a whole chain, or the whole table are reported). Returns the chain heads to keep off the server. **Parameters:** None
 
 #### `export_audit_log`
 

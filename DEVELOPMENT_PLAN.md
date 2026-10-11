@@ -314,7 +314,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 ---
 
-### Phase 7: Deployment automation (in progress: 7.1 and 7.3 done, 7.2 next)
+### Phase 7: Deployment automation (done; a molecule test for the playbook is open)
 
 **Goal:** install the server and its fleet stack (Redis, Postgres) repeatably, from a single host to a cluster, without hand-editing compose files. Today the only paths are `docker-compose.yml` (server only), `docker-compose.fleet.yml` (server, Redis, Postgres on one host) and `docker-compose.fleet-scale.yml` (replicas and workers on one host).
 
@@ -332,6 +332,8 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 - Idempotent (a second run changes nothing), with `--check` support, and a molecule (or equivalent) test in CI.
 
 #### 7.2 Kubernetes option (Helm chart)
+
+**Status: done** (`deploy/helm/unifi-mcp/`). Redis and Postgres are external endpoints only, given as URLs in the chart's Secret: bundling third-party database charts would tie releases to theirs, and production clusters run operators or managed services. Without fleet mode the audit file sits on an emptyDir, or on a PersistentVolumeClaim with one replica. Metrics are scraped through a ServiceMonitor that sends the bearer token, rather than annotations, because `/metrics` needs it. The release workflow now also publishes `<version>-fleet` images. CI lints and renders the chart, validates it with kubeconform, and runs a kind smoke test in fleet mode.
 
 - A Helm chart (`deploy/helm/unifi-mcp/`) with the server as a Deployment (replica count, HPA optional), workers as a second Deployment, `/healthz` readiness and liveness probes, and `/metrics` scrape annotations.
 - Redis and Postgres either as chart dependencies (off by default for production) or external endpoints via values.

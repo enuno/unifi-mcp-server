@@ -1,0 +1,6 @@
+# Used by CI: the server alone, audit log on a volume.
+existingSecret: unifi-mcp  # pragma: allowlist secret (a Secret's name)
+controller:
+  apiType: cloud-ea
+persistence:
+  enabled: true

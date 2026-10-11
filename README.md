@@ -253,6 +253,12 @@ nginx in front of replicas on several hosts. See
 the deployment for you, start from one of the prompts in
 [docs/deploy-prompts/](docs/deploy-prompts/README.md).
 
+### Deploying on Kubernetes
+
+`deploy/helm/unifi-mcp/` is a Helm chart for the server alone or in fleet
+mode with workers, taking credentials and the Postgres and Redis URLs from
+an existing Secret. See [its README](deploy/helm/unifi-mcp/README.md).
+
 ### Connecting via MCP Gateway
 
 Once running in Streamable HTTP mode, configure your MCP gateway to connect:

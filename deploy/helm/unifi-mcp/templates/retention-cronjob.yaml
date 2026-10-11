@@ -1,0 +1,56 @@
+{{- if and .Values.fleet.enabled .Values.audit.retentionDays }}
+# Archives, then deletes, audit records older than audit.retentionDays,
+# as the schema owner (SECURITY.md). One run at a time.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "unifi-mcp.fullname" . }}-audit-retention
+  labels:
+    {{- include "unifi-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: audit-retention
+spec:
+  schedule: {{ .Values.audit.retentionSchedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            {{- include "unifi-mcp.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: audit-retention
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "unifi-mcp.serviceAccountName" . }}
+          automountServiceAccountToken: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: audit-retention
+              image: {{ include "unifi-mcp.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: [python, -m, src.fleet.cli, audit-retention, --confirm]
+              securityContext:
+                {{- toYaml .Values.securityContext | nindent 16 }}
+              env:
+                {{- include "unifi-mcp.env" . | trim | nindent 16 }}
+              envFrom:
+                {{- include "unifi-mcp.envFrom" . | nindent 16 }}
+              volumeMounts:
+                - name: archive
+                  mountPath: /app/archive
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: archive
+              persistentVolumeClaim:
+                claimName: {{ include "unifi-mcp.fullname" . }}-archive
+            - name: tmp
+              emptyDir: {}
+{{- end }}

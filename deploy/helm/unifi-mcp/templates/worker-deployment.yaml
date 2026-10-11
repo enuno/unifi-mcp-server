@@ -1,0 +1,65 @@
+{{- if .Values.fleet.enabled }}
+# Health checks and site/inventory snapshots (python -m src.worker). With
+# REDIS_URL in the Secret several workers split the controllers; without
+# it run exactly one.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "unifi-mcp.fullname" . }}-worker
+  labels:
+    {{- include "unifi-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.fleet.workers.replicas }}
+  selector:
+    matchLabels:
+      {{- include "unifi-mcp.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "unifi-mcp.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+      annotations:
+        checksum/env: {{ include "unifi-mcp.env" . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "unifi-mcp.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "unifi-mcp.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [python, -m, src.worker]
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            {{- include "unifi-mcp.env" . | trim | nindent 12 }}
+          envFrom:
+            {{- include "unifi-mcp.envFrom" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.fleet.workers.resources | nindent 12 }}
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

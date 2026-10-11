@@ -71,8 +71,10 @@ past the new count are removed.
 ## What it sets up
 
 - **Image.** Built on each `mcp` host from `unifi_mcp_repo` at
-  `unifi_mcp_version` with the `fleet` extras, which the published image
-  does not include. Set `unifi_mcp_image` to use a prebuilt image instead.
+  `unifi_mcp_version` with the `fleet` extras, which the base published image
+  does not include. Set `unifi_mcp_image` to use a prebuilt image instead,
+  such as the `ghcr.io/enuno/unifi-mcp-server:<version>-fleet` image a
+  release publishes.
 - **Migrations.** With Postgres, the first `mcp` host runs
   `python -m src.fleet.cli migrate` as the schema owner when `status` reports
   the schema behind.

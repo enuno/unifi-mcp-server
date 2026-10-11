@@ -1,0 +1,15 @@
+apiVersion: v2
+name: unifi-mcp
+description: UniFi MCP server, with optional fleet workers, on Kubernetes
+type: application
+# The chart's own version; bump on every chart change.
+version: 0.1.0
+# The server version the chart is tested with (the image tag by default).
+appVersion: "0.5.0"
+home: https://github.com/enuno/unifi-mcp-server
+sources:
+  - https://github.com/enuno/unifi-mcp-server
+keywords:
+  - unifi
+  - mcp
+  - network

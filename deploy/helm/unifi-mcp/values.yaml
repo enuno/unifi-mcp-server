@@ -1,0 +1,144 @@
+# Values for the unifi-mcp chart (README.md). The chart never holds a
+# secret: every credential comes from the Secret named in existingSecret.
+
+image:
+  repository: ghcr.io/enuno/unifi-mcp-server
+  # Default: the chart's appVersion, with "-fleet" appended when
+  # fleet.enabled (the image built with the Redis and Postgres extras).
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Required. A Secret in the release namespace whose keys are environment
+# variable names; all of them reach the server. Needed keys:
+#   UNIFI_API_KEY, MCP_AUTH_TOKEN, UNIFI_AUDIT_CHAIN_KEY
+# and with fleet.enabled:
+#   DATABASE_URL (the least-privilege role, SECURITY.md),
+#   MIGRATION_DATABASE_URL (the schema owner), UNIFI_FLEET_CREDENTIAL_KEY,
+#   REDIS_URL (optional; shares rate limits and registry changes)
+# Optional: UNIFI_AUDIT_LOG_KEY, UNIFI_AUDIT_SIEM_WEBHOOK_SECRET,
+#   UNIFI_AUDIT_SIEM_OTLP_HEADERS.
+existingSecret: ""
+
+# The controller registered as "default" on first start.
+controller:
+  apiType: local          # local, cloud-v1 or cloud-ea
+  localHost: ""           # required for local
+  localPort: 443
+  verifySsl: true
+
+server:
+  replicas: 1
+  # Sessions live in one replica's memory (MULTI_CONTROLLER.md): with more
+  # than one replica, route each client to one pod (the Service's ClientIP
+  # affinity, or the ingress annotation in ingress.annotations), or set
+  # statelessHttp so any replica answers any request.
+  statelessHttp: false
+  metrics: true
+  # Any other non-secret setting from API.md, e.g. UNIFI_PROFILE: network.
+  extraEnv: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+
+# Controller registry, workers, API tokens and the audit log in Postgres.
+fleet:
+  enabled: false
+  workers:
+    replicas: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 192Mi
+      limits:
+        memory: 384Mi
+  # A pre-install/pre-upgrade Job runs `python -m src.fleet.cli migrate`
+  # as MIGRATION_DATABASE_URL.
+  migrate: true
+
+audit:
+  # The file log (always kept; without fleet it is the only copy).
+  rotateMb: 100
+  # Fleet only: a CronJob archives, then deletes, older records.
+  retentionDays: ""
+  retentionSchedule: "17 3 * * *"
+  # Archives written by the retention job.
+  archive:
+    storageClass: ""
+    size: 5Gi
+  # SIEM export (SECURITY.md); secrets for it go in existingSecret.
+  siemTargets: ""
+  siemCaFile: ""
+
+# The audit log volume. Without persistence it is an emptyDir: keep a SIEM
+# copy, or enable persistence (one replica only, without fleet).
+persistence:
+  enabled: false
+  storageClass: ""
+  size: 2Gi
+
+service:
+  type: ClusterIP
+  port: 3000
+  # Keeps a client on one pod within the cluster; ignored with statelessHttp.
+  sessionAffinity: ClientIP
+
+ingress:
+  enabled: false
+  className: ""
+  # For ingress-nginx, keep each client on one pod:
+  #   nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr$http_authorization"
+  #   nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  annotations: {}
+  hosts:
+    - host: unifi-mcp.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+# A Prometheus Operator ServiceMonitor; /metrics needs the bearer token,
+# read from existingSecret's MCP_AUTH_TOKEN.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# Allow ingress to the server only from these peers (NetworkPolicy "from"
+# entries); an empty list then admits nothing. Egress is left open for the
+# controller, Postgres and Redis.
+networkPolicy:
+  enabled: false
+  from: []
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]

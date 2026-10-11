@@ -218,6 +218,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
     )
 
+    fleet_expected_replicas: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many server replicas share each controller's rate limit. While Redis is "
+            "unavailable each replica falls back to UNIFI_RATE_LIMIT_REQUESTS divided by this"
+        ),
+        validation_alias="UNIFI_FLEET_EXPECTED_REPLICAS",
+    )
+
     # fleet_fanout: one read tool run on many controllers (FLEET_SCALING_PLAN.md §3.4).
     fleet_fanout_concurrency: int = Field(
         default=20,

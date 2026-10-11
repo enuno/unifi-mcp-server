@@ -30,8 +30,10 @@ from ...utils.audit_archive import (
     remove,
     write_archive,
 )
-from ...utils.audit_verify import GENESIS, Head, verify_records
+from ...utils.audit_verify import GENESIS, verify_records
 from ...utils.logger import get_logger
+from .archives import archive_problems, archived_starts
+from .audit_store import verify
 from .models import AuditArchive, AuditLogEntry
 
 logger = get_logger(__name__)
@@ -48,36 +50,6 @@ __all__ = [
     "archived_starts",
     "purge_expired",
 ]
-
-
-async def archived_starts(conn: Any) -> dict[str, Head]:
-    """Per chain, its latest archived record: where verification resumes."""
-    rows = await conn.execute(
-        select(AuditArchive.chain_id, AuditArchive.last_seq, AuditArchive.last_hash)
-    )
-    starts: dict[str, Head] = {}
-    for row in rows:
-        if row.last_seq > starts.get(row.chain_id, GENESIS)[0]:
-            starts[str(row.chain_id)] = (int(row.last_seq), str(row.last_hash))
-    return starts
-
-
-async def archive_problems(conn: Any) -> list[str]:
-    """Gaps or overlaps between one chain's successive archives."""
-    rows = await conn.execute(
-        select(AuditArchive).order_by(AuditArchive.chain_id, AuditArchive.first_seq)
-    )
-    problems = []
-    last: dict[str, Head] = {}
-    for row in rows:
-        prev_seq, prev_hash = last.get(row.chain_id, GENESIS)
-        if row.first_seq != prev_seq + 1 or row.prev_hash != prev_hash:
-            problems.append(
-                f"chain {row.chain_id[:8]}: archive {row.archive} does not continue "
-                f"from seq {prev_seq}"
-            )
-        last[row.chain_id] = (int(row.last_seq), str(row.last_hash))
-    return problems
 
 
 async def _archive_recorded(engine: AsyncEngine, name: str) -> bool:
@@ -143,8 +115,6 @@ async def purge_expired(
         RetentionRefusedError: If verification found problems
         ChainKeyMissingError: If records are HMAC-chained and no key is given
     """
-    from .audit_store import verify
-
     if retention_days < 1:
         raise ValueError("retention_days must be at least 1")
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)

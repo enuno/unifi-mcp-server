@@ -15,6 +15,9 @@ down_revision: str | None = "0004"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Alembic reads these module attributes; listing them marks them as used.
+__all__ = ["branch_labels", "depends_on", "down_revision", "downgrade", "revision", "upgrade"]
+
 #: Still refuses every change, except a DELETE from audit_log made by the
 #: table's owner inside a transaction that set ``unifi_mcp.audit_retention``
 #: (``python -m src.fleet.cli audit-retention`` does, after archiving the rows).

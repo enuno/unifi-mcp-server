@@ -214,6 +214,17 @@ class TestRedisUnavailable:
         stamps = await _burst(clients, LIMIT)
         assert len([t for t in stamps if t < PERIOD * 0.5]) == LIMIT // 2
 
+    def test_redis_configured_but_not_installed_keeps_the_full_budget(
+        self, monkeypatch, redis_port
+    ):
+        settings = _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="4")
+        monkeypatch.setattr("src.cache.REDIS_AVAILABLE", False)
+
+        limiter = _make(settings)
+
+        assert type(limiter) is RateLimiter
+        assert limiter.requests_per_period == LIMIT
+
     def test_without_redis_a_replica_keeps_the_full_budget(self, monkeypatch):
         limiter = _make(_settings(monkeypatch, None, UNIFI_FLEET_EXPECTED_REPLICAS="4"))
         assert limiter.requests_per_period == LIMIT

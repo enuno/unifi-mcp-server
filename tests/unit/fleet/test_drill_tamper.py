@@ -265,3 +265,74 @@ class TestJsonl:
 
     def test_parse_head(self) -> None:
         assert parse_head("abc:12:ff") == ("abc", (12, "ff"))
+
+
+class TestColumnCheck:
+    """Edge cases of the column-versus-record check, without a database."""
+
+    @staticmethod
+    def _entry(record: Any, **columns: Any) -> Any:
+        from types import SimpleNamespace
+
+        base = {
+            "id": 7,
+            "record": record if isinstance(record, str) else json.dumps(record),
+            "event_id": "e1",
+            "event_type": "tool_call",
+            "operation": "update_network",
+            "result": "success",
+            "tier": None,
+            "controller": None,
+            "call_id": None,
+            "chain_id": "c",
+            "seq": 0,
+            "hash": "h",
+            "principal_id": None,
+            "ts": datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc),
+        }
+        base.update(columns)
+        return SimpleNamespace(**base)
+
+    RECORD = {
+        "event_id": "e1",
+        "event_type": "tool_call",
+        "operation": "update_network",
+        "result": "success",
+        "chain_id": "c",
+        "seq": 0,
+        "hash": "h",
+    }
+
+    def _problems(self, entry: Any) -> list[str]:
+        from src.fleet.db.audit_store import _column_problems
+
+        return _column_problems(entry)
+
+    def test_matching_row(self) -> None:
+        record = {**self.RECORD, "timestamp": "2026-10-11T12:00:30+00:00"}
+        assert self._problems(self._entry(record)) == []
+
+    @pytest.mark.parametrize("raw", ["not json", "[1, 2]"])
+    def test_unreadable_records_are_left_to_the_chain_check(self, raw: str) -> None:
+        assert self._problems(self._entry(raw)) == []
+
+    def test_a_principal_is_compared_by_id(self) -> None:
+        record = {**self.RECORD, "principal": {"id": "token:a", "role": "viewer"}}
+        assert self._problems(self._entry(record, principal_id="token:a")) == []
+        assert self._problems(self._entry(record, principal_id="token:b")) == [
+            "row 7: column principal_id does not match the record"
+        ]
+
+    def test_naive_and_zulu_timestamps_are_utc(self) -> None:
+        for stamp in ("2026-10-11T12:01:00", "2026-10-11T12:01:00Z"):
+            assert self._problems(self._entry({**self.RECORD, "timestamp": stamp})) == []
+
+    def test_unparsable_timestamp_is_not_a_column_problem(self) -> None:
+        record = {**self.RECORD, "timestamp": "yesterday"}
+        assert self._problems(self._entry(record)) == []
+
+
+def test_a_chain_past_its_recorded_head_is_reported(audit_file: Path) -> None:
+    chain_id, (seq, head_hash) = _head(audit_file)
+    report = verify_file(audit_file, CHAIN_KEY, {chain_id: (seq - 2, head_hash)})
+    assert any(f"past its recorded head at seq {seq - 2}" in p for p in report.problems)

@@ -84,6 +84,21 @@ _SCHEMES = {"syslog+tls", "syslog+tcp", "https", "http", "otlp+https", "otlp+htt
 # ---------------------------------------------------------------------------
 
 
+async def _wait_event(event: asyncio.Event, timeout: float) -> None:
+    """Wait until ``event`` is set or ``timeout`` passes, staying cancellable.
+
+    Before Python 3.12, cancelling a task inside
+    ``asyncio.wait_for(event.wait(), timeout)`` just as the timeout fires can
+    lose the cancellation, so ``SiemForwarder.stop()`` would wait forever.
+    ``asyncio.wait`` never swallows it.
+    """
+    waiter = asyncio.ensure_future(event.wait())
+    try:
+        await asyncio.wait({waiter}, timeout=timeout)
+    finally:
+        waiter.cancel()
+
+
 class Exporter(Protocol):
     """Sends a batch of stored audit records to one destination."""
 
@@ -165,7 +180,8 @@ class WebhookExporter:
         self.key = url  # spool identity: targets differing only in the query stay apart
         self.url = url
         self._secret = secret.encode()
-        self._verify: Any = ca_file or True
+        # Always verify: the system trust store, or only ``ca_file`` when set (as syslog).
+        self._verify = ssl.create_default_context(cafile=ca_file)
 
     def sign(self, timestamp: str, body: bytes) -> str:
         """``sha256=<hex HMAC>`` over ``"<timestamp>.<body>"``."""
@@ -196,7 +212,7 @@ class OtlpExporter:
         self.url = endpoint.rstrip("/") + "/v1/logs"
         self.name = f"otlp+{endpoint}"
         self._headers = {"Content-Type": "application/json", **(headers or {})}
-        self._verify: Any = ca_file or True
+        self._verify = ssl.create_default_context(cafile=ca_file)
 
     @staticmethod
     def _attribute(key: str, value: Any) -> dict[str, Any]:
@@ -588,8 +604,7 @@ class SiemForwarder:
     async def _deliver(self, target: _Target) -> None:
         backoff = 1.0
         while True:
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(target.wake.wait(), self.flush_seconds)
+            await _wait_event(target.wake, self.flush_seconds)
             target.wake.clear()
             target.seal()
             try:

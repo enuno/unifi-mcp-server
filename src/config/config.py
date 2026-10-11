@@ -1,7 +1,7 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -793,3 +793,34 @@ class Settings(BaseSettings):
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+
+class AuditMaintenanceSettings(BaseSettings):
+    """What the audit retention job reads: same variables as :class:`Settings`.
+
+    A database maintenance job needs no controller credentials, so this
+    model leaves out ``UNIFI_API_KEY`` and everything else it does not use.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    read_only: bool = Field(default=False, validation_alias="UNIFI_READ_ONLY")
+    audit_log_enabled: bool = Field(default=True, validation_alias="UNIFI_AUDIT_LOG_ENABLED")
+    audit_log_file: str | None = Field(default=None, validation_alias="UNIFI_AUDIT_LOG_PATH")
+    audit_retention_days: int | None = Field(
+        default=None, ge=1, validation_alias="UNIFI_AUDIT_RETENTION_DAYS"
+    )
+    audit_archive_dir: str | None = Field(default=None, validation_alias="UNIFI_AUDIT_ARCHIVE_DIR")
+
+    @field_validator("audit_log_file", "audit_retention_days", "audit_archive_dir", mode="before")
+    @classmethod
+    def blank_is_unset(cls, v: Any) -> Any:
+        """Treat a blank value (as compose forwards an unset one) as unset."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v

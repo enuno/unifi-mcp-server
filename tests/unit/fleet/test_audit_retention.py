@@ -230,6 +230,117 @@ class TestPurge:
             await _purge(migrated_engine, tmp_path, retention_days=0)
 
 
+class TestReviewFixes:
+    async def test_a_fully_archived_chain_needs_its_head(
+        self, migrated_engine: Any, tmp_path: Path
+    ) -> None:
+        await _fill(migrated_engine, A, [40, 35])
+        await _purge(migrated_engine, tmp_path)
+        await _as_superuser(
+            migrated_engine, f"DELETE FROM audit_chain_heads WHERE chain_id = '{A}'"
+        )
+
+        report = await audit_store.verify(migrated_engine, CHAIN_KEY)
+        assert any("was archived but has no recorded head" in p for p in report.problems)
+
+    async def test_the_admin_event_is_written_with_the_delete(
+        self, migrated_engine: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.utils.audit import AuditLogger
+
+        await _fill(migrated_engine, A, [40, 1])
+        audit = AuditLogger(tmp_path / "audit.log")
+        audit.chain_key = CHAIN_KEY
+        await _purge(migrated_engine, tmp_path, audit=audit)
+        async with migrated_engine.connect() as conn:
+            rows = list(
+                await conn.execute(text("SELECT record FROM audit_log WHERE event_type = 'admin'"))
+            )
+        (record,) = [json.loads(r.record) for r in rows]
+        assert record["operation"] == "audit_retention"
+        assert record["parameters"]["records"] == 1
+        assert (await audit_store.verify(migrated_engine, CHAIN_KEY)).ok
+
+    async def test_a_failed_admin_event_deletes_nothing(
+        self, migrated_engine: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.utils.audit import AuditLogger, AuditUnavailableError
+
+        await _fill(migrated_engine, A, [40, 1])
+
+        async def refuse(self: Any, *args: Any, **kwargs: Any) -> bool:
+            raise AuditUnavailableError("audit store unavailable")
+
+        monkeypatch.setattr(PostgresAuditSink, "append", refuse)
+        with pytest.raises(AuditUnavailableError):
+            await _purge(migrated_engine, tmp_path, audit=AuditLogger(tmp_path / "audit.log"))
+        assert await _seqs(migrated_engine, A) == [0, 1]
+        assert list((tmp_path / "archive").iterdir()) == []
+
+    async def test_an_unknown_commit_outcome_keeps_the_archive(
+        self, migrated_engine: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        await _fill(migrated_engine, A, [40, 1])
+
+        def broken_insert(*args: Any, **kwargs: Any) -> Any:
+            raise RuntimeError("connection lost")
+
+        async def maybe_committed(engine: Any, name: str) -> bool:
+            return True
+
+        monkeypatch.setattr(retention, "insert", broken_insert)
+        monkeypatch.setattr(retention, "_archive_recorded", maybe_committed)
+        with pytest.raises(RuntimeError, match="connection lost"):
+            await _purge(migrated_engine, tmp_path)
+        assert len(list((tmp_path / "archive").iterdir())) == 2
+
+    async def test_archive_check_keeps_files_when_the_database_cannot_answer(self) -> None:
+        from src.fleet.db.schema import make_engine
+
+        engine = make_engine("postgresql://nobody@127.0.0.1:1/none")
+        try:
+            assert await retention._archive_recorded(engine, "x.jsonl.gz") is True
+        finally:
+            await engine.dispose()
+
+    async def test_downgrade_is_refused_after_retention(
+        self, migrated_engine: Any, tmp_path: Path
+    ) -> None:
+        from src.fleet.db.schema import downgrade
+
+        await _fill(migrated_engine, A, [40, 1])
+        await _purge(migrated_engine, tmp_path)
+        with pytest.raises(RuntimeError, match="unverifiable"):
+            await downgrade(migrated_engine, "0004")
+
+    async def test_a_chain_left_out_of_the_manifest_is_caught(
+        self, migrated_engine: Any, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        await _fill(migrated_engine, A, [40, 1])
+        await _fill(migrated_engine, B, [40, 1])
+        result = await _purge(migrated_engine, tmp_path)
+        assert result.manifest is not None and result.archive is not None
+        data = json.loads(result.manifest.read_text(encoding="utf-8"))
+        data["chains"] = [c for c in data["chains"] if c["chain_id"] != B]
+        result.manifest.write_text(json.dumps(data), encoding="utf-8")
+
+        key = CHAIN_KEY.decode()
+        assert (
+            verify_cli([str(result.archive), "--key", key, "--manifest", str(result.manifest)]) == 1
+        )
+        assert "chain bbbbbbbb is not in its manifest" in capsys.readouterr().out
+
+    def test_a_corrupt_archive_fails_cleanly(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        archive = tmp_path / "broken.jsonl.gz"
+        archive.write_bytes(gzip.compress(b"{}\n" * 100)[:-6])  # trailer cut off
+        assert verify_cli([str(archive)]) == 1
+        assert "cannot read" in capsys.readouterr().out
+        archive.write_bytes(b"not gzip at all")
+        assert verify_cli([str(archive)]) == 1
+
+
 class TestArchiveTampering:
     async def test_deleting_an_archive_row_is_caught(
         self, migrated_engine: Any, tmp_path: Path
@@ -326,7 +437,7 @@ class TestAppendOnlyTrigger:
 
 class TestCli:
     def _env(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, database_url: str) -> None:
-        monkeypatch.setenv("UNIFI_API_KEY", "test-key")  # pragma: allowlist secret
+        monkeypatch.delenv("UNIFI_API_KEY", raising=False)  # not needed by retention
         monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(tmp_path / "audit.log"))
         monkeypatch.setenv("UNIFI_AUDIT_CHAIN_KEY", CHAIN_KEY.decode())
         monkeypatch.setenv("DATABASE_URL", database_url)

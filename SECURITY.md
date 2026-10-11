@@ -565,7 +565,9 @@ CMD ["python", "src/main.py"]
    keeps checking what remains and reports archive rows that were removed.
    The append-only trigger allows a DELETE only by the table's owner inside
    the retention transaction; the server itself never deletes audit records.
-   `UNIFI_READ_ONLY` refuses `--confirm`. Without Postgres (the JSONL file),
+   The run's `audit_retention` admin event is written in the same
+   transaction as the delete, the job needs no controller credentials
+   (no `UNIFI_API_KEY`), and `UNIFI_READ_ONLY` refuses `--confirm`. Without Postgres (the JSONL file),
    retention is not automated yet.
 
    **Least-privilege database role (optional):** the server needs no DDL and

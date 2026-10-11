@@ -14,21 +14,23 @@ transaction that set ``unifi_mcp.audit_retention``. The server itself never
 deletes audit records.
 """
 
-import contextlib
-import gzip
-import json
-import os
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, insert, select, text
+from sqlalchemy import delete, func, insert, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ...utils.audit_verify import GENESIS, Head, file_sha256, verify_records
-from ...utils.exceptions import UniFiMCPException
+from ...utils.audit import AuditLogger
+from ...utils.audit_archive import (
+    ChainArchive,
+    RetentionRefusedError,
+    RetentionResult,
+    remove,
+    write_archive,
+)
+from ...utils.audit_verify import GENESIS, Head, verify_records
 from ...utils.logger import get_logger
 from .models import AuditArchive, AuditLogEntry
 
@@ -38,43 +40,14 @@ logger = get_logger(__name__)
 DELETE_BATCH = 1000
 
 
-class RetentionRefusedError(UniFiMCPException):
-    """Raised when records cannot be archived safely, so nothing is deleted."""
-
-
-@dataclass
-class ChainArchive:
-    """The records of one chain moved to an archive."""
-
-    chain_id: str
-    first_seq: int
-    last_seq: int
-    prev_hash: str
-    last_hash: str
-    records: int
-
-
-@dataclass
-class RetentionResult:
-    """What a retention run archived (or, for a dry run, would archive)."""
-
-    cutoff: datetime
-    dry_run: bool
-    records: int = 0
-    chains: list[ChainArchive] = field(default_factory=list)
-    archive: Path | None = None
-    manifest: Path | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        """A JSON-ready summary."""
-        return {
-            "cutoff": self.cutoff.isoformat(),
-            "dry_run": self.dry_run,
-            "records": self.records,
-            "chains": [asdict(c) for c in self.chains],
-            "archive": str(self.archive) if self.archive else None,
-            "manifest": str(self.manifest) if self.manifest else None,
-        }
+__all__ = [
+    "ChainArchive",
+    "RetentionRefusedError",
+    "RetentionResult",
+    "archive_problems",
+    "archived_starts",
+    "purge_expired",
+]
 
 
 async def archived_starts(conn: Any) -> dict[str, Head]:
@@ -107,6 +80,24 @@ async def archive_problems(conn: Any) -> list[str]:
     return problems
 
 
+async def _archive_recorded(engine: AsyncEngine, name: str) -> bool:
+    """Whether a run's archive is in ``audit_archives`` (its transaction committed).
+
+    Asked after the deleting transaction failed: a lost COMMIT reply can hide
+    a commit that happened. When the database cannot answer, the archive is
+    kept (True), since it may be the only copy of the records.
+    """
+    try:
+        async with engine.connect() as conn:
+            found = await conn.execute(
+                select(AuditArchive.id).where(AuditArchive.archive == name).limit(1)
+            )
+            return found.first() is not None
+    except Exception as e:
+        logger.warning("Could not check whether archive %s was recorded (%s); kept it", name, e)
+        return True
+
+
 def _expired_prefixes(rows: list[Any], cutoff: datetime) -> dict[str, list[Any]]:
     """Per chain, its leading records older than ``cutoff`` (rows in seq order)."""
     prefixes: dict[str, list[Any]] = {}
@@ -121,33 +112,6 @@ def _expired_prefixes(rows: list[Any], cutoff: datetime) -> dict[str, list[Any]]
     return prefixes
 
 
-def _private_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def _write_archive(path: Path, rows: list[Any]) -> None:
-    """Write the stored records to ``path`` (gzip JSON lines, mode 0600), durably."""
-    partial = path.with_name(path.name + ".partial")
-    fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as raw:
-        with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as f:
-            for row in rows:
-                f.write(row.record.encode("utf-8") + b"\n")
-        raw.flush()
-        os.fsync(raw.fileno())
-    partial.rename(path)
-
-
-def _write_manifest(path: Path, data: dict[str, Any]) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
-
-
 async def purge_expired(
     engine: AsyncEngine,
     key: bytes | None,
@@ -156,6 +120,7 @@ async def purge_expired(
     archive_dir: Path,
     dry_run: bool = True,
     now: datetime | None = None,
+    audit: AuditLogger | None = None,
 ) -> RetentionResult:
     """Archive and delete audit records older than ``retention_days``.
 
@@ -171,6 +136,8 @@ async def purge_expired(
         archive_dir: Where archives go (created mode 0700)
         dry_run: Report what would be archived without writing or deleting
         now: The current time (tests)
+        audit: Writes the run's ``audit_retention`` admin event, inside the
+            deleting transaction (none when omitted)
 
     Raises:
         RetentionRefusedError: If verification found problems
@@ -197,21 +164,29 @@ async def purge_expired(
             conn = await conn.execution_options(isolation_level="REPEATABLE READ")
             async with conn.begin():
                 starts = await archived_starts(conn)
-                chains = [
-                    row.chain_id
-                    for row in await conn.execute(
-                        select(AuditLogEntry.chain_id)
-                        .where(AuditLogEntry.ts < cutoff)
-                        .group_by(AuditLogEntry.chain_id)
+                # Only each chain's expired prefix is read: the records before
+                # its first one that is kept (all of them if none is kept).
+                kept = (
+                    select(
+                        AuditLogEntry.chain_id.label("chain_id"),
+                        func.min(AuditLogEntry.seq).label("first_kept"),
                     )
-                ]
-                if not chains:
-                    return result
+                    .where(AuditLogEntry.ts >= cutoff)
+                    .group_by(AuditLogEntry.chain_id)
+                    .subquery()
+                )
                 rows = list(
                     (
                         await conn.execute(
                             select(AuditLogEntry)
-                            .where(AuditLogEntry.chain_id.in_(chains))
+                            .outerjoin(kept, kept.c.chain_id == AuditLogEntry.chain_id)
+                            .where(
+                                AuditLogEntry.ts < cutoff,
+                                or_(
+                                    kept.c.first_kept.is_(None),
+                                    AuditLogEntry.seq < kept.c.first_kept,
+                                ),
+                            )
                             .order_by(AuditLogEntry.chain_id, AuditLogEntry.seq)
                         )
                     ).all()
@@ -243,26 +218,10 @@ async def purge_expired(
                 if dry_run or not expired:
                     return result
 
-                _private_dir(archive_dir)
-                stamp = cutoff.strftime("%Y%m%dT%H%M%SZ")
-                name = f"audit-before-{stamp}-{uuid.uuid4().hex[:8]}.jsonl.gz"
-                archive = archive_dir / name
-                manifest = archive_dir / f"{name}.manifest.json"
-                _write_archive(archive, expired)
-                written.append(archive)
-                digest = file_sha256(archive)
-                written.append(manifest)
-                _write_manifest(
-                    manifest,
-                    {
-                        "archive": name,
-                        "sha256": digest,
-                        "records": len(expired),
-                        "cutoff": cutoff.isoformat(),
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                        "chains": [asdict(c) for c in result.chains],
-                    },
+                archive, manifest, digest = write_archive(
+                    archive_dir, cutoff, (str(row.record) for row in expired), result.chains
                 )
+                written += [archive, manifest]
                 await conn.execute(text("SET LOCAL unifi_mcp.audit_retention = 'on'"))
                 ids = [int(row.id) for row in expired]
                 for start in range(0, len(ids), DELETE_BATCH):
@@ -274,17 +233,39 @@ async def purge_expired(
                 await conn.execute(
                     insert(AuditArchive),
                     [
-                        {**asdict(c), "archive": name, "archive_sha256": digest, "cutoff": cutoff}
+                        {
+                            **asdict(c),
+                            "archive": archive.name,
+                            "archive_sha256": digest,
+                            "cutoff": cutoff,
+                        }
                         for c in result.chains
                     ],
                 )
+                if audit is not None:
+                    # In the same transaction: no delete without its record.
+                    from .audit_store import PostgresAuditSink
+
+                    record = audit.prepare_event(
+                        "admin",
+                        "audit_retention",
+                        "success",
+                        parameters={
+                            "retention_days": retention_days,
+                            "cutoff": cutoff.isoformat(),
+                            "records": result.records,
+                            "chains": len(result.chains),
+                            "archive": archive.name,
+                        },
+                    )
+                    await PostgresAuditSink(engine).append(
+                        record, key=audit.chain_key, strict=True, conn=conn
+                    )
     except Exception:
-        # Nothing was deleted (the transaction did not commit): the records are
-        # still in the store, and an archive without its delete would only
-        # confuse a later audit.
-        for path in written:
-            with contextlib.suppress(OSError):
-                path.unlink()
+        if written and not await _archive_recorded(engine, written[0].name):
+            # The transaction did not commit, so nothing was deleted: an archive
+            # without its delete would only confuse a later audit.
+            remove(*written)
         raise
     result.archive, result.manifest = archive, manifest
     logger.info(

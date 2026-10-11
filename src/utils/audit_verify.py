@@ -27,6 +27,7 @@ import gzip
 import hashlib
 import json
 import sys
+import zlib
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +48,8 @@ class VerifyReport:
     legacy: int = 0
     chains: int = 0
     problems: list[str] = field(default_factory=list)
+    #: The chains seen in the records
+    chain_ids: set[str] = field(default_factory=set)
 
     @property
     def ok(self) -> bool:
@@ -158,6 +161,7 @@ def verify_records(
         seq = record.get("seq")
         if chain_id not in heads:
             report.chains += 1
+            report.chain_ids.add(chain_id)
             start_seq, start_hash = (starts or {}).get(chain_id, GENESIS)
             if seq != start_seq + 1 or record.get("prev_hash") != start_hash:
                 where = "seq 0" if start_seq < 0 else f"seq {start_seq + 1} after its archive"
@@ -350,8 +354,15 @@ def main(argv: list[str] | None = None) -> int:
     except ChainKeyMissingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except (OSError, EOFError, UnicodeDecodeError, zlib.error) as e:
+        # A truncated or corrupt archive (or an unreadable file) fails the check.
+        print(f"FAILED: cannot read {args.log_file}: {type(e).__name__}: {e}")
+        return 1
 
     report.problems[:0] = manifest_problems
+    if args.manifest is not None:
+        for chain_id in sorted(report.chain_ids - set(manifest.heads)):
+            report.problems.append(f"archive: chain {chain_id[:8]} is not in its manifest")
     if args.manifest is not None and report.records != manifest.records:
         report.problems.append(
             f"archive: holds {report.records} record(s), its manifest says {manifest.records}"

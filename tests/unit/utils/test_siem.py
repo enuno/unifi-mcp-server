@@ -134,6 +134,8 @@ class TestBuildExporters:
             ("https://hooks.example/audit", "UNIFI_AUDIT_SIEM_WEBHOOK_SECRET"),
             ("http://hooks.example/audit", "must use https"),
             ("syslog+tls://", "needs a host"),
+            ("https:///ingest", "needs a host"),
+            ("otlp+https:///v1/logs", "needs a host"),
         ],
     )
     def test_invalid(
@@ -420,16 +422,77 @@ class TestForwarder:
         assert "recorder" not in str(directory)  # target names never in paths
 
     async def test_anchors_report_each_moved_head_once(self, tmp_path: Path) -> None:
-        forwarder = SiemForwarder([Recorder()], tmp_path)
+        recorder = Recorder()
+        forwarder = SiemForwarder([recorder], tmp_path)
         forwarder.forward(_record(4))
         forwarder.forward(_record(9, chain="d" * 32))
 
         anchors = forwarder.anchors()
         assert [(a["chain_id"][0], a["seq"]) for a in anchors] == [("c", 4), ("d", 9)]
         assert all(a["event_type"] == "anchor" for a in anchors)
-        assert forwarder.anchors() == []  # unchanged heads are not re-sent
+        forwarder._anchor()
+        forwarder._anchor()  # unchanged heads are not re-sent
         forwarder.forward(_record(5))
-        assert [a["seq"] for a in forwarder.anchors()] == [5]
+        forwarder._anchor()
+        await forwarder.flush()
+        sent = [
+            (r["chain_id"][0], r["seq"]) for r in recorder.records if r["event_type"] == "anchor"
+        ]
+        assert sent == [("c", 4), ("d", 9), ("c", 5)]
+
+    async def test_an_anchor_that_could_not_be_spooled_is_retried(
+        self, tmp_path: Path, monkeypatch: Any, caplog: Any
+    ) -> None:
+        first, second = Recorder("one"), Recorder("two")
+        forwarder = SiemForwarder([first, second], tmp_path)
+        forwarder.forward(_record(4))
+        broken = forwarder._targets[0]
+        real_append = broken.append
+
+        def fail(line: str) -> None:
+            raise OSError("disk full")
+
+        monkeypatch.setattr(broken, "append", fail)
+        forwarder._anchor()
+        assert "Could not spool a chain anchor for one" in caplog.text
+        monkeypatch.setattr(broken, "append", real_append)
+        forwarder._anchor()  # only the target that missed it gets it again
+        await forwarder.flush()
+
+        def anchors(recorder: Recorder) -> list[int]:
+            return [r["seq"] for r in recorder.records if r["event_type"] == "anchor"]
+
+        assert anchors(first) == [4]
+        assert anchors(second) == [4]
+
+    def test_an_anchor_dropped_over_the_cap_is_re_sent(
+        self, tmp_path: Path, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(siem, "SEGMENT_BYTES", 1)  # one record per segment
+        recorder = Recorder()
+        size = len(json.dumps(_record(0), separators=(",", ":"), sort_keys=True)) + 1
+        forwarder = SiemForwarder([recorder], tmp_path, max_bytes=size * 2)
+        forwarder.forward(_record(0))
+        forwarder._anchor()
+        for n in range(1, 4):  # pushes the anchor out of the spool
+            forwarder.forward({**_record(n), "chain_id": "d" * 32})
+        forwarder._anchor()
+        asyncio.run(forwarder.flush())
+
+        anchors = [r for r in recorder.records if r["event_type"] == "anchor"]
+        assert ("c" * 32, 0) in [(a["chain_id"], a["seq"]) for a in anchors]
+
+    def test_targets_differing_in_the_query_get_their_own_spool(self, tmp_path: Path) -> None:
+        first = WebhookExporter("https://siem.example/hook?tenant=a", SECRET)
+        second = WebhookExporter("https://siem.example/hook?tenant=b", SECRET)
+        assert first.name == second.name  # the query is kept out of logs
+        forwarder = SiemForwarder([first, second], tmp_path / "spool")
+        forwarder.forward(_record(0))
+        assert len(list((tmp_path / "spool").iterdir())) == 2
+
+    def test_the_same_target_twice_is_refused(self, tmp_path: Path) -> None:
+        with pytest.raises(ConfigurationError, match="same target twice"):
+            SiemForwarder([Recorder("one"), Recorder("one")], tmp_path)
 
     async def test_stop_sends_the_anchors_and_flushes(self, tmp_path: Path) -> None:
         recorder = Recorder()
@@ -659,6 +722,16 @@ class TestAnchorsVerifyTruncation:
         AuditLogger(log).log_operation("op", {}, "success")
         assert verify_cli([str(log), "--anchors", str(tmp_path / "nope")]) == 2
         assert "anchors file not found" in capsys.readouterr().err
+
+    def test_cli_anchors_file_without_anchors(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        log = tmp_path / "audit.log"
+        AuditLogger(log).log_operation("op", {}, "success")
+        export = tmp_path / "export.jsonl"
+        export.write_text('{"event_type": "tool_call"}\n', encoding="utf-8")
+        assert verify_cli([str(log), "--anchors", str(export)]) == 2
+        assert "no anchor events" in capsys.readouterr().err
 
 
 class TestServerWiring:

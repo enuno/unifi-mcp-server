@@ -247,7 +247,12 @@ def main(argv: list[str] | None = None) -> int:
         if not args.anchors.exists():
             print(f"error: anchors file not found: {args.anchors}", file=sys.stderr)
             return 2
-        expected_heads = {**load_anchors(args.anchors), **expected_heads}
+        anchors = load_anchors(args.anchors)
+        if not anchors:
+            # A wrong or empty export must not pass as "truncation checked".
+            print(f"error: no anchor events in {args.anchors}", file=sys.stderr)
+            return 2
+        expected_heads = {**anchors, **expected_heads}
 
     if not args.log_file.exists():
         print(f"error: log file not found: {args.log_file}", file=sys.stderr)

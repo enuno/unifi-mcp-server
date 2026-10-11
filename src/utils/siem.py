@@ -76,6 +76,7 @@ SEND_TIMEOUT_SECONDS = 15.0
 
 APP_NAME = "unifi-mcp"
 _LOOPBACK = {"localhost", "127.0.0.1", "::1"}
+_SCHEMES = {"syslog+tls", "syslog+tcp", "https", "http", "otlp+https", "otlp+http"}
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +161,8 @@ class WebhookExporter:
 
     def __init__(self, url: str, secret: str, *, ca_file: str | None = None) -> None:
         """POST to ``url``, signed with ``secret``."""
-        self.name = url.split("?", 1)[0]
+        self.name = url.split("?", 1)[0]  # shown in logs; the query may hold a token
+        self.key = url  # spool identity: targets differing only in the query stay apart
         self.url = url
         self._secret = secret.encode()
         self._verify: Any = ca_file or True
@@ -280,9 +282,9 @@ def build_exporters(settings: Settings) -> list[Exporter]:
             continue
         parts = urlsplit(target)
         scheme, host = parts.scheme.lower(), parts.hostname or ""
+        if scheme in _SCHEMES and not host:
+            raise ConfigurationError(f"SIEM target {scheme}:// needs a host")
         if scheme in ("syslog+tls", "syslog+tcp"):
-            if not host:
-                raise ConfigurationError(f"SIEM target {scheme}:// needs a host")
             if scheme == "syslog+tcp" and host not in _LOOPBACK:
                 logger.warning("SIEM target %s sends audit metadata without TLS", host)
             exporters.append(
@@ -329,9 +331,14 @@ def build_exporters(settings: Settings) -> list[Exporter]:
 # ---------------------------------------------------------------------------
 
 
-def _spool_name(exporter_name: str) -> str:
+def _spool_key(exporter: Exporter) -> str:
+    """What identifies a target's spool: its full URL where the name is redacted."""
+    return str(getattr(exporter, "key", exporter.name))
+
+
+def _spool_name(key: str) -> str:
     """A directory name for one target (its URL never appears in the path)."""
-    return base64.urlsafe_b64encode(hashlib.sha256(exporter_name.encode()).digest()[:12]).decode()
+    return base64.urlsafe_b64encode(hashlib.sha256(key.encode()).digest()[:12]).decode()
 
 
 @dataclass
@@ -344,6 +351,9 @@ class _Target:
     counter: int = 0
     dropped: int = 0
     delivered: int = 0
+    # Heads this target has spooled; cleared when the cap drops a segment,
+    # which may have held an anchor, so every head is re-sent.
+    anchored: dict[str, tuple[int, str]] = field(default_factory=dict)
 
     @property
     def active(self) -> Path:
@@ -384,6 +394,7 @@ class _Target:
             oldest.unlink()
             total -= size
             self.dropped += lost
+            self.anchored.clear()
             logger.error(
                 "SIEM spool for %s over its %d MB cap: dropped %d undelivered audit record(s)",
                 self.exporter.name,
@@ -424,14 +435,16 @@ class SiemForwarder:
         # private too, since spooled records name operations and principals.
         buffer_dir.mkdir(parents=True, exist_ok=True)
         buffer_dir.chmod(0o700)
+        keys = [_spool_key(exporter) for exporter in exporters]
+        if len(set(keys)) != len(keys):
+            raise ConfigurationError("UNIFI_AUDIT_SIEM_TARGETS lists the same target twice")
         for exporter in exporters:
-            directory = buffer_dir / _spool_name(exporter.name)
+            directory = buffer_dir / _spool_name(_spool_key(exporter))
             directory.mkdir(exist_ok=True, mode=0o700)
             directory.chmod(0o700)
             self._targets.append(_Target(exporter, directory, max_bytes))
         self._heads: dict[str, tuple[int, str]] = {}
         self._heads_lock = threading.Lock()
-        self._anchored: dict[str, tuple[int, str]] = {}
         self._tasks: list[asyncio.Task[None]] = []
 
     @classmethod
@@ -497,37 +510,40 @@ class SiemForwarder:
         for target in self._targets:
             loop.call_soon_threadsafe(target.wake.set)
 
-    def anchors(self) -> list[dict[str, Any]]:
-        """One ``anchor`` event per chain whose head moved since the last anchor."""
+    def anchors(self, target: _Target | None = None) -> list[dict[str, Any]]:
+        """One ``anchor`` event per chain whose head ``target`` has not spooled yet.
+
+        Without a target, one per chain head known.
+        """
         now = datetime.now(timezone.utc).isoformat()
         with self._heads_lock:
             heads = dict(self._heads)
-        events = []
-        for chain_id, (seq, digest) in sorted(heads.items()):
-            if self._anchored.get(chain_id) == (seq, digest):
-                continue
-            events.append(
-                {
-                    "event_id": uuid.uuid4().hex,
-                    "event_type": "anchor",
-                    "timestamp": now,
-                    "chain_id": chain_id,
-                    "seq": seq,
-                    "hash": digest,
-                }
-            )
-            self._anchored[chain_id] = (seq, digest)
-        return events
+        return [
+            {
+                "event_id": uuid.uuid4().hex,
+                "event_type": "anchor",
+                "timestamp": now,
+                "chain_id": chain_id,
+                "seq": seq,
+                "hash": digest,
+            }
+            for chain_id, (seq, digest) in sorted(heads.items())
+            if target is None or target.anchored.get(chain_id) != (seq, digest)
+        ]
 
     def _anchor(self) -> None:
-        for event in self.anchors():
-            for target in self._targets:
+        """Spool each target's missing anchors; one that fails is retried next time."""
+        for target in self._targets:
+            for event in self.anchors(target):
                 try:
                     target.append(_body(event))
                 except Exception as e:
                     logger.error(
                         "Could not spool a chain anchor for %s: %s", target.exporter.name, e
                     )
+                    continue
+                with target.lock:
+                    target.anchored[event["chain_id"]] = (event["seq"], event["hash"])
         self._notify()
 
     async def start(self) -> None:

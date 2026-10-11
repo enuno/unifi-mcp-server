@@ -127,21 +127,25 @@ if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.mo
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
     """Start the Postgres registry and audit store with the server, then audit the start."""
-    if hasattr(fleet_registry, "start"):
-        from .fleet.db import audit_store
-
-        audit_store.install(settings, fleet_registry.store.engine)
-        await fleet_registry.start()
+    # The forwarder comes first: registry startup can already store audit
+    # records (registry_seeded), and every stored record is exported.
     forwarder = await start_siem_forwarder(settings)
-    await audit_server_start()
     try:
-        yield
+        if hasattr(fleet_registry, "start"):
+            from .fleet.db import audit_store
+
+            audit_store.install(settings, fleet_registry.store.engine)
+            await fleet_registry.start()
+        try:
+            await audit_server_start()
+            yield
+        finally:
+            await client_pool.aclose()
+            if hasattr(fleet_registry, "stop"):
+                await fleet_registry.stop()
     finally:
         if forwarder is not None:
             await forwarder.stop()
-        await client_pool.aclose()
-        if hasattr(fleet_registry, "stop"):
-            await fleet_registry.stop()
 
 
 async def start_siem_forwarder(current_settings: Settings) -> Any:

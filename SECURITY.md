@@ -526,8 +526,11 @@ CMD ["python", "src/main.py"]
 
    Every `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` (default 300) and on shutdown, the
    server also sends an `anchor` event per chain that moved: `chain_id`,
-   `seq` and `hash` of its latest record. Export the anchors from the SIEM as
-   JSON lines (or a JSON array) and check a log against them:
+   `seq` and `hash` of its latest record. Anchors are tracked per target, so a
+   target that missed one (a failed write, or its buffer dropping it over the
+   cap) gets it again at the next interval. Export the anchors from the SIEM as
+   JSON lines (or a JSON array) and check a log against them (a file with no
+   anchor events is an error, not a pass):
 
    ```bash
    UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify audit.log --anchors anchors.jsonl

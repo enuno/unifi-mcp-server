@@ -118,6 +118,9 @@ Configure the MCP server using environment variables:
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
 | `UNIFI_FLEET_MAX_OPEN_CLIENTS` | Most controller connections each server keeps open; least recently used idle ones are closed beyond this (controller state such as cached auth is kept) | No | `256` |
+| `UNIFI_FLEET_FANOUT_CONCURRENCY` | Most controllers one `fleet_fanout` call reaches at once | No | `20` |
+| `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS` | Default per-controller timeout of `fleet_fanout` | No | `15` |
+| `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS` | Default overall deadline of `fleet_fanout`; controllers not done by then are reported as timed out | No | `60` |
 | `UNIFI_FLEET_WORKER_HEALTH_SECONDS` | Worker (`python -m src.worker`): how often each controller is health-checked | No | `60` |
 | `UNIFI_FLEET_WORKER_SYNC_SECONDS` | Worker: how often each controller's sites and device inventory are refreshed | No | `900` |
 | `UNIFI_FLEET_WORKER_CONCURRENCY` | Worker: most controller jobs one worker runs at once | No | `20` |
@@ -476,7 +479,7 @@ Show which controller a call without `controller` would target, and whether it c
 
 ### Fleet Registry Administration
 
-Available only when `DATABASE_URL` is set, and never in read-only mode. These tools manage the controller registry rather than a controller, so they take no `controller` argument. They are `fleet-admin` tier, need `confirm=true`, accept `dry_run`, and every call is audited as an `admin` event with API keys redacted. A change is routable on the server that made it immediately, and on other servers within `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`.
+Available only when `DATABASE_URL` is set, and never in read-only mode. These tools manage the controller registry rather than a controller, so they take no `controller` argument. They are `fleet-admin` tier, need `confirm=true`, accept `dry_run`, and every call is audited as an `admin` event with API keys redacted. A change is routable on the server that made it immediately, on other servers at once when Redis is configured (`registry:changed` pub/sub), and otherwise within `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`.
 
 #### `register_controller`
 
@@ -539,6 +542,60 @@ python -m src.fleet.cli import --name hq     # register the UNIFI_* controller
 python -m src.fleet.cli tokens create --name first-admin --role fleet-admin
 python -m src.fleet.cli tokens list
 python -m src.fleet.cli tokens revoke --name first-admin
+```
+
+### Fleet-Wide Reads
+
+Available when `DATABASE_URL` is set. All four are `read` tier, from the module `fleet` (so `deny_modules: ["fleet"]` removes them), take no `controller` argument, and cover only the controllers inside the caller's `controller_labels` scope. Naming a controller that is unknown, disabled or out of scope is refused without saying which.
+
+`fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; every entry says how many seconds old it is. Without a running worker they report `unknown` health and no sites or devices.
+
+#### `fleet_health`
+
+Each enabled controller's last health check: `ok`, `degraded` (failing), `down` (`UNIFI_FLEET_WORKER_DOWN_AFTER` failures in a row) or `unknown` (never checked), the failure detail, `capabilities` (`network_version` on local controllers), and ages. An entry is `stale` when its last check is more than three health intervals old. Also returns a count per state.
+
+**Parameters:** `health` (`ok`, `degraded`, `down` or `unknown`), `labels` (controllers carrying all of these)
+
+#### `fleet_sites`
+
+Every controller's sites: controller, `site_id` (UUID), short name, display name, age.
+
+**Parameters:** `controllers` (names), `labels`
+
+#### `fleet_inventory`
+
+Devices across the fleet (local controllers; the worker does not inventory cloud controllers): controller, site, id, MAC, name, model, firmware, state, age. Also the total match count and a count per model.
+
+**Parameters:** `model` (substring, case-insensitive, e.g. `UDM`), `firmware_below` (numeric comparison, e.g. `4.1.0`; devices without a version are left out), `state` (e.g. `OFFLINE`), `controllers`, `labels`, `limit` (default 200, max 1000), `offset`
+
+```json
+// fleet_inventory(model="UDM", firmware_below="4.1")
+{
+  "devices": [
+    {"controller": "store-017", "site_id": "88f7af54-...", "id": "a1b2...", "mac": "aa:bb:cc:00:11:22",
+     "name": "Gateway", "model": "UDM-Pro", "firmware_version": "4.0.9", "state": "ONLINE",
+     "synced_seconds_ago": 412.7}
+  ],
+  "total": 1, "offset": 0, "by_model": {"UDM-Pro": 1}
+}
+```
+
+#### `fleet_fanout`
+
+Run one `read`-tier controller tool live on many controllers: at most `UNIFI_FLEET_FANOUT_CONCURRENCY` at once, each with its own timeout, all under one deadline. Each controller gets its own result, so one unreachable controller never fails the call. Every per-controller call goes through the normal pipeline: the caller's role, module filters and controller scope apply to it, and cached reads are served from the read cache. Write, destructive and `fleet_*` tools are refused. Prefer the snapshot tools above when they cover the question.
+
+**Parameters:** `tool` (required, e.g. `list_devices`), `arguments` (the tool's arguments except `controller`), `controllers`, `labels`, `timeout_seconds` (default `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS`), `deadline_seconds` (default `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS`)
+
+```json
+// fleet_fanout(tool="get_application_info", labels={"region": "west"})
+{
+  "tool": "get_application_info",
+  "results": {
+    "store-001": {"ok": true, "data": {"application_version": "9.4.19"}},
+    "store-007": {"ok": false, "error": "timed out after 15s"}
+  },
+  "succeeded": 1, "failed": 1, "elapsed_seconds": 15.02
+}
 ```
 
 ### Protect Phase 3 Tools

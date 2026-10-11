@@ -76,7 +76,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 
 ### Phase 5 — Enterprise scale & operational excellence
 
-- [ ] Add multi-controller / multi-site orchestration (partial: fleet Phases 0–3 shipped per-call `controller` routing, the Postgres controller registry, a shared connection pool and the Redis read cache; horizontal scale (fleet Phase 4) is in progress: multi-replica sessions, shared rate limits, registry pub/sub and the worker tier are done, `fleet_*` fan-out tools remain, `docs/FLEET_SCALING_PLAN.md` §4)
+- [ ] Add multi-controller / multi-site orchestration (partial: fleet Phases 0–3 shipped per-call `controller` routing, the Postgres controller registry, a shared connection pool and the Redis read cache; fleet Phase 4 added horizontal scale: several replicas, shared rate limits, registry pub/sub, the worker tier and the `fleet_*` read tools; Phase 5 hardening remains, `docs/FLEET_SCALING_PLAN.md` §4)
 - [x] Add dry-run / change-safe mode (every mutating tool declares `dry_run`, enforced by `test_every_mutating_tool_declares_dry_run`; `UNIFI_DRY_RUN` forces previews server-wide)
 - [x] Add tool-level RBAC: roles over risk tiers, server-issued API tokens (fleet Phase 2b: `viewer`/`operator`/`admin`/`fleet-admin` roles, module and controller-label scopes, `umcp_` tokens with `DATABASE_URL`)
 - [ ] Add append-only audit logging (partial: wrapper-level coverage, HMAC hash chain with `python -m src.utils.audit_verify`, and the append-only Postgres store shipped; SIEM export and retention are fleet Phase 5, `docs/FLEET_SCALING_PLAN.md` §3.7)

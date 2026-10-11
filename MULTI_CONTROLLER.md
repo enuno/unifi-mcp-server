@@ -152,6 +152,34 @@ and a stopped one hands them over at once. Without Redis, run exactly one.
 First runs are spread over each interval by a hash of the controller name and
 later ones jittered by ±10%, so a large fleet is not polled all at once.
 
+## Fleet-wide questions
+
+- `fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's
+  snapshots: "which controllers are down", "which gateways run firmware older
+  than 4.1" across a thousand controllers is one database query and no
+  controller calls. Each entry says how old it is.
+- `fleet_fanout` runs any read tool live on many controllers (bounded
+  concurrency, a per-controller timeout and an overall deadline) and returns
+  one result per controller, so a few unreachable ones never fail the call.
+
+All four see only the controllers in the caller's `controller_labels` scope;
+API.md has the parameters.
+
+## Example deployment
+
+`docker-compose.fleet-scale.yml`, layered on `docker-compose.fleet.yml`, runs
+Redis, three replicas behind nginx (sticky on `mcp-session-id`) and two
+workers:
+
+```bash
+docker compose -f docker-compose.fleet.yml -f docker-compose.fleet-scale.yml up -d
+```
+
+`make verify-fleet-scale` runs the same topology as local processes (Postgres
+from pgserver, an in-process Redis, a mock controller fleet) and checks the
+worker split and failover, registry pub/sub, the shared rate limit, fan-out
+partial results and the snapshot tools.
+
 ## Status
 
 Phase-5 documentation.

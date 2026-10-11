@@ -102,6 +102,94 @@ If a controller registry change causes ambiguity or cross-target confusion:
 - Keep any comparison or diff output clearly labeled by controller.
 - Re-run isolation checks after controller registry edits.
 
+## Running several replicas
+
+A stateful Streamable HTTP session exists only in the memory of the replica
+that created it; any other replica answers `404 Session not found`. Choose one:
+
+- **Sticky routing (recommended).** Send all of one client's requests to the
+  same replica, using a key the client already has when it sends `initialize`.
+  `select_controller` then works as on one server. If that replica dies, the
+  client starts a new session and selects again. Do not hash on the
+  `mcp-session-id` header alone: `initialize` carries none, and the next
+  request (carrying the id the replica just issued) can hash to a different
+  replica, which answers `404`. With nginx, hash on the client address and its
+  bearer token:
+
+  ```nginx
+  upstream unifi_mcp {
+      hash $remote_addr$http_authorization consistent;
+      server mcp-1:3000;
+      server mcp-2:3000;
+      server mcp-3:3000;
+  }
+  ```
+
+  Behind another proxy, use the original client address (e.g.
+  `$http_x_forwarded_for` from a trusted proxy) instead of `$remote_addr`. A
+  load-balancer cookie works too, if every client keeps cookies.
+
+- **Stateless (`MCP_STATELESS_HTTP=true`).** No sessions, so any replica can
+  answer any request and no affinity is needed. `select_controller` is refused;
+  pass `controller=<name>` to each call (or rely on the registry default for
+  reads).
+
+With Redis configured (`REDIS_URL`), replicas also share each controller's
+rate limit (one budget per controller, one per API key for api.ui.com) and
+reload the controller registry as soon as any replica changes it.
+
+## Fleet workers
+
+`python -m src.worker` (same image, different command) keeps a snapshot of
+the fleet in Postgres, so the snapshot tools below answer without the API
+replicas polling every controller (other tools, and `fleet_fanout`, still
+call controllers live):
+
+- **Health** every `UNIFI_FLEET_WORKER_HEALTH_SECONDS` (60): the same
+  authentication probe tools use, plus the Network application version on
+  local controllers. Stored on `controllers` as `health` (`ok`; `degraded`
+  after a failure; `down` after `UNIFI_FLEET_WORKER_DOWN_AFTER` in a row),
+  `health_detail`, `last_seen_at` and `capabilities`.
+- **Sites and devices** every `UNIFI_FLEET_WORKER_SYNC_SECONDS` (900): the
+  `sites` table for every controller, and `device_inventory` per site for
+  local controllers (the cloud APIs list devices per host, not per site).
+  Each sync replaces the previous snapshot; a failed sync leaves it as it was.
+
+With Redis configured, run as many workers as needed: they split the
+controllers by rendezvous hashing and hold a lease on each, so a dead worker's
+controllers move to the others within `UNIFI_FLEET_WORKER_LEASE_SECONDS` (30)
+and a stopped one hands them over at once. Without Redis, run exactly one.
+First runs are spread over each interval by a hash of the controller name and
+later ones jittered by ±10%, so a large fleet is not polled all at once.
+
+## Fleet-wide questions
+
+- `fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's
+  snapshots: "which controllers are down", "which gateways run firmware older
+  than 4.1" across a thousand controllers is one database query and no
+  controller calls. Each entry says how old it is.
+- `fleet_fanout` runs any read tool live on many controllers (bounded
+  concurrency, a per-controller timeout and an overall deadline) and returns
+  one result per controller, so a few unreachable ones never fail the call.
+
+All four see only the controllers in the caller's `controller_labels` scope;
+API.md has the parameters.
+
+## Example deployment
+
+`docker-compose.fleet-scale.yml`, layered on `docker-compose.fleet.yml`, runs
+Redis, three replicas behind nginx (sticky on client address and token) and two
+workers:
+
+```bash
+docker compose -f docker-compose.fleet.yml -f docker-compose.fleet-scale.yml up -d
+```
+
+`make verify-fleet-scale` runs the same topology as local processes (Postgres
+from pgserver, an in-process Redis, a mock controller fleet) and checks the
+worker split and failover, registry pub/sub, the shared rate limit, fan-out
+partial results and the snapshot tools.
+
 ## Status
 
 Phase-5 documentation.

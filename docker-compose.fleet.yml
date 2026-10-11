@@ -64,5 +64,24 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Health checks and site/inventory snapshots (python -m src.worker). Without
+  # Redis run exactly one worker; with REDIS_URL set, scale it freely.
+  worker:
+    build:
+      context: .
+      args:
+        EXTRAS: fleet
+    restart: unless-stopped
+    command: ["python", "-m", "src.worker"]
+    environment:
+      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      UNIFI_FLEET_CREDENTIAL_KEY: ${UNIFI_FLEET_CREDENTIAL_KEY:?UNIFI_FLEET_CREDENTIAL_KEY required}
+      UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}
+      UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
+    depends_on:
+      unifi-mcp:
+        condition: service_started
+
 volumes:
   postgres-data:

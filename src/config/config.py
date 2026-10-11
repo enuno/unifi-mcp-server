@@ -218,6 +218,73 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
     )
 
+    # fleet_fanout: one read tool run on many controllers (FLEET_SCALING_PLAN.md §3.4).
+    fleet_fanout_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controllers one fleet_fanout call reaches at once",
+        validation_alias="UNIFI_FLEET_FANOUT_CONCURRENCY",
+    )
+
+    fleet_fanout_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        description="Default per-controller timeout of fleet_fanout",
+        validation_alias="UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS",
+    )
+
+    fleet_fanout_deadline_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description=(
+            "Default overall deadline of fleet_fanout; controllers not done by then "
+            "are reported as timed out"
+        ),
+        validation_alias="UNIFI_FLEET_FANOUT_DEADLINE_SECONDS",
+    )
+
+    # Worker tier (python -m src.worker, docs/FLEET_SCALING_PLAN.md §3.5).
+    fleet_worker_health_seconds: int = Field(
+        default=60,
+        ge=5,
+        description="How often the worker health-checks each controller",
+        validation_alias="UNIFI_FLEET_WORKER_HEALTH_SECONDS",
+    )
+
+    fleet_worker_sync_seconds: int = Field(
+        default=900,
+        ge=30,
+        description="How often the worker refreshes each controller's sites and device inventory",
+        validation_alias="UNIFI_FLEET_WORKER_SYNC_SECONDS",
+    )
+
+    fleet_worker_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controller jobs one worker runs at once",
+        validation_alias="UNIFI_FLEET_WORKER_CONCURRENCY",
+    )
+
+    fleet_worker_lease_seconds: int = Field(
+        default=30,
+        ge=3,
+        description=(
+            "How long a worker's membership and controller leases last without renewal; "
+            "a dead worker's controllers move to the others after this"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_LEASE_SECONDS",
+    )
+
+    fleet_worker_down_after: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Consecutive failed health checks before a controller is marked down "
+            "(earlier failures mark it degraded)"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_DOWN_AFTER",
+    )
+
     stdio_role: Literal["viewer", "operator", "admin", "fleet-admin"] = Field(
         default="fleet-admin",
         description=(
@@ -344,6 +411,18 @@ class Settings(BaseSettings):
         default=3000,
         description="Server port (used for http/sse/streamable_http transport)",
         validation_alias="MCP_SERVER_PORT",
+    )
+
+    mcp_stateless_http: bool = Field(
+        default=False,
+        description=(
+            "Serve Streamable HTTP without MCP sessions, so any replica can answer any "
+            "request. No session survives between requests: select_controller is "
+            "refused and every controller-bound call needs controller=<name> (or the "
+            "registry default). The default, stateful mode needs sticky routing on "
+            "mcp-session-id behind a load balancer."
+        ),
+        validation_alias="MCP_STATELESS_HTTP",
     )
 
     mcp_auth_token: str | None = Field(

@@ -82,7 +82,7 @@ Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are c
 
 **Phase 4 open items**: release tag (v0.5.0, pending hardware verification).
 
-**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` and `UNIFI_DRY_RUN` modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, hash-chained wrapper-level audit log, `/metrics`, and fleet routing (Phases 0–3 of `docs/FLEET_SCALING_PLAN.md`).
+**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` and `UNIFI_DRY_RUN` modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, hash-chained wrapper-level audit log, `/metrics`, and the fleet stack (Phases 0–4 of `docs/FLEET_SCALING_PLAN.md`: routing, Postgres registry, pool and read cache, several replicas, workers, `fleet_*` read tools).
 
 **Total**: 343 MCP tools registered in local mode across 60 tool modules, 3,152 unit tests passing
 

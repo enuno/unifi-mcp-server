@@ -191,6 +191,29 @@ class TestMainEntryPoint:
         assert kwargs["transport"] == "streamable-http"
         assert [m.cls.__name__ for m in kwargs["middleware"]] == ["SessionlessRequestGuard"]
 
+    def test_stateless_http_is_passed_to_streamable_http(self) -> None:
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="streamable_http",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+            MCP_STATELESS_HTTP="true",
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
+
+        assert run.call_args.kwargs["stateless_http"] is True
+        # The session guard would answer every sessionless call with 400.
+        assert "middleware" not in run.call_args.kwargs
+
+    def test_stateful_by_default(self) -> None:
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="streamable_http",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
+
+        assert "stateless_http" not in run.call_args.kwargs
+
     def test_sse_has_no_session_guard(self) -> None:
         mod = _reload_main(
             MCP_SERVER_TRANSPORT="sse",

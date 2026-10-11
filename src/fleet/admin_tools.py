@@ -128,7 +128,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
             default_site=default_site,
             labels=dict(labels or {}),
         )
-        await registry.refresh()
+        await registry.changed()
         return {"registered": summary}
 
     async def update_controller(
@@ -197,7 +197,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
         await registry.store.update_controller(
             name, changes=changes, api_key=api_key, make_default=default
         )
-        await registry.refresh()
+        await registry.changed()
         return {"updated": summary}
 
     async def register_cloud_account(
@@ -260,7 +260,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
         if coerce_bool(dry_run):
             return {"dry_run": True, "would_rotate": "every stored credential"}
         rotated = await registry.store.rotate_credentials()
-        await registry.refresh()
+        await registry.changed()
         return {"rotated": rotated}
 
     return [

@@ -1,13 +1,15 @@
 """Postgres tables of the controller registry (docs/FLEET_SCALING_PLAN.md §3.2).
 
 Phase 2a created ``credentials``, ``cloud_accounts`` and ``controllers``;
-Phase 2b adds ``api_tokens``, ``audit_log`` and ``audit_chain_heads``. Site and
-inventory tables arrive with the phases that read them. Schema changes go through Alembic migrations in
+Phase 2b adds ``api_tokens``, ``audit_log`` and ``audit_chain_heads``; Phase 4
+adds the worker's ``sites`` and ``device_inventory`` snapshots and the health
+columns of ``controllers``. Schema changes go through Alembic migrations in
 ``src/fleet/db/migrations``; a test checks the two agree.
 """
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -15,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     MetaData,
@@ -105,6 +108,7 @@ class Controller(_Timestamps, Base):
         CheckConstraint(
             "credential_id IS NOT NULL OR cloud_account_id IS NOT NULL", name="has_credential"
         ),
+        CheckConstraint("health IN ('ok', 'degraded', 'down')", name="health"),
         # At most one default controller.
         Index(
             "uq_controllers_single_default",
@@ -133,9 +137,62 @@ class Controller(_Timestamps, Base):
     )
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    # Written by the worker's health check (src/worker); NULL until its first run.
+    health: Mapped[str | None] = mapped_column(String(16))
+    health_detail: Mapped[str | None] = mapped_column(String(255))
+    health_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    capabilities: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
 
     credential: Mapped[Credential | None] = relationship(lazy="joined")
     cloud_account: Mapped[CloudAccount | None] = relationship(lazy="joined")
+
+
+class Site(Base):
+    """A site of a controller, as the worker last saw it."""
+
+    __tablename__ = "sites"
+
+    controller_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("controllers.id", ondelete="CASCADE"), primary_key=True
+    )
+    site_uuid: Mapped[str] = mapped_column(String(64), primary_key=True)
+    short_name: Mapped[str | None] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DeviceInventory(Base):
+    """A device of a controller's site, as the worker last saw it."""
+
+    __tablename__ = "device_inventory"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["controller_id", "site_uuid"],
+            ["sites.controller_id", "sites.site_uuid"],
+            ondelete="CASCADE",
+            name="fk_device_inventory_site",
+        ),
+        Index("ix_device_inventory_model", "model"),
+        Index("ix_device_inventory_version", "version"),
+    )
+
+    controller_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+    site_uuid: Mapped[str] = mapped_column(String(64), primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mac: Mapped[str | None] = mapped_column(String(32))
+    name: Mapped[str | None] = mapped_column(String(255))
+    model: Mapped[str | None] = mapped_column(String(64))
+    version: Mapped[str | None] = mapped_column(String(64))
+    state: Mapped[str | None] = mapped_column(String(32))
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
 
 
 class ApiToken(Base):

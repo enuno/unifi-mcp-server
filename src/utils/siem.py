@@ -165,7 +165,8 @@ class WebhookExporter:
         self.key = url  # spool identity: targets differing only in the query stay apart
         self.url = url
         self._secret = secret.encode()
-        self._verify: Any = ca_file or True
+        # Always verify: the system trust store, or only ``ca_file`` when set (as syslog).
+        self._verify = ssl.create_default_context(cafile=ca_file)
 
     def sign(self, timestamp: str, body: bytes) -> str:
         """``sha256=<hex HMAC>`` over ``"<timestamp>.<body>"``."""
@@ -196,7 +197,7 @@ class OtlpExporter:
         self.url = endpoint.rstrip("/") + "/v1/logs"
         self.name = f"otlp+{endpoint}"
         self._headers = {"Content-Type": "application/json", **(headers or {})}
-        self._verify: Any = ca_file or True
+        self._verify = ssl.create_default_context(cafile=ca_file)
 
     @staticmethod
     def _attribute(key: str, value: Any) -> dict[str, Any]:

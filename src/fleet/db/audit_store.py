@@ -28,6 +28,7 @@ from ...utils.audit import (
 from ...utils.audit_verify import Head, VerifyReport, verify_records
 from ...utils.logger import get_logger
 from .models import AuditChainHead, AuditLogEntry
+from .retention import archive_problems, archived_starts
 
 logger = get_logger(__name__)
 
@@ -179,7 +180,10 @@ async def verify(
 ) -> VerifyReport:
     """Verify every chain in the audit store, in insertion order.
 
-    Each chain must also end exactly at its ``audit_chain_heads`` entry, so
+    Chains whose oldest records were archived by retention resume right
+    after their latest ``audit_archives`` entry, and successive archives of a
+    chain must not leave gaps. Each chain must also end exactly at its
+    ``audit_chain_heads`` entry, so
     records removed from the end of a chain (or a whole chain, or the whole
     table) are reported. Records and heads are read from one snapshot: a
     record and its head are written in one transaction.
@@ -203,9 +207,12 @@ async def verify(
                 str(h.chain_id): (int(h.seq), str(h.hash))
                 for h in await conn.execute(select(AuditChainHead))
             }
+            starts = await archived_starts(conn)
+            gaps = await archive_problems(conn)
     heads.update(extra_heads or {})
     rows = [(f"row {e.id}", str(e.record)) for e in entries]
-    report = verify_records(rows, key, heads)
+    report = verify_records(rows, key, heads, starts)
+    report.problems.extend(gaps)
 
     # Every chain the sink writes has a head; one without a head (its row
     # deleted) would otherwise escape the end-of-chain check.

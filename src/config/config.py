@@ -430,6 +430,25 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_SIEM_ANCHOR_SECONDS",
     )
 
+    # Audit retention (src/fleet/db/retention.py, docs/FLEET_SCALING_PLAN.md §3.7).
+    audit_retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Archive and delete Postgres audit records older than this many days "
+            "(python -m src.fleet.cli audit-retention); unset keeps them forever"
+        ),
+        validation_alias="UNIFI_AUDIT_RETENTION_DAYS",
+    )
+
+    audit_archive_dir: str | None = Field(
+        default=None,
+        description=(
+            "Where retention writes its archives (default: audit-archive next to the audit log)"
+        ),
+        validation_alias="UNIFI_AUDIT_ARCHIVE_DIR",
+    )
+
     # Backup download location
     backup_download_dir: str = Field(
         default=".",
@@ -510,6 +529,8 @@ class Settings(BaseSettings):
         "audit_siem_otlp_headers",
         "audit_siem_ca_file",
         "audit_siem_buffer_dir",
+        "audit_retention_days",
+        "audit_archive_dir",
         mode="before",
     )
     @classmethod

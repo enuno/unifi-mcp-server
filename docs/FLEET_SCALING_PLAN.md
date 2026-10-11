@@ -195,7 +195,7 @@ Reads are not audited.
 
 **Tamper evidence.** Each record's `hash` is an HMAC-SHA256, keyed by `UNIFI_AUDIT_CHAIN_KEY` (separate from the payload encryption key), over the canonical JSON of the stored record plus `prev_hash`. Each replica keeps its own chain (`chain_id` = instance id), so writes don't serialize across replicas. Because hashes cover the stored ciphertext, verification doesn't need the payload key. Chain heads are regularly written to `audit_chain_heads` and sent to the SIEM as anchors, so truncating a chain or rewriting it wholesale is detectable from outside the server. Verification uses `verify_audit_chain` (MCP tool) and `unifi-mcp audit verify` (CLI).
 
-**Retention.** `UNIFI_AUDIT_RETENTION_DAYS` (unset = keep forever). Expired monthly partitions are verified, exported to compressed JSONL with their chain heads, and only then dropped; JSONL files are rotated and archived the same way.
+**Retention.** `UNIFI_AUDIT_RETENTION_DAYS` (unset = keep forever). Expired records are verified, exported to compressed JSONL with their chain heads, and only then deleted; JSONL files are rotated and archived the same way. (As built in 5c: no monthly partitions, see Phase 5.)
 
 **Querying** (`fleet-admin` only; every query is itself an audited admin event): `search_audit_log` (filters: time range, principal, controller, tool, tier, result, event type; cursor pagination; payloads decrypted only when the payload key is configured), `verify_audit_chain`, and `export_audit_log`. The existing `python -m src.utils.audit_decrypt` CLI keeps working for JSONL.
 
@@ -319,6 +319,14 @@ Each phase is independently shippable, keeps the zero-config path identical, and
   - Anchors: every `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` and on shutdown, an `anchor` event per chain that moved. `audit_verify --anchors FILE` takes the anchors exported from the SIEM. This closes the 5a limit: the tamper drill now rewrites records and heads together in Postgres, verifies clean on the server, and is caught against the SIEM anchor.
   - SIEM-outage drill (`tests/unit/utils/test_siem.py`): with the target down, 50 audited calls each cost under 10 ms in the audit path, everything is delivered in order once it comes back, the buffer survives a restart, the cap drops the oldest and counts them, and shutdown while down keeps the buffer.
   - Not done here: chain-head writes to `audit_chain_heads` stay per-record (5a); `anchored_at` is still unused, since anchors are tracked by the SIEM rather than the database.
+- **Done in 5c, part 1 (Postgres retention):**
+  - `python -m src.fleet.cli audit-retention` (dry run by default, `--confirm` to act) with `UNIFI_AUDIT_RETENTION_DAYS` and `UNIFI_AUDIT_ARCHIVE_DIR`. It verifies the whole store, verifies the expired records again inside the deleting transaction, writes them to a gzip JSON-lines archive (0600, in a 0700 directory) plus a manifest of each chain's first and last record and the archive's SHA-256, fsyncs both, and only then deletes. A failed delete removes the archive again. The run is itself an audited `admin` event, and `UNIFI_READ_ONLY` refuses `--confirm`.
+  - Each chain loses a prefix only: everything from its first not-yet-expired record stays, so the rest still links (a record that looks old after a newer one, from clock skew, stays too).
+  - New append-only `audit_archives` table records where each chain was cut. `verify_audit_chain` resumes each chain right after its latest archive, reports gaps between successive archives, and accepts a fully archived chain whose head is its last archived record. Deleting archive rows to hide records is caught.
+  - `audit_verify ARCHIVE.jsonl.gz --manifest ARCHIVE.manifest.json` checks an archive on its own: its SHA-256, its record count, and that each chain runs exactly from its recorded start to its end.
+  - The append-only trigger now allows one thing: a DELETE from `audit_log` by the table's owner in a transaction that set `unifi_mcp.audit_retention`. Other roles, even with a DELETE grant, and TRUNCATE are still refused; the least-privilege runtime role needs only `SELECT` on `audit_archives`.
+  - **Deviation from the plan:** no monthly partitions. Partitioning `audit_log` would need the partition key (`ts`) in every unique constraint, which would drop the database's own guarantee that `(chain_id, seq)` and `event_id` are unique. Retention deletes in batches of 1,000 instead, run by an operator or a scheduled job as the schema owner; the server never deletes audit records.
+  - Still to do (5c, part 2): JSONL rotation and retention for servers without Postgres.
 
 ## 5. Risks and open questions
 

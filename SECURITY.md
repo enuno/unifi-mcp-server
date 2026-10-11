@@ -541,6 +541,33 @@ CMD ["python", "src/main.py"]
    it. Records written after the last anchor are covered by the next one, so
    keep the interval short enough for your needs.
 
+   **Retention:** with `UNIFI_AUDIT_RETENTION_DAYS` set, run the retention job
+   as the schema owner (it uses `MIGRATION_DATABASE_URL` when set), for example
+   daily from cron or a Kubernetes CronJob:
+
+   ```bash
+   python -m src.fleet.cli audit-retention            # dry run: what would go
+   python -m src.fleet.cli audit-retention --confirm  # archive, then delete
+   ```
+
+   It refuses to delete anything unless the whole store verifies. Expired
+   records go to a gzip archive in `UNIFI_AUDIT_ARCHIVE_DIR` (default
+   `audit-archive` next to the audit log; directory 0700, files 0600) with a
+   manifest, both written to disk before the delete commits. Move archives to
+   storage of their own; check one with:
+
+   ```bash
+   UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify \
+     audit-before-....jsonl.gz --manifest audit-before-....jsonl.gz.manifest.json
+   ```
+
+   `audit_archives` records where each chain was cut, so `verify_audit_chain`
+   keeps checking what remains and reports archive rows that were removed.
+   The append-only trigger allows a DELETE only by the table's owner inside
+   the retention transaction; the server itself never deletes audit records.
+   `UNIFI_READ_ONLY` refuses `--confirm`. Without Postgres (the JSONL file),
+   retention is not automated yet.
+
    **Least-privilege database role (optional):** the server needs no DDL and
    no UPDATE/DELETE on the audit table. Run migrations as the schema owner
    (`MIGRATION_DATABASE_URL`) and point `DATABASE_URL` at a role granted only
@@ -552,6 +579,7 @@ CMD ["python", "src/main.py"]
      TO unifi_mcp_runtime;
    GRANT SELECT, INSERT ON audit_log TO unifi_mcp_runtime;
    GRANT SELECT, INSERT, UPDATE ON audit_chain_heads TO unifi_mcp_runtime;
+   GRANT SELECT ON audit_archives TO unifi_mcp_runtime;
    GRANT USAGE ON SEQUENCE audit_log_id_seq TO unifi_mcp_runtime;
    GRANT SELECT ON unifi_mcp_alembic_version TO unifi_mcp_runtime;
    ```

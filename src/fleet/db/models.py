@@ -3,7 +3,7 @@
 Phase 2a created ``credentials``, ``cloud_accounts`` and ``controllers``;
 Phase 2b adds ``api_tokens``, ``audit_log`` and ``audit_chain_heads``; Phase 4
 adds the worker's ``sites`` and ``device_inventory`` snapshots and the health
-columns of ``controllers``. Schema changes go through Alembic migrations in
+columns of ``controllers``; Phase 5c adds ``audit_archives``. Schema changes go through Alembic migrations in
 ``src/fleet/db/migrations``; a test checks the two agree.
 """
 
@@ -267,5 +267,31 @@ class AuditChainHead(Base):
     seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AuditArchive(Base):
+    """One chain's records moved to an archive file by retention (append-only).
+
+    Verification resumes each chain right after its latest archived record.
+    """
+
+    __tablename__ = "audit_archives"
+    __table_args__ = (
+        UniqueConstraint("chain_id", "first_seq", name="uq_audit_archives_chain_first_seq"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    chain_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    first_seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    last_seq: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    prev_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    last_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    records: Mapped[int] = mapped_column(Integer, nullable=False)
+    archive: Mapped[str] = mapped_column(String(255), nullable=False)
+    archive_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    cutoff: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    archived_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

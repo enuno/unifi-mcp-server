@@ -120,6 +120,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_AUDIT_SIEM_CA_FILE` | CA bundle used to verify SIEM targets | No | system roots |
 | `UNIFI_AUDIT_SIEM_BUFFER_DIR` | On-disk buffer for undelivered records | No | `siem-buffer` next to the audit log |
 | `UNIFI_AUDIT_SIEM_BUFFER_MAX_MB` | Most undelivered data kept per target; the oldest is dropped beyond it | No | `100` |
+| `UNIFI_AUDIT_RETENTION_DAYS` | Archive and delete Postgres audit records older than this, with `python -m src.fleet.cli audit-retention --confirm` (see SECURITY.md) | No | unset (keep forever) |
+| `UNIFI_AUDIT_ARCHIVE_DIR` | Where retention writes its archives | No | `audit-archive` next to the audit log |
 | `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` | How often each chain's head is sent to the SIEM as an anchor | No | `300` |
 | `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |

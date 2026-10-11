@@ -8,6 +8,7 @@ file verifier. A trigger makes ``audit_log`` append-only for every role.
 
 import asyncio
 import json
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
@@ -24,7 +25,7 @@ from ...utils.audit import (
     get_audit_logger,
     seal_record,
 )
-from ...utils.audit_verify import VerifyReport, verify_records
+from ...utils.audit_verify import Head, VerifyReport, verify_records
 from ...utils.logger import get_logger
 from .models import AuditChainHead, AuditLogEntry
 
@@ -169,16 +170,37 @@ async def search(
     return rows[:limit], next_cursor
 
 
-async def verify(engine: AsyncEngine, key: bytes | None) -> VerifyReport:
+async def verify(
+    engine: AsyncEngine, key: bytes | None, extra_heads: Mapping[str, Head] | None = None
+) -> VerifyReport:
     """Verify every chain in the audit store, in insertion order.
+
+    Each chain must also end exactly at its ``audit_chain_heads`` entry, so
+    records removed from the end of a chain (or a whole chain, or the whole
+    table) are reported. Records and heads are read from one snapshot: a
+    record and its head are written in one transaction.
+
+    Args:
+        engine: The registry's engine
+        key: The chain HMAC key
+        extra_heads: Heads recorded outside the database (e.g. SIEM anchors);
+            they take precedence over the table, which someone with write
+            access to the database could have rewritten along with the records
 
     Raises:
         ChainKeyMissingError: If records are HMAC-chained and no key is given
     """
     query = select(AuditLogEntry.id, AuditLogEntry.record).order_by(AuditLogEntry.id)
     async with engine.connect() as conn:
-        rows = [(f"row {r.id}", str(r.record)) for r in await conn.execute(query)]
-    return verify_records(rows, key)
+        conn = await conn.execution_options(isolation_level="REPEATABLE READ")
+        async with conn.begin():
+            rows = [(f"row {r.id}", str(r.record)) for r in await conn.execute(query)]
+            heads: dict[str, Head] = {
+                str(h.chain_id): (int(h.seq), str(h.hash))
+                for h in await conn.execute(select(AuditChainHead))
+            }
+    heads.update(extra_heads or {})
+    return verify_records(rows, key, heads)
 
 
 async def chain_heads(engine: AsyncEngine) -> list[dict[str, Any]]:

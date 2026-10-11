@@ -3,6 +3,7 @@
 Usage::
 
     UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log
+    ... audit_verify audit.log --head 4f9c...e2:1532:7d1a...b0   # an anchored head
 
 Each process appends its own chain (``chain_id``) to the file. For every
 chain this checks that ``seq`` starts at 0 and has no gaps, that each record's
@@ -12,8 +13,10 @@ records. Records written before chaining existed are counted as legacy, but
 an unchained record after a chained one is reported, since stripping the
 chain fields would otherwise hide an edit.
 
-Not detectable from the file alone: removing the *last* records of a chain,
-or a whole chain. Anchoring chain heads outside the server covers that
+Not detectable from the records alone: removing the *last* records of a
+chain, or a whole chain. Give the chain heads recorded elsewhere (``--head
+CHAIN:SEQ:HASH``, e.g. from the SIEM or the Postgres ``audit_chain_heads``
+table) and each chain must reach exactly that head
 (docs/FLEET_SCALING_PLAN.md §3.7).
 
 Exit codes: 0 intact, 1 problems found, 2 usage error or missing key.
@@ -22,7 +25,7 @@ Exit codes: 0 intact, 1 problems found, 2 usage error or missing key.
 import argparse
 import json
 import sys
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -49,12 +52,20 @@ class VerifyReport:
         return not self.problems
 
 
-def verify_file(path: Path, key: bytes | None) -> VerifyReport:
+#: A chain's expected last record: ``(seq, hash)``.
+Head = tuple[int, str]
+
+
+def verify_file(
+    path: Path, key: bytes | None, expected_heads: Mapping[str, Head] | None = None
+) -> VerifyReport:
     """Verify every chain in an audit file.
 
     Args:
         path: The audit log file
         key: The chain HMAC key, needed for ``hmac-sha256`` records
+        expected_heads: Chain heads recorded elsewhere, by chain id (see
+            :func:`verify_records`)
 
     Returns:
         What was checked and any problems, each naming its line number
@@ -64,17 +75,27 @@ def verify_file(path: Path, key: bytes | None) -> VerifyReport:
     """
     with open(path, encoding="utf-8") as f:
         return verify_records(
-            ((f"line {number}", line) for number, line in enumerate(f, start=1)), key
+            ((f"line {number}", line) for number, line in enumerate(f, start=1)),
+            key,
+            expected_heads,
         )
 
 
-def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> VerifyReport:
+def verify_records(
+    records: Iterable[tuple[str, str]],
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+) -> VerifyReport:
     """Verify every chain in a sequence of stored records, in storage order.
 
     Args:
         records: ``(location, stored JSON)`` pairs, e.g. ``("line 3", ...)``
             for a file or ``("row 17", ...)`` for the Postgres audit store
         key: The chain HMAC key, needed for ``hmac-sha256`` records
+        expected_heads: Chain heads recorded elsewhere, by chain id. Each
+            named chain must end exactly at its head: fewer records means
+            records were removed from the end (or the whole chain was), and
+            more means the head record was rewritten or replaced.
 
     Returns:
         What was checked and any problems, each naming its location
@@ -134,7 +155,42 @@ def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> Ver
                 )
         heads[chain_id] = (seq if isinstance(seq, int) else -1, record["hash"])
 
+    for chain_id, (head_seq, head_hash) in sorted((expected_heads or {}).items()):
+        label = f"chain {chain_id[:8]}"
+        if chain_id not in heads:
+            report.problems.append(
+                f"{label}: its recorded head is seq {head_seq} but none of its records remain"
+            )
+            continue
+        last_seq, last_hash = heads[chain_id]
+        if last_seq < head_seq:
+            report.problems.append(
+                f"{label}: ends at seq {last_seq} but its recorded head is seq {head_seq} "
+                f"({head_seq - last_seq} record(s) missing from the end)"
+            )
+        elif last_seq > head_seq:
+            report.problems.append(
+                f"{label}: continues to seq {last_seq} past its recorded head at seq {head_seq}"
+            )
+        elif last_hash != head_hash:
+            report.problems.append(
+                f"{label}: its last record (seq {last_seq}) does not match the recorded head"
+            )
+
     return report
+
+
+def parse_head(value: str) -> tuple[str, Head]:
+    """Parse ``CHAIN:SEQ:HASH`` (``--head``) into ``(chain_id, (seq, hash))``.
+
+    Raises:
+        ValueError: If the value is not in that form
+    """
+    chain_id, sep, rest = value.partition(":")
+    seq_text, sep2, head_hash = rest.partition(":")
+    if not (sep and sep2 and chain_id and head_hash and seq_text.isdigit()):
+        raise ValueError(f"expected CHAIN:SEQ:HASH, got {value!r}")
+    return chain_id, (int(seq_text), head_hash)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -159,7 +215,22 @@ def main(argv: list[str] | None = None) -> int:
             "key does not appear in shell history."
         ),
     )
+    parser.add_argument(
+        "--head",
+        action="append",
+        default=[],
+        metavar="CHAIN:SEQ:HASH",
+        help=(
+            "A chain head recorded outside this file (repeatable). The chain must end "
+            "exactly there, which detects records removed from its end."
+        ),
+    )
     args = parser.parse_args(argv)
+    try:
+        expected_heads = dict(parse_head(value) for value in args.head)
+    except ValueError as e:
+        print(f"error: --head: {e}", file=sys.stderr)
+        return 2
 
     if not args.log_file.exists():
         print(f"error: log file not found: {args.log_file}", file=sys.stderr)
@@ -167,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     key = args.key.encode("utf-8") if args.key else resolve_chain_key()
 
     try:
-        report = verify_file(args.log_file, key)
+        report = verify_file(args.log_file, key, expected_heads)
     except ChainKeyMissingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

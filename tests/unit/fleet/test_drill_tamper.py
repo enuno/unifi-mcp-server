@@ -17,6 +17,7 @@ outside the store (a SIEM anchor) reveals it.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,7 @@ async def _fill(engine: Any, chain_id: str = "a" * 32, count: int = RECORDS) -> 
         await sink.append(
             {
                 "event_id": f"{chain_id[:4]}-{n}",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "event_type": "tool_call",
                 "operation": "update_network",
                 "result": "success",
@@ -83,6 +85,30 @@ POSTGRES_TAMPERING = {
         "none of its records remain",
     ),
     "empty the table": ("TRUNCATE audit_log", "none of its records remain"),
+    # Searchable columns copied out of the sealed record: editing one could
+    # hide a record from search_audit_log or misfile it.
+    "edit a searchable column": (
+        f"UPDATE audit_log SET operation = 'list_devices' WHERE seq = 2 AND {ONLY_A}",
+        "column operation does not match",
+    ),
+    "reattribute a record": (
+        f"UPDATE audit_log SET principal_id = 'token:someone-else' WHERE seq = 2 AND {ONLY_A}",
+        "column principal_id does not match",
+    ),
+    "move a record out of a time window": (
+        f"UPDATE audit_log SET ts = ts - interval '30 days' WHERE seq = 2 AND {ONLY_A}",
+        "column ts is far from",
+    ),
+    "edit the seq column": (
+        f"UPDATE audit_log SET seq = 99 WHERE seq = 2 AND {ONLY_A}",
+        "column seq does not match",
+    ),
+    # Without its head a chain would escape the end-of-chain check.
+    "delete a head with the newest records": (
+        f"DELETE FROM audit_log WHERE seq >= {RECORDS - 2} AND {ONLY_A}; "
+        f"DELETE FROM audit_chain_heads WHERE {ONLY_A}",
+        "has records but no recorded head",
+    ),
     "reorder two records": (
         f"UPDATE audit_log SET id = id + 1000 WHERE seq = 1 AND {ONLY_A}",
         "expected seq 1",
@@ -106,7 +132,7 @@ class TestPostgres:
         await _fill(migrated_engine)
         await _fill(migrated_engine, chain_id="b" * 32)  # an untouched neighbour
 
-        await _as_superuser(migrated_engine, statement)
+        await _as_superuser(migrated_engine, *statement.split("; "))
 
         report = await audit_store.verify(migrated_engine, CHAIN_KEY)
         assert not report.ok, case

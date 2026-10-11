@@ -78,6 +78,10 @@ def bucket_key(settings: Settings) -> str:
     return f"{KEY_PREFIX}:controller:{connection_key(settings)[:32]}"
 
 
+#: Fallback buckets by (window key, budget, period); see :func:`make_rate_limiter`.
+_fallbacks: dict[tuple[str, int, int], Any] = {}
+
+
 def fallback_budget(settings: Settings) -> int:
     """Requests per period one replica may send while Redis is unavailable."""
     replicas = getattr(settings, "fleet_expected_replicas", 1)
@@ -106,12 +110,20 @@ def make_rate_limiter(settings: Settings, local: Callable[[int, int], Any]) -> A
 
     if not cache.REDIS_AVAILABLE:
         return local(settings.rate_limit_requests, period)
+    key = bucket_key(settings)
+    # One fallback bucket per window and process, shared by every client of
+    # that controller (pooled tool calls and unpooled resources alike), so the
+    # replica's share holds however many clients it builds during an outage.
+    budget = fallback_budget(settings)
+    fallback = _fallbacks.get((key, budget, period))
+    if fallback is None:
+        fallback = _fallbacks[(key, budget, period)] = local(budget, period)
     return RedisRateLimiter(
         settings,
-        key=bucket_key(settings),
+        key=key,
         requests_per_period=settings.rate_limit_requests,
         period_seconds=period,
-        fallback=local(fallback_budget(settings), period),
+        fallback=fallback,
     )
 
 

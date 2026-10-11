@@ -9,7 +9,7 @@ file verifier. A trigger makes ``audit_log`` append-only for every role.
 import asyncio
 import json
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -190,17 +190,80 @@ async def verify(
     Raises:
         ChainKeyMissingError: If records are HMAC-chained and no key is given
     """
-    query = select(AuditLogEntry.id, AuditLogEntry.record).order_by(AuditLogEntry.id)
+    query = select(AuditLogEntry).order_by(AuditLogEntry.id)
     async with engine.connect() as conn:
         conn = await conn.execution_options(isolation_level="REPEATABLE READ")
         async with conn.begin():
-            rows = [(f"row {r.id}", str(r.record)) for r in await conn.execute(query)]
+            entries = list((await conn.execute(query)).all())
             heads: dict[str, Head] = {
                 str(h.chain_id): (int(h.seq), str(h.hash))
                 for h in await conn.execute(select(AuditChainHead))
             }
     heads.update(extra_heads or {})
-    return verify_records(rows, key, heads)
+    rows = [(f"row {e.id}", str(e.record)) for e in entries]
+    report = verify_records(rows, key, heads)
+
+    # Every chain the sink writes has a head; one without a head (its row
+    # deleted) would otherwise escape the end-of-chain check.
+    for chain_id in sorted({str(e.chain_id) for e in entries} - set(heads)):
+        report.problems.append(f"chain {chain_id[:8]}: has records but no recorded head")
+    for entry in entries:
+        report.problems.extend(_column_problems(entry))
+    return report
+
+
+#: Searchable columns copied out of each record, and where they come from.
+_COPIED_COLUMNS = (
+    "event_id",
+    "event_type",
+    "operation",
+    "result",
+    "tier",
+    "controller",
+    "call_id",
+    "chain_id",
+    "seq",
+    "hash",
+)
+
+#: Most a row's insert time (``ts``) may differ from the record's own timestamp.
+_TS_TOLERANCE_SECONDS = 300
+
+
+def _column_problems(entry: Any) -> list[str]:
+    """Columns of one row that disagree with its sealed record.
+
+    Searches filter on these columns, so editing one could hide a record from
+    a search or misfile it without touching the hash-covered record.
+    """
+    where = f"row {entry.id}"
+    try:
+        record = json.loads(entry.record)
+    except (TypeError, ValueError):
+        return []  # reported by verify_records
+    if not isinstance(record, dict):
+        return []
+    problems = [
+        f"{where}: column {name} does not match the record"
+        for name in _COPIED_COLUMNS
+        if getattr(entry, name) != record.get(name)
+    ]
+    principal = record.get("principal")
+    principal_id = principal.get("id") if isinstance(principal, dict) else None
+    if entry.principal_id != principal_id:
+        problems.append(f"{where}: column principal_id does not match the record")
+    stamp = record.get("timestamp")
+    if isinstance(stamp, str) and entry.ts is not None:
+        try:
+            recorded = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+        except ValueError:
+            recorded = None
+        if recorded is not None:
+            if recorded.tzinfo is None:
+                recorded = recorded.replace(tzinfo=timezone.utc)
+            if abs((entry.ts - recorded).total_seconds()) > _TS_TOLERANCE_SECONDS:
+                problems.append(f"{where}: column ts is far from the record's timestamp")
+    return problems
 
 
 async def chain_heads(engine: AsyncEngine) -> list[dict[str, Any]]:

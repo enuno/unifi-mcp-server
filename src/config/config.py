@@ -222,8 +222,9 @@ class Settings(BaseSettings):
         default=1,
         ge=1,
         description=(
-            "How many server replicas share each controller's rate limit. While Redis is "
-            "unavailable each replica falls back to UNIFI_RATE_LIMIT_REQUESTS divided by this"
+            "How many processes (server replicas and workers) share each controller's rate "
+            "limit. While Redis is unavailable each falls back to UNIFI_RATE_LIMIT_REQUESTS "
+            "divided by this"
         ),
         validation_alias="UNIFI_FLEET_EXPECTED_REPLICAS",
     )

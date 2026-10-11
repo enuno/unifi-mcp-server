@@ -46,6 +46,35 @@ UNWRAPPED = {
 }
 
 
+class UntouchableRegistry:
+    """A registry that fails the test if a refused call reaches it.
+
+    Refusal must come before controller resolution, not only before the
+    controller is contacted. ``armed`` is off while the server is built.
+    """
+
+    armed = False
+
+    def __init__(self, inner: StaticRegistry) -> None:
+        self._inner = inner
+
+    def _check(self, method: str) -> None:
+        if UntouchableRegistry.armed:
+            raise AssertionError(f"a refused call reached registry.{method}()")
+
+    async def list_controllers(self) -> Any:
+        self._check("list_controllers")
+        return await self._inner.list_controllers()
+
+    async def get_controller(self, name: str) -> Any:
+        self._check("get_controller")
+        return await self._inner.get_controller(name)
+
+    async def default_controller(self) -> Any:
+        self._check("default_controller")
+        return await self._inner.default_controller()
+
+
 @pytest.fixture
 def settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Settings:
     monkeypatch.setenv("UNIFI_API_KEY", "drill-key")  # pragma: allowlist secret
@@ -66,7 +95,7 @@ def server(settings: Settings) -> FastMCP:
         api_key="hq-key",  # pragma: allowlist secret
         local_host="192.0.2.1",
     )
-    router = FleetRouter(settings, StaticRegistry(profile, default="hq"))
+    router = FleetRouter(settings, UntouchableRegistry(StaticRegistry(profile, default="hq")))
     mcp = FastMCP("rbac-drill")
     for info in pkgutil.iter_modules(src.tools.__path__):
         module = importlib.import_module(f"src.tools.{info.name}")
@@ -133,6 +162,7 @@ async def test_every_tool_beyond_the_role_is_refused_before_any_call(
     assert beyond, f"{role} should lack some tier"
 
     escaped = []
+    monkeypatch.setattr(UntouchableRegistry, "armed", True)
     for name in beyond:
         try:
             await tools[name].fn()

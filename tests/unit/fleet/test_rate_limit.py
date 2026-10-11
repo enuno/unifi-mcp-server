@@ -61,6 +61,12 @@ def _make(settings: Settings) -> Any:
 
 
 @pytest.fixture(autouse=True)
+def _fresh_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Fallback buckets are per process; each test is a fresh process.
+    monkeypatch.setattr("src.api.rate_limit._fallbacks", {})
+
+
+@pytest.fixture(autouse=True)
 async def _flush(redis_port: int) -> None:
     client = aioredis.Redis(port=redis_port)
     await client.flushdb()
@@ -177,7 +183,10 @@ class TestRedisUnavailable:
         # Without the share, three replicas would each send the full budget.
         _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="2")
         monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")  # nothing listens
-        replicas = [_make(Settings()) for _ in range(2)]
+        replicas = []
+        for _ in range(2):  # two processes, each with its own fallback bucket
+            monkeypatch.setattr("src.api.rate_limit._fallbacks", {})
+            replicas.append(_make(Settings()))
 
         stamps = await _burst(replicas, 2 * LIMIT)
 
@@ -193,6 +202,17 @@ class TestRedisUnavailable:
         )
         partial = Settings.model_construct(rate_limit_requests=8, fleet_expected_replicas=None)
         assert fallback_budget(partial) == 8
+
+    async def test_clients_of_one_controller_share_the_fallback(self, monkeypatch, redis_port):
+        # MCP resources build a client per read outside the pool; during an
+        # outage they must not each get a fresh share of the budget.
+        _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="2")
+        monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")  # nothing listens
+        clients = [_make(Settings()) for _ in range(3)]
+
+        assert clients[0]._fallback is clients[1]._fallback is clients[2]._fallback
+        stamps = await _burst(clients, LIMIT)
+        assert len([t for t in stamps if t < PERIOD * 0.5]) == LIMIT // 2
 
     def test_without_redis_a_replica_keeps_the_full_budget(self, monkeypatch):
         limiter = _make(_settings(monkeypatch, None, UNIFI_FLEET_EXPECTED_REPLICAS="4"))

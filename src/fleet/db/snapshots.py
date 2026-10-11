@@ -58,6 +58,35 @@ class ControllerHealth:
     capabilities: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class FleetStatus:
+    """One enabled controller's recorded health, for fleet-wide reads."""
+
+    name: str
+    api_type: str
+    labels: dict[str, str]
+    health: ControllerHealth
+
+
+@dataclass(frozen=True)
+class FleetSite:
+    """A site of a controller, for fleet-wide reads."""
+
+    controller: str
+    site: SiteRecord
+    synced_at: datetime
+
+
+@dataclass(frozen=True)
+class FleetDevice:
+    """A device of a controller's site, for fleet-wide reads."""
+
+    controller: str
+    site_uuid: str
+    device: DeviceRecord
+    synced_at: datetime
+
+
 class SnapshotStore:
     """The worker's view of the fleet, stored in Postgres."""
 
@@ -287,4 +316,110 @@ class SnapshotStore:
                 state=row.state,
             )
             for row in rows
+        ]
+
+    async def fleet_status(self, names: Sequence[str] | None = None) -> list[FleetStatus]:
+        """Return the recorded health of every enabled controller, by name.
+
+        Args:
+            names: Only these controllers (all when None)
+        """
+        query = (
+            select(
+                Controller.name,
+                Controller.api_type,
+                Controller.labels,
+                Controller.health,
+                Controller.health_detail,
+                Controller.health_checked_at,
+                Controller.last_seen_at,
+                Controller.capabilities,
+            )
+            .where(Controller.enabled)
+            .order_by(Controller.name)
+        )
+        if names is not None:
+            query = query.where(Controller.name.in_(list(names)))
+        async with self._sessions() as session:
+            rows = (await session.execute(query)).all()
+        return [
+            FleetStatus(
+                name=row.name,
+                api_type=row.api_type,
+                labels=dict(row.labels),
+                health=ControllerHealth(
+                    health=row.health,
+                    detail=row.health_detail,
+                    checked_at=row.health_checked_at,
+                    last_seen_at=row.last_seen_at,
+                    capabilities=dict(row.capabilities),
+                ),
+            )
+            for row in rows
+        ]
+
+    async def fleet_sites(self, names: Sequence[str]) -> list[FleetSite]:
+        """Return the site snapshots of ``names``, by controller then site UUID."""
+        query = (
+            select(
+                Controller.name, Site.site_uuid, Site.short_name, Site.display_name, Site.synced_at
+            )
+            .join(Controller, Controller.id == Site.controller_id)
+            .where(Controller.name.in_(list(names)))
+            .order_by(Controller.name, Site.site_uuid)
+        )
+        async with self._sessions() as session:
+            rows = (await session.execute(query)).all()
+        return [
+            FleetSite(
+                controller=row.name,
+                site=SiteRecord(row.site_uuid, row.short_name, row.display_name),
+                synced_at=row.synced_at,
+            )
+            for row in rows
+        ]
+
+    async def fleet_devices(
+        self,
+        names: Sequence[str],
+        *,
+        model: str | None = None,
+        state: str | None = None,
+    ) -> list[FleetDevice]:
+        """Return the device snapshots of ``names``, by controller, site and device.
+
+        Args:
+            names: The controllers
+            model: Only models containing this (case-insensitive)
+            state: Only devices in this state (case-insensitive)
+        """
+        query = (
+            select(DeviceInventory, Controller.name)
+            .join(Controller, Controller.id == DeviceInventory.controller_id)
+            .where(Controller.name.in_(list(names)))
+            .order_by(Controller.name, DeviceInventory.site_uuid, DeviceInventory.device_id)
+        )
+        if model:
+            escaped = model.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            query = query.where(DeviceInventory.model.ilike(f"%{escaped}%", escape="\\"))
+        if state:
+            query = query.where(func.lower(DeviceInventory.state) == state.lower())
+        async with self._sessions() as session:
+            rows = (await session.execute(query)).all()
+        return [
+            FleetDevice(
+                controller=name,
+                site_uuid=row.site_uuid,
+                device=DeviceRecord(
+                    device_id=row.device_id,
+                    payload=row.payload,
+                    mac=row.mac,
+                    name=row.name,
+                    model=row.model,
+                    version=row.version,
+                    state=row.state,
+                ),
+                synced_at=row.synced_at,
+            )
+            for row, name in rows
         ]

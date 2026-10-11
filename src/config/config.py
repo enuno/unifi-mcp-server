@@ -218,6 +218,31 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
     )
 
+    # fleet_fanout: one read tool run on many controllers (FLEET_SCALING_PLAN.md §3.4).
+    fleet_fanout_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controllers one fleet_fanout call reaches at once",
+        validation_alias="UNIFI_FLEET_FANOUT_CONCURRENCY",
+    )
+
+    fleet_fanout_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        description="Default per-controller timeout of fleet_fanout",
+        validation_alias="UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS",
+    )
+
+    fleet_fanout_deadline_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description=(
+            "Default overall deadline of fleet_fanout; controllers not done by then "
+            "are reported as timed out"
+        ),
+        validation_alias="UNIFI_FLEET_FANOUT_DEADLINE_SECONDS",
+    )
+
     # Worker tier (python -m src.worker, docs/FLEET_SCALING_PLAN.md §3.5).
     fleet_worker_health_seconds: int = Field(
         default=60,

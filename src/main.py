@@ -642,6 +642,13 @@ if settings.database_url:
 
     register_admin_tools(mcp, fleet_registry, settings)
 
+    from .fleet.db.snapshots import SnapshotStore
+    from .fleet.fleet_tools import register_fleet_read_tools
+
+    register_fleet_read_tools(
+        mcp, fleet_registry, settings, SnapshotStore(fleet_registry.store.engine)
+    )
+
 # ---------------------------------------------------------------------------
 # Resource handlers
 # ---------------------------------------------------------------------------

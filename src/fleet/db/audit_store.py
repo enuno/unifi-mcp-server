@@ -7,6 +7,7 @@ file verifier. A trigger makes ``audit_log`` append-only for every role.
 """
 
 import asyncio
+import contextlib
 import json
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -14,7 +15,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from ...config import Settings
 from ...utils.audit import (
@@ -27,6 +28,7 @@ from ...utils.audit import (
 )
 from ...utils.audit_verify import Head, VerifyReport, verify_records
 from ...utils.logger import get_logger
+from .archives import archive_problems, archived_starts
 from .models import AuditChainHead, AuditLogEntry
 
 logger = get_logger(__name__)
@@ -51,8 +53,22 @@ class PostgresAuditSink:
         self._seq = 0
         self._prev_hash = GENESIS_HASH
 
-    async def append(self, record: dict[str, Any], *, key: bytes | None, strict: bool) -> bool:
+    async def append(
+        self,
+        record: dict[str, Any],
+        *,
+        key: bytes | None,
+        strict: bool,
+        conn: AsyncConnection | None = None,
+    ) -> bool:
         """Chain and insert one record (payload fields already encrypted).
+
+        Args:
+            record: The record
+            key: The chain HMAC key
+            strict: Raise instead of logging when the record is not stored
+            conn: Insert inside this connection's open transaction (the
+                caller commits) instead of a transaction of its own
 
         Returns:
             True if the record was stored (False only when not ``strict``)
@@ -80,7 +96,9 @@ class PostgresAuditSink:
                 "record": json.dumps(record),
             }
             try:
-                async with self.engine.begin() as conn:
+                async with contextlib.AsyncExitStack() as stack:
+                    if conn is None:
+                        conn = await stack.enter_async_context(self.engine.begin())
                     await conn.execute(insert(AuditLogEntry).values(**row))
                     await conn.execute(
                         insert(AuditChainHead)
@@ -179,7 +197,10 @@ async def verify(
 ) -> VerifyReport:
     """Verify every chain in the audit store, in insertion order.
 
-    Each chain must also end exactly at its ``audit_chain_heads`` entry, so
+    Chains whose oldest records were archived by retention resume right
+    after their latest ``audit_archives`` entry, and successive archives of a
+    chain must not leave gaps. Each chain must also end exactly at its
+    ``audit_chain_heads`` entry, so
     records removed from the end of a chain (or a whole chain, or the whole
     table) are reported. Records and heads are read from one snapshot: a
     record and its head are written in one transaction.
@@ -203,14 +224,20 @@ async def verify(
                 str(h.chain_id): (int(h.seq), str(h.hash))
                 for h in await conn.execute(select(AuditChainHead))
             }
+            starts = await archived_starts(conn)
+            gaps = await archive_problems(conn)
     heads.update(extra_heads or {})
     rows = [(f"row {e.id}", str(e.record)) for e in entries]
-    report = verify_records(rows, key, heads)
+    report = verify_records(rows, key, heads, starts)
+    report.problems.extend(gaps)
 
     # Every chain the sink writes has a head; one without a head (its row
     # deleted) would otherwise escape the end-of-chain check.
     for chain_id in sorted({str(e.chain_id) for e in entries} - set(heads)):
         report.problems.append(f"chain {chain_id[:8]}: has records but no recorded head")
+    # A fully archived chain has no rows left; its head must still be there.
+    for chain_id in sorted(set(starts) - {str(e.chain_id) for e in entries} - set(heads)):
+        report.problems.append(f"chain {chain_id[:8]}: was archived but has no recorded head")
     for entry in entries:
         report.problems.extend(_column_problems(entry))
     return report

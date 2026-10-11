@@ -95,6 +95,7 @@ class TestAppendOnly:
                 "CREATE ROLE audit_runtime LOGIN PASSWORD 'rt'",
                 "GRANT SELECT, INSERT ON audit_log TO audit_runtime",
                 "GRANT SELECT, INSERT, UPDATE ON audit_chain_heads TO audit_runtime",
+                "GRANT SELECT ON audit_archives TO audit_runtime",
                 "GRANT USAGE ON SEQUENCE audit_log_id_seq TO audit_runtime",
             ):
                 await conn.execute(text(sql))

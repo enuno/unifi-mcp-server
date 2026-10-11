@@ -57,8 +57,13 @@ def _settings(monkeypatch: pytest.MonkeyPatch, redis_port: int | None, **env: st
 
 
 def _make(settings: Settings) -> Any:
-    local = RateLimiter(settings.rate_limit_requests, settings.rate_limit_period)
-    return make_rate_limiter(settings, local)
+    return make_rate_limiter(settings, RateLimiter)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Fallback buckets are per process; each test is a fresh process.
+    monkeypatch.setattr("src.api.rate_limit._fallbacks", {})
 
 
 @pytest.fixture(autouse=True)
@@ -171,6 +176,58 @@ class TestRedisUnavailable:
 
         assert len(stamps) == LIMIT
         assert "local" in caplog.text.lower()
+
+    async def test_three_replicas_stay_near_the_budget_during_an_outage(
+        self, monkeypatch, redis_port
+    ):
+        # Without the share, three replicas would each send the full budget.
+        _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="2")
+        monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")  # nothing listens
+        replicas = []
+        for _ in range(2):  # two processes, each with its own fallback bucket
+            monkeypatch.setattr("src.api.rate_limit._fallbacks", {})
+            replicas.append(_make(Settings()))
+
+        stamps = await _burst(replicas, 2 * LIMIT)
+
+        assert len([t for t in stamps if t < PERIOD * 0.5]) == LIMIT  # 2 x LIMIT/2 at once
+
+    def test_fallback_budget(self, monkeypatch):
+        from src.api.rate_limit import fallback_budget
+
+        assert fallback_budget(_settings(monkeypatch, None)) == LIMIT
+        assert fallback_budget(_settings(monkeypatch, None, UNIFI_FLEET_EXPECTED_REPLICAS="3")) == 1
+        assert (
+            fallback_budget(_settings(monkeypatch, None, UNIFI_FLEET_EXPECTED_REPLICAS="99")) == 1
+        )
+        partial = Settings.model_construct(rate_limit_requests=8, fleet_expected_replicas=None)
+        assert fallback_budget(partial) == 8
+
+    async def test_clients_of_one_controller_share_the_fallback(self, monkeypatch, redis_port):
+        # MCP resources build a client per read outside the pool; during an
+        # outage they must not each get a fresh share of the budget.
+        _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="2")
+        monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")  # nothing listens
+        clients = [_make(Settings()) for _ in range(3)]
+
+        assert clients[0]._fallback is clients[1]._fallback is clients[2]._fallback
+        stamps = await _burst(clients, LIMIT)
+        assert len([t for t in stamps if t < PERIOD * 0.5]) == LIMIT // 2
+
+    def test_redis_configured_but_not_installed_keeps_the_full_budget(
+        self, monkeypatch, redis_port
+    ):
+        settings = _settings(monkeypatch, redis_port, UNIFI_FLEET_EXPECTED_REPLICAS="4")
+        monkeypatch.setattr("src.cache.REDIS_AVAILABLE", False)
+
+        limiter = _make(settings)
+
+        assert type(limiter) is RateLimiter
+        assert limiter.requests_per_period == LIMIT
+
+    def test_without_redis_a_replica_keeps_the_full_budget(self, monkeypatch):
+        limiter = _make(_settings(monkeypatch, None, UNIFI_FLEET_EXPECTED_REPLICAS="4"))
+        assert limiter.requests_per_period == LIMIT
 
 
 class TestClientWiring:

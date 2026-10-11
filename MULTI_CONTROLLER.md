@@ -138,6 +138,17 @@ With Redis configured (`REDIS_URL`), replicas also share each controller's
 rate limit (one budget per controller, one per API key for api.ui.com) and
 reload the controller registry as soon as any replica changes it.
 
+If Redis goes down, nothing stops: reads bypass the cache, registry changes
+reach other replicas at their next periodic refresh, and each replica falls
+back to a local rate limit of `UNIFI_RATE_LIMIT_REQUESTS /
+UNIFI_FLEET_EXPECTED_REPLICAS` (set it to your replica count plus workers;
+`docker-compose.fleet-scale.yml` sets 5). Workers pause
+until Redis is back, since none can know its share of the fleet without it.
+If Postgres goes down, replicas keep routing with their last registry
+snapshot, reads keep working, writes are refused (their audit record cannot
+be stored), the `fleet_*` snapshot tools fail with an error, and issued tokens
+are refused; `MCP_AUTH_TOKEN` keeps working.
+
 ## Fleet workers
 
 `python -m src.worker` (same image, different command) keeps a snapshot of

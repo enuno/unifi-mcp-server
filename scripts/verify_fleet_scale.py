@@ -373,6 +373,7 @@ async def run_checks(args: argparse.Namespace) -> int:
             "UNIFI_FLEET_WORKER_SYNC_SECONDS": str(SYNC_SECONDS),
             "UNIFI_FLEET_WORKER_LEASE_SECONDS": str(LEASE_SECONDS),
             "UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS": "10",
+            "UNIFI_FLEET_EXPECTED_REPLICAS": "5",  # 3 replicas + 2 workers
             "MCP_AUTH_TOKEN": TOKEN,
         }
         try:

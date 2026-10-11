@@ -13,8 +13,9 @@ its entry back out and waits until the oldest entry leaves the window. No Lua
 is needed, and unlike a fixed window it cannot burst at a window boundary.
 
 If Redis stops answering, the limiter falls back to a per-process bucket and
-logs a warning: calls keep flowing at the old per-replica rate rather than
-failing.
+logs a warning, so calls keep flowing rather than failing. That bucket gets
+``UNIFI_RATE_LIMIT_REQUESTS / UNIFI_FLEET_EXPECTED_REPLICAS`` (at least 1), so
+the replicas together stay near the controller's budget during the outage.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import hashlib
+from collections.abc import Callable
 from typing import Any
 from uuid import uuid4
 
@@ -76,30 +78,52 @@ def bucket_key(settings: Settings) -> str:
     return f"{KEY_PREFIX}:controller:{connection_key(settings)[:32]}"
 
 
-def make_rate_limiter(settings: Settings, local: Any) -> Any:
+#: Fallback buckets by (window key, budget, period); see :func:`make_rate_limiter`.
+_fallbacks: dict[tuple[str, int, int], Any] = {}
+
+
+def fallback_budget(settings: Settings) -> int:
+    """Requests per period one replica may send while Redis is unavailable."""
+    replicas = getattr(settings, "fleet_expected_replicas", 1)
+    replicas = replicas if isinstance(replicas, int) and replicas > 0 else 1
+    return max(1, settings.rate_limit_requests // replicas)
+
+
+def make_rate_limiter(settings: Settings, local: Callable[[int, int], Any]) -> Any:
     """Return the rate limiter for one controller connection.
 
     Args:
         settings: The controller's settings
-        local: The per-process limiter (``src.api.client.RateLimiter``), used
-            without Redis and as the fallback while Redis is unavailable
+        local: Builds a per-process limiter from ``(requests, period)``
+            (``src.api.client.RateLimiter``)
 
     Returns:
         A shared :class:`RedisRateLimiter` when Redis is configured and the
-        redis package is installed, otherwise ``local``
+        redis package is installed (falling back to a per-process limiter at
+        :func:`fallback_budget`), otherwise a per-process limiter with the
+        full budget
     """
+    period = settings.rate_limit_period
     if not _redis_configured(settings):
-        return local
+        return local(settings.rate_limit_requests, period)
     from .. import cache
 
     if not cache.REDIS_AVAILABLE:
-        return local
+        return local(settings.rate_limit_requests, period)
+    key = bucket_key(settings)
+    # One fallback bucket per window and process, shared by every client of
+    # that controller (pooled tool calls and unpooled resources alike), so the
+    # replica's share holds however many clients it builds during an outage.
+    budget = fallback_budget(settings)
+    fallback = _fallbacks.get((key, budget, period))
+    if fallback is None:
+        fallback = _fallbacks[(key, budget, period)] = local(budget, period)
     return RedisRateLimiter(
         settings,
-        key=bucket_key(settings),
+        key=key,
         requests_per_period=settings.rate_limit_requests,
-        period_seconds=settings.rate_limit_period,
-        fallback=local,
+        period_seconds=period,
+        fallback=fallback,
     )
 
 

@@ -24,6 +24,9 @@ services:
     ports: !reset []
     environment:
       REDIS_URL: redis://redis:6379/0
+      # 3 replicas + 2 workers draw from each controller's budget: while Redis
+      # is down each process keeps a fifth of it (keep in step with replicas).
+      UNIFI_FLEET_EXPECTED_REPLICAS: "5"
     deploy:
       replicas: 3
     depends_on:
@@ -33,6 +36,9 @@ services:
   worker:
     environment:
       REDIS_URL: redis://redis:6379/0
+      # 3 replicas + 2 workers draw from each controller's budget: while Redis
+      # is down each process keeps a fifth of it (keep in step with replicas).
+      UNIFI_FLEET_EXPECTED_REPLICAS: "5"
     deploy:
       replicas: 2
     depends_on:

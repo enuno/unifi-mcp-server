@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         metavar="LOG_FILE",
         help=(
             "The audit log file; with rotation, its rotated files first, oldest first "
-            "(audit.log.* audit.log)."
+            "(audit.log.[0-9]* audit.log)."
         ),
     )
     parser.add_argument(

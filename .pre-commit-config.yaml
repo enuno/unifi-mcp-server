@@ -14,6 +14,8 @@ repos:
         name: Fix end of files
       - id: check-yaml
         name: Check YAML syntax
+        # Parse for syntax only, so Compose tags such as !reset are accepted.
+        args: [--unsafe]
       - id: check-json
         name: Check JSON syntax
       - id: check-toml

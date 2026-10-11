@@ -45,11 +45,18 @@ def _describe(error: BaseException) -> str:
 
 
 def _entries(response: Any) -> list[Any]:
+    """The entries of a listing, bare or in a ``data`` envelope.
+
+    Raises:
+        ValueError: For any other shape (e.g. ``{}`` from an empty 2xx body),
+            so a sync fails and keeps the last snapshot instead of replacing
+            it with nothing
+    """
     if isinstance(response, list):
         return response
     if isinstance(response, Mapping) and isinstance(response.get("data"), list):
         return list(response["data"])
-    return []
+    raise ValueError(f"unexpected listing shape: {type(response).__name__}")
 
 
 async def _paged(client: UniFiClient, endpoint: str) -> list[Any]:

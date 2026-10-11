@@ -192,3 +192,22 @@ class TestClientWiring:
         await first.close()
         await second.close()
         await pool.aclose()
+
+    async def test_unpooled_clients_use_the_shared_window_too(self, monkeypatch, redis_port):
+        # MCP resources and the debug tool build clients outside the pool.
+        from src.api.client import UniFiClient
+
+        settings = _settings(monkeypatch, redis_port)
+        client = UniFiClient(settings)
+
+        assert isinstance(client.rate_limiter, RedisRateLimiter)
+        assert client.rate_limiter.key == bucket_key(settings)
+        await client.close()
+
+    async def test_unpooled_clients_without_redis_keep_a_local_bucket(self, monkeypatch):
+        from src.api.client import UniFiClient
+
+        client = UniFiClient(_settings(monkeypatch, None))
+
+        assert type(client.rate_limiter) is RateLimiter
+        await client.close()

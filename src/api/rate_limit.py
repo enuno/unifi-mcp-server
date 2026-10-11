@@ -42,8 +42,13 @@ _CLOUD_TYPES = (APIType.CLOUD_V1, APIType.CLOUD_EA)
 
 def _redis_configured(settings: Settings) -> bool:
     # Same rule as src.cache.redis_configured, without importing src.cache
-    # (and so redis) when Redis is not configured.
-    return bool(settings.redis_url) or "redis_host" in settings.model_fields_set
+    # (and so redis) when Redis is not configured. Strict about types because
+    # every UniFiClient asks, including ones built from partial settings.
+    url = getattr(settings, "redis_url", None)
+    explicit = getattr(settings, "model_fields_set", None)
+    return (isinstance(url, str) and bool(url)) or (
+        isinstance(explicit, set) and "redis_host" in explicit
+    )
 
 
 #: Salt of the API key identifiers in cloud window names (not secret: it only

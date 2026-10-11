@@ -107,19 +107,27 @@ If a controller registry change causes ambiguity or cross-target confusion:
 A stateful Streamable HTTP session exists only in the memory of the replica
 that created it; any other replica answers `404 Session not found`. Choose one:
 
-- **Sticky routing (recommended).** Route every request carrying the same
-  `mcp-session-id` header to the same replica. `select_controller` works as on
-  one server. If that replica dies, the client starts a new session and selects
-  again. With nginx:
+- **Sticky routing (recommended).** Send all of one client's requests to the
+  same replica, using a key the client already has when it sends `initialize`.
+  `select_controller` then works as on one server. If that replica dies, the
+  client starts a new session and selects again. Do not hash on the
+  `mcp-session-id` header alone: `initialize` carries none, and the next
+  request (carrying the id the replica just issued) can hash to a different
+  replica, which answers `404`. With nginx, hash on the client address and its
+  bearer token:
 
   ```nginx
   upstream unifi_mcp {
-      hash $http_mcp_session_id consistent;
+      hash $remote_addr$http_authorization consistent;
       server mcp-1:3000;
       server mcp-2:3000;
       server mcp-3:3000;
   }
   ```
+
+  Behind another proxy, use the original client address (e.g.
+  `$http_x_forwarded_for` from a trusted proxy) instead of `$remote_addr`. A
+  load-balancer cookie works too, if every client keeps cookies.
 
 - **Stateless (`MCP_STATELESS_HTTP=true`).** No sessions, so any replica can
   answer any request and no affinity is needed. `select_controller` is refused;
@@ -133,7 +141,9 @@ reload the controller registry as soon as any replica changes it.
 ## Fleet workers
 
 `python -m src.worker` (same image, different command) keeps a snapshot of
-the fleet in Postgres so API replicas never poll controllers:
+the fleet in Postgres, so the snapshot tools below answer without the API
+replicas polling every controller (other tools, and `fleet_fanout`, still
+call controllers live):
 
 - **Health** every `UNIFI_FLEET_WORKER_HEALTH_SECONDS` (60): the same
   authentication probe tools use, plus the Network application version on
@@ -168,7 +178,7 @@ API.md has the parameters.
 ## Example deployment
 
 `docker-compose.fleet-scale.yml`, layered on `docker-compose.fleet.yml`, runs
-Redis, three replicas behind nginx (sticky on `mcp-session-id`) and two
+Redis, three replicas behind nginx (sticky on client address and token) and two
 workers:
 
 ```bash

@@ -130,9 +130,16 @@ class Worker:
         return started
 
     def _forget(self, name: str) -> None:
-        """Drop a controller this worker no longer holds (running jobs finish)."""
+        """Drop a controller this worker no longer holds.
+
+        A running job keeps its schedule, so it is still tracked (and awaited
+        on shutdown) and cannot be started twice if the controller comes
+        back; it drops the schedule itself when it finishes.
+        """
         for kind in JOB_KINDS:
-            self._schedules.pop((name, kind), None)
+            schedule = self._schedules.get((name, kind))
+            if schedule is not None and schedule.task is None:
+                del self._schedules[(name, kind)]
         self._failures.pop(name, None)
 
     async def _run(self, name: str, kind: JobKind, profile: ControllerProfile) -> None:
@@ -165,9 +172,12 @@ class Worker:
             active_pool.reset(token)
             schedule = self._schedules.get((name, kind))
             if schedule is not None:
-                jitter = self._rng.uniform(0.9, 1.1)
-                schedule.due = self._clock() + self._interval(kind) * jitter
-                schedule.task = None
+                if name not in self.held:  # given away while running
+                    del self._schedules[(name, kind)]
+                else:
+                    jitter = self._rng.uniform(0.9, 1.1)
+                    schedule.due = self._clock() + self._interval(kind) * jitter
+                    schedule.task = None
 
     async def run(self, stop: asyncio.Event) -> None:
         """Tick until ``stop`` is set, then give up the shard and wait for running jobs."""

@@ -104,6 +104,12 @@ def test_version_key_orders_numerically() -> None:
     assert version_key("beta") == ()
 
 
+def test_version_key_ignores_trailing_zeros() -> None:
+    assert version_key("8.0") == version_key("8.0.0") == version_key("8")
+    assert not version_key("8.0") < version_key("8.0.0")
+    assert version_key("8.0.0.1") > version_key("8")
+
+
 class TestFleetHealth:
     async def test_every_enabled_controller(self, tools: dict[str, Any]) -> None:
         result = await tools["health"](settings=tools["settings"])

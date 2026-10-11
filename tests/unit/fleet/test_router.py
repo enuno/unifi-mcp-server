@@ -240,7 +240,21 @@ class TestStatelessHttp:
     @pytest.fixture
     def stateless(self, monkeypatch: pytest.MonkeyPatch, base: Settings) -> Settings:
         monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        monkeypatch.setenv("MCP_SERVER_TRANSPORT", "streamable_http")
         return Settings()
+
+    @pytest.mark.parametrize("transport", ["stdio", "sse"])
+    async def test_ignored_where_the_transport_keeps_sessions(
+        self, monkeypatch: pytest.MonkeyPatch, base: Settings, two_controllers, transport: str
+    ):
+        # main() passes stateless_http only to the HTTP transports.
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        monkeypatch.setenv("MCP_SERVER_TRANSPORT", transport)
+        _active_ctx.set(FakeContext())
+        router = FleetRouter(Settings(), two_controllers)
+
+        assert not router.stateless
+        assert (await router.select("hq")).name == "hq"
 
     async def test_select_is_refused_clearly(self, stateless, two_controllers):
         _active_ctx.set(FakeContext())

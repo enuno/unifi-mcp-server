@@ -107,10 +107,11 @@ class UniFiClient:
             follow_redirects=False,  # Prevent HTTP redirects that might downgrade protocol
         )
 
-        # Initialize rate limiter
-        self.rate_limiter = RateLimiter(
-            settings.rate_limit_requests,
-            settings.rate_limit_period,
+        # Shared across replicas when Redis is configured, as on the pooled path.
+        from .rate_limit import make_rate_limiter
+
+        self.rate_limiter = make_rate_limiter(
+            settings, RateLimiter(settings.rate_limit_requests, settings.rate_limit_period)
         )
 
     async def __aenter__(self) -> "UniFiClient":

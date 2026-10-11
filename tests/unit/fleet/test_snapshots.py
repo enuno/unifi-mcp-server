@@ -59,6 +59,16 @@ class TestHealth:
         assert health.last_seen_at == seen
         assert health.capabilities == {"network_version": "9.4.19"}
 
+    async def test_degraded_does_not_count_as_seen(self, snapshots: SnapshotStore) -> None:
+        await snapshots.record_health("hq", "ok")
+        seen = (await snapshots.health("hq")).last_seen_at
+
+        await snapshots.record_health("hq", "degraded", detail="ConnectError")
+
+        health = await snapshots.health("hq")
+        assert health.health == "degraded"
+        assert health.last_seen_at == seen
+
     async def test_unknown_controller(self, snapshots: SnapshotStore) -> None:
         with pytest.raises(ResourceNotFoundError):
             await snapshots.record_health("gone", "ok")

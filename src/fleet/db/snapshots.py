@@ -126,7 +126,7 @@ class SnapshotStore:
             "health_detail": detail[:_DETAIL_LENGTH] if detail else None,
             "health_checked_at": func.now(),
         }
-        if health != "down":
+        if health == "ok":
             values["last_seen_at"] = func.now()
         if capabilities is not None:
             values["capabilities"] = dict(capabilities)

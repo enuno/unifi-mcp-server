@@ -54,8 +54,14 @@ def _age(when: datetime | None, now: datetime) -> float | None:
 
 
 def version_key(version: str) -> tuple[int, ...]:
-    """Order firmware versions numerically: ``4.0.10`` sorts after ``4.0.9``."""
-    return tuple(int(part) for part in re.findall(r"\d+", version))
+    """Order firmware versions numerically: ``4.0.10`` sorts after ``4.0.9``.
+
+    Trailing zero parts are dropped, so ``8.0`` and ``8.0.0`` compare equal.
+    """
+    parts = [int(part) for part in re.findall(r"\d+", version)]
+    while parts and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
 
 
 def _matches(labels: Mapping[str, str], selector: Mapping[str, str] | None) -> bool:
@@ -307,8 +313,12 @@ def build_fanout_tool(mcp: FastMCP, registry: ControllerRegistry, config: Settin
         target = await mcp.get_tool(tool)
         if target is None or "controller" not in (target.parameters or {}).get("properties", {}):
             raise ValidationError(f"'{tool}' is not a controller tool on this server")
-        timeout = timeout_seconds or config_.fleet_fanout_timeout_seconds
-        deadline = deadline_seconds or config_.fleet_fanout_deadline_seconds
+        timeout = (
+            config_.fleet_fanout_timeout_seconds if timeout_seconds is None else timeout_seconds
+        )
+        deadline = (
+            config_.fleet_fanout_deadline_seconds if deadline_seconds is None else deadline_seconds
+        )
         if timeout <= 0 or deadline <= 0:
             raise ValidationError("timeout_seconds and deadline_seconds must be positive")
 

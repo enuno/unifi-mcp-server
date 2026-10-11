@@ -231,6 +231,24 @@ class TestSyncController:
         snapshots.replace_sites.assert_not_awaited()
         snapshots.replace_inventory.assert_not_awaited()
 
+    @pytest.mark.parametrize("body", [{}, {"error": "busy"}])
+    async def test_a_malformed_listing_keeps_the_snapshot(
+        self,
+        settings: Settings,
+        snapshots: AsyncMock,
+        monkeypatch: pytest.MonkeyPatch,
+        body: Any,
+    ) -> None:
+        # UniFiClient.get() returns {} for an empty 2xx body: that must not
+        # read as "the controller has no sites" and wipe the snapshot.
+        monkeypatch.setattr("src.api.client.UniFiClient.authenticate", AsyncMock())
+        monkeypatch.setattr("src.api.client.UniFiClient.get", AsyncMock(return_value=body))
+
+        with pytest.raises(ValueError, match="unexpected listing shape"):
+            await jobs.sync_controller("hq", settings, snapshots)
+        snapshots.replace_sites.assert_not_awaited()
+        snapshots.replace_inventory.assert_not_awaited()
+
     @pytest.mark.parametrize(
         ("api_type", "endpoint"), [("cloud-ea", "/ea/sites"), ("cloud-v1", "/v1/sites")]
     )
@@ -275,6 +293,12 @@ def test_device_record_skips_entries_without_an_id() -> None:
     assert (record.device_id, record.mac, record.version, record.model) == ("d-1", "aa", "1", None)
 
 
-def test_entries_of_unexpected_shapes() -> None:
-    assert jobs._entries("junk") == []
-    assert jobs._entries({"data": "junk"}) == []
+@pytest.mark.parametrize("response", ["junk", {"data": "junk"}, {}, None])
+def test_entries_of_unexpected_shapes_raise(response: Any) -> None:
+    with pytest.raises(ValueError, match="unexpected listing shape"):
+        jobs._entries(response)
+
+
+def test_empty_listings_are_empty() -> None:
+    assert jobs._entries([]) == []
+    assert jobs._entries({"data": []}) == []

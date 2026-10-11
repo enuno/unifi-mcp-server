@@ -1,7 +1,8 @@
 # Several replicas and workers on top of docker-compose.fleet.yml
 # (docs/FLEET_SCALING_PLAN.md Phase 4). Adds Redis (shared rate limits,
 # registry pub/sub, worker leases), three server replicas behind nginx with
-# sticky routing on mcp-session-id (MULTI_CONTROLLER.md), and two workers.
+# sticky routing on client address and bearer token (MULTI_CONTROLLER.md), and
+# two workers.
 #
 #   docker compose -f docker-compose.fleet.yml -f docker-compose.fleet-scale.yml up -d
 #
@@ -56,8 +57,10 @@ configs:
     content: |
       # "unifi-mcp" resolves to every replica when nginx starts, one peer per
       # address; after scaling the replicas, restart lb to pick up the change.
+      # The key must be stable from `initialize` onward, so not mcp-session-id
+      # (initialize has none, and the next request would rehash).
       upstream unifi_mcp {
-          hash $$http_mcp_session_id consistent;
+          hash $$remote_addr$$http_authorization consistent;
           server unifi-mcp:${MCP_SERVER_PORT:-3000};
       }
       server {

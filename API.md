@@ -136,7 +136,7 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address for `http`/`sse`/`streamable_http` | No | `127.0.0.1` |
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
-| `MCP_STATELESS_HTTP` | Run Streamable HTTP without MCP sessions so any replica can answer any request. `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs sticky routing on `mcp-session-id` across replicas | No | `false` |
+| `MCP_STATELESS_HTTP` | Run the HTTP transports without MCP sessions so any replica can answer any request (ignored for stdio and SSE). `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs per-client sticky routing across replicas, keyed on something stable from `initialize` onward (see `MULTI_CONTROLLER.md`) | No | `false` |
 | `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 

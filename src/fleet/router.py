@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from fastmcp.server.dependencies import get_context
 
-from ..config import Settings
+from ..config import Settings, TransportMode
 from ..utils.exceptions import ValidationError
 from .registry import ControllerProfile, ControllerRegistry
 
@@ -68,8 +68,16 @@ class FleetRouter:
 
     @property
     def stateless(self) -> bool:
-        """Whether the server runs without MCP sessions (``MCP_STATELESS_HTTP``)."""
-        return bool(getattr(self.base, "mcp_stateless_http", False))
+        """Whether the server runs without MCP sessions.
+
+        ``MCP_STATELESS_HTTP`` applies to the HTTP transports only; stdio and
+        SSE keep their sessions (``main`` passes ``stateless_http`` to neither).
+        """
+        transport = getattr(self.base, "server_transport", None)
+        return bool(getattr(self.base, "mcp_stateless_http", False)) and transport in (
+            TransportMode.HTTP,
+            TransportMode.STREAMABLE_HTTP,
+        )
 
     async def session_controller(self) -> str | None:
         """Return the controller selected in this MCP session, if any."""

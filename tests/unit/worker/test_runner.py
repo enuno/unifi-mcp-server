@@ -294,3 +294,77 @@ class TestPool:
         worker = Worker(settings, Registry([]), AsyncMock(), Shards())
         assert worker.pool.auth_ttl == 0
         assert worker.pool.max_open == settings.fleet_max_open_clients
+
+
+class TestLosingARunningController:
+    """A job still running when its controller is given away (review on PR #204)."""
+
+    @pytest.fixture
+    def slow(self, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+        state: dict[str, Any] = {"release": asyncio.Event(), "started": 0}
+
+        async def health(*args: Any, **kwargs: Any) -> None:
+            state["started"] += 1
+            await state["release"].wait()
+
+        monkeypatch.setattr(runner, "check_health", health)
+        monkeypatch.setattr(runner, "sync_controller", AsyncMock())
+        return state
+
+    async def _running(self, settings: Settings, shards: Shards) -> tuple[Worker, Clock, Any]:
+        worker, clock = _worker(settings, ["hq"], shards=shards)
+        await worker.tick()
+        clock.now += 60
+        (task,) = [t for t in await worker.tick() if t.get_name() == "worker-health-hq"]
+        await asyncio.sleep(0)
+        return worker, clock, task
+
+    async def test_regained_before_it_finishes_is_not_started_twice(
+        self, settings: Settings, slow: dict[str, Any]
+    ) -> None:
+        shards = Shards({"hq"})
+        worker, clock, task = await self._running(settings, shards)
+
+        shards.held = set()
+        await worker.tick()  # given away while running
+        shards.held = {"hq"}
+        clock.now += 600
+        later = await worker.tick()  # regained, and due again
+
+        assert not [t for t in later if t.get_name() == "worker-health-hq"]
+        assert slow["started"] == 1
+        slow["release"].set()
+        await asyncio.gather(task, *later)
+        # Rescheduled for one interval later, not dropped.
+        schedule = worker._schedules[("hq", "health")]
+        assert schedule.task is None
+        assert schedule.due > clock.now
+
+    async def test_finishing_after_it_was_given_away_drops_the_schedule(
+        self, settings: Settings, slow: dict[str, Any]
+    ) -> None:
+        shards = Shards({"hq"})
+        worker, _, task = await self._running(settings, shards)
+
+        shards.held = set()
+        await worker.tick()
+        assert ("hq", "health") in worker._schedules  # still tracked while running
+
+        slow["release"].set()
+        await task
+        assert ("hq", "health") not in worker._schedules
+
+    async def test_shutdown_waits_for_a_job_that_was_given_away(
+        self, settings: Settings, slow: dict[str, Any]
+    ) -> None:
+        shards = Shards({"hq"})
+        worker, _, task = await self._running(settings, shards)
+        shards.held = set()
+        await worker.tick()
+
+        closing = asyncio.create_task(worker.close())
+        await asyncio.sleep(0.01)
+        assert not closing.done()  # waiting for the job
+        slow["release"].set()
+        await closing
+        assert task.done()

@@ -184,6 +184,8 @@ async def test_label_filter(server: FastMCP) -> None:
         ({"tool": "get_thing", "arguments": {"controller": "c-0001"}}, "not in `arguments"),
         ({"tool": "get_thing", "controllers": ["nope"]}, "Unknown controllers"),
         ({"tool": "get_thing", "timeout_seconds": -1}, "must be positive"),
+        ({"tool": "get_thing", "timeout_seconds": 0}, "must be positive"),
+        ({"tool": "get_thing", "deadline_seconds": 0}, "must be positive"),
     ],
 )
 async def test_refused(server: FastMCP, arguments: dict[str, Any], message: str) -> None:

@@ -1,0 +1,2 @@
+# Set false when Docker Engine is already installed and managed elsewhere.
+docker_install: true

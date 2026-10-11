@@ -87,16 +87,17 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [ ] Research and map the Access API
 - [ ] Implement Access API tools once the endpoint map is confirmed
 
-### Phase 7 — Deployment automation (planned, `DEVELOPMENT_PLAN.md` Phase 7)
+### Phase 7 — Deployment automation (in progress, `DEVELOPMENT_PLAN.md` Phase 7)
 
-- [ ] Ansible playbook (`deploy/ansible/`) installing the server, Redis and Postgres with Docker, for a single server or a multi-server / clustered inventory; each component optional, secrets from Ansible Vault, migrations run once, idempotent with `--check`
-- [ ] Molecule (or equivalent) test for the playbook in CI
+- [x] Ansible playbook (`deploy/ansible/`) installing the server, Redis and Postgres with Docker, for a single server or a multi-server / clustered inventory with nginx in front; each component optional, secrets from Ansible Vault, migrations run once, least-privilege runtime role, retention cron; syntax-checked in CI
+- [x] Unauthenticated `GET /healthz` liveness endpoint for load balancers and container health checks
+- [ ] Molecule (or equivalent) test for the playbook in CI (a converge-and-idempotence run on a Docker-in-Docker host; today CI runs `--syntax-check` and `tests/unit/test_deploy.py`)
 - [ ] Helm chart (`deploy/helm/unifi-mcp/`) for Kubernetes: server and worker Deployments, probes, metrics annotations, Redis/Postgres as optional dependencies or external endpoints, secrets from an existing Secret, migration Job
 - [ ] `helm lint` / `helm template` and a kind smoke test in CI
-- [ ] Agent setup prompt: MCP server only (`docs/deploy-prompts/`)
-- [ ] Agent setup prompt: MCP server with a single Redis and Postgres
-- [ ] Agent setup prompt: full clustered environment (replicas, workers, HA Redis and Postgres, load balancer, SIEM export)
-- [ ] Test that the playbook, chart and compose files set the same environment variables
+- [x] Agent setup prompt: MCP server only (`docs/deploy-prompts/`)
+- [x] Agent setup prompt: MCP server with a single Redis and Postgres
+- [x] Agent setup prompt: full clustered environment (replicas, workers, Redis and Postgres on a data host, load balancer, SIEM export); HA Redis and Postgres are left to managed services
+- [ ] Test that the Helm chart sets the same environment variables (the playbook and compose check is `tests/unit/test_deploy.py`)
 
 ---
 

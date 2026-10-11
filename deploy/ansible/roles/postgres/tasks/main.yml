@@ -1,0 +1,40 @@
+- name: Create the Postgres data directory
+  ansible.builtin.file:
+    path: "{{ postgres_data_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Create the shared Docker network
+  community.docker.docker_network:
+    name: "{{ unifi_mcp_network }}"
+
+- name: Run Postgres
+  community.docker.docker_container:
+    name: unifi-mcp-postgres
+    image: "{{ postgres_image }}"
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ unifi_mcp_network }}"
+    env:
+      POSTGRES_DB: "{{ postgres_db }}"
+      POSTGRES_USER: "{{ postgres_owner }}"
+      POSTGRES_PASSWORD: "{{ vault_postgres_password }}"
+    volumes:
+      - "{{ postgres_data_dir }}:/var/lib/postgresql/data"
+    # Published only when MCP hosts other than this one need it.
+    published_ports: "{{ [postgres_bind_address ~ ':' ~ postgres_port ~ ':5432'] if unifi_mcp_remote_data | bool else [] }}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ postgres_owner }} -d {{ postgres_db }}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  no_log: true
+
+- name: Wait for Postgres to accept connections
+  ansible.builtin.command: >-
+    docker exec unifi-mcp-postgres pg_isready -U {{ postgres_owner }} -d {{ postgres_db }}
+  register: postgres_ready
+  until: postgres_ready.rc == 0
+  retries: 30
+  delay: 2
+  changed_when: false

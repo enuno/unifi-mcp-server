@@ -250,3 +250,16 @@ def test_a2a_routes_not_registered_for_stdio() -> None:
 # Restore a pristine src.main for any later tests in the session.
 def teardown_module(module) -> None:  # noqa: D401
     _reload_main()
+
+
+def test_healthz_needs_no_token_while_mcp_does() -> None:
+    from starlette.testclient import TestClient
+
+    main = _reload_main(MCP_SERVER_TRANSPORT="streamable_http", MCP_AUTH_TOKEN="s3cr3t-token")
+    main.register_health_route(main.mcp)
+    with TestClient(main.mcp.http_app(transport="streamable-http")) as client:
+        health = client.get("/healthz")
+        mcp = client.post("/mcp", json=_init_request(), headers=_ACCEPT)
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert mcp.status_code == 401

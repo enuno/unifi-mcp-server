@@ -3165,6 +3165,14 @@ Independently of Redis, every server keeps one long-lived connection per control
 **Cache Invalidation:**
 Caches are automatically invalidated when mutating operations are performed on related resources.
 
+### Liveness (`GET /healthz`)
+
+On a network transport the server answers `GET /healthz` with
+`{"status": "ok"}` (`Cache-Control: no-store`) without a bearer token, for
+load balancers and container health checks. It says only that the process is
+serving HTTP: no version, controller or configuration. Use the `health_check`
+tool or `/metrics` (both behind the token) for more.
+
 ### Webhooks (Optional)
 
 On a network transport (`http`, `sse`, `streamable_http`) the server serves

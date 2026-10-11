@@ -1,0 +1,50 @@
+# Docker Engine plus the Python Docker SDK that community.docker needs.
+- name: Install Docker on Debian or Ubuntu
+  when: docker_install and ansible_facts.os_family == "Debian"
+  block:
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg]
+        state: present
+        update_cache: true
+    - name: Add Docker's signing key
+      ansible.builtin.get_url:
+        url: "https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}/gpg"
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+    - name: Add Docker's apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/{{ ansible_facts.distribution | lower }}
+          {{ ansible_facts.distribution_release }} stable
+        filename: docker
+        state: present
+    - name: Install Docker Engine and the Python SDK
+      ansible.builtin.apt:
+        name: [docker-ce, docker-ce-cli, containerd.io, python3-docker]
+        state: present
+        update_cache: true
+
+- name: Install Docker on RHEL-family systems
+  when: docker_install and ansible_facts.os_family == "RedHat"
+  block:
+    - name: Add Docker's dnf repository
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        mode: "0644"
+    - name: Install Docker Engine
+      ansible.builtin.dnf:
+        name: [docker-ce, docker-ce-cli, containerd.io, python3-pip]
+        state: present
+    - name: Install the Python Docker SDK
+      ansible.builtin.pip:
+        name: docker
+        state: present
+
+- name: Start Docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true

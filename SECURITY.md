@@ -610,7 +610,12 @@ CMD ["python", "src/main.py"]
    GRANT SELECT ON audit_archives TO unifi_mcp_runtime;
    GRANT USAGE ON SEQUENCE audit_log_id_seq TO unifi_mcp_runtime;
    GRANT SELECT ON unifi_mcp_alembic_version TO unifi_mcp_runtime;
+   -- Workers replace each controller's site and device snapshots.
+   GRANT SELECT, INSERT, UPDATE, DELETE ON sites, device_inventory TO unifi_mcp_runtime;
    ```
+
+   The Ansible playbook (`deploy/ansible/`) creates this role and these grants
+   when it runs Postgres itself.
 
    The append-only trigger then backs up the missing grants rather than
    being the only control.

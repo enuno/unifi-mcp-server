@@ -1,0 +1,12 @@
+# Copy to vault.yml, fill in, then: ansible-vault encrypt vault.yml
+# Generate keys with:
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"            (tokens, passwords)
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  (Fernet keys)
+vault_unifi_api_key: ""          # the controller's API key
+vault_mcp_auth_token: ""         # bearer token clients send (MCP_AUTH_TOKEN)
+vault_audit_chain_key: ""        # HMAC key for the audit hash chain
+vault_audit_log_key: ""          # Fernet key encrypting audit payloads (optional)
+vault_fleet_credential_key: ""   # Fernet key encrypting stored controller keys
+vault_postgres_password: ""      # schema owner (migrations, retention)
+vault_runtime_db_password: ""    # least-privilege role the server runs as
+vault_redis_password: ""

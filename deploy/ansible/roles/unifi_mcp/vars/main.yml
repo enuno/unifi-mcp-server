@@ -1,0 +1,41 @@
+# The environment of every server container. tests/unit/test_deploy.py checks
+# these names against Settings and against docker-compose.fleet.yml. Empty
+# values are dropped before the containers start.
+unifi_mcp_server_env_base:
+  UNIFI_API_KEY: "{{ vault_unifi_api_key }}"
+  UNIFI_API_TYPE: "{{ unifi_mcp_api_type }}"
+  UNIFI_LOCAL_HOST: "{{ unifi_mcp_local_host }}"
+  UNIFI_LOCAL_PORT: "{{ unifi_mcp_local_port }}"
+  UNIFI_LOCAL_VERIFY_SSL: "{{ unifi_mcp_local_verify_ssl | bool | lower }}"
+  MCP_SERVER_TRANSPORT: streamable_http
+  MCP_SERVER_HOST: 0.0.0.0
+  MCP_SERVER_PORT: "3000"
+  MCP_AUTH_TOKEN: "{{ vault_mcp_auth_token }}"
+  MCP_STATELESS_HTTP: "{{ unifi_mcp_stateless_http | bool | lower }}"
+  UNIFI_METRICS_ENABLED: "{{ unifi_mcp_metrics_enabled | bool | lower }}"
+  UNIFI_AUDIT_LOG_PATH: /app/logs/audit.log
+  UNIFI_AUDIT_CHAIN_KEY: "{{ vault_audit_chain_key | default('') }}"
+  UNIFI_AUDIT_LOG_KEY: "{{ vault_audit_log_key | default('') }}"
+  UNIFI_AUDIT_LOG_ROTATE_MB: "{{ unifi_mcp_audit_log_rotate_mb }}"
+  UNIFI_AUDIT_RETENTION_DAYS: "{{ unifi_mcp_audit_retention_days }}"
+  # Read by the retention job: Postgres archives go to their own volume.
+  UNIFI_AUDIT_ARCHIVE_DIR: "{{ '/app/archive' if unifi_mcp_fleet | bool else '/app/logs/audit-archive' }}"
+  UNIFI_AUDIT_SIEM_TARGETS: "{{ unifi_mcp_siem_targets }}"
+  UNIFI_AUDIT_SIEM_WEBHOOK_SECRET: "{{ vault_siem_webhook_secret | default('') }}"
+  UNIFI_AUDIT_SIEM_OTLP_HEADERS: "{{ vault_siem_otlp_headers | default('') }}"
+  UNIFI_AUDIT_SIEM_CA_FILE: "{{ unifi_mcp_siem_ca_file }}"
+  UNIFI_AUDIT_SIEM_BUFFER_DIR: /app/logs/siem-buffer
+  UNIFI_AUDIT_SIEM_BUFFER_MAX_MB: "100"
+  UNIFI_AUDIT_SIEM_ANCHOR_SECONDS: "300"
+  DATABASE_URL: "{{ unifi_mcp_runtime_database_url }}"
+  UNIFI_FLEET_CREDENTIAL_KEY: "{{ vault_fleet_credential_key | default('') if unifi_mcp_fleet | bool else '' }}"
+  REDIS_URL: "{{ unifi_mcp_effective_redis_url }}"
+  UNIFI_FLEET_EXPECTED_REPLICAS: "{{ unifi_mcp_total_processes }}"
+
+unifi_mcp_server_env: >-
+  {{ unifi_mcp_server_env_base | combine(unifi_mcp_env_extra)
+     | dict2items | rejectattr('value', 'equalto', '') | items2dict }}
+
+unifi_mcp_image_ref: >-
+  {{ unifi_mcp_image if unifi_mcp_image
+     else 'unifi-mcp-server:' ~ (unifi_mcp_version | regex_replace('[^A-Za-z0-9_.-]', '-')) ~ '-fleet' }}

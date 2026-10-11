@@ -244,6 +244,15 @@ services:
       - "127.0.0.1:3000:3000"
 ```
 
+### Deploying with Ansible
+
+`deploy/ansible/` deploys to one host or several: the MCP server alone, a
+single-server fleet (server, worker, Redis, Postgres), or a cluster with
+nginx in front of replicas on several hosts. See
+[deploy/ansible/README.md](deploy/ansible/README.md). To have an AI agent run
+the deployment for you, start from one of the prompts in
+[docs/deploy-prompts/](docs/deploy-prompts/README.md).
+
 ### Connecting via MCP Gateway
 
 Once running in Streamable HTTP mode, configure your MCP gateway to connect:
@@ -342,6 +351,7 @@ unifi-mcp-server
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Global Dry-Run Mode**: Set `UNIFI_DRY_RUN=true` to force every `dry_run`-gated tool into preview mode at call time (caller-supplied values are overridden), and to withhold registration of mutating tools that have no dry-run gate — no write can reach the controller
 - **Metrics Endpoint**: Set `UNIFI_METRICS_ENABLED=true` to serve `GET /metrics` (Prometheus text exposition: `unifi_mcp_tool_calls_total`, `unifi_mcp_tool_call_duration_seconds` histogram, `unifi_mcp_tools_registered`) on network transports; bearer-token protected like `/mcp`
+- **Liveness Endpoint**: `GET /healthz` answers `{"status": "ok"}` on network transports without a token, for load balancers and container health checks; it reveals nothing else
 - **Audit Logging**: Append-only JSON-lines audit trail for mutation paths; optional at-rest Fernet encryption of sensitive payload fields via `UNIFI_AUDIT_LOG_KEY` with non-destructive key rotation (see SECURITY.md; decrypt with `python -m src.utils.audit_decrypt`)
 - **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages

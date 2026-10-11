@@ -1,0 +1,25 @@
+# Settings for every host. Secrets are in vault.yml next to this file:
+#   cp vault.yml.example vault.yml && ansible-vault encrypt vault.yml
+# Any other server setting (API.md) can be added under unifi_mcp_env_extra.
+
+# What to run. Leave unifi_mcp_image empty to build the image from source
+# (unifi_mcp_repo at unifi_mcp_version, with the fleet extras) on each host.
+unifi_mcp_version: main
+unifi_mcp_image: ""
+
+# The controller registered as "default" on first start.
+unifi_mcp_api_type: local
+unifi_mcp_local_host: 192.168.1.1
+unifi_mcp_local_port: 443
+unifi_mcp_local_verify_ssl: true
+
+# Where the server listens. Loopback by default: put an authenticating TLS
+# proxy in front to expose it, or use the cluster inventory's lb group.
+unifi_mcp_bind_address: 127.0.0.1
+unifi_mcp_port: 3000
+unifi_mcp_replicas: 1
+unifi_mcp_workers: 1
+
+# Audit: keep 365 days, rotate the file at 100 MB when there is no Postgres.
+unifi_mcp_audit_retention_days: 365
+unifi_mcp_audit_log_rotate_mb: 100

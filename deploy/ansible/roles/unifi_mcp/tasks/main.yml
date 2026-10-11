@@ -1,0 +1,234 @@
+- name: Check the settings
+  ansible.builtin.assert:
+    that:
+      - vault_unifi_api_key | default('') | length > 0
+      - vault_mcp_auth_token | default('') | length >= 32
+      - unifi_mcp_replicas | int >= 1
+      - unifi_mcp_api_type != 'local' or unifi_mcp_local_host | length > 0
+      - not unifi_mcp_fleet | bool or vault_fleet_credential_key | default('') | length > 0
+      - not unifi_mcp_manage_runtime_role | bool or vault_runtime_db_password | default('') | length > 0
+      - unifi_mcp_audit_retention_days | string | length == 0 or vault_audit_chain_key | default('') | length > 0
+    fail_msg: >-
+      Set vault_unifi_api_key, vault_mcp_auth_token (32+ characters), and with
+      Postgres vault_fleet_credential_key and vault_runtime_db_password
+      (vault.yml.example), vault_audit_chain_key for audit retention, and
+      unifi_mcp_local_host for the local API.
+    quiet: true
+
+- name: Create the shared Docker network
+  community.docker.docker_network:
+    name: "{{ unifi_mcp_network }}"
+
+- name: Create the root directory
+  ansible.builtin.file:
+    path: "{{ unifi_mcp_root }}"
+    state: directory
+    mode: "0755"
+
+# The image runs as uid 1000 (Dockerfile); logs hold the audit trail.
+- name: Create the log and archive directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "1000"
+    group: "1000"
+    mode: "0700"
+  loop: >-
+    {{ [unifi_mcp_root ~ '/logs', unifi_mcp_root ~ '/archive']
+       + range(unifi_mcp_replicas | int) | map('string') | map('regex_replace', '^', unifi_mcp_root ~ '/logs/') | list }}
+
+- name: Pull the image
+  community.docker.docker_image:
+    name: "{{ unifi_mcp_image }}"
+    source: pull
+  when: unifi_mcp_image | length > 0
+
+- name: Build the image from source
+  when: unifi_mcp_image | length == 0
+  block:
+    - name: Install git
+      ansible.builtin.package:
+        name: git
+
+    - name: Check out the source
+      ansible.builtin.git:
+        repo: "{{ unifi_mcp_repo }}"
+        version: "{{ unifi_mcp_version }}"
+        dest: "{{ unifi_mcp_root }}/src"
+        depth: 1
+      register: unifi_mcp_checkout
+
+    # The fleet extras (Redis, Postgres) are not in the published image.
+    - name: Build the image with the fleet extras
+      community.docker.docker_image:
+        name: "{{ unifi_mcp_image_ref }}"
+        source: build
+        force_source: "{{ unifi_mcp_checkout.changed }}"
+        build:
+          path: "{{ unifi_mcp_root }}/src"
+          args:
+            EXTRAS: fleet
+
+- name: Write the maintenance environment (schema owner, retention)
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ unifi_mcp_root }}/maintenance.env"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    env_vars: >-
+      {{ {
+           'MIGRATION_DATABASE_URL': unifi_mcp_owner_database_url,
+           'UNIFI_AUDIT_LOG_PATH': '/app/logs/audit.log',
+           'UNIFI_AUDIT_CHAIN_KEY': vault_audit_chain_key | default(''),
+           'UNIFI_AUDIT_RETENTION_DAYS': unifi_mcp_audit_retention_days,
+           'UNIFI_AUDIT_ARCHIVE_DIR': unifi_mcp_server_env_base.UNIFI_AUDIT_ARCHIVE_DIR,
+           'UNIFI_READ_ONLY': unifi_mcp_env_extra.UNIFI_READ_ONLY | default(''),
+         } | dict2items | rejectattr('value', 'equalto', '') | items2dict }}
+  no_log: true
+
+# An env file keeps every value a string, as Docker wants.
+- name: Write the server environment
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ unifi_mcp_root }}/server.env"
+    owner: root
+    group: root
+    mode: "0600"
+  vars:
+    env_vars: "{{ unifi_mcp_server_env }}"
+  no_log: true
+
+# status exits 1 when the schema is behind; migrate then upgrades it.
+- name: Bring the registry schema up to date
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --network
+      - "{{ unifi_mcp_network }}"
+      - --env-file
+      - "{{ unifi_mcp_root }}/maintenance.env"
+      - "{{ unifi_mcp_image_ref }}"
+      - sh
+      - -c
+      - python -m src.fleet.cli status || python -m src.fleet.cli migrate
+  register: unifi_mcp_migrate
+  changed_when: "'this server needs' in unifi_mcp_migrate.stdout"
+  run_once: true
+  when: unifi_mcp_fleet | bool
+
+- name: Create the least-privilege database role
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -i
+      - -e
+      - RUNTIME_PASSWORD
+      - unifi-mcp-postgres
+      - psql
+      - -q
+      - -U
+      - "{{ postgres_owner | default('unifi_mcp') }}"
+      - -d
+      - "{{ postgres_db | default('unifi_mcp') }}"
+    stdin: "{{ lookup('ansible.builtin.template', 'runtime-role.sql.j2') }}"
+  environment:
+    RUNTIME_PASSWORD: "{{ vault_runtime_db_password }}"
+  delegate_to: "{{ groups['postgres'] | first }}"
+  run_once: true
+  changed_when: false
+  no_log: true
+  when: unifi_mcp_fleet | bool and unifi_mcp_manage_runtime_role | bool
+
+- name: Run the MCP server replicas
+  community.docker.docker_container:
+    name: "unifi-mcp-{{ item }}"
+    image: "{{ unifi_mcp_image_ref }}"
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ unifi_mcp_network }}"
+    env_file: "{{ unifi_mcp_root }}/server.env"
+    published_ports:
+      - "{{ unifi_mcp_bind_address }}:{{ unifi_mcp_port | int + item }}:3000"
+    volumes:
+      - "{{ unifi_mcp_root }}/logs/{{ item }}:/app/logs"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/healthz', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+  loop: "{{ range(unifi_mcp_replicas | int) | list }}"
+  no_log: true
+
+# Health checks and site/inventory snapshots (python -m src.worker).
+- name: Run the workers
+  community.docker.docker_container:
+    name: "unifi-mcp-worker-{{ item }}"
+    image: "{{ unifi_mcp_image_ref }}"
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ unifi_mcp_network }}"
+    command: [python, -m, src.worker]
+    env_file: "{{ unifi_mcp_root }}/server.env"
+  loop: "{{ range(unifi_mcp_workers | int) | list if unifi_mcp_fleet | bool else [] }}"
+  no_log: true
+
+- name: Find containers left over from a larger deployment
+  ansible.builtin.command:
+    argv: [docker, ps, -a, --format, "{{ '{{' }}.Names{{ '}}' }}", --filter, name=^unifi-mcp-]
+  register: unifi_mcp_existing
+  changed_when: false
+  check_mode: false
+
+- name: Remove containers left over from a larger deployment
+  community.docker.docker_container:
+    name: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ unifi_mcp_existing.stdout_lines
+       | select('match', '^unifi-mcp-(worker-)?[0-9]+$')
+       | reject('in', unifi_mcp_wanted) | list }}
+  vars:
+    unifi_mcp_wanted: >-
+      {{ range(unifi_mcp_replicas | int) | map('string') | map('regex_replace', '^', 'unifi-mcp-') | list
+         + (range(unifi_mcp_workers | int) | map('string') | map('regex_replace', '^', 'unifi-mcp-worker-') | list
+            if unifi_mcp_fleet | bool else []) }}
+
+- name: Wait for every replica to report healthy
+  ansible.builtin.uri:
+    url: "http://{{ unifi_mcp_bind_address }}:{{ unifi_mcp_port | int + item }}/healthz"
+    return_content: true
+  register: unifi_mcp_health
+  until: unifi_mcp_health.status == 200
+  retries: 30
+  delay: 2
+  loop: "{{ range(unifi_mcp_replicas | int) | list }}"
+
+- name: Install the audit retention job
+  when: unifi_mcp_audit_retention_days | string | length > 0
+  block:
+    - name: Write the retention script
+      ansible.builtin.template:
+        src: audit-retention.sh.j2
+        dest: "{{ unifi_mcp_root }}/audit-retention.sh"
+        mode: "0700"
+
+    # Fleet mode: one job for the shared Postgres, on the first mcp host.
+    - name: Schedule the retention job
+      ansible.builtin.cron:
+        name: unifi-mcp audit retention
+        minute: "{{ unifi_mcp_retention_minute }}"
+        hour: "{{ unifi_mcp_retention_hour }}"
+        job: "{{ unifi_mcp_root }}/audit-retention.sh >> {{ unifi_mcp_root }}/logs/retention.log 2>&1"
+        state: >-
+          {{ 'present' if not unifi_mcp_fleet | bool
+             or inventory_hostname == (groups['mcp'] | first) else 'absent' }}

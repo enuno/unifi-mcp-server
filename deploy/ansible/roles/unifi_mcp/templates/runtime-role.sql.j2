@@ -1,0 +1,24 @@
+-- The least-privilege role the server and workers run as (SECURITY.md).
+-- Idempotent: applied on every run. The password comes from the
+-- RUNTIME_PASSWORD environment variable, never from this file.
+\set ON_ERROR_STOP on
+\getenv runtime_password RUNTIME_PASSWORD
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'unifi_mcp_runtime') THEN
+    CREATE ROLE unifi_mcp_runtime LOGIN;
+  END IF;
+END
+$$;
+ALTER ROLE unifi_mcp_runtime PASSWORD :'runtime_password';
+GRANT CONNECT ON DATABASE {{ postgres_db | default('unifi_mcp') }} TO unifi_mcp_runtime;
+GRANT USAGE ON SCHEMA public TO unifi_mcp_runtime;
+GRANT SELECT, INSERT, UPDATE ON credentials, cloud_accounts, controllers, api_tokens
+  TO unifi_mcp_runtime;
+GRANT SELECT, INSERT ON audit_log TO unifi_mcp_runtime;
+GRANT SELECT, INSERT, UPDATE ON audit_chain_heads TO unifi_mcp_runtime;
+GRANT SELECT ON audit_archives TO unifi_mcp_runtime;
+GRANT USAGE ON SEQUENCE audit_log_id_seq TO unifi_mcp_runtime;
+GRANT SELECT ON unifi_mcp_alembic_version TO unifi_mcp_runtime;
+-- Worker snapshots: each sync replaces the controller's previous rows.
+GRANT SELECT, INSERT, UPDATE, DELETE ON sites, device_inventory TO unifi_mcp_runtime;

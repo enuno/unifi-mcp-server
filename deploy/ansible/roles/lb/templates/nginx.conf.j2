@@ -1,0 +1,52 @@
+# Managed by Ansible (deploy/ansible). MCP sessions live in one replica's
+# memory, so each client (address + token) sticks to one upstream
+# (MULTI_CONTROLLER.md). Streamable HTTP needs buffering off and long reads.
+worker_processes auto;
+events { worker_connections 1024; }
+
+http {
+  server_tokens off;
+  access_log /dev/stdout;
+  # The Authorization header is part of the hash key only, never logged.
+  log_format mcp '$remote_addr [$time_local] "$request" $status $body_bytes_sent $request_time';
+
+  upstream unifi_mcp {
+    hash "$remote_addr$http_authorization" consistent;
+{% for host in groups['mcp'] %}
+{% for i in range(hostvars[host].unifi_mcp_replicas | default(unifi_mcp_replicas) | default(1) | int) %}
+    server {{ hostvars[host].private_address | default(hostvars[host].ansible_host) }}:{{ (hostvars[host].unifi_mcp_port | default(3000) | int) + i }} max_fails=3 fail_timeout=10s;
+{% endfor %}
+{% endfor %}
+  }
+
+  server {
+{% if lb_tls_certificate and lb_tls_certificate_key %}
+    listen {{ lb_listen_port }} ssl;
+    http2 on;
+    ssl_certificate /etc/nginx/tls/cert.pem;
+    ssl_certificate_key /etc/nginx/tls/key.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+{% else %}
+    listen {{ lb_listen_port }};
+{% endif %}
+    access_log /dev/stdout mcp;
+    client_max_body_size 4m;
+
+    location = /healthz {
+      proxy_pass http://unifi_mcp;
+    }
+
+    location / {
+      proxy_pass http://unifi_mcp;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header Connection "";
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_buffering off;
+      proxy_cache off;
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+    }
+  }
+}

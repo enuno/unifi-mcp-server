@@ -20,6 +20,7 @@ failing.
 from __future__ import annotations
 
 import asyncio
+import functools
 import hashlib
 from typing import Any
 from uuid import uuid4
@@ -45,6 +46,17 @@ def _redis_configured(settings: Settings) -> bool:
     return bool(settings.redis_url) or "redis_host" in settings.model_fields_set
 
 
+#: Salt of the API key identifiers in cloud window names (not secret: it only
+#: keeps them from matching any other use of the same key).
+_KEY_ID_SALT = b"unifi-mcp:ratelimit:v1"
+
+
+@functools.lru_cache(maxsize=1024)
+def _key_id(api_key: str) -> str:
+    """A stable, non-reversible identifier for an API key (computed once per key)."""
+    return hashlib.pbkdf2_hmac("sha256", api_key.encode("utf-8"), _KEY_ID_SALT, 10_000).hex()[:32]
+
+
 def bucket_key(settings: Settings) -> str:
     """Return the Redis key of the window ``settings``' controller draws from.
 
@@ -53,22 +65,24 @@ def bucket_key(settings: Settings) -> str:
     appears in the key.
     """
     if settings.api_type in _CLOUD_TYPES:
-        digest = hashlib.sha256(settings.api_key.encode("utf-8")).hexdigest()[:32]
-        return f"{KEY_PREFIX}:cloud:{digest}"
+        return f"{KEY_PREFIX}:cloud:{_key_id(settings.api_key)}"
     from .pool import connection_key
 
     return f"{KEY_PREFIX}:controller:{connection_key(settings)[:32]}"
 
 
-def make_rate_limiter(settings: Settings) -> Any:
+def make_rate_limiter(settings: Settings, local: Any) -> Any:
     """Return the rate limiter for one controller connection.
 
-    A shared :class:`RedisRateLimiter` when Redis is configured and the redis
-    package is installed, otherwise the per-process ``RateLimiter``.
-    """
-    from .client import RateLimiter
+    Args:
+        settings: The controller's settings
+        local: The per-process limiter (``src.api.client.RateLimiter``), used
+            without Redis and as the fallback while Redis is unavailable
 
-    local = RateLimiter(settings.rate_limit_requests, settings.rate_limit_period)
+    Returns:
+        A shared :class:`RedisRateLimiter` when Redis is configured and the
+        redis package is installed, otherwise ``local``
+    """
     if not _redis_configured(settings):
         return local
     from .. import cache

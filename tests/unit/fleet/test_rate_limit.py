@@ -56,6 +56,11 @@ def _settings(monkeypatch: pytest.MonkeyPatch, redis_port: int | None, **env: st
     return Settings()
 
 
+def _make(settings: Settings) -> Any:
+    local = RateLimiter(settings.rate_limit_requests, settings.rate_limit_period)
+    return make_rate_limiter(settings, local)
+
+
 @pytest.fixture(autouse=True)
 async def _flush(redis_port: int) -> None:
     client = aioredis.Redis(port=redis_port)
@@ -82,10 +87,10 @@ def _max_in_any_window(stamps: list[float], window: float) -> int:
 
 class TestFactory:
     def test_without_redis_each_process_keeps_its_own_bucket(self, monkeypatch, redis_port):
-        assert isinstance(make_rate_limiter(_settings(monkeypatch, None)), RateLimiter)
+        assert isinstance(_make(_settings(monkeypatch, None)), RateLimiter)
 
     def test_with_redis_the_bucket_is_shared(self, monkeypatch, redis_port):
-        assert isinstance(make_rate_limiter(_settings(monkeypatch, redis_port)), RedisRateLimiter)
+        assert isinstance(_make(_settings(monkeypatch, redis_port)), RedisRateLimiter)
 
 
 class TestBucketKeys:
@@ -129,7 +134,7 @@ class TestSharedBudget:
         self, monkeypatch, redis_port
     ):
         settings = _settings(monkeypatch, redis_port)
-        replicas = [make_rate_limiter(settings) for _ in range(3)]
+        replicas = [_make(settings) for _ in range(3)]
 
         stamps = await _burst(replicas, LIMIT * 2)
 
@@ -140,15 +145,15 @@ class TestSharedBudget:
     async def test_per_process_limiters_would_multiply_the_rate(self, monkeypatch, redis_port):
         # What the shared bucket fixes: three local buckets let 3x through at once.
         settings = _settings(monkeypatch, None)
-        replicas = [make_rate_limiter(settings) for _ in range(3)]
+        replicas = [_make(settings) for _ in range(3)]
 
         stamps = await _burst(replicas, LIMIT * 3)
 
         assert _max_in_any_window(stamps, PERIOD * 0.95) == LIMIT * 3
 
     async def test_different_controllers_do_not_share(self, monkeypatch, redis_port):
-        a = make_rate_limiter(_settings(monkeypatch, redis_port, UNIFI_LOCAL_HOST="10.0.0.1"))
-        b = make_rate_limiter(_settings(monkeypatch, redis_port, UNIFI_LOCAL_HOST="10.0.0.2"))
+        a = _make(_settings(monkeypatch, redis_port, UNIFI_LOCAL_HOST="10.0.0.1"))
+        b = _make(_settings(monkeypatch, redis_port, UNIFI_LOCAL_HOST="10.0.0.2"))
 
         stamps = await _burst([a, b], LIMIT * 2)
 
@@ -157,16 +162,15 @@ class TestSharedBudget:
 
 class TestRedisUnavailable:
     async def test_falls_back_to_a_local_bucket(self, monkeypatch, redis_port, caplog):
-        settings = _settings(monkeypatch, redis_port)
+        _settings(monkeypatch, redis_port)
         monkeypatch.setenv("REDIS_URL", "redis://127.0.0.1:1/0")  # nothing listens
-        limiter = make_rate_limiter(Settings())
+        limiter = _make(Settings())
 
         with caplog.at_level("WARNING"):
             stamps = await _burst([limiter], LIMIT)
 
         assert len(stamps) == LIMIT
         assert "local" in caplog.text.lower()
-        del settings
 
 
 class TestClientWiring:

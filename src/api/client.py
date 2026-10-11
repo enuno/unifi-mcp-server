@@ -90,7 +90,10 @@ class UniFiClient:
                 from .rate_limit import make_rate_limiter
 
                 # Shared across replicas when Redis is configured.
-                self._connection.rate_limiter = make_rate_limiter(settings)
+                self._connection.rate_limiter = make_rate_limiter(
+                    settings,
+                    RateLimiter(settings.rate_limit_requests, settings.rate_limit_period),
+                )
             self.rate_limiter = self._connection.rate_limiter
             return
 

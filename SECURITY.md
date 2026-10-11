@@ -572,10 +572,14 @@ CMD ["python", "src/main.py"]
    **JSONL rotation and retention:** without Postgres, set
    `UNIFI_AUDIT_LOG_ROTATE_MB` and the server renames the full audit file to
    `audit.log.<UTC time>Z` and starts a new one; the hash chain continues
-   across files, so verify them together, oldest first:
+   across files, so verify them together, oldest first (`[0-9]*` matches
+   only the rotated files, not the checkpoint file retention adds). Rotation
+   renames the file, so it must live in a writable directory: in Docker,
+   mount a directory and point `UNIFI_AUDIT_LOG_PATH` into it rather than
+   mounting the file itself:
 
    ```bash
-   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.* /var/log/unifi-mcp/audit.log
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log
    ```
 
    Retention removes rotated files whose records are all past
@@ -585,7 +589,7 @@ CMD ["python", "src/main.py"]
 
    ```bash
    python -m src.utils.audit_retention /var/log/unifi-mcp/audit.log --confirm
-   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.* /var/log/unifi-mcp/audit.log \
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log \
      --checkpoints /var/log/unifi-mcp/audit.log.checkpoints.jsonl
    ```
 

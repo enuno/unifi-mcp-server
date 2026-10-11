@@ -15,7 +15,7 @@ expired files go into one archive with a manifest (see
 to ``<log>.checkpoints.jsonl``, and only then are the files deleted. Verify
 what remains with::
 
-    python -m src.utils.audit_verify audit.log.* audit.log --checkpoints audit.log.checkpoints.jsonl
+    python -m src.utils.audit_verify audit.log.[0-9]* audit.log --checkpoints audit.log.checkpoints.jsonl
 
 If a run stops between writing its checkpoints and deleting its files, the
 next run deletes them first (they are in the archive).
@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -39,7 +40,14 @@ from .audit_archive import (
     remove,
     write_archive,
 )
-from .audit_verify import GENESIS, ChainKeyMissingError, Head, UnreadableLogError, verify_files
+from .audit_verify import (
+    GENESIS,
+    ChainKeyMissingError,
+    Head,
+    UnreadableLogError,
+    file_sha256,
+    verify_files,
+)
 
 
 def checkpoints_path(log_file: Path) -> Path:
@@ -47,23 +55,39 @@ def checkpoints_path(log_file: Path) -> Path:
     return log_file.with_name(f"{log_file.name}.checkpoints.jsonl")
 
 
-def _checkpoint_lines(path: Path) -> list[dict[str, Any]]:
+def _checkpoint_batches(path: Path) -> list[dict[str, Any]]:
+    """Each retention run's checkpoint line, oldest first.
+
+    A run appends its whole batch as one line, so a crash leaves at most a
+    torn last line (no newline, not valid JSON). That line is ignored: its
+    run had not finished writing, so it deleted nothing.
+
+    Raises:
+        ValueError: For any other line that is not a checkpoint batch
+    """
     if not path.exists():
         return []
-    entries = []
-    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    batches = []
+    for number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
+        torn = number == len(lines)  # the last piece has no newline after it
         try:
-            entry = json.loads(line)
-            if not isinstance(entry, dict):
+            batch = json.loads(line)
+            if not isinstance(batch, dict):
                 raise TypeError("not an object")
-            if "chain_id" in entry:  # a line without one only lists legacy files
-                int(entry["seq"]), str(entry["chain_id"]), str(entry["hash"])
+            str(batch["archive"]), str(batch["sha256"])
+            files = [str(name) for name in batch["files"]]
+            chains = [(str(c["chain_id"]), int(c["seq"]), str(c["hash"])) for c in batch["chains"]]
         except (ValueError, KeyError, TypeError, AttributeError) as e:
-            raise ValueError(f"line {number} is not a checkpoint: {e}") from e
-        entries.append(entry)
-    return entries
+            if torn:
+                print(f"Ignoring an unfinished checkpoint line in {path}", file=sys.stderr)
+                continue
+            raise ValueError(f"line {number} is not a checkpoint batch: {e}") from e
+        batches.append({**batch, "files": files, "chains": chains})
+    return batches
 
 
 def read_checkpoints(path: Path) -> dict[str, Head]:
@@ -75,25 +99,77 @@ def read_checkpoints(path: Path) -> dict[str, Head]:
     if not path.exists():
         raise ValueError(f"{path} not found")
     starts: dict[str, Head] = {}
-    for entry in _checkpoint_lines(path):
-        if "chain_id" not in entry:
-            continue
-        chain_id, seq = str(entry["chain_id"]), int(entry["seq"])
-        if seq > starts.get(chain_id, GENESIS)[0]:
-            starts[chain_id] = (seq, str(entry["hash"]))
+    for batch in _checkpoint_batches(path):
+        for chain_id, seq, digest in batch["chains"]:
+            if seq > starts.get(chain_id, GENESIS)[0]:
+                starts[chain_id] = (seq, digest)
     return starts
 
 
-def _finish_interrupted(log_file: Path, entries: list[dict[str, Any]]) -> list[str]:
-    """Delete files the latest run archived and checkpointed but did not delete."""
-    if not entries:
+def _delete(paths: list[Path]) -> None:
+    """Delete files; one already gone is fine, any other failure is raised."""
+    for path in paths:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _finish_interrupted(
+    log_file: Path, batches: list[dict[str, Any]], archive_dir: Path
+) -> list[str]:
+    """Delete files the latest run checkpointed but did not delete.
+
+    Only once that run's archive is confirmed intact: if it is missing or
+    changed, the files may be the only good copy, so nothing is deleted.
+
+    Raises:
+        RetentionRefusedError: If the archive is missing or does not match
+    """
+    if not batches:
         return []
-    latest = entries[-1].get("archive")
-    names = {name for e in entries if e.get("archive") == latest for name in e.get("files", [])}
-    left = [log_file.with_name(name) for name in sorted(names)]
+    latest = batches[-1]
+    left = [log_file.with_name(name) for name in latest["files"]]
     left = [p for p in left if p.exists() and p != log_file]
-    remove(*left)
+    if not left:
+        return []
+    archive = archive_dir / str(latest["archive"])
+    if not archive.exists() or file_sha256(archive) != latest["sha256"]:
+        raise RetentionRefusedError(
+            f"A previous run archived {len(left)} file(s) to {archive} but did not delete them, "
+            "and that archive is missing or changed; nothing was deleted. Restore the archive "
+            "(or point --archive-dir at it) and run again."
+        )
+    _delete(left)
     return [p.name for p in left]
+
+
+def _append_batch(path: Path, batch: dict[str, Any]) -> None:
+    """Append one checkpoint batch as a single line, durably."""
+    created = not path.exists()
+    data = (json.dumps(batch) + "\n").encode("utf-8")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        written = os.write(fd, data)
+        if written != len(data):  # pragma: no cover - a short append is a disk error
+            raise OSError(f"short write to {path}")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    if created:
+        dir_fd = os.open(path.parent, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        finally:
+            os.close(dir_fd)
+
+
+def _records(paths: list[Path]) -> Iterator[str]:
+    for path in paths:
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    yield line
 
 
 def _timestamp(record: dict[str, Any]) -> datetime | None:
@@ -156,9 +232,9 @@ def purge_expired_files(
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
     result = RetentionResult(cutoff=cutoff, dry_run=dry_run)
     checkpoints = checkpoints_path(log_file)
-    entries = _checkpoint_lines(checkpoints)
+    batches = _checkpoint_batches(checkpoints)
     if not dry_run:
-        finished = _finish_interrupted(log_file, entries)
+        finished = _finish_interrupted(log_file, batches, archive_dir)
         if finished:
             print(f"Removed {len(finished)} file(s) a previous run archived", file=sys.stderr)
 
@@ -180,37 +256,34 @@ def purge_expired_files(
     if not expired:
         return result
 
-    lines: list[str] = []
+    count = 0
     chains: dict[str, ChainArchive] = {}
-    for path in expired:
-        for line in path.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            lines.append(line)
-            record = json.loads(line)
-            if "hash" not in record:
-                continue  # legacy, unchained
-            chain_id, seq = str(record["chain_id"]), int(record["seq"])
-            if chain_id in chains:
-                chain = chains[chain_id]
-                chain.last_seq, chain.last_hash = seq, str(record["hash"])
-                chain.records += 1
-            else:
-                chains[chain_id] = ChainArchive(
-                    chain_id=chain_id,
-                    first_seq=seq,
-                    last_seq=seq,
-                    prev_hash=str(record["prev_hash"]),
-                    last_hash=str(record["hash"]),
-                    records=1,
-                )
-    result.records = len(lines)
+    for line in _records(expired):  # one pass for the manifest, nothing kept in memory
+        count += 1
+        record = json.loads(line)
+        if "hash" not in record:
+            continue  # legacy, unchained
+        chain_id, seq = str(record["chain_id"]), int(record["seq"])
+        if chain_id in chains:
+            chain = chains[chain_id]
+            chain.last_seq, chain.last_hash = seq, str(record["hash"])
+            chain.records += 1
+        else:
+            chains[chain_id] = ChainArchive(
+                chain_id=chain_id,
+                first_seq=seq,
+                last_seq=seq,
+                prev_hash=str(record["prev_hash"]),
+                last_hash=str(record["hash"]),
+                records=1,
+            )
+    result.records = count
     result.chains = [chains[c] for c in sorted(chains)]
     result.files = [p.name for p in expired]
     if dry_run:
         return result
 
-    archive, manifest, _ = write_archive(archive_dir, cutoff, lines, result.chains)
+    archive, manifest, digest = write_archive(archive_dir, cutoff, _records(expired), result.chains)
     if audit is not None:
         try:
             audit.log_event(
@@ -229,29 +302,20 @@ def purge_expired_files(
         except BaseException:
             remove(archive, manifest)  # nothing deleted without its record
             raise
-    archived_at = datetime.now(timezone.utc).isoformat()
-    fd = os.open(checkpoints, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    with os.fdopen(fd, "a", encoding="utf-8") as f:
-        for chain in result.chains:
-            entry = {
-                "chain_id": chain.chain_id,
-                "seq": chain.last_seq,
-                "hash": chain.last_hash,
-                "archive": archive.name,
-                "files": result.files,
-                "archived_at": archived_at,
-            }
-            f.write(json.dumps(entry) + "\n")
-        if not result.chains:  # only legacy records: still note the files
-            f.write(
-                json.dumps(
-                    {"archive": archive.name, "files": result.files, "archived_at": archived_at}
-                )
-                + "\n"
-            )
-        f.flush()
-        os.fsync(f.fileno())
-    remove(*expired)
+    _append_batch(
+        checkpoints,
+        {
+            "archive": archive.name,
+            "sha256": digest,
+            "files": result.files,
+            "archived_at": datetime.now(timezone.utc).isoformat(),
+            "chains": [
+                {"chain_id": c.chain_id, "seq": c.last_seq, "hash": c.last_hash}
+                for c in result.chains
+            ],
+        },
+    )
+    _delete(expired)
     result.archive, result.manifest = archive, manifest
     return result
 

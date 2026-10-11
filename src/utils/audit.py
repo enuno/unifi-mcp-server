@@ -9,6 +9,7 @@ src.utils.audit_verify`` checks a file (docs/FLEET_SCALING_PLAN.md §3.7).
 """
 
 import asyncio
+import contextlib
 import glob
 import hashlib
 import hmac
@@ -99,7 +100,7 @@ class _Chain:
 ROTATE_MB_ENV = "UNIFI_AUDIT_LOG_ROTATE_MB"
 
 #: Rotated files are ``<log>.<UTC time>Z``, so they sort oldest first.
-_ROTATED_SUFFIX = re.compile(r"\.\d{8}T\d{6}\d{6}Z(-\d+)?$")
+_ROTATED_SUFFIX = re.compile(r"\.\d{8}T\d{12}Z(-\d+)?")
 
 
 def resolve_rotate_bytes(env: dict[str, str] | None = None) -> int | None:
@@ -125,7 +126,7 @@ def audit_files(log_file: str | Path) -> list[Path]:
     rotated = sorted(
         p
         for p in active.parent.glob(f"{glob.escape(active.name)}.*")
-        if _ROTATED_SUFFIX.search(p.name[len(active.name) :])
+        if _ROTATED_SUFFIX.fullmatch(p.name[len(active.name) :])
     )
     return rotated + ([active] if active.exists() else [])
 
@@ -473,8 +474,18 @@ class AuditLogger:
         try:
             self.log_file.rename(target)
         except OSError as e:
-            self.logger.error(f"Failed to rotate the audit log: {e}")
+            # e.g. EBUSY when the file itself is bind-mounted into a container:
+            # retrying on every write would only repeat the error.
+            self.rotate_bytes = None
+            self.logger.error(
+                f"Failed to rotate the audit log ({e}); rotation is off until restart. "
+                "Rotation renames the file, so it must sit in a writable directory "
+                "(for Docker, mount a directory, not the file)."
+            )
             return
+        # Start the next file at once, so the log always exists for verification.
+        with contextlib.suppress(OSError):
+            os.close(os.open(self.log_file, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600))
         self.logger.info(f"Rotated the audit log to {target.name}")
 
     def _decrypt_entry(self, entry: dict[str, Any]) -> dict[str, Any]:

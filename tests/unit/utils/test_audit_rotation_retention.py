@@ -88,10 +88,10 @@ class TestRotation:
         log = tmp_path / "audit.log"
         _write(_logger(log), 10, NOW, monkeypatch)
 
-        files = audit_files(log)  # the 10th record filled the file, so it was rotated too
-        assert len(files) >= 3 and log not in files
+        files = audit_files(log)  # the 10th record filled the file: rotated, a new one started
+        assert len(files) >= 3 and files[-1] == log and log.stat().st_size == 0
         assert all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in files)
-        assert [p.name for p in files] == sorted(p.name for p in files)
+        assert [p.name for p in files[:-1]] == sorted(p.name for p in files[:-1])
         report = audit_verify.verify_files(files, KEY)
         assert report.ok and report.records == 10 and report.chains == 1
         # each rotated file alone is only part of the chain
@@ -122,6 +122,8 @@ class TestRotation:
         assert audit_files(log) == [log]
         assert audit_verify.verify_file(log, KEY).records == 2
         assert "Failed to rotate" in caplog.text
+        assert logger.rotate_bytes is None  # off until restart, not retried on every write
+        assert caplog.text.count("Failed to rotate") == 1
 
     def test_rotated_names_never_collide(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -141,6 +143,7 @@ class TestRotation:
             "audit.log.20261011T120000000000Z",
             "audit.log.20261011T120000000000Z-1",
             "audit.log.20261011T120000000000Z-2",
+            "audit.log",  # started afresh after each rotation
         ]
 
 
@@ -178,7 +181,9 @@ class TestRetention:
 
         key = KEY.decode()
         assert verify_cli([str(archive), "--key", key, "--manifest", str(manifest)]) == 0
-        remaining = [str(p) for p in audit_files(log)]
+        # the documented glob: rotated files only, not the checkpoint file
+        remaining = [str(p) for p in sorted(tmp_path.glob("audit.log.[0-9]*"))] + [str(log)]
+        assert str(checkpoints) not in remaining
         assert verify_cli([*remaining, "--key", key, "--checkpoints", str(checkpoints)]) == 0
         assert verify_cli([*remaining, "--key", key]) == 1
         assert "after its archive" not in capsys.readouterr().out
@@ -234,7 +239,7 @@ class TestRetention:
             raise KeyboardInterrupt  # stopped after the checkpoints, before the delete
 
         with monkeypatch.context() as m:
-            m.setattr(audit_retention, "remove", crash)
+            m.setattr(audit_retention, "_delete", crash)
             with pytest.raises(KeyboardInterrupt):
                 _purge(log, tmp_path)
         checkpoints = checkpoints_path(log)
@@ -285,8 +290,8 @@ class TestRetention:
         assert not checkpoints_path(log).exists()
 
         _purge(log, tmp_path, audit=logger)
-        newest = audit_files(log)[-1]  # the event may have filled and rotated the file
-        last = json.loads(newest.read_text(encoding="utf-8").splitlines()[-1])
+        lines = [ln for p in audit_files(log) for ln in p.read_text(encoding="utf-8").splitlines()]
+        last = json.loads(lines[-1])
         assert last["operation"] == "audit_retention"
 
     def test_an_unreadable_file_refuses_the_run(
@@ -298,10 +303,80 @@ class TestRetention:
         assert retention_cli([str(log), "--days", "30", "--confirm"]) == 1
         assert "cannot read" in capsys.readouterr().err
 
+    def test_an_interrupted_run_with_a_lost_archive_deletes_nothing(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log, _ = _old_then_new(tmp_path, monkeypatch)
+
+        def crash(paths: list[Path]) -> None:
+            raise KeyboardInterrupt
+
+        with monkeypatch.context() as m:
+            m.setattr(audit_retention, "_delete", crash)
+            with pytest.raises(KeyboardInterrupt):
+                _purge(log, tmp_path)
+        for archived in (tmp_path / "archive").glob("*.jsonl.gz"):
+            archived.write_bytes(b"lost")
+        before = audit_files(log)
+        with pytest.raises(RetentionRefusedError, match="missing or changed"):
+            _purge(log, tmp_path)
+        assert audit_files(log) == before
+
+    def test_a_torn_last_checkpoint_line_is_ignored(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log, _ = _old_then_new(tmp_path, monkeypatch)
+        _purge(log, tmp_path)
+        checkpoints = checkpoints_path(log)
+        good = read_checkpoints(checkpoints)
+        with open(checkpoints, "a", encoding="utf-8") as f:
+            f.write('{"archive": "x", "sha256": "y", "files": ["aud')  # crash mid-append
+        assert read_checkpoints(checkpoints) == good
+        assert _purge(log, tmp_path).records == 0
+
+    def test_a_failed_delete_is_reported_and_finished_later(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        log, _ = _old_then_new(tmp_path, monkeypatch)
+        real_unlink = Path.unlink
+
+        def refuse(self: Path, missing_ok: bool = False) -> None:
+            if self.parent == tmp_path and self.name.startswith("audit.log."):
+                raise PermissionError("read-only")
+            real_unlink(self, missing_ok=missing_ok)
+
+        with monkeypatch.context() as m:
+            m.setattr(Path, "unlink", refuse)
+            with pytest.raises(PermissionError):
+                _purge(log, tmp_path)
+        _purge(log, tmp_path)  # finishes the delete, then finds nothing new
+        checkpoints = checkpoints_path(log)
+        assert audit_verify.verify_files(
+            audit_files(log), KEY, starts=read_checkpoints(checkpoints)
+        ).ok
+
+    def test_only_timestamped_files_count_as_rotated(self, tmp_path: Path) -> None:
+        log = tmp_path / "audit.log"
+        log.write_text("", encoding="utf-8")
+        for name in (
+            "audit.log.20261011T120000000000Z",
+            "audit.log.20261011T120000000000Z-1",
+            "audit.log.backup.20261011T120000000000Z",
+            "audit.log.checkpoints.jsonl",
+            "audit.log.20261011T1200Z",
+        ):
+            (tmp_path / name).write_text("", encoding="utf-8")
+        assert [p.name for p in audit_files(log)] == [
+            "audit.log.20261011T120000000000Z",
+            "audit.log.20261011T120000000000Z-1",
+            "audit.log",
+        ]
+
     def test_bad_checkpoints(self, tmp_path: Path) -> None:
         path = tmp_path / "c.jsonl"
         path.write_text('{"chain_id": "a", "seq": "x"}\n', encoding="utf-8")
-        with pytest.raises(ValueError, match="line 1 is not a checkpoint"):
+        path.write_text('{"chain_id": "a", "seq": "x"}\n{}\n', encoding="utf-8")
+        with pytest.raises(ValueError, match="line 1 is not a checkpoint batch"):
             read_checkpoints(path)
         with pytest.raises(ValueError, match="not found"):
             read_checkpoints(tmp_path / "missing.jsonl")

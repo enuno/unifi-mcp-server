@@ -364,7 +364,8 @@ async def test_siem_anchors_catch_records_and_heads_rewritten_together(
             "operation": "update_network",
             "result": "success",
         }
-        assert await sink.append(record, key=CHAIN_KEY, strict=True)
+        appended = await sink.append(record, key=CHAIN_KEY, strict=True)
+        assert appended
         forwarder.forward(record)
     await forwarder.stop()  # sends the anchor
     export = tmp_path / "siem-export.jsonl"

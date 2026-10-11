@@ -9,14 +9,17 @@ src.utils.audit_verify`` checks a file (docs/FLEET_SCALING_PLAN.md §3.7).
 """
 
 import asyncio
+import glob
 import hashlib
 import hmac
 import json
 import os
+import re
 import threading
 import time
 import uuid
 from contextvars import ContextVar
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +95,41 @@ class _Chain:
         self.prev_hash = GENESIS_HASH
 
 
+#: Rotate the audit file once it reaches this many MB (unset: never).
+ROTATE_MB_ENV = "UNIFI_AUDIT_LOG_ROTATE_MB"
+
+#: Rotated files are ``<log>.<UTC time>Z``, so they sort oldest first.
+_ROTATED_SUFFIX = re.compile(r"\.\d{8}T\d{6}\d{6}Z(-\d+)?$")
+
+
+def resolve_rotate_bytes(env: dict[str, str] | None = None) -> int | None:
+    """``UNIFI_AUDIT_LOG_ROTATE_MB`` in bytes, or None when unset or blank.
+
+    Raises:
+        ValueError: If the value is not a positive whole number
+    """
+    raw = (env if env is not None else os.environ).get(ROTATE_MB_ENV, "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit() or int(raw) < 1:
+        raise ValueError(f"{ROTATE_MB_ENV} must be a whole number of MB, at least 1")
+    return int(raw) * 1024 * 1024
+
+
+def audit_files(log_file: str | Path) -> list[Path]:
+    """The audit file's rotated files, oldest first, then the file itself if present.
+
+    Verify them together, in this order: each chain continues across files.
+    """
+    active = Path(log_file)
+    rotated = sorted(
+        p
+        for p in active.parent.glob(f"{glob.escape(active.name)}.*")
+        if _ROTATED_SUFFIX.search(p.name[len(active.name) :])
+    )
+    return rotated + ([active] if active.exists() else [])
+
+
 #: Chains by resolved audit file path; one lock orders seq numbers and writes.
 _chains: dict[str, _Chain] = {}
 _chain_lock = threading.Lock()
@@ -137,6 +175,7 @@ class AuditLogger:
         # caller) skips re-resolution so tests and embeddings control wiring.
         self.cipher = resolve_audit_cipher() if encryption is None else encryption
         self.chain_key = resolve_chain_key()
+        self.rotate_bytes = resolve_rotate_bytes()
         # A Postgres sink (src/fleet/db/audit_store.py) replaces the file when
         # the fleet registry is configured; records then go there only.
         self.sink: Any = None
@@ -387,6 +426,7 @@ class AuditLogger:
             try:
                 with open(self.log_file, "a", encoding="utf-8", opener=self._opener) as f:
                     f.write(json.dumps(record) + "\n")
+                    size = f.tell()
             except Exception as e:
                 if strict:
                     raise AuditUnavailableError(f"Audit log unavailable: {e}") from e
@@ -394,7 +434,29 @@ class AuditLogger:
                 return
             chain.seq += 1
             chain.prev_hash = record["hash"]
+            if self.rotate_bytes is not None and size >= self.rotate_bytes:
+                self._rotate()
         self._forward(record)
+
+    def _rotate(self) -> None:
+        """Rename the full audit file aside (call with the chain lock held).
+
+        The next record starts a new file; its chain carries on from the last
+        record in the rotated one. A failed rename only logs: the record is
+        written, and the next write tries again.
+        """
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        target = self.log_file.with_name(f"{self.log_file.name}.{stamp}")
+        n = 0
+        while target.exists():
+            n += 1
+            target = self.log_file.with_name(f"{self.log_file.name}.{stamp}-{n}")
+        try:
+            self.log_file.rename(target)
+        except OSError as e:
+            self.logger.error(f"Failed to rotate the audit log: {e}")
+            return
+        self.logger.info(f"Rotated the audit log to {target.name}")
 
     def _decrypt_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Decrypt the encrypted payload fields of one audit entry, in place.
@@ -442,14 +504,12 @@ class AuditLogger:
             decrypted when a usable key is configured; metadata stays
             readable either way.
         """
-        if not self.log_file.exists():
-            return []
-
-        entries = []
+        entries: list[dict[str, Any]] = []
         try:
-            with open(self.log_file, encoding="utf-8") as f:
-                # Read file in reverse to get most recent entries first
-                lines = f.readlines()
+            # Newest first: the current file, then rotated ones back in time.
+            for path in reversed(audit_files(self.log_file)):
+                with open(path, encoding="utf-8") as f:
+                    lines = f.readlines()
                 for line in reversed(lines):
                     if not line.strip():
                         continue
@@ -458,12 +518,11 @@ class AuditLogger:
                         entry = json.loads(line)
                         if operation is None or entry.get("operation") == operation:
                             entries.append(self._decrypt_entry(entry))
-
-                        if len(entries) >= limit:
-                            break
                     except json.JSONDecodeError:
                         self.logger.warning(f"Invalid JSON in audit log: {line}")
                         continue
+                    if len(entries) >= limit:
+                        return entries
 
         except Exception as e:
             self.logger.error(f"Failed to read audit log: {e}")

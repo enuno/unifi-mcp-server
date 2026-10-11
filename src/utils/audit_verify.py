@@ -27,7 +27,7 @@ import gzip
 import hashlib
 import json
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -83,14 +83,30 @@ def verify_file(
     Raises:
         ChainKeyMissingError: If the file has HMAC-chained records and no key
     """
-    opener: Any = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt", encoding="utf-8") as f:
-        return verify_records(
-            ((f"line {number}", line) for number, line in enumerate(f, start=1)),
-            key,
-            expected_heads,
-            starts,
-        )
+    return verify_files([path], key, expected_heads, starts)
+
+
+def verify_files(
+    paths: Sequence[Path],
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+    starts: Mapping[str, Head] | None = None,
+) -> VerifyReport:
+    """Verify audit files as one log, in the order given (oldest first).
+
+    Chains continue across rotated files (:func:`~src.utils.audit.audit_files`
+    lists them in order). Same arguments as :func:`verify_file`.
+    """
+
+    def lines() -> Iterator[tuple[str, str]]:
+        for path in paths:
+            prefix = f"{path.name} " if len(paths) > 1 else ""
+            opener: Any = gzip.open if path.suffix == ".gz" else open
+            with opener(path, "rt", encoding="utf-8") as f:
+                for number, line in enumerate(f, start=1):
+                    yield f"{prefix}line {number}", line
+
+    return verify_records(lines(), key, expected_heads, starts)
 
 
 def verify_records(
@@ -270,7 +286,16 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m src.utils.audit_verify",
         description="Verify the hash chains in an audit log file.",
     )
-    parser.add_argument("log_file", type=Path, help="Path to the audit log file.")
+    parser.add_argument(
+        "log_files",
+        type=Path,
+        nargs="+",
+        metavar="LOG_FILE",
+        help=(
+            "The audit log file; with rotation, its rotated files first, oldest first "
+            "(audit.log.* audit.log)."
+        ),
+    )
     parser.add_argument(
         "--key",
         default=None,
@@ -297,6 +322,16 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Chain anchors exported to the SIEM (JSON lines or a JSON array; other records "
             "are ignored). The latest anchor of each chain is used like --head."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoints",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Where JSONL retention cut each chain (<log>.checkpoints.jsonl): chains resume "
+            "right after their latest checkpoint."
         ),
     )
     parser.add_argument(
@@ -329,8 +364,20 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         expected_heads = {**anchors, **expected_heads}
 
-    if not args.log_file.exists():
-        print(f"error: log file not found: {args.log_file}", file=sys.stderr)
+    for path in args.log_files:
+        if not path.exists():
+            print(f"error: log file not found: {path}", file=sys.stderr)
+            return 2
+    if args.checkpoints is not None:
+        from .audit_retention import read_checkpoints
+
+        try:
+            starts = read_checkpoints(args.checkpoints)
+        except ValueError as e:
+            print(f"error: --checkpoints: {e}", file=sys.stderr)
+            return 2
+    if args.manifest is not None and len(args.log_files) != 1:
+        print("error: --manifest checks one archive at a time", file=sys.stderr)
         return 2
     manifest_problems: list[str] = []
     if args.manifest is not None:
@@ -339,14 +386,14 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"error: --manifest: {e}", file=sys.stderr)
             return 2
-        starts = manifest.starts
+        starts = {**starts, **manifest.starts}
         expected_heads = {**manifest.heads, **expected_heads}
-        if file_sha256(args.log_file) != manifest.sha256:
+        if file_sha256(args.log_files[0]) != manifest.sha256:
             manifest_problems.append("archive: SHA-256 does not match its manifest")
     key = args.key.encode("utf-8") if args.key else resolve_chain_key()
 
     try:
-        report = verify_file(args.log_file, key, expected_heads, starts)
+        report = verify_files(args.log_files, key, expected_heads, starts)
     except ChainKeyMissingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2

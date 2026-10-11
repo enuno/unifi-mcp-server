@@ -430,6 +430,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_SIEM_ANCHOR_SECONDS",
     )
 
+    audit_log_rotate_mb: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Rotate the JSONL audit file at this size into <log>.<UTC time>Z files "
+            "(read by the audit logger; unset never rotates)"
+        ),
+        validation_alias="UNIFI_AUDIT_LOG_ROTATE_MB",
+    )
+
     # Audit retention (src/fleet/db/retention.py, docs/FLEET_SCALING_PLAN.md §3.7).
     audit_retention_days: int | None = Field(
         default=None,
@@ -531,6 +541,7 @@ class Settings(BaseSettings):
         "audit_siem_buffer_dir",
         "audit_retention_days",
         "audit_archive_dir",
+        "audit_log_rotate_mb",
         mode="before",
     )
     @classmethod

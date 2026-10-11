@@ -14,12 +14,7 @@ transaction that set ``unifi_mcp.audit_retention``. The server itself never
 deletes audit records.
 """
 
-import contextlib
-import gzip
-import json
-import os
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -27,8 +22,14 @@ from typing import Any
 from sqlalchemy import delete, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from ...utils.audit_verify import GENESIS, Head, file_sha256, verify_records
-from ...utils.exceptions import UniFiMCPException
+from ...utils.audit_archive import (
+    ChainArchive,
+    RetentionRefusedError,
+    RetentionResult,
+    remove,
+    write_archive,
+)
+from ...utils.audit_verify import GENESIS, Head, verify_records
 from ...utils.logger import get_logger
 from .models import AuditArchive, AuditLogEntry
 
@@ -38,43 +39,14 @@ logger = get_logger(__name__)
 DELETE_BATCH = 1000
 
 
-class RetentionRefusedError(UniFiMCPException):
-    """Raised when records cannot be archived safely, so nothing is deleted."""
-
-
-@dataclass
-class ChainArchive:
-    """The records of one chain moved to an archive."""
-
-    chain_id: str
-    first_seq: int
-    last_seq: int
-    prev_hash: str
-    last_hash: str
-    records: int
-
-
-@dataclass
-class RetentionResult:
-    """What a retention run archived (or, for a dry run, would archive)."""
-
-    cutoff: datetime
-    dry_run: bool
-    records: int = 0
-    chains: list[ChainArchive] = field(default_factory=list)
-    archive: Path | None = None
-    manifest: Path | None = None
-
-    def as_dict(self) -> dict[str, Any]:
-        """A JSON-ready summary."""
-        return {
-            "cutoff": self.cutoff.isoformat(),
-            "dry_run": self.dry_run,
-            "records": self.records,
-            "chains": [asdict(c) for c in self.chains],
-            "archive": str(self.archive) if self.archive else None,
-            "manifest": str(self.manifest) if self.manifest else None,
-        }
+__all__ = [
+    "ChainArchive",
+    "RetentionRefusedError",
+    "RetentionResult",
+    "archive_problems",
+    "archived_starts",
+    "purge_expired",
+]
 
 
 async def archived_starts(conn: Any) -> dict[str, Head]:
@@ -119,33 +91,6 @@ def _expired_prefixes(rows: list[Any], cutoff: datetime) -> dict[str, list[Any]]
         else:
             stopped.add(row.chain_id)  # a later record kept means the rest stay too
     return prefixes
-
-
-def _private_dir(path: Path) -> None:
-    path.mkdir(parents=True, exist_ok=True)
-    path.chmod(0o700)
-
-
-def _write_archive(path: Path, rows: list[Any]) -> None:
-    """Write the stored records to ``path`` (gzip JSON lines, mode 0600), durably."""
-    partial = path.with_name(path.name + ".partial")
-    fd = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as raw:
-        with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as f:
-            for row in rows:
-                f.write(row.record.encode("utf-8") + b"\n")
-        raw.flush()
-        os.fsync(raw.fileno())
-    partial.rename(path)
-
-
-def _write_manifest(path: Path, data: dict[str, Any]) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-        f.flush()
-        os.fsync(f.fileno())
 
 
 async def purge_expired(
@@ -243,26 +188,10 @@ async def purge_expired(
                 if dry_run or not expired:
                     return result
 
-                _private_dir(archive_dir)
-                stamp = cutoff.strftime("%Y%m%dT%H%M%SZ")
-                name = f"audit-before-{stamp}-{uuid.uuid4().hex[:8]}.jsonl.gz"
-                archive = archive_dir / name
-                manifest = archive_dir / f"{name}.manifest.json"
-                _write_archive(archive, expired)
-                written.append(archive)
-                digest = file_sha256(archive)
-                written.append(manifest)
-                _write_manifest(
-                    manifest,
-                    {
-                        "archive": name,
-                        "sha256": digest,
-                        "records": len(expired),
-                        "cutoff": cutoff.isoformat(),
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                        "chains": [asdict(c) for c in result.chains],
-                    },
+                archive, manifest, digest = write_archive(
+                    archive_dir, cutoff, (str(row.record) for row in expired), result.chains
                 )
+                written += [archive, manifest]
                 await conn.execute(text("SET LOCAL unifi_mcp.audit_retention = 'on'"))
                 ids = [int(row.id) for row in expired]
                 for start in range(0, len(ids), DELETE_BATCH):
@@ -274,7 +203,12 @@ async def purge_expired(
                 await conn.execute(
                     insert(AuditArchive),
                     [
-                        {**asdict(c), "archive": name, "archive_sha256": digest, "cutoff": cutoff}
+                        {
+                            **asdict(c),
+                            "archive": archive.name,
+                            "archive_sha256": digest,
+                            "cutoff": cutoff,
+                        }
                         for c in result.chains
                     ],
                 )
@@ -282,9 +216,7 @@ async def purge_expired(
         # Nothing was deleted (the transaction did not commit): the records are
         # still in the store, and an archive without its delete would only
         # confuse a later audit.
-        for path in written:
-            with contextlib.suppress(OSError):
-                path.unlink()
+        remove(*written)
         raise
     result.archive, result.manifest = archive, manifest
     logger.info(

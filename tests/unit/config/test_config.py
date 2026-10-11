@@ -472,3 +472,58 @@ class TestSettingsStatelessHttp:
     def test_reads_env(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
         assert Settings().mcp_stateless_http is True
+
+
+class TestDocumentedSettings:
+    """Every setting is documented, and the docs name no setting that does not exist."""
+
+    #: Read with os.environ outside Settings (key material and CLI-only URLs).
+    OUTSIDE_SETTINGS = {
+        "MIGRATION_DATABASE_URL",
+        "UNIFI_AUDIT_CHAIN_KEY",
+        "UNIFI_AUDIT_LOG_KEY",
+        "UNIFI_AUDIT_ENCRYPTION_KEY",
+        "UNIFI_FLEET_CREDENTIAL_KEY",
+        "UNIFI_PROFILE",
+    }
+    #: In Settings but deliberately left out of .env.example.
+    NOT_IN_ENV_EXAMPLE = {"UNIFI_CACHE_TTL"}
+
+    @staticmethod
+    def _aliases() -> set[str]:
+        return {str(field.validation_alias) for field in Settings.model_fields.values()}
+
+    @staticmethod
+    def _read(name: str) -> str:
+        from pathlib import Path
+
+        return (Path(__file__).parents[3] / name).read_text(encoding="utf-8")
+
+    def test_every_setting_is_in_api_md(self) -> None:
+        api = self._read("API.md")
+        missing = sorted(a for a in self._aliases() if f"`{a}`" not in api)
+        assert missing == []
+
+    def test_every_setting_is_in_env_example(self) -> None:
+        env = self._read(".env.example")
+        missing = sorted(a for a in self._aliases() - self.NOT_IN_ENV_EXAMPLE if a not in env)
+        assert missing == []
+
+    def test_api_md_names_no_unknown_setting(self) -> None:
+        import re
+
+        rows = set(re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \|", self._read("API.md"), re.M))
+        variables = {r for r in rows if r.startswith(("UNIFI_", "MCP_", "REDIS_", "DATABASE_"))}
+        unknown = sorted(variables - self._aliases() - self.OUTSIDE_SETTINGS)
+        assert unknown == []
+
+    def test_env_example_names_no_unknown_setting(self) -> None:
+        import re
+
+        names = set(
+            re.findall(
+                r"^#? ?((?:UNIFI|MCP|REDIS|DATABASE)_[A-Z0-9_]+)=", self._read(".env.example"), re.M
+            )
+        )
+        unknown = sorted(names - self._aliases() - self.OUTSIDE_SETTINGS)
+        assert unknown == []

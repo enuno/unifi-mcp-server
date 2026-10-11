@@ -302,3 +302,34 @@ def test_entries_of_unexpected_shapes_raise(response: Any) -> None:
 def test_empty_listings_are_empty() -> None:
     assert jobs._entries([]) == []
     assert jobs._entries({"data": []}) == []
+
+
+class TestHealthAnnouncements:
+    """A successful check is announced so replicas half-open their circuit breakers."""
+
+    async def test_success_is_announced(
+        self, settings: Settings, pool: ClientPool, snapshots: AsyncMock
+    ) -> None:
+        import time
+
+        from src.api.pool import connection_key
+
+        bus = AsyncMock()
+        before = time.time()
+        await jobs.check_health("hq", settings, snapshots, failures={}, down_after=3, bus=bus)
+
+        key, checked_at = bus.publish_ok.await_args.args
+        assert key == connection_key(settings)
+        assert before <= checked_at <= time.time()
+
+    async def test_failure_is_not_announced(
+        self,
+        settings: Settings,
+        pool: ClientPool,
+        snapshots: AsyncMock,
+        controller: MockController,
+    ) -> None:
+        controller.fail = True
+        bus = AsyncMock()
+        await jobs.check_health("hq", settings, snapshots, failures={}, down_after=3, bus=bus)
+        bus.publish_ok.assert_not_awaited()

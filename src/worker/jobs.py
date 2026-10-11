@@ -15,12 +15,15 @@ rate limit shared with the API replicas.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from ..api.client import UniFiClient
+from ..api.pool import connection_key
 from ..config import APIType, Settings
+from ..fleet.bus import HealthBus
 from ..fleet.db.snapshots import DeviceRecord, Health, SiteRecord, SnapshotStore
 from ..utils.logger import get_logger
 
@@ -78,6 +81,7 @@ async def check_health(
     *,
     failures: dict[str, int],
     down_after: int,
+    bus: HealthBus | None = None,
 ) -> Health:
     """Probe one controller and record the outcome.
 
@@ -87,10 +91,13 @@ async def check_health(
         snapshots: Where the outcome is recorded
         failures: Consecutive failures per controller, updated in place
         down_after: Failures in a row that mark the controller ``down``
+        bus: Announces a successful check, so replicas half-open the
+            controller's circuit breaker (none without Redis)
 
     Returns:
         The recorded health
     """
+    checked_at = time.time()
     try:
         async with UniFiClient(settings) as client:
             await client.authenticate()
@@ -107,6 +114,8 @@ async def check_health(
         return health
     failures.pop(name, None)
     await snapshots.record_health(name, "ok", capabilities=capabilities)
+    if bus is not None:
+        await bus.publish_ok(connection_key(settings), checked_at)
     return "ok"
 
 

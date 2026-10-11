@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import importlib.metadata
 import json
@@ -136,16 +137,35 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
 
             audit_store.install(settings, fleet_registry.store.engine)
             await fleet_registry.start()
+        health_listener = start_health_listener(settings, client_pool)
         try:
             await audit_server_start()
             yield
         finally:
+            if health_listener is not None:
+                health_listener.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await health_listener
             await client_pool.aclose()
             if hasattr(fleet_registry, "stop"):
                 await fleet_registry.stop()
     finally:
         if forwarder is not None:
             await forwarder.stop()
+
+
+def start_health_listener(current_settings: Settings, pool: Any) -> asyncio.Task[None] | None:
+    """Half-open circuit breakers when a worker reports the controller healthy.
+
+    Needs Redis (the workers publish on it); returns the listening task, or
+    None without Redis.
+    """
+    from .fleet.bus import HealthBus
+
+    bus = HealthBus.from_settings(current_settings)
+    if bus is None:
+        return None
+    return asyncio.create_task(bus.listen(pool.health_ok))
 
 
 async def start_siem_forwarder(current_settings: Settings) -> Any:

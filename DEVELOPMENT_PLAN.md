@@ -105,7 +105,7 @@ Describe how to execute the plan without losing sight of the current production 
 | Device Migration | Complete | Move between sites (`move-device`), migrate to another controller (`migrate` / `cancel-migrate`); local only |
 | Protect | Complete (v7.3.68, mock-tested) | Cameras, devices, NVR, views, events, MCP resources, plus the v7 surface (Phase 5a): arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion. Write paths await hardware verification |
 | Mobility / InnerSpace / Carrier Fabric | Complete (mock-tested) | Phase 6: 8 + 6 + 11 tools over the Site Manager client and Cloud Connector proxy |
-| Fleet | Partial | Per-call `controller` routing, Postgres controller registry, shared connection pool, Redis read cache (fleet Phases 0–3); horizontal scale pending |
+| Fleet | Complete | Per-call `controller` routing, Postgres controller registry, shared connection pool, Redis read cache, several replicas, workers and `fleet_*` tools, hardening (fleet Phases 0–5); cloud-account discovery deferred |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
 | Access controls | Complete | Bearer auth on network transports, roles over risk tiers with server-issued tokens (fleet Phase 2b), `UNIFI_READ_ONLY`, `UNIFI_DRY_RUN`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` and `dry_run` on every write tool |
 | Audit logging | Complete | Wrapper-level records for every mutating call, credential redaction, optional payload encryption, HMAC hash chain, append-only Postgres store with `DATABASE_URL`, SIEM export (syslog/TLS, signed webhook, OTLP) with chain-head anchors, retention for Postgres and for rotated JSONL files (verify, archive, delete); design in `docs/FLEET_SCALING_PLAN.md` §3.7 |
@@ -115,7 +115,7 @@ Describe how to execute the plan without losing sight of the current production 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
-- Multi-controller orchestration is partial: fleet Phases 0–3 (per-call routing, Postgres registry, connection pool, read cache) shipped; horizontal scale (fleet Phase 4: several replicas, the worker tier, `fleet_*` read tools) shipped; Phase 5 hardening remains.
+- Multi-controller orchestration: fleet Phases 0–5 shipped; discovering the consoles behind a cloud account is deferred until per-console routing exists (`docs/FLEET_SCALING_PLAN.md` Phase 4b).
 - The Redis webhook event bus is not yet implemented (runbook only). The webhook receiver is served at `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 
@@ -231,7 +231,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### Deliverables
 
-- Multi-controller / multi-site orchestration — open (runbook only)
+- Multi-controller / multi-site orchestration — done (fleet Phases 0–5, `docs/FLEET_SCALING_PLAN.md`; cloud-account discovery deferred)
 - Dry-run / change-safe mode — partial
 - Tool-level RBAC via roles and API tokens — partial (transport-level bearer auth only); design in `docs/FLEET_SCALING_PLAN.md` §3.6, Phases 1 and 2b
 - Append-only audit log — done (payload encryption, hash chain, Postgres store, SIEM export and anchors, retention for Postgres and JSONL); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5

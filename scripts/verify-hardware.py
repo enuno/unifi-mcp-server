@@ -36,6 +36,7 @@ RESULTS: list[tuple[str, str, str]] = []  # (phase, name, status)
 
 
 def report(phase: str, name: str, status: str, detail: str = "") -> None:
+    """Record one probe result and print it."""
     RESULTS.append((phase, name, status))
     suffix = f" — {detail}" if detail else ""
     print(f"[{status:7}] ({phase}) {name}{suffix}")
@@ -54,6 +55,7 @@ def load_dotenv(path: Path) -> None:
 
 
 async def phase_a(settings) -> None:
+    """Run the read-only probes (Phase A)."""
     from src.tools import (
         carrier,
         innerspace,
@@ -85,7 +87,12 @@ async def phase_a(settings) -> None:
                 # Gateways without a Protect application serve the SPA index
                 # page (text/html) for unknown proxy paths — verified live on
                 # U7 Express (200 text/html catch-all). Not a code defect.
-                report("A", f"protect v7 read: {name}", "SKIP", "no Protect application on this console")
+                report(
+                    "A",
+                    f"protect v7 read: {name}",
+                    "SKIP",
+                    "no Protect application on this console",
+                )
             else:
                 report("A", f"protect v7 read: {name}", classify(e), str(e)[:120])
 
@@ -93,12 +100,16 @@ async def phase_a(settings) -> None:
     if settings.site_manager_enabled:
         try:
             result = await mobility.list_mobility_workspaces(settings)
-            report("A", "mobility: list_workspaces", "PASS", f"{result.get('count', '?')} workspace(s)")
+            report(
+                "A", "mobility: list_workspaces", "PASS", f"{result.get('count', '?')} workspace(s)"
+            )
         except Exception as e:  # noqa: BLE001
             report("A", "mobility: list_workspaces", classify(e), str(e)[:120])
         try:
             result = await carrier.list_carrier_service_plans(settings)
-            report("A", "carrier: list_service_plans", "PASS", f"{result.get('count', '?')} plan(s)")
+            report(
+                "A", "carrier: list_service_plans", "PASS", f"{result.get('count', '?')} plan(s)"
+            )
         except Exception as e:  # noqa: BLE001
             report("A", "carrier: list_service_plans", classify(e), str(e)[:120])
 
@@ -111,17 +122,27 @@ async def phase_a(settings) -> None:
             else:
                 console_id = host_list[0].get("id") or host_list[0].get("hostId")
                 result = await innerspace.list_innerspace_access_points(console_id, settings)
-                report("A", "innerspace: list_access_points", "PASS", f"{result.get('count', '?')} AP(s)")
+                report(
+                    "A",
+                    "innerspace: list_access_points",
+                    "PASS",
+                    f"{result.get('count', '?')} AP(s)",
+                )
         except Exception as e:  # noqa: BLE001
             report("A", "innerspace: list_access_points", classify(e), str(e)[:120])
     else:
-        report("A", "cloud APIs (mobility/carrier/innerspace)", "SKIP", "UNIFI_SITE_MANAGER_ENABLED not set")
+        report(
+            "A",
+            "cloud APIs (mobility/carrier/innerspace)",
+            "SKIP",
+            "UNIFI_SITE_MANAGER_ENABLED not set",
+        )
 
 
 async def phase_b(settings) -> None:
     """Write-path probes. Operator-gated: run only with approval and rollback ready."""
     print("\n--- PHASE B: WRITE PROBES (operator-gated) ---")
-    from src.tools import carrier, mobility, protect_alarm, protect_sirens
+    from src.tools import carrier, protect_alarm, protect_sirens
 
     # B1. Protect: siren test-sound (physically audible — operator must expect it)
     try:
@@ -138,8 +159,13 @@ async def phase_b(settings) -> None:
     # B2. Protect: arm-profile create -> delete round-trip (net-neutral)
     try:
         created = await protect_alarm.create_protect_arm_profile(
-            settings, name="verify-hw-roundtrip", automations=[], schedules=[],
-            record_everything=False, activation_delay=0, confirm=True,
+            settings,
+            name="verify-hw-roundtrip",
+            automations=[],
+            schedules=[],
+            record_everything=False,
+            activation_delay=0,
+            confirm=True,
         )
         profile_id = created.get("id") or created.get("data", {}).get("id")
         if not profile_id:
@@ -160,13 +186,17 @@ async def phase_b(settings) -> None:
     if settings.site_manager_enabled:
         try:
             sub = await carrier.create_carrier_subscriber(
-                settings, subscriber_number="VERIFY-HW-0001", name="verification round-trip",
+                settings,
+                subscriber_number="VERIFY-HW-0001",
+                name="verification round-trip",
                 confirm=True,
             )
             sub_id = sub.get("id") or sub.get("data", {}).get("id")
             if not sub_id:
                 raise RuntimeError(f"create response carried no id: {str(sub)[:100]}")
-            await carrier.suspend_carrier_subscriber(sub_id, settings, reason="hw verification", confirm=True)
+            await carrier.suspend_carrier_subscriber(
+                sub_id, settings, reason="hw verification", confirm=True
+            )
             await carrier.resume_carrier_subscriber(sub_id, settings, confirm=True)
             report("B", "carrier subscriber lifecycle", "PASS", f"subscriber {sub_id}")
             print(f"  NOTE: subscriber {sub_id} still exists — delete via UI/operator if undesired")
@@ -195,6 +225,7 @@ def count_items(result) -> int:
 
 
 def classify(e: Exception) -> str:
+    """Return BLOCKED for a connectivity error (environment) and FAIL for anything else."""
     text = str(e).lower()
     if "connect" in text or "timeout" in text or "unreachable" in text or "network" in text:
         return "BLOCKED"
@@ -206,9 +237,16 @@ def classify(e: Exception) -> str:
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--writes", metavar="TOKEN", default=None,
-                        help='Run Phase B write probes; requires the exact token "APPLY-WRITES"')
+    """Parse arguments, run Phase A and, with the operator token, Phase B."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--writes",
+        metavar="TOKEN",
+        default=None,
+        help='Run Phase B write probes; requires the exact token "APPLY-WRITES"',
+    )
     args = parser.parse_args()
 
     load_dotenv(REPO_ROOT / ".env")
@@ -217,8 +255,10 @@ async def main() -> int:
 
     settings = Settings()
 
-    print(f"controller: {settings.local_host} (api_type={getattr(settings, 'api_type', '?')}, "
-          f"cloud_enabled={settings.site_manager_enabled})")
+    print(
+        f"controller: {settings.local_host} (api_type={getattr(settings, 'api_type', '?')}, "
+        f"cloud_enabled={settings.site_manager_enabled})"
+    )
     print("(API keys redacted)\n")
 
     await phase_a(settings)

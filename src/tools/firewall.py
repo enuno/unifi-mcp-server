@@ -1,6 +1,6 @@
 """Firewall rules management MCP tools."""
 
-from typing import Any
+from typing import Any, cast
 
 from ..api import UniFiClient
 from ..config import APIType, Settings
@@ -235,7 +235,7 @@ async def create_firewall_rule(
                 site_id=site_id,
             )
 
-            return created_rule
+            return cast(dict[str, Any], created_rule)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to create firewall rule '{name}': {e}"))
@@ -386,7 +386,7 @@ async def update_firewall_rule(
                 site_id=site_id,
             )
 
-            return updated_rule
+            return cast(dict[str, Any], updated_rule)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to update firewall rule '{rule_id}': {e}"))

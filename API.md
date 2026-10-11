@@ -3086,16 +3086,31 @@ Caches are automatically invalidated when mutating operations are performed on r
 
 ### Webhooks (Optional)
 
-The MCP server can receive webhooks from UniFi for real-time event processing.
+On a network transport (`http`, `sse`, `streamable_http`) the server serves
+`POST /webhooks/unifi` when `WEBHOOK_SECRET` is set, with the default handlers
+below registered. Without the secret the route is not mounted at all; over
+stdio there is no HTTP surface.
 
-**Configuration:**
-Set `WEBHOOK_SECRET` environment variable for signature verification.
+**Authentication:** the route does not use the MCP bearer token (UniFi cannot
+send one). Each request must carry `X-UniFi-Signature`: the hex HMAC-SHA256 of
+the raw request body, keyed with `WEBHOOK_SECRET`.
 
-**Webhook Endpoint:**
+The receiver (`src/webhooks/`) is a Starlette endpoint and can also be mounted
+on another app:
 
+```python
+from src.webhooks import WebhookEventHandler, WebhookReceiver
+
+receiver = WebhookReceiver(settings, app=starlette_app)  # POST /webhooks/unifi
+WebhookEventHandler(settings).register_default_handlers(receiver)
 ```
-POST /webhooks/unifi
-```
+
+An unconfigured receiver mounted this way refuses every request (`503`).
+
+**Responses:** `200` processed (or `{"status": "duplicate"}` for a repeated
+`event_id` within 5 minutes), `400` invalid JSON or event, `401` missing or
+invalid signature, `429` more than 100 events per site per minute, `503` no
+secret configured (receiver mounted by hand only).
 
 **Supported Events:**
 
@@ -3107,7 +3122,10 @@ POST /webhooks/unifi
 - `event.occurred` - Generic event
 
 **Event Handlers:**
-Webhooks automatically invalidate relevant caches and can trigger custom handlers.
+`device.*` and `client.*` events clear the server's read cache (when Redis is
+configured). A payload does not say which controller sent it, so the cached
+reads of every controller are cleared. Custom handlers can be registered with
+`receiver.register_handler(event_type, handler)`.
 
 ## MCP Resources
 

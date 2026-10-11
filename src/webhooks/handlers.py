@@ -11,20 +11,34 @@ from ..utils import get_logger
 from .receiver import WebhookEvent
 
 if TYPE_CHECKING:
+    from ..cache import ReadCache
     from .receiver import WebhookReceiver
 
 
 class WebhookEventHandler:
     """Manages webhook event handlers and provides common handlers."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, read_cache: "ReadCache | None" = None):
         """Initialize event handler.
 
         Args:
             settings: Application settings
+            read_cache: The server's read cache, cleared on state-change events.
+                None when Redis is not configured (nothing to clear).
         """
         self.settings = settings
+        self.read_cache = read_cache
         self.logger = get_logger(__name__, settings.log_level)
+
+    async def _invalidate_reads(self) -> None:
+        """Clear cached reads after a device or client state change.
+
+        The payload does not say which controller sent it, so every
+        controller's reads are cleared: exact with one controller, and only
+        extra cache misses (never stale reads) in a fleet.
+        """
+        if self.read_cache is not None:
+            await self.read_cache.invalidate_all()
 
     async def handle_device_online(self, event: WebhookEvent) -> None:
         """Handle device online event.
@@ -39,14 +53,7 @@ class WebhookEventHandler:
             f"Device came online: {device_name} ({device_mac}) in site {event.site_id}"
         )
 
-        # Example: Invalidate device cache
-        from ..cache import invalidate_cache
-
-        await invalidate_cache(
-            self.settings,
-            resource_type="devices",
-            site_id=event.site_id,
-        )
+        await self._invalidate_reads()
 
     async def handle_device_offline(self, event: WebhookEvent) -> None:
         """Handle device offline event.
@@ -61,14 +68,7 @@ class WebhookEventHandler:
             f"Device went offline: {device_name} ({device_mac}) in site {event.site_id}"
         )
 
-        # Example: Invalidate device cache
-        from ..cache import invalidate_cache
-
-        await invalidate_cache(
-            self.settings,
-            resource_type="devices",
-            site_id=event.site_id,
-        )
+        await self._invalidate_reads()
 
     async def handle_client_connected(self, event: WebhookEvent) -> None:
         """Handle client connected event.
@@ -84,14 +84,7 @@ class WebhookEventHandler:
             f"Client connected: {client_name} ({client_mac}) to {ssid} " f"in site {event.site_id}"
         )
 
-        # Example: Invalidate clients cache
-        from ..cache import invalidate_cache
-
-        await invalidate_cache(
-            self.settings,
-            resource_type="clients",
-            site_id=event.site_id,
-        )
+        await self._invalidate_reads()
 
     async def handle_client_disconnected(self, event: WebhookEvent) -> None:
         """Handle client disconnected event.
@@ -106,14 +99,7 @@ class WebhookEventHandler:
             f"Client disconnected: {client_name} ({client_mac}) from site {event.site_id}"
         )
 
-        # Example: Invalidate clients cache
-        from ..cache import invalidate_cache
-
-        await invalidate_cache(
-            self.settings,
-            resource_type="clients",
-            site_id=event.site_id,
-        )
+        await self._invalidate_reads()
 
     async def handle_alert_raised(self, event: WebhookEvent) -> None:
         """Handle alert raised event.

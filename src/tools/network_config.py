@@ -1,6 +1,6 @@
 """Network configuration MCP tools."""
 
-from typing import Any
+from typing import Any, cast
 
 from ..api import UniFiClient
 from ..config import Settings
@@ -151,7 +151,7 @@ async def create_network(
                 site_id=site_id,
             )
 
-            return created_network
+            return cast(dict[str, Any], created_network)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to create network '{name}': {e}"))
@@ -319,7 +319,7 @@ async def update_network(
                 site_id=site_id,
             )
 
-            return updated_network
+            return cast(dict[str, Any], updated_network)
 
     except Exception as e:
         logger.error(sanitize_log_message(f"Failed to update network '{network_id}': {e}"))

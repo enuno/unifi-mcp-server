@@ -60,7 +60,7 @@ def _tool_description(tool: FunctionTool) -> str:
     fn = getattr(tool, "fn", None)
     doc = getattr(fn, "__doc__", None)
     if doc:
-        return doc.strip().splitlines()[0]
+        return str(doc.strip().splitlines()[0])
     return f"MCP tool: {tool.name}"
 
 
@@ -245,7 +245,7 @@ def build_agent_card(mcp: FastMCP, settings: Settings) -> AgentCard:
         "A UniFi Network control surface exposed through MCP and A2A for local and cloud "
         "controller operations."
     )
-    metadata = {
+    metadata: dict[str, Any] = {
         "apiType": settings.api_type.value,
         "baseUrl": settings.base_url,
         "resourceCount": len(resources),

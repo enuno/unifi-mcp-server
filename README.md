@@ -353,8 +353,8 @@ unifi-mcp-server
 
 - **Async Support**: Built with async/await for high performance and concurrency
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
-- **Comprehensive Testing**: 1,236 tests with high coverage, all passing across Python 3.10–3.13
-- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (18 checks)
+- **Comprehensive Testing**: 3,152 unit tests at 93% line coverage, all passing across Python 3.10–3.13
+- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (25 checks)
 - **Multi-Architecture**: Docker images for amd64, arm64, arm/v7 (32-bit ARM), and arm64/v8
 - **Security Hardened**: Updated critical dependencies (FastMCP, MCP SDK, cryptography)
 - **Quality Metrics**: Black formatting, Ruff linting, comprehensive type hints, Pydantic validation
@@ -1188,7 +1188,7 @@ pytest -m integration
 
 **Current Test Coverage**:
 
-- 1,236 tests passing across Python 3.10-3.13
+- 3,152 unit tests passing across Python 3.10-3.13 (93% line coverage)
 - Coverage and module-level reporting are tracked in Codecov and CI
 - Module-specific targets are maintained in `DEVELOPMENT_PLAN.md` and the test suite
 
@@ -1254,7 +1254,7 @@ unifi-mcp-server/
 │   ├── unifi-security.md  # Firewall, ZBF, ACLs, VPN, content filtering
 │   └── unifi-system.md    # Sites, backups, traffic flows, DPI, RADIUS
 ├── src/
-│   ├── main.py            # MCP server entry point (215+ tools registered)
+│   ├── main.py            # MCP server entry point (343 tools registered in local mode)
 │   ├── cache.py           # Redis caching implementation
 │   ├── memory.py          # Supermemory operator notes/context storage
 │   ├── config/            # Configuration management
@@ -1460,13 +1460,13 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 
 **Quality Achievements:**
 
-- [x] 1,236 tests passing
-- [x] 18/18 CI/CD checks passing
+- [x] 3,152 unit tests passing
+- [x] 25/25 CI/CD checks passing
 - [x] Zero security vulnerabilities
 - [x] 30+ AI assistant example prompts
 - [x] Comprehensive documentation (docs/archive/VERIFICATION_REPORT.md, API.md)
 
-**Total: 364 MCP tools + Comprehensive documentation and verification**
+**Total: 343 MCP tools in local mode (60 tool modules) + Comprehensive documentation and verification**
 
 ### Version 0.3.0 (Future - Planned)
 

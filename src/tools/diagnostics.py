@@ -278,9 +278,7 @@ async def _spectrum_scan_targets(
     if not isinstance(devices, list):
         return []
     return [
-        d.get("mac")
-        for d in devices
-        if isinstance(d, dict) and d.get("type") == "uap" and d.get("mac")
+        d["mac"] for d in devices if isinstance(d, dict) and d.get("type") == "uap" and d.get("mac")
     ]
 
 

@@ -89,6 +89,7 @@ class TestListFirewallPolicies:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy_response
@@ -109,6 +110,7 @@ class TestListFirewallPolicies:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = []
@@ -138,6 +140,7 @@ class TestListFirewallPolicies:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.side_effect = APIError("Connection failed")
@@ -198,6 +201,7 @@ class TestListFirewallPolicies:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy_response
@@ -215,6 +219,7 @@ class TestListFirewallPolicies:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = False
             mock_client.get.return_value = sample_policy_response
@@ -398,6 +403,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy
@@ -420,6 +426,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.side_effect = ResourceNotFoundError("firewall_policy", "nonexistent-id")
@@ -452,6 +459,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy
@@ -476,6 +484,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = wrapped_response
@@ -497,6 +506,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = {}
@@ -512,6 +522,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.side_effect = APIError("Connection failed")
@@ -528,6 +539,7 @@ class TestGetFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = False
             mock_client.get.return_value = sample_policy
@@ -600,6 +612,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             # The new GET-merge-PUT flow fetches the existing policy first.
@@ -657,6 +670,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -684,6 +698,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.put.side_effect = ResourceNotFoundError("firewall_policy", "nonexistent-id")
@@ -730,6 +745,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -769,6 +785,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -804,6 +821,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -835,6 +853,7 @@ class TestUpdateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = system_policy
@@ -980,6 +999,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy
@@ -1023,6 +1043,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy
@@ -1049,6 +1070,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.side_effect = ResourceNotFoundError("firewall_policy", "nonexistent-id")
@@ -1089,6 +1111,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = predefined_policy
@@ -1115,6 +1138,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_policy
@@ -1143,6 +1167,7 @@ class TestDeleteFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = False
             mock_client.get.return_value = sample_policy
@@ -1209,6 +1234,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -1252,6 +1278,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
 
             result = await create_firewall_policy(
@@ -1276,6 +1303,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.side_effect = APIError("Connection failed")
@@ -1316,6 +1344,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -1349,6 +1378,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -1393,6 +1423,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -1425,6 +1456,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             # Make refresh return an empty list too, so no new mappings appear.
@@ -1482,6 +1514,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = allow_policy
@@ -1508,6 +1541,7 @@ class TestCreateFirewallPolicy:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = False
             mock_client.post.return_value = sample_created_policy
@@ -1563,6 +1597,7 @@ class TestListFirewallZonesV2:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = raw_zones
@@ -1603,6 +1638,7 @@ class TestListFirewallZonesV2:
         for empty_response in ({"data": None}, {"data": []}, []):
             with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
                 mock_client = AsyncMock()
+                mock_client._site_uuid_to_name = {}
                 MockClient.return_value.__aenter__.return_value = mock_client
                 mock_client.is_authenticated = True
                 mock_client.get.return_value = empty_response
@@ -1648,6 +1684,7 @@ class TestCreateFirewallPolicyConfirmCoercion:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = {
@@ -1724,6 +1761,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = created_policy
@@ -1760,6 +1798,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = created_policy
@@ -1792,6 +1831,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = created_policy
@@ -1825,6 +1865,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
 
@@ -1854,6 +1895,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = created_policy
@@ -1885,6 +1927,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
 
@@ -1912,6 +1955,7 @@ class TestCreateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
 
@@ -1974,6 +2018,7 @@ class TestUpdateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = existing_policy
@@ -2004,6 +2049,7 @@ class TestUpdateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = existing_policy
@@ -2030,6 +2076,7 @@ class TestUpdateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = existing_policy
@@ -2057,6 +2104,7 @@ class TestUpdateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = existing_policy
@@ -2082,6 +2130,7 @@ class TestUpdateFirewallPolicyPortMatching:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = existing_policy
@@ -2141,6 +2190,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2166,6 +2216,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2191,6 +2242,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2216,6 +2268,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2241,6 +2294,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2267,6 +2321,7 @@ class TestUpdateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.get.return_value = sample_existing_policy
@@ -2354,6 +2409,7 @@ class TestCreateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -2379,6 +2435,7 @@ class TestCreateFirewallPolicyNewFields:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.post.return_value = sample_created_policy
@@ -2488,6 +2545,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2513,6 +2571,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2539,6 +2598,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2571,6 +2631,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2595,6 +2656,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2617,6 +2679,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")
@@ -2640,6 +2703,7 @@ class TestGetZonePolicyMatrix:
 
         with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
             mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
             MockClient.return_value.__aenter__.return_value = mock_client
             mock_client.is_authenticated = True
             mock_client.resolve_site_id = AsyncMock(return_value="resolved-site-id")

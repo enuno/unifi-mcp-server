@@ -25,6 +25,7 @@ class ProtectClient:
         # client (see src/api/pool.py) instead of opening a new one.
         self._pool = active_pool.get()
         self._connection = self._pool.acquire(settings) if self._pool is not None else None
+        self._pooled = self._connection is not None
         if self._connection is not None:
             self.client = self._connection.client
             return
@@ -44,10 +45,15 @@ class ProtectClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the HTTP client (or hand a pooled connection back to the pool)."""
-        if self._connection is not None and self._pool is not None:
-            self._pool.release(self._connection)
-            self._connection = None
+        """Close the HTTP client (or hand a pooled connection back to the pool).
+
+        Idempotent: a pooled client is shared, so it is never closed here, even
+        on a second call after the connection was released.
+        """
+        if self._pooled:
+            if self._connection is not None and self._pool is not None:
+                self._pool.release(self._connection)
+                self._connection = None
             return
         await self.client.aclose()
 

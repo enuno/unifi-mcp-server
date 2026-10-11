@@ -7,7 +7,7 @@ configured.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 try:
     from supermemory import AsyncSupermemory
@@ -15,7 +15,7 @@ try:
     SUPERMEMORY_AVAILABLE = True
 except ImportError:
     SUPERMEMORY_AVAILABLE = False
-    AsyncSupermemory: Any = None
+    AsyncSupermemory = None  # type: ignore[assignment, misc, unused-ignore]
 
 from .config import Settings
 from .utils import get_logger
@@ -74,7 +74,7 @@ class MemoryClient:
                 container_tag=container_tag,
                 metadata=metadata or {},
             )
-            return response.id
+            return cast(str | None, response.id)
         except Exception as e:
             self.logger.error(f"Supermemory remember error: {e}")
             return None

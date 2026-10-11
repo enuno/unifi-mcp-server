@@ -67,15 +67,20 @@ class TestChaining:
         assert verify_file(path, None).ok
         assert _records(path)[0]["parameters_encrypted"] is True
 
-    def test_failed_write_does_not_advance_the_chain(self, tmp_path: Path):
+    def test_failed_write_does_not_advance_the_chain(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
         path = tmp_path / "audit.log"
         logger = AuditLogger(log_file=path)
         logger.log_operation("first", {}, "success")
-        path.chmod(0o400)
-        try:
+
+        # Fail the open itself rather than chmod the file: root ignores 0o400.
+        def deny(_path: str, _flags: int) -> int:
+            raise PermissionError("denied")
+
+        with monkeypatch.context() as m:
+            m.setattr(logger, "_opener", deny)
             logger.log_operation("lost", {}, "success")  # swallowed (non-strict)
-        finally:
-            path.chmod(0o600)
         logger.log_operation("second", {}, "success")
 
         assert [r["seq"] for r in _records(path)] == [0, 1]

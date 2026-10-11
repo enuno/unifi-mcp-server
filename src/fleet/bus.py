@@ -67,6 +67,9 @@ class _Bus:
         self.instance_id = instance_id
         #: Set once the listener is subscribed (tests wait on it).
         self.subscribed = asyncio.Event()
+        # A worker publishes once per healthy controller per interval: during
+        # a Redis outage, warn once rather than for every publish.
+        self._publish_failing = False
 
     @classmethod
     def from_settings(cls, settings: Settings) -> Any:
@@ -92,7 +95,13 @@ class _Bus:
                 self.channel, json.dumps({**payload, "origin": self.instance_id})
             )
         except cache.RedisError as e:
-            logger.warning(failure, e)
+            if not self._publish_failing:
+                logger.warning(failure, e)
+            self._publish_failing = True
+            return
+        if self._publish_failing:
+            logger.info("%s announcements reach Redis again", self.label)
+            self._publish_failing = False
 
     async def _listen(self, handler: Callable[[dict[str, Any]], Awaitable[Any]]) -> None:
         """Call ``handler`` with every message another process publishes.
@@ -170,27 +179,28 @@ class HealthBus(_Bus):
     channel = HEALTH_CHANNEL
     label = "Controller health"
 
-    async def publish_ok(self, key: str, checked_at: float) -> None:
+    async def publish_ok(self, key: str, took: float) -> None:
         """Announce that the controller with connection key ``key`` answered a health check.
 
         Args:
             key: :func:`~src.api.pool.connection_key` of its settings (a hash; no
                 credential is sent)
-            checked_at: When the check started (``time.time()``)
+            took: How long the check ran (``time.monotonic()`` difference), so
+                each receiver can date it on its own clock
         """
         await self._publish(
-            {"key": key, "checked_at": checked_at},
+            {"key": key, "took": took},
             "Could not announce a healthy controller to the replicas (%s); their circuit "
             "breakers recover after the cooldown instead",
         )
 
     async def listen(self, on_ok: Callable[[str, float], Any]) -> None:
-        """Call ``on_ok(key, checked_at)`` for every healthy controller announced."""
+        """Call ``on_ok(key, took)`` for every healthy controller announced."""
 
         async def handle(payload: dict[str, Any]) -> None:
-            key, checked_at = payload.get("key"), payload.get("checked_at")
-            if isinstance(key, str) and isinstance(checked_at, int | float):
-                result = on_ok(key, float(checked_at))
+            key, took = payload.get("key"), payload.get("took")
+            if isinstance(key, str) and isinstance(took, int | float):
+                result = on_ok(key, float(took))
                 if asyncio.iscoroutine(result):
                     await result
 

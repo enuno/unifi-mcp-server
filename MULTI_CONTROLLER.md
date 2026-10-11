@@ -170,7 +170,8 @@ Each server keeps a circuit breaker per controller: after 5 calls in a row the
 controller did not answer, it fails fast for 30 seconds instead of waiting
 out timeouts. With Redis configured, a worker announces every successful
 health check, and each server half-opens that controller's breaker if it
-opened before the check started: calls go through again at once, and one
+opened before the check started (each server dates the check on its own
+clock, so clock skew between hosts does not matter): calls go through again at once, and one
 more failure re-opens it. Without Redis (or without workers) the breaker
 recovers after its cooldown as before.
 

@@ -69,8 +69,6 @@ class CircuitBreaker:
         self.cooldown = cooldown
         self.failures = 0
         self.opened_at: float | None = None
-        #: Wall-clock time the circuit opened, to compare with workers' checks.
-        self.opened_wall: float | None = None
 
     def check(self, label: str) -> None:
         """Raise :class:`CircuitOpenError` while the circuit is open and cooling down."""
@@ -87,24 +85,23 @@ class CircuitBreaker:
         """Close the circuit."""
         self.failures = 0
         self.opened_at = None
-        self.opened_wall = None
 
-    def half_open(self, checked_at: float) -> bool:
+    def half_open(self, started_at: float) -> bool:
         """Let calls through again after a health check that started after the circuit opened.
 
         One more unreachable call re-opens it. A check that started before
         the circuit opened says nothing about the outage, so it is ignored.
 
         Args:
-            checked_at: When the health check started (``time.time()``)
+            started_at: When the health check started, on this process's
+                ``time.monotonic()`` clock (never another host's clock)
 
         Returns:
             True if the circuit was open and is now half-open
         """
-        if self.opened_at is None or self.opened_wall is None or checked_at <= self.opened_wall:
+        if self.opened_at is None or started_at <= self.opened_at:
             return False
         self.opened_at = None
-        self.opened_wall = None
         self.failures = self.threshold - 1
         return True
 
@@ -113,7 +110,6 @@ class CircuitBreaker:
         self.failures += 1
         if self.failures >= self.threshold:
             self.opened_at = time.monotonic()
-            self.opened_wall = time.time()
 
 
 @dataclass
@@ -226,17 +222,27 @@ class ClientPool:
         """Open connections."""
         return len(self._connections)
 
-    def health_ok(self, key: str, checked_at: float) -> bool:
+    def health_ok(self, key: str, took: float) -> bool:
         """A worker's health check reached the controller: half-open its circuit here.
 
-        Called for ``HealthBus`` announcements (src/fleet/bus.py). Controllers
-        this server has never called, or whose circuit is closed, are left alone.
+        Called for ``HealthBus`` announcements (src/fleet/bus.py) as they
+        arrive. The check started at least ``took`` seconds ago, so it is
+        dated on this process's clock as now minus ``took``: no two hosts'
+        clocks are compared. Pub/sub delay only makes the check look later
+        than it was, by milliseconds, so a check from before an outage is
+        never taken for one after it. Controllers this server has never
+        called, or whose circuit is closed, are left alone.
+
+        Args:
+            key: :func:`connection_key` of the controller
+            took: How long the check ran, by the worker's monotonic clock
 
         Returns:
             True if an open circuit was half-opened
         """
         state = self._states.get(key)
-        if state is None or not state.breaker.half_open(checked_at):
+        started_at = time.monotonic() - max(took, 0.0)
+        if state is None or not state.breaker.half_open(started_at):
             return False
         logger.info("A worker reached a controller whose circuit was open here; retrying it now")
         return True

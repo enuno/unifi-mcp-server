@@ -141,6 +141,8 @@ Configure the MCP server using environment variables:
 | `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
 | `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
+| `WEBHOOK_SECRET` | HMAC-SHA256 key verifying `X-UniFi-Signature` on `POST /webhooks/unifi`; without it the receiver refuses every request | To receive webhooks | unset |
+| `UNIFI_CACHE_ENABLED` | Use the Redis read cache when Redis is configured; set `false` to bypass it | No | `true` |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | Redis location for the response cache | No | `localhost` / `6379` / `0` / unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |

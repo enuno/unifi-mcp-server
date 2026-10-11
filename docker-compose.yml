@@ -33,7 +33,8 @@ services:
       # Required before any network transport (http/sse/streamable_http) will
       # start; the server refuses to open a listener without it.
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
-      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+      # LOG_LEVEL is what the server reads; MCP_LOG_LEVEL is the old .env name.
+      LOG_LEVEL: ${LOG_LEVEL:-${MCP_LOG_LEVEL:-INFO}}
 
       # Optional: Rate Limiting
       UNIFI_RATE_LIMIT_REQUESTS: ${UNIFI_RATE_LIMIT_REQUESTS:-100}

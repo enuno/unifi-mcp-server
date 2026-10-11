@@ -315,12 +315,12 @@ class TestHealthAnnouncements:
         from src.api.pool import connection_key
 
         bus = AsyncMock()
-        before = time.time()
+        before = time.monotonic()
         await jobs.check_health("hq", settings, snapshots, failures={}, down_after=3, bus=bus)
 
-        key, checked_at = bus.publish_ok.await_args.args
+        key, took = bus.publish_ok.await_args.args
         assert key == connection_key(settings)
-        assert before <= checked_at <= time.time()
+        assert 0 <= took <= time.monotonic() - before
 
     async def test_failure_is_not_announced(
         self,

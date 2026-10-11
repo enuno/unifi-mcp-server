@@ -3,7 +3,9 @@
 A replica's breaker opens after repeated unreachable calls and fails fast for
 its cooldown. When a worker's health check, started after the breaker opened,
 reaches the controller, the worker announces it on Redis and every replica
-lets calls through again; one more failure re-opens the circuit.
+lets calls through again; one more failure re-opens the circuit. The worker
+sends how long the check took, and each replica dates it on its own
+monotonic clock, so no two hosts' clocks are compared.
 """
 
 from __future__ import annotations
@@ -53,12 +55,12 @@ def _open(breaker: CircuitBreaker) -> None:
 class TestHalfOpen:
     def test_a_closed_circuit_is_left_alone(self) -> None:
         breaker = CircuitBreaker()
-        assert breaker.half_open(time.time()) is False
+        assert breaker.half_open(time.monotonic()) is False
         assert breaker.failures == 0
 
     def test_a_check_from_before_the_outage_is_ignored(self) -> None:
         breaker = CircuitBreaker()
-        before = time.time() - 1
+        before = time.monotonic() - 1
         _open(breaker)
         assert breaker.half_open(before) is False
         with pytest.raises(CircuitOpenError):
@@ -67,7 +69,7 @@ class TestHalfOpen:
     def test_a_later_check_lets_calls_through_until_the_next_failure(self) -> None:
         breaker = CircuitBreaker()
         _open(breaker)
-        assert breaker.half_open(time.time() + 0.001) is True
+        assert breaker.half_open(time.monotonic() + 0.001) is True
         breaker.check("hq")  # no longer fails fast
         breaker.record_failure()
         with pytest.raises(CircuitOpenError):
@@ -76,7 +78,7 @@ class TestHalfOpen:
 
 class TestPool:
     def test_unknown_controllers_are_ignored(self) -> None:
-        assert ClientPool().health_ok("nope", time.time()) is False
+        assert ClientPool().health_ok("nope", 0.0) is False
 
     async def test_an_open_circuit_is_half_opened(self, monkeypatch: pytest.MonkeyPatch) -> None:
         settings = _settings(monkeypatch)
@@ -84,9 +86,13 @@ class TestPool:
         connection = pool.acquire(settings)
         try:
             _open(connection.breaker)
-            assert pool.health_ok(connection_key(settings), time.time() + 0.001) is True
+            key = connection_key(settings)
+            # began 10 s ago, before the circuit opened: says nothing about the outage
+            assert pool.health_ok(key, took=10.0) is False
+            time.sleep(0.002)
+            assert pool.health_ok(key, took=0.0) is True  # began after it opened
             connection.breaker.check("hq")
-            assert pool.health_ok(connection_key(settings), time.time()) is False  # closed now
+            assert pool.health_ok(key, took=0.0) is False  # closed now
         finally:
             pool.release(connection)
             await pool.aclose()
@@ -108,7 +114,8 @@ class TestBus:
         task = asyncio.create_task(replica.listen(pool.health_ok))
         try:
             await asyncio.wait_for(replica.subscribed.wait(), timeout=5)
-            await worker.publish_ok(connection_key(settings), time.time() + 0.001)
+            await asyncio.sleep(0.002)
+            await worker.publish_ok(connection_key(settings), 0.0)
             deadline = time.monotonic() + 5
             while connection.breaker.opened_at is not None:
                 assert time.monotonic() < deadline, "breaker was not half-opened"
@@ -135,7 +142,8 @@ class TestBus:
             await asyncio.wait_for(bus.subscribed.wait(), timeout=5)
             client = bus._redis()
             await client.publish(HEALTH_CHANNEL, "not json")
-            await client.publish(HEALTH_CHANNEL, '{"key": 5, "checked_at": 1}')
+            await client.publish(HEALTH_CHANNEL, '{"key": 5, "took": 1}')
+            await client.publish(HEALTH_CHANNEL, '{"key": "k", "checked_at": 1}')
             await bus.publish_ok("own", 1.0)  # its own message
             await HealthBus(settings, instance_id="worker").publish_ok("k", 2.0)
             deadline = time.monotonic() + 5
@@ -148,12 +156,27 @@ class TestBus:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-    async def test_publishing_without_redis_only_warns(
+    async def test_publishing_without_redis_warns_once(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
         settings = _settings(monkeypatch, "redis://127.0.0.1:1/0")
-        await HealthBus(settings, instance_id="worker").publish_ok("k", 1.0)
-        assert "recover after the cooldown" in caplog.text
+        bus = HealthBus(settings, instance_id="worker")
+        for _ in range(3):  # one per healthy controller during the outage
+            await bus.publish_ok("k", 1.0)
+        assert caplog.text.count("recover after the cooldown") == 1
+
+    async def test_recovery_is_logged(
+        self, monkeypatch: pytest.MonkeyPatch, redis_port: int, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        settings = _settings(monkeypatch, f"redis://127.0.0.1:{redis_port}/0")
+        bus = HealthBus(settings, instance_id="worker")
+        bus._publish_failing = True  # as after an outage
+        with caplog.at_level(logging.INFO):
+            await bus.publish_ok("k", 1.0)
+            await bus.publish_ok("k", 1.0)
+        assert caplog.text.count("announcements reach Redis again") == 1
 
 
 class TestServerWiring:

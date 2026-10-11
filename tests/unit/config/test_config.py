@@ -486,6 +486,17 @@ class TestDocumentedSettings:
         "UNIFI_FLEET_CREDENTIAL_KEY",
         "UNIFI_PROFILE",
     }
+    #: Third-party variables the docs mention (agnost.ai monitoring, MCP Toolbox).
+    THIRD_PARTY = {
+        "AGNOST_ENABLED",
+        "AGNOST_ORG_ID",
+        "AGNOST_ENDPOINT",
+        "AGNOST_DISABLE_INPUT",
+        "AGNOST_DISABLE_OUTPUT",
+        "TOOLBOX_PORT",
+        "TOOLBOX_SERVICE_NAME",
+        "TOOLBOX_VERSION",
+    }
     #: In Settings but deliberately left out of .env.example.
     NOT_IN_ENV_EXAMPLE = {"UNIFI_CACHE_TTL"}
 
@@ -499,31 +510,37 @@ class TestDocumentedSettings:
 
         return (Path(__file__).parents[3] / name).read_text(encoding="utf-8")
 
+    def _api_rows(self) -> set[str]:
+        """Variable names in API.md's environment-variable table."""
+        import re
+
+        text = self._read("API.md")
+        start = text.index("### Environment Variables")
+        end = text.index("\n### ", start + 1)
+        names: set[str] = set()
+        for cell in re.findall(r"^\| ([^|]+) \|", text[start:end], re.M):
+            names.update(re.findall(r"`([A-Z][A-Z0-9_]+)`", cell))
+        return names - {"Variable"}
+
+    def _env_assignments(self) -> set[str]:
+        """Names assigned (or shown commented out) in .env.example."""
+        import re
+
+        return set(re.findall(r"^#? ?([A-Z][A-Z0-9_]+)=", self._read(".env.example"), re.M))
+
     def test_every_setting_is_in_api_md(self) -> None:
-        api = self._read("API.md")
-        missing = sorted(a for a in self._aliases() if f"`{a}`" not in api)
-        assert missing == []
+        assert sorted(self._aliases() - self._api_rows()) == []
 
     def test_every_setting_is_in_env_example(self) -> None:
-        env = self._read(".env.example")
-        missing = sorted(a for a in self._aliases() - self.NOT_IN_ENV_EXAMPLE if a not in env)
-        assert missing == []
+        missing = self._aliases() - self.NOT_IN_ENV_EXAMPLE - self._env_assignments()
+        assert sorted(missing) == []
 
     def test_api_md_names_no_unknown_setting(self) -> None:
-        import re
-
-        rows = set(re.findall(r"^\| `([A-Z][A-Z0-9_]+)` \|", self._read("API.md"), re.M))
-        variables = {r for r in rows if r.startswith(("UNIFI_", "MCP_", "REDIS_", "DATABASE_"))}
-        unknown = sorted(variables - self._aliases() - self.OUTSIDE_SETTINGS)
-        assert unknown == []
+        unknown = self._api_rows() - self._aliases() - self.OUTSIDE_SETTINGS - self.THIRD_PARTY
+        assert sorted(unknown) == []
 
     def test_env_example_names_no_unknown_setting(self) -> None:
-        import re
-
-        names = set(
-            re.findall(
-                r"^#? ?((?:UNIFI|MCP|REDIS|DATABASE)_[A-Z0-9_]+)=", self._read(".env.example"), re.M
-            )
+        unknown = (
+            self._env_assignments() - self._aliases() - self.OUTSIDE_SETTINGS - self.THIRD_PARTY
         )
-        unknown = sorted(names - self._aliases() - self.OUTSIDE_SETTINGS)
-        assert unknown == []
+        assert sorted(unknown) == []

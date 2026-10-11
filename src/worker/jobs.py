@@ -97,7 +97,7 @@ async def check_health(
     Returns:
         The recorded health
     """
-    checked_at = time.time()
+    started = time.monotonic()
     try:
         async with UniFiClient(settings) as client:
             await client.authenticate()
@@ -115,7 +115,7 @@ async def check_health(
     failures.pop(name, None)
     await snapshots.record_health(name, "ok", capabilities=capabilities)
     if bus is not None:
-        await bus.publish_ok(connection_key(settings), checked_at)
+        await bus.publish_ok(connection_key(settings), time.monotonic() - started)
     return "ok"
 
 

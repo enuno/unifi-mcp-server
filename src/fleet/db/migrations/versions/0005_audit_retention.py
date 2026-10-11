@@ -82,6 +82,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """Drop audit_archives and make audit_log fully append-only again."""
+    """Drop audit_archives and make audit_log fully append-only again.
+
+    Refused once retention has run: the checkpoints are the only link between
+    each remaining chain and its archived records, so dropping them would
+    leave every such chain unverifiable.
+    """
+    archived = op.get_bind().execute(sa.text("SELECT count(*) FROM audit_archives")).scalar()
+    if archived:
+        raise RuntimeError(
+            f"audit_archives holds {archived} checkpoint(s) from audit retention; "
+            "downgrading below 0005 would make the remaining audit chains unverifiable"
+        )
     op.drop_table("audit_archives")
     op.execute(ORIGINAL_FUNCTION)

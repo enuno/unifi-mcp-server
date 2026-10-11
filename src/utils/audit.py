@@ -299,6 +299,25 @@ class AuditLogger:
         record.update({key: value for key, value in fields.items() if value is not None})
         return record
 
+    def prepare_event(
+        self,
+        event_type: str,
+        operation: str,
+        result: str,
+        *,
+        parameters: dict[str, Any] | None = None,
+        error: str | None = None,
+        **fields: Any,
+    ) -> dict[str, Any]:
+        """Build a record ready for a sink (redacted, payload encrypted, not yet sealed).
+
+        For a caller that stores the record itself, e.g. inside its own
+        database transaction (``PostgresAuditSink.append(..., conn=...)``).
+        """
+        record = self._event(event_type, operation, result, parameters, error, fields)
+        self._encrypt_payload(record)
+        return record
+
     def log_event(
         self,
         event_type: str,

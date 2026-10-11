@@ -265,6 +265,39 @@ class TestRetention:
         assert not rotated.exists()
         assert read_checkpoints(checkpoints_path(log)) == {}
 
+    def test_the_admin_event_comes_before_the_delete(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from src.utils.audit import AuditUnavailableError
+
+        log, logger = _old_then_new(tmp_path, monkeypatch)
+        before = audit_files(log)
+
+        class Refusing:
+            def log_event(self, *args: Any, **kwargs: Any) -> None:
+                assert kwargs.get("strict") is True
+                raise AuditUnavailableError("disk full")
+
+        with pytest.raises(AuditUnavailableError):
+            _purge(log, tmp_path, audit=Refusing())
+        assert audit_files(log) == before
+        assert list((tmp_path / "archive").iterdir()) == []
+        assert not checkpoints_path(log).exists()
+
+        _purge(log, tmp_path, audit=logger)
+        newest = audit_files(log)[-1]  # the event may have filled and rotated the file
+        last = json.loads(newest.read_text(encoding="utf-8").splitlines()[-1])
+        assert last["operation"] == "audit_retention"
+
+    def test_an_unreadable_file_refuses_the_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: Any
+    ) -> None:
+        log, _ = _old_then_new(tmp_path, monkeypatch)
+        audit_files(log)[0].write_bytes(b"\xff\xfe not utf-8\n")
+        monkeypatch.setenv("UNIFI_AUDIT_CHAIN_KEY", KEY.decode())
+        assert retention_cli([str(log), "--days", "30", "--confirm"]) == 1
+        assert "cannot read" in capsys.readouterr().err
+
     def test_bad_checkpoints(self, tmp_path: Path) -> None:
         path = tmp_path / "c.jsonl"
         path.write_text('{"chain_id": "a", "seq": "x"}\n', encoding="utf-8")

@@ -66,9 +66,12 @@ class RetentionResult:
 
 
 def private_dir(path: Path) -> None:
-    """Create ``path`` (and parents) and make it owner-only."""
+    """Create ``path`` (and parents) owner-only; a new one is fsynced into its parent."""
+    created = not path.exists()
     path.mkdir(parents=True, exist_ok=True)
     path.chmod(0o700)
+    if created:
+        _fsync_dir(path.parent)
 
 
 def _fsync_dir(path: Path) -> None:
@@ -128,6 +131,7 @@ def write_archive(
             out.write("\n")
             out.flush()
             os.fsync(out.fileno())
+        # Both new entries must survive a power loss before any record is deleted.
         _fsync_dir(archive_dir)
     except BaseException:
         remove(partial, archive, manifest)

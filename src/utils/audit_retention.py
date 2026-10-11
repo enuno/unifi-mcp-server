@@ -31,7 +31,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .audit import AuditLogger, audit_files, resolve_chain_key
+from .audit import AuditLogger, AuditUnavailableError, audit_files, resolve_chain_key
 from .audit_archive import (
     ChainArchive,
     RetentionRefusedError,
@@ -39,7 +39,7 @@ from .audit_archive import (
     remove,
     write_archive,
 )
-from .audit_verify import GENESIS, ChainKeyMissingError, Head, verify_files
+from .audit_verify import GENESIS, ChainKeyMissingError, Head, UnreadableLogError, verify_files
 
 
 def checkpoints_path(log_file: Path) -> Path:
@@ -129,10 +129,24 @@ def purge_expired_files(
     archive_dir: Path,
     dry_run: bool = True,
     now: datetime | None = None,
+    audit: AuditLogger | None = None,
 ) -> RetentionResult:
     """Archive and delete the rotated audit files older than ``retention_days``.
 
+    Args:
+        log_file: The audit file being written (never removed)
+        key: The chain HMAC key
+        retention_days: Keep records this many days
+        archive_dir: Where archives go (created mode 0700)
+        dry_run: Report what would be archived without writing or deleting
+        now: The current time (tests)
+        audit: Writes the run's ``audit_retention`` admin event (strictly,
+            before anything is deleted; none when omitted)
+
     Raises:
+        AuditUnavailableError: If the admin event could not be written (the
+            archive is removed again and nothing is deleted)
+        UnreadableLogError: If a file cannot be read
         RetentionRefusedError: If the log does not verify
         ChainKeyMissingError: If records are HMAC-chained and no key is given
         ValueError: For a bad ``retention_days`` or checkpoint file
@@ -197,6 +211,24 @@ def purge_expired_files(
         return result
 
     archive, manifest, _ = write_archive(archive_dir, cutoff, lines, result.chains)
+    if audit is not None:
+        try:
+            audit.log_event(
+                "admin",
+                "audit_retention",
+                "success",
+                parameters={
+                    "retention_days": retention_days,
+                    "cutoff": cutoff.isoformat(),
+                    "records": result.records,
+                    "files": len(result.files),
+                    "archive": archive.name,
+                },
+                strict=True,
+            )
+        except BaseException:
+            remove(archive, manifest)  # nothing deleted without its record
+            raise
     archived_at = datetime.now(timezone.utc).isoformat()
     fd = os.open(checkpoints, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as f:
@@ -278,26 +310,14 @@ def main(argv: list[str] | None = None) -> int:
             retention_days=days,
             archive_dir=archive_dir,
             dry_run=not args.confirm,
+            audit=AuditLogger(args.log_file),
         )
-    except RetentionRefusedError as e:
+    except (RetentionRefusedError, UnreadableLogError, AuditUnavailableError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
     except (ChainKeyMissingError, ValueError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    if args.confirm and result.records:
-        AuditLogger(args.log_file).log_event(
-            "admin",
-            "audit_retention",
-            "success",
-            parameters={
-                "retention_days": days,
-                "cutoff": result.cutoff.isoformat(),
-                "records": result.records,
-                "files": len(result.files),
-                "archive": result.archive.name if result.archive else None,
-            },
-        )
     print(json.dumps(result.as_dict(), indent=2))
     if not args.confirm:
         print(

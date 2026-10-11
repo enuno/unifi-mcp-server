@@ -128,12 +128,18 @@ async def _audit_retention(url: str, args: argparse.Namespace) -> int:
     import json
     from pathlib import Path
 
-    from ..config import Settings
-    from ..utils.audit import resolve_chain_key
+    from pydantic import ValidationError
+
+    from ..config.config import AuditMaintenanceSettings
+    from ..utils.audit import AuditLogger, resolve_chain_key
     from .db.retention import purge_expired
     from .db.schema import ensure_current, make_engine
 
-    settings = Settings()
+    try:
+        settings = AuditMaintenanceSettings()
+    except ValidationError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
     days = args.days if args.days is not None else settings.audit_retention_days
     if days is None or days < 1:
         print("error: set UNIFI_AUDIT_RETENTION_DAYS or pass --days N (N >= 1)", file=sys.stderr)
@@ -151,32 +157,17 @@ async def _audit_retention(url: str, args: argparse.Namespace) -> int:
     engine = make_engine(url)
     try:
         await ensure_current(engine)
+        # Its admin event is written in the deleting transaction, as a chain
+        # of this run's own.
+        audit = AuditLogger(settings.audit_log_file) if settings.audit_log_enabled else None
         result = await purge_expired(
             engine,
             resolve_chain_key(),
             retention_days=days,
             archive_dir=archive_dir,
             dry_run=not args.confirm,
+            audit=audit,
         )
-        if args.confirm and result.records and settings.audit_log_enabled:
-            from ..utils.audit import AuditLogger
-            from .db.audit_store import PostgresAuditSink
-
-            # A logger of its own: this run's record starts a chain of its own.
-            audit = AuditLogger(settings.audit_log_file)
-            audit.sink = PostgresAuditSink(engine)
-            await audit.alog_event(
-                "admin",
-                "audit_retention",
-                "success",
-                parameters={
-                    "retention_days": days,
-                    "cutoff": result.cutoff.isoformat(),
-                    "records": result.records,
-                    "chains": len(result.chains),
-                    "archive": result.archive.name if result.archive else None,
-                },
-            )
     finally:
         await engine.dispose()
     print(json.dumps(result.as_dict(), indent=2))

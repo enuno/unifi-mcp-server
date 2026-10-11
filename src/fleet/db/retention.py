@@ -19,9 +19,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, insert, select, text
+from sqlalchemy import delete, func, insert, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from ...utils.audit import AuditLogger
 from ...utils.audit_archive import (
     ChainArchive,
     RetentionRefusedError,
@@ -79,6 +80,24 @@ async def archive_problems(conn: Any) -> list[str]:
     return problems
 
 
+async def _archive_recorded(engine: AsyncEngine, name: str) -> bool:
+    """Whether a run's archive is in ``audit_archives`` (its transaction committed).
+
+    Asked after the deleting transaction failed: a lost COMMIT reply can hide
+    a commit that happened. When the database cannot answer, the archive is
+    kept (True), since it may be the only copy of the records.
+    """
+    try:
+        async with engine.connect() as conn:
+            found = await conn.execute(
+                select(AuditArchive.id).where(AuditArchive.archive == name).limit(1)
+            )
+            return found.first() is not None
+    except Exception as e:
+        logger.warning("Could not check whether archive %s was recorded (%s); kept it", name, e)
+        return True
+
+
 def _expired_prefixes(rows: list[Any], cutoff: datetime) -> dict[str, list[Any]]:
     """Per chain, its leading records older than ``cutoff`` (rows in seq order)."""
     prefixes: dict[str, list[Any]] = {}
@@ -101,6 +120,7 @@ async def purge_expired(
     archive_dir: Path,
     dry_run: bool = True,
     now: datetime | None = None,
+    audit: AuditLogger | None = None,
 ) -> RetentionResult:
     """Archive and delete audit records older than ``retention_days``.
 
@@ -116,6 +136,8 @@ async def purge_expired(
         archive_dir: Where archives go (created mode 0700)
         dry_run: Report what would be archived without writing or deleting
         now: The current time (tests)
+        audit: Writes the run's ``audit_retention`` admin event, inside the
+            deleting transaction (none when omitted)
 
     Raises:
         RetentionRefusedError: If verification found problems
@@ -142,21 +164,29 @@ async def purge_expired(
             conn = await conn.execution_options(isolation_level="REPEATABLE READ")
             async with conn.begin():
                 starts = await archived_starts(conn)
-                chains = [
-                    row.chain_id
-                    for row in await conn.execute(
-                        select(AuditLogEntry.chain_id)
-                        .where(AuditLogEntry.ts < cutoff)
-                        .group_by(AuditLogEntry.chain_id)
+                # Only each chain's expired prefix is read: the records before
+                # its first one that is kept (all of them if none is kept).
+                kept = (
+                    select(
+                        AuditLogEntry.chain_id.label("chain_id"),
+                        func.min(AuditLogEntry.seq).label("first_kept"),
                     )
-                ]
-                if not chains:
-                    return result
+                    .where(AuditLogEntry.ts >= cutoff)
+                    .group_by(AuditLogEntry.chain_id)
+                    .subquery()
+                )
                 rows = list(
                     (
                         await conn.execute(
                             select(AuditLogEntry)
-                            .where(AuditLogEntry.chain_id.in_(chains))
+                            .outerjoin(kept, kept.c.chain_id == AuditLogEntry.chain_id)
+                            .where(
+                                AuditLogEntry.ts < cutoff,
+                                or_(
+                                    kept.c.first_kept.is_(None),
+                                    AuditLogEntry.seq < kept.c.first_kept,
+                                ),
+                            )
                             .order_by(AuditLogEntry.chain_id, AuditLogEntry.seq)
                         )
                     ).all()
@@ -212,11 +242,30 @@ async def purge_expired(
                         for c in result.chains
                     ],
                 )
+                if audit is not None:
+                    # In the same transaction: no delete without its record.
+                    from .audit_store import PostgresAuditSink
+
+                    record = audit.prepare_event(
+                        "admin",
+                        "audit_retention",
+                        "success",
+                        parameters={
+                            "retention_days": retention_days,
+                            "cutoff": cutoff.isoformat(),
+                            "records": result.records,
+                            "chains": len(result.chains),
+                            "archive": archive.name,
+                        },
+                    )
+                    await PostgresAuditSink(engine).append(
+                        record, key=audit.chain_key, strict=True, conn=conn
+                    )
     except Exception:
-        # Nothing was deleted (the transaction did not commit): the records are
-        # still in the store, and an archive without its delete would only
-        # confuse a later audit.
-        remove(*written)
+        if written and not await _archive_recorded(engine, written[0].name):
+            # The transaction did not commit, so nothing was deleted: an archive
+            # without its delete would only confuse a later audit.
+            remove(*written)
         raise
     result.archive, result.manifest = archive, manifest
     logger.info(

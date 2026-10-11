@@ -448,7 +448,9 @@ class TestDecryptCli:
             operation="op", parameters={"k": "v"}, result="success"
         )
 
-        assert decrypt_cli_main([str(log_path), "--key", KEY_A]) == 0
+        # "--key=" form: a random Fernet key can start with "-", which argparse
+        # would otherwise read as an option.
+        assert decrypt_cli_main([str(log_path), f"--key={KEY_A}"]) == 0
         assert json.loads(capsys.readouterr().out.strip())["parameters"] == {"k": "v"}
 
     def test_cli_no_key_errors_cleanly(self, tmp_path, capsys):

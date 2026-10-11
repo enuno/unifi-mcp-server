@@ -127,18 +127,46 @@ if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.mo
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
     """Start the Postgres registry and audit store with the server, then audit the start."""
-    if hasattr(fleet_registry, "start"):
-        from .fleet.db import audit_store
-
-        audit_store.install(settings, fleet_registry.store.engine)
-        await fleet_registry.start()
-    await audit_server_start()
+    # The forwarder comes first: registry startup can already store audit
+    # records (registry_seeded), and every stored record is exported.
+    forwarder = await start_siem_forwarder(settings)
     try:
-        yield
+        if hasattr(fleet_registry, "start"):
+            from .fleet.db import audit_store
+
+            audit_store.install(settings, fleet_registry.store.engine)
+            await fleet_registry.start()
+        try:
+            await audit_server_start()
+            yield
+        finally:
+            await client_pool.aclose()
+            if hasattr(fleet_registry, "stop"):
+                await fleet_registry.stop()
     finally:
-        await client_pool.aclose()
-        if hasattr(fleet_registry, "stop"):
-            await fleet_registry.stop()
+        if forwarder is not None:
+            await forwarder.stop()
+
+
+async def start_siem_forwarder(current_settings: Settings) -> Any:
+    """Start exporting audit records to ``UNIFI_AUDIT_SIEM_TARGETS``, if set.
+
+    Raises:
+        ConfigurationError: For an invalid target, so a misconfigured export
+            stops the server instead of silently sending nothing
+    """
+    if not current_settings.audit_log_enabled or not current_settings.audit_siem_targets:
+        return None
+    from .utils.audit import get_audit_logger
+    from .utils.siem import SiemForwarder
+
+    forwarder = SiemForwarder.from_settings(current_settings)
+    if forwarder is None:
+        return None
+    get_audit_logger(current_settings.audit_log_file).forwarder = forwarder
+    await forwarder.start()
+    logger.info("Exporting audit records to %d SIEM target(s)", len(forwarder.targets))
+    return forwarder
 
 
 def build_auth_provider(current_settings: Settings, token_store: Any = None) -> Any:

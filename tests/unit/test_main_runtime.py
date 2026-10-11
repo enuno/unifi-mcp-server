@@ -158,6 +158,36 @@ class TestLifespan:
                 aclose.assert_not_called()
         aclose.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_siem_forwarder_starts_before_the_registry(self, main_mod: ModuleType) -> None:
+        order: list[str] = []
+        forwarder = MagicMock()
+        forwarder.stop = AsyncMock(side_effect=lambda: order.append("forwarder.stop"))
+
+        async def start_forwarder(_: object) -> MagicMock:
+            order.append("forwarder.start")
+            return forwarder
+
+        async def registry_start() -> None:
+            order.append("registry.start")  # may store registry_seeded
+            raise RuntimeError("database down")
+
+        registry = MagicMock()
+        registry.start = registry_start
+        # Imported here so the patch below does not depend on test order.
+        pytest.importorskip("sqlalchemy")
+        from src.fleet.db import audit_store
+
+        with (
+            patch.object(main_mod, "start_siem_forwarder", start_forwarder),
+            patch.object(main_mod, "fleet_registry", registry),
+            patch.object(audit_store, "install"),
+            pytest.raises(RuntimeError, match="database down"),
+        ):
+            async with main_mod._lifespan(None):
+                pass  # pragma: no cover - startup fails first
+        assert order == ["forwarder.start", "registry.start", "forwarder.stop"]
+
 
 class TestMainEntryPoint:
     def test_stdio(self, main_mod: ModuleType) -> None:

@@ -225,12 +225,34 @@ def main(argv: list[str] | None = None) -> int:
             "exactly there, which detects records removed from its end."
         ),
     )
+    parser.add_argument(
+        "--anchors",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Chain anchors exported to the SIEM (JSON lines or a JSON array; other records "
+            "are ignored). The latest anchor of each chain is used like --head."
+        ),
+    )
     args = parser.parse_args(argv)
     try:
         expected_heads = dict(parse_head(value) for value in args.head)
     except ValueError as e:
         print(f"error: --head: {e}", file=sys.stderr)
         return 2
+    if args.anchors is not None:
+        from .siem import load_anchors
+
+        if not args.anchors.exists():
+            print(f"error: anchors file not found: {args.anchors}", file=sys.stderr)
+            return 2
+        anchors = load_anchors(args.anchors)
+        if not anchors:
+            # A wrong or empty export must not pass as "truncation checked".
+            print(f"error: no anchor events in {args.anchors}", file=sys.stderr)
+            return 2
+        expected_heads = {**anchors, **expected_heads}
 
     if not args.log_file.exists():
         print(f"error: log file not found: {args.log_file}", file=sys.stderr)

@@ -140,7 +140,9 @@ class AuditLogger:
         # A Postgres sink (src/fleet/db/audit_store.py) replaces the file when
         # the fleet registry is configured; records then go there only.
         self.sink: Any = None
-        self._pending: set[asyncio.Task[None]] = set()
+        # src/utils/siem.py: gets every record once it is stored.
+        self.forwarder: Any = None
+        self._pending: set[asyncio.Task[Any]] = set()
 
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
@@ -313,7 +315,8 @@ class AuditLogger:
         record = self._event(event_type, operation, result, parameters, error, fields)
         if self.sink is not None:
             self._encrypt_payload(record)
-            await self.sink.append(record, key=self.chain_key, strict=strict)
+            if await self.sink.append(record, key=self.chain_key, strict=strict):
+                self._forward(record)
         else:
             self._write(record, strict=strict)
         self.logger.info(f"AUDIT: {event_type} {operation} - {result}")
@@ -330,6 +333,18 @@ class AuditLogger:
         task = loop.create_task(self.sink.append(record, key=self.chain_key, strict=False))
         self._pending.add(task)
         task.add_done_callback(self._pending.discard)
+        task.add_done_callback(
+            lambda done: (
+                self._forward(record)
+                if not done.cancelled() and done.exception() is None and done.result()
+                else None
+            )
+        )
+
+    def _forward(self, record: dict[str, Any]) -> None:
+        """Hand a stored record to the SIEM forwarder, if one is configured."""
+        if self.forwarder is not None:
+            self.forwarder.forward(record)
 
     def _encrypt_payload(self, record: dict[str, Any]) -> None:
         # At-rest encryption for the sensitive payloads (issue #22). This
@@ -379,6 +394,7 @@ class AuditLogger:
                 return
             chain.seq += 1
             chain.prev_hash = record["hash"]
+        self._forward(record)
 
     def _decrypt_entry(self, entry: dict[str, Any]) -> dict[str, Any]:
         """Decrypt the encrypted payload fields of one audit entry, in place.

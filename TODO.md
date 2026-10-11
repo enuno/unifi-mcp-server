@@ -79,13 +79,24 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [ ] Add multi-controller / multi-site orchestration (partial: fleet Phases 0–3 shipped per-call `controller` routing, the Postgres controller registry, a shared connection pool and the Redis read cache; fleet Phase 4 added horizontal scale: several replicas, shared rate limits, registry pub/sub, the worker tier and the `fleet_*` read tools; Phase 5 hardening remains, `docs/FLEET_SCALING_PLAN.md` §4)
 - [x] Add dry-run / change-safe mode (every mutating tool declares `dry_run`, enforced by `test_every_mutating_tool_declares_dry_run`; `UNIFI_DRY_RUN` forces previews server-wide)
 - [x] Add tool-level RBAC: roles over risk tiers, server-issued API tokens (fleet Phase 2b: `viewer`/`operator`/`admin`/`fleet-admin` roles, module and controller-label scopes, `umcp_` tokens with `DATABASE_URL`)
-- [ ] Add append-only audit logging (partial: wrapper-level coverage, HMAC hash chain with `python -m src.utils.audit_verify`, and the append-only Postgres store shipped; SIEM export and retention are fleet Phase 5, `docs/FLEET_SCALING_PLAN.md` §3.7)
+- [ ] Add append-only audit logging (partial: wrapper-level coverage, HMAC hash chain with `python -m src.utils.audit_verify`, the append-only Postgres store, and SIEM export with chain-head anchors (`UNIFI_AUDIT_SIEM_TARGETS`, fleet Phase 5b) shipped; retention is fleet Phase 5c, `docs/FLEET_SCALING_PLAN.md` §3.7)
 - [x] Add Prometheus metrics endpoint (`UNIFI_METRICS_ENABLED`: `GET /metrics` on network transports, behind the same bearer token as `/mcp`)
 - [x] Add A2A agent card and manifest (`src/a2a/`, `agent-card.json`, served behind bearer auth)
 - [ ] Add webhook event bus with Redis pub/sub (partial: `src/webhooks/` receiver with signature verification; no Redis fan-out)
 - [ ] Add tool exposure modes for network, protect, access, talk, drive, and read-only sessions (partial: `UNIFI_PROFILE` supports network, devices, security, system, minimal, protect; `UNIFI_READ_ONLY` done; access, talk, drive pending)
 - [ ] Research and map the Access API
 - [ ] Implement Access API tools once the endpoint map is confirmed
+
+### Phase 7 — Deployment automation (planned, `DEVELOPMENT_PLAN.md` Phase 7)
+
+- [ ] Ansible playbook (`deploy/ansible/`) installing the server, Redis and Postgres with Docker, for a single server or a multi-server / clustered inventory; each component optional, secrets from Ansible Vault, migrations run once, idempotent with `--check`
+- [ ] Molecule (or equivalent) test for the playbook in CI
+- [ ] Helm chart (`deploy/helm/unifi-mcp/`) for Kubernetes: server and worker Deployments, probes, metrics annotations, Redis/Postgres as optional dependencies or external endpoints, secrets from an existing Secret, migration Job
+- [ ] `helm lint` / `helm template` and a kind smoke test in CI
+- [ ] Agent setup prompt: MCP server only (`docs/deploy-prompts/`)
+- [ ] Agent setup prompt: MCP server with a single Redis and Postgres
+- [ ] Agent setup prompt: full clustered environment (replicas, workers, HA Redis and Postgres, load balancer, SIEM export)
+- [ ] Test that the playbook, chart and compose files set the same environment variables
 
 ---
 

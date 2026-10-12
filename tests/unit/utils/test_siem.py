@@ -392,6 +392,37 @@ def _record(n: int, chain: str = "c" * 32) -> dict[str, Any]:
     return {**RECORD, "event_id": f"e-{n}", "seq": n, "hash": f"{n:064x}", "chain_id": chain}
 
 
+class TestWaitEvent:
+    async def test_a_cancel_arriving_with_the_event_is_not_lost(self) -> None:
+        # stop() sets the wake event and cancels the delivery task in one
+        # tick; asyncio.wait_for dropped that cancellation before 3.12.
+        from src.utils.siem import _wait_event
+
+        event = asyncio.Event()
+
+        async def loop() -> None:
+            while True:
+                await _wait_event(event, 30)
+                event.clear()
+
+        task = asyncio.create_task(loop())
+        await asyncio.sleep(0.01)
+        event.set()
+        task.cancel()
+        done, _pending = await asyncio.wait({task}, timeout=2)
+        assert done, "the waiter ignored its cancellation"
+        task.cancel()
+
+    async def test_returns_when_the_event_is_set(self) -> None:
+        from src.utils.siem import _wait_event
+
+        event = asyncio.Event()
+        asyncio.get_running_loop().call_later(0.01, event.set)
+        started = time.monotonic()
+        await _wait_event(event, 5)
+        assert time.monotonic() - started < 1
+
+
 class TestForwarder:
     async def test_delivers_in_the_background(self, tmp_path: Path) -> None:
         recorder = Recorder()

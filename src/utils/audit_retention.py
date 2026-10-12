@@ -24,6 +24,7 @@ Exit codes: 0 done (or nothing to do), 1 refused, 2 usage error or missing key.
 """
 
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -41,78 +42,21 @@ from .audit_archive import (
     write_archive,
 )
 from .audit_verify import (
-    GENESIS,
     ChainKeyMissingError,
-    Head,
     UnreadableLogError,
+    checkpoint_batches,
+    checkpoints_path,
     file_sha256,
+    read_checkpoints,
     verify_files,
 )
-
-
-def checkpoints_path(log_file: Path) -> Path:
-    """Where retention records the chain checkpoints of ``log_file``."""
-    return log_file.with_name(f"{log_file.name}.checkpoints.jsonl")
-
-
-def _checkpoint_batches(path: Path) -> list[dict[str, Any]]:
-    """Each retention run's checkpoint line, oldest first.
-
-    A run appends its whole batch as one line, so a crash leaves at most a
-    torn last line (no newline, not valid JSON). That line is ignored: its
-    run had not finished writing, so it deleted nothing.
-
-    Raises:
-        ValueError: For any other line that is not a checkpoint batch
-    """
-    if not path.exists():
-        return []
-    text = path.read_text(encoding="utf-8")
-    lines = text.split("\n")
-    batches = []
-    for number, line in enumerate(lines, start=1):
-        if not line.strip():
-            continue
-        torn = number == len(lines)  # the last piece has no newline after it
-        try:
-            batch = json.loads(line)
-            if not isinstance(batch, dict):
-                raise TypeError("not an object")
-            str(batch["archive"]), str(batch["sha256"])
-            files = [str(name) for name in batch["files"]]
-            chains = [(str(c["chain_id"]), int(c["seq"]), str(c["hash"])) for c in batch["chains"]]
-        except (ValueError, KeyError, TypeError, AttributeError) as e:
-            if torn:
-                print(f"Ignoring an unfinished checkpoint line in {path}", file=sys.stderr)
-                continue
-            raise ValueError(f"line {number} is not a checkpoint batch: {e}") from e
-        batches.append({**batch, "files": files, "chains": chains})
-    return batches
-
-
-def read_checkpoints(path: Path) -> dict[str, Head]:
-    """Per chain, its latest checkpoint ``(seq, hash)``: where it resumes.
-
-    Raises:
-        ValueError: If the file holds something other than checkpoints
-    """
-    if not path.exists():
-        raise ValueError(f"{path} not found")
-    starts: dict[str, Head] = {}
-    for batch in _checkpoint_batches(path):
-        for chain_id, seq, digest in batch["chains"]:
-            if seq > starts.get(chain_id, GENESIS)[0]:
-                starts[chain_id] = (seq, digest)
-    return starts
 
 
 def _delete(paths: list[Path]) -> None:
     """Delete files; one already gone is fine, any other failure is raised."""
     for path in paths:
-        try:
+        with contextlib.suppress(FileNotFoundError):  # already gone: nothing to do
             path.unlink()
-        except FileNotFoundError:
-            pass
 
 
 def _finish_interrupted(
@@ -232,7 +176,7 @@ def purge_expired_files(
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
     result = RetentionResult(cutoff=cutoff, dry_run=dry_run)
     checkpoints = checkpoints_path(log_file)
-    batches = _checkpoint_batches(checkpoints)
+    batches = checkpoint_batches(checkpoints)
     if not dry_run:
         finished = _finish_interrupted(log_file, batches, archive_dir)
         if finished:

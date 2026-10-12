@@ -1,0 +1,33 @@
+unifi_mcp_repo: https://github.com/enuno/unifi-mcp-server.git
+unifi_mcp_version: main
+# A prebuilt image with the fleet extras; empty builds one from source.
+unifi_mcp_image: ""
+
+unifi_mcp_api_type: local
+unifi_mcp_local_host: ""
+unifi_mcp_local_port: 443
+unifi_mcp_local_verify_ssl: true
+
+unifi_mcp_bind_address: "{{ private_address | default('127.0.0.1') }}"
+unifi_mcp_port: 3000
+unifi_mcp_replicas: 1
+unifi_mcp_workers: 1
+# Sessions in one replica's memory need sticky routing (MULTI_CONTROLLER.md);
+# true serves without sessions, so any replica answers any request.
+unifi_mcp_stateless_http: false
+unifi_mcp_metrics_enabled: true
+# Run the server as the least-privilege database role (SECURITY.md).
+unifi_mcp_least_privilege: true
+
+unifi_mcp_audit_retention_days: ""
+unifi_mcp_audit_log_rotate_mb: ""
+# When the retention job runs on the first mcp host (cron syntax, local time).
+unifi_mcp_retention_minute: "17"
+unifi_mcp_retention_hour: "3"
+
+# SIEM export (SECURITY.md); empty leaves it off.
+unifi_mcp_siem_targets: ""
+unifi_mcp_siem_ca_file: ""
+
+# Any other server setting (API.md), e.g. {UNIFI_PROFILE: network}.
+unifi_mcp_env_extra: {}

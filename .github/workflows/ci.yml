@@ -209,6 +209,35 @@ jobs:
         env:
           SKIP: mypy,end-of-file-fixer,markdownlint  # mypy covered in lint job; cosmetic hooks skipped
 
+  deploy:
+    name: Deploy Files Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ansible-core and the playbook's collections
+        working-directory: deploy/ansible
+        run: |
+          pip install "ansible-core==2.17.5" "ansible-lint==24.9.2"
+          ansible-galaxy collection install -r requirements.yml -p ./collections
+
+      - name: Syntax-check the playbook
+        working-directory: deploy/ansible
+        run: |
+          for inventory in single cluster; do
+            ansible-playbook -i "inventories/$inventory/hosts.yml" site.yml --syntax-check
+          done
+
+      - name: Lint the playbook
+        working-directory: deploy/ansible
+        run: ansible-lint --offline site.yml
+
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest

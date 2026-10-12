@@ -1,0 +1,23 @@
+#!/bin/sh
+# Managed by Ansible (deploy/ansible): archive, then delete, audit records
+# older than UNIFI_AUDIT_RETENTION_DAYS (SECURITY.md). Run from cron.
+set -eu
+{% if unifi_mcp_fleet | bool %}
+exec docker run --rm --network {{ unifi_mcp_network }} \
+  --env-file {{ unifi_mcp_root }}/maintenance.env \
+  -v {{ unifi_mcp_root }}/archive:/app/archive \
+  {{ unifi_mcp_image_ref }} \
+  python -m src.fleet.cli audit-retention --confirm
+{% else %}
+# One audit log per replica, each its own hash chain. Every replica
+# directory is visited, including those of replicas since scaled away.
+status=0
+for dir in {{ unifi_mcp_root }}/logs/[0-9]*; do
+  [ -f "$dir/audit.log" ] || continue
+  docker run --rm --env-file {{ unifi_mcp_root }}/maintenance.env \
+    -v "$dir":/app/logs \
+    {{ unifi_mcp_image_ref }} \
+    python -m src.utils.audit_retention /app/logs/audit.log --confirm || status=1
+done
+exit "$status"
+{% endif %}

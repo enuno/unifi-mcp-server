@@ -210,11 +210,13 @@ class TestMainEntryPoint:
             patch.object(mod.mcp, "run") as run,
             patch.object(mod, "register_a2a_routes") as a2a,
             patch.object(mod, "register_metrics_route") as metrics,
+            patch.object(mod, "register_health_route") as health,
             patch.object(mod, "register_webhook_route", return_value=None) as webhook,
         ):
             mod.main()
 
         a2a.assert_called_once()
+        health.assert_called_once_with(mod.mcp)
         metrics.assert_called_once()
         webhook.assert_called_once_with(mod.mcp, mod.settings)
         kwargs = run.call_args.kwargs

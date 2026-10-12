@@ -222,3 +222,7 @@ bandit-report.json
 .mcp.json
 .xerj/
 
+
+# Ansible deploy (deploy/ansible): secrets and downloaded collections
+deploy/ansible/inventories/*/group_vars/all/vault.yml
+deploy/ansible/collections/

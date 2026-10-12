@@ -1,0 +1,40 @@
+# Deploy the UniFi MCP server: ansible-playbook site.yml (README.md).
+# Groups: mcp (required), redis, postgres, lb (optional).
+
+- name: Install Docker
+  hosts: all
+  become: true
+  roles:
+    - docker
+
+- name: Run Postgres
+  hosts: postgres
+  become: true
+  vars_files:
+    - vars/derived.yml
+  roles:
+    - postgres
+
+- name: Run Redis
+  hosts: redis
+  become: true
+  vars_files:
+    - vars/derived.yml
+  roles:
+    - redis
+
+- name: Run the MCP server and workers
+  hosts: mcp
+  become: true
+  vars_files:
+    - vars/derived.yml
+  roles:
+    - unifi_mcp
+
+- name: Run nginx in front of the replicas
+  hosts: lb
+  become: true
+  vars_files:
+    - vars/derived.yml
+  roles:
+    - lb

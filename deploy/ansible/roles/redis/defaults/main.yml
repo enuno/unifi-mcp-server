@@ -1,0 +1,4 @@
+redis_image: redis:7-alpine
+redis_bind_address: "{{ private_address | default(ansible_host) }}"
+redis_port: 6379
+redis_data_dir: /opt/unifi-mcp/redis

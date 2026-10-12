@@ -1,0 +1,31 @@
+- name: Check the settings
+  ansible.builtin.assert:
+    that:
+      - vault_redis_password | default('') | length > 0
+    fail_msg: Set vault_redis_password (vault.yml.example).
+    quiet: true
+
+- name: Create the Redis data directory
+  ansible.builtin.file:
+    path: "{{ redis_data_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Create the shared Docker network
+  community.docker.docker_network:
+    name: "{{ unifi_mcp_network }}"
+
+- name: Run Redis (password required)
+  community.docker.docker_container:
+    name: unifi-mcp-redis
+    image: "{{ redis_image }}"
+    restart_policy: unless-stopped
+    networks:
+      - name: "{{ unifi_mcp_network }}"
+    command: >-
+      redis-server --requirepass {{ vault_redis_password }}
+      --appendonly yes --save 60 1000
+    volumes:
+      - "{{ redis_data_dir }}:/data"
+    published_ports: "{{ [redis_bind_address ~ ':' ~ redis_port ~ ':6379'] if unifi_mcp_remote_data | bool else [] }}"
+  no_log: true

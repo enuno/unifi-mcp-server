@@ -314,11 +314,13 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 ---
 
-### Phase 7: Deployment automation (planned)
+### Phase 7: Deployment automation (in progress: 7.1 and 7.3 done, 7.2 next)
 
 **Goal:** install the server and its fleet stack (Redis, Postgres) repeatably, from a single host to a cluster, without hand-editing compose files. Today the only paths are `docker-compose.yml` (server only), `docker-compose.fleet.yml` (server, Redis, Postgres on one host) and `docker-compose.fleet-scale.yml` (replicas and workers on one host).
 
 #### 7.1 Ansible playbook (Docker hosts)
+
+**Status: done** (`deploy/ansible/`, `deploy/ansible/README.md`). Redis and Postgres run as single containers; for high availability the inventory points at managed endpoints (`unifi_mcp_redis_url`, `unifi_mcp_database_url`) instead of running Sentinel or Patroni itself. The replicas serve plain HTTP on loopback or the private network, with TLS at nginx. A new unauthenticated `GET /healthz` backs the container health check and the load balancer. CI runs `--syntax-check`; a converge-and-idempotence test (molecule or equivalent) is still open.
 
 - A role-based playbook (`deploy/ansible/`) that installs Docker, then the server, Redis and Postgres as containers, driven by an inventory:
   - **Single server:** everything on one host, equivalent to `docker-compose.fleet.yml`.
@@ -331,13 +333,15 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### 7.2 Kubernetes option (Helm chart)
 
-- A Helm chart (`deploy/helm/unifi-mcp/`) with the server as a Deployment (replica count, HPA optional), workers as a second Deployment, `/health` readiness and liveness probes, and `/metrics` scrape annotations.
+- A Helm chart (`deploy/helm/unifi-mcp/`) with the server as a Deployment (replica count, HPA optional), workers as a second Deployment, `/healthz` readiness and liveness probes, and `/metrics` scrape annotations.
 - Redis and Postgres either as chart dependencies (off by default for production) or external endpoints via values.
 - Secrets from an existing Kubernetes Secret or External Secrets; the chart never templates secret values from `values.yaml` defaults.
 - A pre-install/upgrade Job for migrations; a PersistentVolumeClaim (or SIEM export as the durable copy) for the audit log.
 - `helm lint` and `helm template` checks in CI, with a kind-based smoke test.
 
 #### 7.3 Pre-canned agent setup prompts
+
+**Status: done** (`docs/deploy-prompts/`), using `/healthz` and an `initialize` call with the bearer token for verification.
 
 Prompts an operator can hand to an AI coding agent (Claude Code or similar) to stand up the infrastructure, kept in `docs/deploy-prompts/`. Each lists what it will ask for, the safety rules it must follow (no secrets in files under version control, confirm before touching existing hosts, verify with `/health` and a read-only tool call) and how to check the result:
 

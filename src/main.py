@@ -366,6 +366,28 @@ def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
     server.custom_route("/metrics", methods=["GET"])(_metrics)
 
 
+def register_health_route(server: FastMCP) -> None:
+    """Register ``GET /healthz``: an unauthenticated liveness check.
+
+    Load balancers, container health checks and Kubernetes probes cannot
+    send the bearer token, so this answers without one. It says only that the
+    process is serving HTTP (``{"status": "ok"}``): no version, controller,
+    configuration or registry state, nothing a scanner could use. Readiness
+    to reach controllers is a different question, answered by the
+    ``fleet_health`` tool.
+
+    Args:
+        server: The FastMCP server to register the route on
+    """
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+
+    async def _healthz(request: Request) -> Response:
+        return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
+
+    server.custom_route("/healthz", methods=["GET"])(_healthz)
+
+
 def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     """Mount ``POST /webhooks/unifi`` when ``WEBHOOK_SECRET`` is set.
 
@@ -966,6 +988,8 @@ def main() -> None:
         logger.info("MCP authentication: bearer token required (MCP_AUTH_TOKEN)")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
         register_a2a_routes(mcp, a2a_state, mcp_auth)
+        register_health_route(mcp)
+        logger.info("Liveness endpoint: GET /healthz (no token, no details)")
         logger.info(
             "A2A endpoints (bearer token required): /a2a/agent-card, /a2a/discover, "
             "/a2a/delegate, /a2a/confirm, /a2a/audit"

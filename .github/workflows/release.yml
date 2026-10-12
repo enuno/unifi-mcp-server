@@ -67,11 +67,11 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # The versions in uv.lock, so a release is checked with the same tools
+      # (black, ruff, pytest) it was developed with: an unpinned install once
+      # pulled a newer black that rejected an already-tagged commit.
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --locked --python 3.10 --extra dev --extra fleet
 
       - name: Run tests
         run: |

@@ -70,7 +70,7 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Add `docker-compose.yml` and `HARBOR_SETUP.md`
 - [x] Add `Makefile` (`make help` lists targets; `make ci` mirrors the blocking CI jobs)
 - [x] Synchronize README, API.md, UNIFI_API.md, and CHANGELOG.md (2026-09-27; tool and test counts refreshed 2026-10-10)
-- [ ] Prepare release prep notes and version bump (prepped 2026-09-27: `pyproject.toml` at 0.5.0, `CHANGELOG.md` `[0.5.0]`; tag pending hardware verification, see `DEVELOPMENT_PLAN.md` §5)
+- [x] Prepare release prep notes and version bump (v0.5.0 tagged 2026-09-28; v0.6.0 prepared 2026-10-12, see `DEVELOPMENT_PLAN.md` §5)
 - [x] Fix the webhook receiver (2026-10-10: Starlette endpoint instead of the undeclared `fastapi`, `WEBHOOK_SECRET` read into `Settings`, fails closed without it, real 401/429 responses)
 - [x] Mount `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set (`register_webhook_route` in `src/main.py`)
 

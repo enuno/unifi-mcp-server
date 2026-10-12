@@ -125,6 +125,7 @@ jobs:
             VERSION="latest"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "image_tag=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
 
       - name: Extract metadata for Docker
@@ -216,7 +217,8 @@ jobs:
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          # The tag the metadata action pushed: semver without the leading "v".
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.docker-meta.outputs.version }}
           format: cyclonedx-json
           output-file: sbom.cyclonedx.json
 
@@ -259,6 +261,7 @@ jobs:
             VERSION="latest"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "image_tag=${VERSION#v}" >> $GITHUB_OUTPUT
 
       - name: Generate changelog
         id: changelog
@@ -284,10 +287,12 @@ jobs:
 
           ## Docker Image
 
-          Multi-architecture support: amd64, arm64, arm/v7, arm64/v8
+          Multi-architecture support: amd64, arm64, arm/v7. The fleet image
+          (Postgres and Redis extras) is published for amd64 and arm64.
 
           \`\`\`bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.image_tag }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.image_tag }}-fleet
           \`\`\`
 
           ## Install from source
@@ -333,6 +338,7 @@ jobs:
             VERSION="latest"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "image_tag=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "version_number=${VERSION#v}" >> $GITHUB_OUTPUT
 
       - name: Generate announcement content
@@ -362,10 +368,10 @@ jobs:
 
           ## 🐳 Docker Installation
 
-          Multi-architecture support: **amd64**, **arm64**, **arm/v7**, **arm64/v8**
+          Multi-architecture support: **amd64**, **arm64**, **arm/v7** (the `-fleet` image: amd64, arm64)
 
           ```bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.image_tag }}
           ```
 
           Or using Docker Compose:
@@ -373,7 +379,7 @@ jobs:
           ```yaml
           services:
             unifi-mcp:
-              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.image_tag }}
               environment:
                 - UNIFI_HOST=your-controller-host
                 - UNIFI_USERNAME=your-username

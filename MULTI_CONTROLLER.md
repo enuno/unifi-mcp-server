@@ -166,6 +166,15 @@ call controllers live):
   local controllers (the cloud APIs list devices per host, not per site).
   Each sync replaces the previous snapshot; a failed sync leaves it as it was.
 
+Each server keeps a circuit breaker per controller: after 5 calls in a row the
+controller did not answer, it fails fast for 30 seconds instead of waiting
+out timeouts. With Redis configured, a worker announces every successful
+health check, and each server half-opens that controller's breaker if it
+opened before the check started (each server dates the check on its own
+clock, so clock skew between hosts does not matter): calls go through again at once, and one
+more failure re-opens it. Without Redis (or without workers) the breaker
+recovers after its cooldown as before.
+
 With Redis configured, run as many workers as needed: they split the
 controllers by rendezvous hashing and hold a lease on each, so a dead worker's
 controllers move to the others within `UNIFI_FLEET_WORKER_LEASE_SECONDS` (30)
@@ -203,4 +212,10 @@ partial results and the snapshot tools.
 
 ## Status
 
-Phase-5 documentation.
+Implemented through fleet Phase 5 (`docs/FLEET_SCALING_PLAN.md`): per-call
+routing, the Postgres registry, the connection pool and read cache, several
+replicas with shared rate limits and registry pub/sub, workers with snapshot
+tools, health-driven circuit recovery, the security and degradation drills,
+SIEM export and audit retention. Not implemented: discovering the consoles
+behind a cloud account (cloud controllers route by API key; a discovered
+console would have nothing to route to until per-console routing exists).

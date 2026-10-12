@@ -21,6 +21,7 @@ from typing import Any, Literal
 
 from ..api.pool import ClientPool, active_pool
 from ..config import Settings
+from ..fleet.bus import HealthBus
 from ..fleet.db.snapshots import SnapshotStore
 from ..fleet.registry import ControllerProfile, ControllerRegistry
 from ..utils.logger import get_logger
@@ -59,6 +60,7 @@ class Worker:
         shards: Shards,
         *,
         pool: ClientPool | None = None,
+        health_bus: HealthBus | None = None,
         clock: Callable[[], float] = time.monotonic,
         rng: random.Random | None = None,
     ) -> None:
@@ -70,6 +72,8 @@ class Worker:
             snapshots: Where results are stored
             shards: Which of the controllers this worker holds
             pool: Connections for the jobs (one is made if not given)
+            health_bus: Announces healthy controllers to the replicas (made
+                from the settings when Redis is configured, if not given)
             clock: Monotonic clock (tests)
             rng: Source of jitter (tests)
         """
@@ -82,6 +86,9 @@ class Worker:
             pool
             if pool is not None
             else ClientPool(max_open=settings.fleet_max_open_clients, auth_ttl=0)
+        )
+        self.health_bus = (
+            health_bus if health_bus is not None else HealthBus.from_settings(settings)
         )
         self._clock = clock
         self._rng = rng or random.Random()  # noqa: S311 - jitter, not security
@@ -154,6 +161,7 @@ class Worker:
                     self.snapshots,
                     failures=self._failures,
                     down_after=self.settings.fleet_worker_down_after,
+                    bus=self.health_bus,
                 )
 
         else:

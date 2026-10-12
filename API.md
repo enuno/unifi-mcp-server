@@ -106,10 +106,11 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
+| `UNIFI_RETRY_BACKOFF_FACTOR` | Exponential backoff factor between retries | No | `2.0` |
+| `UNIFI_RETRY_TOTAL_TIMEOUT` | Wall-clock budget in seconds for one request, including all retries and backoff waits | No | `60` |
 | `UNIFI_PROFILE` | Tool exposure profile: `network`, `devices`, `security`, `system`, `minimal`, `protect`. An unrecognised value logs a warning and falls back to all modules | No | unset |
 | `UNIFI_READ_ONLY` | Register only non-mutating tools. State-changing tools are not exposed to the client at all | No | `false` |
-| `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
-| `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
+| `UNIFI_DRY_RUN` | Change-safe mode: every tool with a `dry_run` parameter runs as a preview, and mutating tools without one are not registered | No | `false` |
 | `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
@@ -140,7 +141,8 @@ Configure the MCP server using environment variables:
 | `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
 | `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
-| `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
+| `WEBHOOK_SECRET` | HMAC-SHA256 key verifying `X-UniFi-Signature` on `POST /webhooks/unifi`; without it the receiver refuses every request | To receive webhooks | unset |
+| `UNIFI_CACHE_ENABLED` | Use the Redis read cache when Redis is configured; set `false` to bypass it | No | `true` |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | Redis location for the response cache | No | `localhost` / `6379` / `0` / unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
@@ -150,6 +152,11 @@ Configure the MCP server using environment variables:
 | `MCP_STATELESS_HTTP` | Run the HTTP transports without MCP sessions so any replica can answer any request (ignored for stdio and SSE). `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs per-client sticky routing across replicas, keyed on something stable from `initialize` onward (see `MULTI_CONTROLLER.md`) | No | `false` |
 | `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
+| `LOG_API_REQUESTS` | Log each controller API request | No | `true` |
+| `UNIFI_CACHE_TTL` | Accepted but not used: read-cache lifetimes are fixed per resource type (sites, networks and WLANs 5 min, devices 1 min, clients 30 s) | No | `300` |
+| `UNIFI_BACKUP_DOWNLOAD_DIR` | Directory `download_backup` writes into; the caller names only the file | No | `.` |
+| `SUPERMEMORY_ENABLED` | Enable the Supermemory integration for operator notes | No | `false` |
+| `SUPERMEMORY_API_KEY` | Supermemory API key | With `SUPERMEMORY_ENABLED` | unset |
 
 - Required when `UNIFI_API_TYPE=local`.
 

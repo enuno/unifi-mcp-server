@@ -364,14 +364,15 @@ Prompts an operator can hand to an AI coding agent (Claude Code or similar) to s
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Next release (prepped 2026-09-27, tag pending)**: 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
-| v0.2.5 | Last tagged release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
+| v0.6.0 | Fleet Phases 0–5 + Phase 7 | **Released 2026-10-12**: multi-controller fleet stack (`docs/FLEET_SCALING_PLAN.md`), SIEM export and audit retention, Ansible playbook, Helm chart and `-fleet` images, agent setup prompts |
+| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
+| v0.2.5 | Earlier release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v0.6.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; Phase 5 items as they land; Phase 7 deployment automation (Ansible, Helm, agent setup prompts) |
+| v0.7.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; a converge-and-idempotence test for the playbook |
 
 ---
 
-> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. Remaining release steps: hardware verification of mock-tested surfaces (below), then `git tag v0.5.0 && git push origin v0.5.0` (triggers `.github/workflows/release.yml`).
+> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. `v0.5.0` was tagged on 2026-09-28 after hardware verification but never published: its release workflow could not start (an account billing lock), and the re-run on 2026-10-12 failed because the job installed unpinned dev tools and a newer black rejected the tagged code. The release job now installs the locked versions (`uv sync --locked`). Everything in v0.5.0 plus fleet Phases 0–5 and Phase 7 ships as **v0.6.0**, the first release published since v0.2.6.
 
 ## 6. Required downstream docs
 

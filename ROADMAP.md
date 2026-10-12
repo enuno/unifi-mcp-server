@@ -121,8 +121,9 @@ Goal: turn the server into a multi-site, multi-team operating platform with stro
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.2.5 | Current stable release | Baseline release artifact |
+| v0.2.5 | Earlier release | Baseline release artifact |
 | v0.3.0 | Phases 0–2 completion | Docs sync, Network refs, connector foundation |
 | v0.4.0 | Phase 3 | Protect API integration (folded into v0.5.0 — never tagged) |
-| v0.5.0 | Phases 3+4+5a+6 | Next release (prepped 2026-09-27): 343 tools/60 modules, spec alignment v10.6.106/v7.3.68, Protect v7 expansion, Mobility/InnerSpace/Carrier Fabric, transport auth hardening |
+| v0.5.0 | Phases 3+4+5a+6 | Tagged 2026-09-28, never published (its contents ship in v0.6.0): 343 tools/60 modules, spec alignment v10.6.106/v7.3.68, Protect v7 expansion, Mobility/InnerSpace/Carrier Fabric, transport auth hardening |
+| v0.6.0 | Fleet Phases 0–5 + Phase 7 | Released 2026-10-12: multi-controller fleet stack, SIEM export and audit retention, Ansible playbook, Helm chart and `-fleet` images, agent setup prompts |
 | v1.0.0 | Phase 5 | Enterprise scale and operational excellence |

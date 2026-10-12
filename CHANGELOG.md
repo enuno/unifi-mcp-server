@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-12
+
+Fleet scaling Phases 0–5 (one server for many controllers: per-call routing, a Postgres controller registry, access control with server-issued tokens, a tamper-evident Postgres audit store, shared connections and a Redis read cache, several replicas and a worker tier, SIEM export and audit retention) and Phase 7 deployment automation (Ansible playbook, Helm chart, agent setup prompts). The fleet features stay off until `DATABASE_URL` is set; a server without it behaves as before. Also the first published release of everything under `[0.5.0]`, whose tag was never released. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.0` and, with the fleet extras, `:0.6.0-fleet`.
+
 ### Added
 
 - **Deployment automation, Phase 7b: Helm chart.** `deploy/helm/unifi-mcp/` runs the server on Kubernetes: a server Deployment probed on `/healthz`, running non-root with a read-only root filesystem and no service account token; in fleet mode a worker Deployment, a pre-install/pre-upgrade migration Job and an audit retention CronJob that archives to a PersistentVolumeClaim; and optional Ingress (with the ingress-nginx annotations that keep a client on one pod), ServiceMonitor (sending the bearer token to `/metrics`), PodDisruptionBudget and NetworkPolicy. Every credential, including the Postgres and Redis URLs, comes from an existing Secret, and the chart refuses a secret in `server.extraEnv`. The release workflow also publishes a `<version>-fleet` image with the fleet extras. CI lints and renders the chart, validates it with kubeconform, and runs `scripts/helm_smoke_test.sh` on kind against a throwaway Postgres.

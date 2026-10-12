@@ -567,8 +567,34 @@ CMD ["python", "src/main.py"]
    the retention transaction; the server itself never deletes audit records.
    The run's `audit_retention` admin event is written in the same
    transaction as the delete, the job needs no controller credentials
-   (no `UNIFI_API_KEY`), and `UNIFI_READ_ONLY` refuses `--confirm`. Without Postgres (the JSONL file),
-   retention is not automated yet.
+   (no `UNIFI_API_KEY`), and `UNIFI_READ_ONLY` refuses `--confirm`.
+
+   **JSONL rotation and retention:** without Postgres, set
+   `UNIFI_AUDIT_LOG_ROTATE_MB` and the server renames the full audit file to
+   `audit.log.<UTC time>Z` and starts a new one; the hash chain continues
+   across files, so verify them together, oldest first (`[0-9]*` matches
+   only the rotated files, not the checkpoint file retention adds). Rotation
+   renames the file, so it must live in a writable directory: in Docker,
+   mount a directory and point `UNIFI_AUDIT_LOG_PATH` into it rather than
+   mounting the file itself:
+
+   ```bash
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log
+   ```
+
+   Retention removes rotated files whose records are all past
+   `UNIFI_AUDIT_RETENTION_DAYS` (never the file being written), after the
+   same verify-then-archive steps, and records where each chain was cut in
+   `audit.log.checkpoints.jsonl`:
+
+   ```bash
+   python -m src.utils.audit_retention /var/log/unifi-mcp/audit.log --confirm
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log \
+     --checkpoints /var/log/unifi-mcp/audit.log.checkpoints.jsonl
+   ```
+
+   Whoever can rewrite the log can rewrite the checkpoint file too, so keep
+   the archives (or the SIEM copy) on storage the server cannot change.
 
    **Least-privilege database role (optional):** the server needs no DDL and
    no UPDATE/DELETE on the audit table. Run migrations as the schema owner

@@ -28,12 +28,16 @@ import hashlib
 import json
 import sys
 import zlib
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .audit import GENESIS_HASH, record_hash, resolve_chain_key
+
+
+class UnreadableLogError(Exception):
+    """Raised when a log or archive cannot be read (e.g. a truncated archive)."""
 
 
 class ChainKeyMissingError(Exception):
@@ -86,14 +90,33 @@ def verify_file(
     Raises:
         ChainKeyMissingError: If the file has HMAC-chained records and no key
     """
-    opener: Any = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt", encoding="utf-8") as f:
-        return verify_records(
-            ((f"line {number}", line) for number, line in enumerate(f, start=1)),
-            key,
-            expected_heads,
-            starts,
-        )
+    return verify_files([path], key, expected_heads, starts)
+
+
+def verify_files(
+    paths: Sequence[Path],
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+    starts: Mapping[str, Head] | None = None,
+) -> VerifyReport:
+    """Verify audit files as one log, in the order given (oldest first).
+
+    Chains continue across rotated files (:func:`~src.utils.audit.audit_files`
+    lists them in order). Same arguments as :func:`verify_file`.
+    """
+
+    def lines() -> Iterator[tuple[str, str]]:
+        for path in paths:
+            prefix = f"{path.name} " if len(paths) > 1 else ""
+            opener: Any = gzip.open if path.suffix == ".gz" else open
+            try:
+                with opener(path, "rt", encoding="utf-8") as f:
+                    for number, line in enumerate(f, start=1):
+                        yield f"{prefix}line {number}", line
+            except (OSError, EOFError, UnicodeDecodeError, zlib.error) as e:
+                raise UnreadableLogError(f"cannot read {path}: {type(e).__name__}: {e}") from e
+
+    return verify_records(lines(), key, expected_heads, starts)
 
 
 def verify_records(
@@ -261,6 +284,65 @@ def parse_head(value: str) -> tuple[str, Head]:
     return chain_id, (int(seq_text), head_hash)
 
 
+# Checkpoints written by JSONL retention (src/utils/audit_retention.py).
+
+
+def checkpoints_path(log_file: Path) -> Path:
+    """Where retention records the chain checkpoints of ``log_file``."""
+    return log_file.with_name(f"{log_file.name}.checkpoints.jsonl")
+
+
+def checkpoint_batches(path: Path) -> list[dict[str, Any]]:
+    """Each retention run's checkpoint line, oldest first.
+
+    A run appends its whole batch as one line, so a crash leaves at most a
+    torn last line (no newline, not valid JSON). That line is ignored: its
+    run had not finished writing, so it deleted nothing.
+
+    Raises:
+        ValueError: For any other line that is not a checkpoint batch
+    """
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    batches = []
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        torn = number == len(lines)  # the last piece has no newline after it
+        try:
+            batch = json.loads(line)
+            if not isinstance(batch, dict):
+                raise TypeError("not an object")
+            str(batch["archive"]), str(batch["sha256"])
+            files = [str(name) for name in batch["files"]]
+            chains = [(str(c["chain_id"]), int(c["seq"]), str(c["hash"])) for c in batch["chains"]]
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
+            if torn:
+                print(f"Ignoring an unfinished checkpoint line in {path}", file=sys.stderr)
+                continue
+            raise ValueError(f"line {number} is not a checkpoint batch: {e}") from e
+        batches.append({**batch, "files": files, "chains": chains})
+    return batches
+
+
+def read_checkpoints(path: Path) -> dict[str, Head]:
+    """Per chain, its latest checkpoint ``(seq, hash)``: where it resumes.
+
+    Raises:
+        ValueError: If the file holds something other than checkpoints
+    """
+    if not path.exists():
+        raise ValueError(f"{path} not found")
+    starts: dict[str, Head] = {}
+    for batch in checkpoint_batches(path):
+        for chain_id, seq, digest in batch["chains"]:
+            if seq > starts.get(chain_id, GENESIS)[0]:
+                starts[chain_id] = (seq, digest)
+    return starts
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the audit-chain verification CLI.
 
@@ -274,7 +356,16 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m src.utils.audit_verify",
         description="Verify the hash chains in an audit log file.",
     )
-    parser.add_argument("log_file", type=Path, help="Path to the audit log file.")
+    parser.add_argument(
+        "log_files",
+        type=Path,
+        nargs="+",
+        metavar="LOG_FILE",
+        help=(
+            "The audit log file; with rotation, its rotated files first, oldest first "
+            "(audit.log.[0-9]* audit.log)."
+        ),
+    )
     parser.add_argument(
         "--key",
         default=None,
@@ -301,6 +392,16 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "Chain anchors exported to the SIEM (JSON lines or a JSON array; other records "
             "are ignored). The latest anchor of each chain is used like --head."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoints",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Where JSONL retention cut each chain (<log>.checkpoints.jsonl): chains resume "
+            "right after their latest checkpoint."
         ),
     )
     parser.add_argument(
@@ -333,8 +434,18 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         expected_heads = {**anchors, **expected_heads}
 
-    if not args.log_file.exists():
-        print(f"error: log file not found: {args.log_file}", file=sys.stderr)
+    for path in args.log_files:
+        if not path.exists():
+            print(f"error: log file not found: {path}", file=sys.stderr)
+            return 2
+    if args.checkpoints is not None:
+        try:
+            starts = read_checkpoints(args.checkpoints)
+        except ValueError as e:
+            print(f"error: --checkpoints: {e}", file=sys.stderr)
+            return 2
+    if args.manifest is not None and len(args.log_files) != 1:
+        print("error: --manifest checks one archive at a time", file=sys.stderr)
         return 2
     manifest_problems: list[str] = []
     if args.manifest is not None:
@@ -343,20 +454,20 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError as e:
             print(f"error: --manifest: {e}", file=sys.stderr)
             return 2
-        starts = manifest.starts
+        starts = {**starts, **manifest.starts}
         expected_heads = {**manifest.heads, **expected_heads}
-        if file_sha256(args.log_file) != manifest.sha256:
+        if file_sha256(args.log_files[0]) != manifest.sha256:
             manifest_problems.append("archive: SHA-256 does not match its manifest")
     key = args.key.encode("utf-8") if args.key else resolve_chain_key()
 
     try:
-        report = verify_file(args.log_file, key, expected_heads, starts)
+        report = verify_files(args.log_files, key, expected_heads, starts)
     except ChainKeyMissingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    except (OSError, EOFError, UnicodeDecodeError, zlib.error) as e:
+    except UnreadableLogError as e:
         # A truncated or corrupt archive (or an unreadable file) fails the check.
-        print(f"FAILED: cannot read {args.log_file}: {type(e).__name__}: {e}")
+        print(f"FAILED: {e}")
         return 1
 
     report.problems[:0] = manifest_problems

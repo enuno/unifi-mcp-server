@@ -177,7 +177,7 @@ class TestRetention:
             assert [json.loads(line)["operation"] for line in f] == [f"op_{n}" for n in range(8)]
         checkpoints = checkpoints_path(log)
         assert stat.S_IMODE(checkpoints.stat().st_mode) == 0o600
-        (chain_id,) = read_checkpoints(checkpoints)
+        assert len(read_checkpoints(checkpoints)) == 1  # one chain, checkpointed
 
         key = KEY.decode()
         assert verify_cli([str(archive), "--key", key, "--manifest", str(manifest)]) == 0

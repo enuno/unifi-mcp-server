@@ -90,3 +90,17 @@ async def test_metrics_route_serves_without_auth_when_no_provider() -> None:
         response = await handler(_request())
         assert response.status_code == 200
         mock_render.assert_called_once()
+
+
+async def test_healthz_answers_without_a_token_and_says_nothing_else() -> None:
+    import json
+
+    main = _load_main()
+    server = StubServer()
+    main.register_health_route(server)  # type: ignore[arg-type]
+    handler = server.routes[("/healthz", ("GET",))]
+
+    response = await handler(_request())
+    assert response.status_code == 200
+    assert json.loads(response.body) == {"status": "ok"}
+    assert response.headers["cache-control"] == "no-store"

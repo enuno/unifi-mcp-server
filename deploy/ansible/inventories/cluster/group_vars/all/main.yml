@@ -1,0 +1,25 @@
+# Settings for every host (see inventories/single for the basics).
+unifi_mcp_version: main
+unifi_mcp_image: ""
+
+unifi_mcp_api_type: local
+unifi_mcp_local_host: 192.168.1.1
+unifi_mcp_local_port: 443
+unifi_mcp_local_verify_ssl: true
+
+# Each mcp host runs this many replicas and workers. The replicas listen on
+# private_address at unifi_mcp_port, unifi_mcp_port + 1, ... for nginx.
+unifi_mcp_replicas: 2
+unifi_mcp_workers: 1
+unifi_mcp_port: 3000
+
+# nginx on the lb hosts: TLS when both files are set (paths on the lb host).
+lb_listen_port: 443
+lb_tls_certificate: /etc/ssl/unifi-mcp/fullchain.pem
+lb_tls_certificate_key: /etc/ssl/unifi-mcp/privkey.pem
+
+unifi_mcp_audit_retention_days: 365
+
+# Optional: copy every audit record to a SIEM (SECURITY.md).
+# unifi_mcp_env_extra:
+#   UNIFI_AUDIT_SIEM_TARGETS: syslog+tls://siem.example.com:6514

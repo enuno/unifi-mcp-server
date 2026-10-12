@@ -47,7 +47,7 @@ async def _resolve_network_uuid(
                     logger.debug(
                         sanitize_log_message(f"Resolved network ObjectId {identifier} → UUID {ext}")
                     )
-                    return ext
+                    return str(ext)
     except Exception:
         logger.debug(
             sanitize_log_message(f"Failed to resolve network ObjectId {identifier} via legacy API")

@@ -227,3 +227,54 @@ class TestSessionIsolation:
 
     async def test_current_controller_is_unset_outside_calls(self):
         assert current_controller.get() is None
+
+
+class TestStatelessHttp:
+    """With MCP_STATELESS_HTTP no MCP session survives between requests.
+
+    FastMCP keys session state by the ``mcp-session-id`` header, which a
+    stateless server never issues, so each request would get a fresh key and a
+    selection would silently vanish (docs/FLEET_SCALING_PLAN.md, Phase 4 spike).
+    """
+
+    @pytest.fixture
+    def stateless(self, monkeypatch: pytest.MonkeyPatch, base: Settings) -> Settings:
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        monkeypatch.setenv("MCP_SERVER_TRANSPORT", "streamable_http")
+        return Settings()
+
+    @pytest.mark.parametrize("transport", ["stdio", "sse"])
+    async def test_ignored_where_the_transport_keeps_sessions(
+        self, monkeypatch: pytest.MonkeyPatch, base: Settings, two_controllers, transport: str
+    ):
+        # main() passes stateless_http only to the HTTP transports.
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        monkeypatch.setenv("MCP_SERVER_TRANSPORT", transport)
+        _active_ctx.set(FakeContext())
+        router = FleetRouter(Settings(), two_controllers)
+
+        assert not router.stateless
+        assert (await router.select("hq")).name == "hq"
+
+    async def test_select_is_refused_clearly(self, stateless, two_controllers):
+        _active_ctx.set(FakeContext())
+
+        with pytest.raises(ValidationError, match="stateless") as excinfo:
+            await FleetRouter(stateless, two_controllers).select("hq")
+        assert "controller=" in str(excinfo.value)
+
+    async def test_session_state_is_ignored(self, stateless, two_controllers):
+        ctx = FakeContext()
+        ctx.state[SESSION_KEY] = "branch"
+        _active_ctx.set(ctx)
+        router = FleetRouter(stateless, two_controllers)
+
+        assert await router.session_controller() is None
+        assert (await router.resolve(None, mutating=False)).name == "hq"  # the default
+
+    async def test_write_error_names_only_the_explicit_argument(self, stateless, two_controllers):
+        with pytest.raises(ValidationError) as excinfo:
+            await FleetRouter(stateless, two_controllers).resolve(None, mutating=True)
+
+        assert "controller=<name>" in str(excinfo.value)
+        assert "select_controller" not in str(excinfo.value)

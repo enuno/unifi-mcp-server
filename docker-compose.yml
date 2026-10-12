@@ -33,7 +33,8 @@ services:
       # Required before any network transport (http/sse/streamable_http) will
       # start; the server refuses to open a listener without it.
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
-      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+      # LOG_LEVEL is what the server reads; MCP_LOG_LEVEL is the old .env name.
+      LOG_LEVEL: ${LOG_LEVEL:-${MCP_LOG_LEVEL:-INFO}}
 
       # Optional: Rate Limiting
       UNIFI_RATE_LIMIT_REQUESTS: ${UNIFI_RATE_LIMIT_REQUESTS:-100}
@@ -42,6 +43,9 @@ services:
       UNIFI_PROFILE: ${UNIFI_PROFILE:-network}
       DRY_RUN: ${DRY_RUN:-false}
       UNIFI_AUDIT_LOG_PATH: ${UNIFI_AUDIT_LOG_PATH:-/app/audit.log}
+      # Rotation renames the file, which a file bind mount (./audit.log below)
+      # does not allow: with it, also set UNIFI_AUDIT_LOG_PATH=/app/logs/audit.log.
+      UNIFI_AUDIT_LOG_ROTATE_MB: ${UNIFI_AUDIT_LOG_ROTATE_MB:-}
       UNIFI_METRICS_ENABLED: ${UNIFI_METRICS_ENABLED:-false}
       UNIFI_WEBHOOK_REDIS_URL: ${UNIFI_WEBHOOK_REDIS_URL:-}
       UNIFI_CONTROLLERS: ${UNIFI_CONTROLLERS:-}

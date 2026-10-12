@@ -1,7 +1,7 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
 from enum import Enum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -181,6 +181,16 @@ class Settings(BaseSettings):
         repr=False,
     )
 
+    webhook_secret: str | None = Field(
+        default=None,
+        description=(
+            "HMAC-SHA256 key for verifying X-UniFi-Signature on incoming webhooks. "
+            "Without it the webhook receiver refuses every request."
+        ),
+        validation_alias="WEBHOOK_SECRET",
+        repr=False,
+    )
+
     # Fleet registry (docs/FLEET_SCALING_PLAN.md Phase 2a). Setting DATABASE_URL
     # switches the controller registry from the single UNIFI_* controller to
     # Postgres; UNIFI_FLEET_CREDENTIAL_KEY must then be set as well.
@@ -206,6 +216,84 @@ class Settings(BaseSettings):
             "used idle ones are closed beyond this"
         ),
         validation_alias="UNIFI_FLEET_MAX_OPEN_CLIENTS",
+    )
+
+    fleet_expected_replicas: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many processes (server replicas and workers) share each controller's rate "
+            "limit. While Redis is unavailable each falls back to UNIFI_RATE_LIMIT_REQUESTS "
+            "divided by this"
+        ),
+        validation_alias="UNIFI_FLEET_EXPECTED_REPLICAS",
+    )
+
+    # fleet_fanout: one read tool run on many controllers (FLEET_SCALING_PLAN.md §3.4).
+    fleet_fanout_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controllers one fleet_fanout call reaches at once",
+        validation_alias="UNIFI_FLEET_FANOUT_CONCURRENCY",
+    )
+
+    fleet_fanout_timeout_seconds: float = Field(
+        default=15.0,
+        gt=0,
+        description="Default per-controller timeout of fleet_fanout",
+        validation_alias="UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS",
+    )
+
+    fleet_fanout_deadline_seconds: float = Field(
+        default=60.0,
+        gt=0,
+        description=(
+            "Default overall deadline of fleet_fanout; controllers not done by then "
+            "are reported as timed out"
+        ),
+        validation_alias="UNIFI_FLEET_FANOUT_DEADLINE_SECONDS",
+    )
+
+    # Worker tier (python -m src.worker, docs/FLEET_SCALING_PLAN.md §3.5).
+    fleet_worker_health_seconds: int = Field(
+        default=60,
+        ge=5,
+        description="How often the worker health-checks each controller",
+        validation_alias="UNIFI_FLEET_WORKER_HEALTH_SECONDS",
+    )
+
+    fleet_worker_sync_seconds: int = Field(
+        default=900,
+        ge=30,
+        description="How often the worker refreshes each controller's sites and device inventory",
+        validation_alias="UNIFI_FLEET_WORKER_SYNC_SECONDS",
+    )
+
+    fleet_worker_concurrency: int = Field(
+        default=20,
+        ge=1,
+        description="Most controller jobs one worker runs at once",
+        validation_alias="UNIFI_FLEET_WORKER_CONCURRENCY",
+    )
+
+    fleet_worker_lease_seconds: int = Field(
+        default=30,
+        ge=3,
+        description=(
+            "How long a worker's membership and controller leases last without renewal; "
+            "a dead worker's controllers move to the others after this"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_LEASE_SECONDS",
+    )
+
+    fleet_worker_down_after: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "Consecutive failed health checks before a controller is marked down "
+            "(earlier failures mark it degraded)"
+        ),
+        validation_alias="UNIFI_FLEET_WORKER_DOWN_AFTER",
     )
 
     stdio_role: Literal["viewer", "operator", "admin", "fleet-admin"] = Field(
@@ -289,6 +377,88 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_AUDIT_FAIL_CLOSED",
     )
 
+    # SIEM export (src/utils/siem.py, docs/FLEET_SCALING_PLAN.md §3.7).
+    audit_siem_targets: str | None = Field(
+        default=None,
+        description=(
+            "Comma-separated SIEM destinations for audit records: syslog+tls://host:6514, "
+            "https://host/path (signed webhook) or otlp+https://collector:4318"
+        ),
+        validation_alias="UNIFI_AUDIT_SIEM_TARGETS",
+        repr=False,
+    )
+
+    audit_siem_webhook_secret: str | None = Field(
+        default=None,
+        description="HMAC-SHA256 key signing webhook deliveries (required for https:// targets)",
+        validation_alias="UNIFI_AUDIT_SIEM_WEBHOOK_SECRET",
+        repr=False,
+    )
+
+    audit_siem_otlp_headers: str | None = Field(
+        default=None,
+        description="Extra headers for OTLP targets, as key=value,key=value (e.g. an API key)",
+        validation_alias="UNIFI_AUDIT_SIEM_OTLP_HEADERS",
+        repr=False,
+    )
+
+    audit_siem_ca_file: str | None = Field(
+        default=None,
+        description="CA bundle to verify SIEM targets with (system roots when unset)",
+        validation_alias="UNIFI_AUDIT_SIEM_CA_FILE",
+    )
+
+    audit_siem_buffer_dir: str | None = Field(
+        default=None,
+        description=(
+            "Where records wait for delivery (default: siem-buffer next to the audit log)"
+        ),
+        validation_alias="UNIFI_AUDIT_SIEM_BUFFER_DIR",
+    )
+
+    audit_siem_buffer_max_mb: int = Field(
+        default=100,
+        ge=1,
+        description="Most undelivered data kept per target; the oldest is dropped beyond it",
+        validation_alias="UNIFI_AUDIT_SIEM_BUFFER_MAX_MB",
+    )
+
+    audit_siem_anchor_seconds: int = Field(
+        default=300,
+        ge=10,
+        description="How often each audit chain's head is sent to the SIEM as an anchor",
+        validation_alias="UNIFI_AUDIT_SIEM_ANCHOR_SECONDS",
+    )
+
+    audit_log_rotate_mb: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Rotate the JSONL audit file at this size into <log>.<UTC time>Z files "
+            "(read by the audit logger; unset never rotates)"
+        ),
+        validation_alias="UNIFI_AUDIT_LOG_ROTATE_MB",
+    )
+
+    # Audit retention (src/fleet/db/retention.py, docs/FLEET_SCALING_PLAN.md §3.7).
+    audit_retention_days: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Archive and delete Postgres audit records older than this many days "
+            "(python -m src.fleet.cli audit-retention); unset keeps them forever"
+        ),
+        validation_alias="UNIFI_AUDIT_RETENTION_DAYS",
+    )
+
+    audit_archive_dir: str | None = Field(
+        default=None,
+        description=(
+            "Where retention writes its archives (default: audit-archive next to the audit log)"
+        ),
+        validation_alias="UNIFI_AUDIT_ARCHIVE_DIR",
+    )
+
     # Backup download location
     backup_download_dir: str = Field(
         default=".",
@@ -336,6 +506,18 @@ class Settings(BaseSettings):
         validation_alias="MCP_SERVER_PORT",
     )
 
+    mcp_stateless_http: bool = Field(
+        default=False,
+        description=(
+            "Serve Streamable HTTP without MCP sessions, so any replica can answer any "
+            "request. No session survives between requests: select_controller is "
+            "refused and every controller-bound call needs controller=<name> (or the "
+            "registry default). The default, stateful mode needs sticky routing on "
+            "mcp-session-id behind a load balancer."
+        ),
+        validation_alias="MCP_STATELESS_HTTP",
+    )
+
     mcp_auth_token: str | None = Field(
         default=None,
         description=(
@@ -347,7 +529,21 @@ class Settings(BaseSettings):
         validation_alias="MCP_AUTH_TOKEN",
     )
 
-    @field_validator("redis_url", "redis_password", "database_url", mode="before")
+    @field_validator(
+        "redis_url",
+        "redis_password",
+        "database_url",
+        "webhook_secret",
+        "audit_siem_targets",
+        "audit_siem_webhook_secret",
+        "audit_siem_otlp_headers",
+        "audit_siem_ca_file",
+        "audit_siem_buffer_dir",
+        "audit_retention_days",
+        "audit_archive_dir",
+        "audit_log_rotate_mb",
+        mode="before",
+    )
     @classmethod
     def blank_secret_is_unset(cls, v: str | None) -> str | None:
         """Treat a blank value as unset.
@@ -608,3 +804,34 @@ class Settings(BaseSettings):
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+
+class AuditMaintenanceSettings(BaseSettings):
+    """What the audit retention job reads: same variables as :class:`Settings`.
+
+    A database maintenance job needs no controller credentials, so this
+    model leaves out ``UNIFI_API_KEY`` and everything else it does not use.
+    """
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    read_only: bool = Field(default=False, validation_alias="UNIFI_READ_ONLY")
+    audit_log_enabled: bool = Field(default=True, validation_alias="UNIFI_AUDIT_LOG_ENABLED")
+    audit_log_file: str | None = Field(default=None, validation_alias="UNIFI_AUDIT_LOG_PATH")
+    audit_retention_days: int | None = Field(
+        default=None, ge=1, validation_alias="UNIFI_AUDIT_RETENTION_DAYS"
+    )
+    audit_archive_dir: str | None = Field(default=None, validation_alias="UNIFI_AUDIT_ARCHIVE_DIR")
+
+    @field_validator("audit_log_file", "audit_retention_days", "audit_archive_dir", mode="before")
+    @classmethod
+    def blank_is_unset(cls, v: Any) -> Any:
+        """Treat a blank value (as compose forwards an unset one) as unset."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v

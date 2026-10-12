@@ -1,0 +1,22 @@
+The UniFi MCP server is deploying as {{ include "unifi-mcp.fullname" . }}
+({{ .Values.server.replicas }} replica(s){{ if .Values.fleet.enabled }}, {{ .Values.fleet.workers.replicas }} worker(s), fleet mode{{ end }}).
+
+Check it:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "unifi-mcp.fullname" . }} 3000:{{ .Values.service.port }}
+  curl -fsS http://127.0.0.1:3000/healthz        # {"status":"ok"}, no token
+
+MCP clients connect to http(s)://<host>/mcp with the header
+"Authorization: Bearer <MCP_AUTH_TOKEN from the {{ .Values.existingSecret }} Secret>".
+{{- if and (gt (int .Values.server.replicas) 1) (not .Values.server.statelessHttp) }}
+
+Several replicas keep sessions in memory: make sure your ingress keeps
+each client on one pod (values.yaml, ingress.annotations).
+{{- end }}
+{{- if not .Values.fleet.enabled }}
+{{- if not .Values.persistence.enabled }}
+
+The audit log is on an emptyDir and is lost with the pod: set
+audit.siemTargets, persistence.enabled, or fleet.enabled.
+{{- end }}
+{{- end }}

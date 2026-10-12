@@ -2,26 +2,13 @@
 
 import hashlib
 import hmac
-import sys
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-mock_fastapi = MagicMock()
-mock_fastapi.FastAPI = MagicMock
-mock_fastapi.Header = MagicMock
-mock_fastapi.HTTPException = Exception
-mock_fastapi.Request = MagicMock
-mock_fastapi.status = MagicMock()
-mock_fastapi.status.HTTP_401_UNAUTHORIZED = 401
-mock_fastapi.status.HTTP_400_BAD_REQUEST = 400
-mock_fastapi.status.HTTP_429_TOO_MANY_REQUESTS = 429
-mock_fastapi.status.HTTP_500_INTERNAL_SERVER_ERROR = 500
-sys.modules["fastapi"] = mock_fastapi
-
-from src.webhooks.handlers import WebhookEventHandler  # noqa: E402
-from src.webhooks.receiver import WebhookEvent, WebhookReceiver  # noqa: E402
+from src.webhooks.handlers import WebhookEventHandler
+from src.webhooks.receiver import WebhookEvent, WebhookReceiver
 
 
 @pytest.fixture
@@ -321,8 +308,7 @@ class TestWebhookEventHandler:
             data={"mac": "00:11:22:33:44:55", "name": "Access Point"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_device_online(event)
+        await handler.handle_device_online(event)
 
     @pytest.mark.asyncio
     async def test_handle_device_offline(self, handler):
@@ -333,8 +319,7 @@ class TestWebhookEventHandler:
             data={"mac": "00:11:22:33:44:55", "name": "Switch"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_device_offline(event)
+        await handler.handle_device_offline(event)
 
     @pytest.mark.asyncio
     async def test_handle_client_connected(self, handler):
@@ -345,8 +330,7 @@ class TestWebhookEventHandler:
             data={"mac": "aa:bb:cc:dd:ee:ff", "hostname": "laptop", "essid": "Corp-WiFi"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_client_connected(event)
+        await handler.handle_client_connected(event)
 
     @pytest.mark.asyncio
     async def test_handle_client_disconnected(self, handler):
@@ -357,8 +341,7 @@ class TestWebhookEventHandler:
             data={"mac": "aa:bb:cc:dd:ee:ff", "hostname": "phone"},
         )
 
-        with patch("src.cache.invalidate_cache", new_callable=AsyncMock):
-            await handler.handle_client_disconnected(event)
+        await handler.handle_client_disconnected(event)
 
     @pytest.mark.asyncio
     async def test_handle_alert_raised(self, handler):

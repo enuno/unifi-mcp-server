@@ -1,7 +1,8 @@
 """A real Postgres for the fleet registry tests, started with pgserver (no Docker).
 
 One server per test session; every test that asks for ``database_url`` gets a
-fresh, empty database on it.
+fresh, empty database on it. The data directory is deleted at the end of the
+session (each one is several hundred MB, and ``stop`` used to leave them behind).
 """
 
 import itertools
@@ -20,7 +21,7 @@ def postgres_server() -> Iterator[Any]:
     pytest.importorskip("sqlalchemy")
     pytest.importorskip("asyncpg")
     pgserver = pytest.importorskip("pgserver")
-    server = pgserver.get_server(tempfile.mkdtemp(prefix="unifi-mcp-pg-"), cleanup_mode="stop")
+    server = pgserver.get_server(tempfile.mkdtemp(prefix="unifi-mcp-pg-"), cleanup_mode="delete")
     yield server
     server.cleanup()
 

@@ -8,11 +8,14 @@ Usage::
     python -m src.fleet.cli tokens create --name ops-bot --role operator
     python -m src.fleet.cli tokens list
     python -m src.fleet.cli tokens revoke --name ops-bot
+    python -m src.fleet.cli audit-retention            # dry run: what would go
+    python -m src.fleet.cli audit-retention --confirm  # archive, then delete
 
 ``migrate``, ``status`` and ``tokens`` need only DATABASE_URL; ``tokens create``
 is how the first fleet-admin token is issued. ``migrate`` and ``status`` prefer
 MIGRATION_DATABASE_URL when set, so the schema owner can differ from the
-least-privilege role the server runs as (see SECURITY.md). ``import`` registers the
+least-privilege role the server runs as (see SECURITY.md); so does
+``audit-retention``, which must run as the schema owner. ``import`` registers the
 controller configured by the UNIFI_* variables and needs
 UNIFI_FLEET_CREDENTIAL_KEY to encrypt its API key. The server refuses to start
 until ``migrate`` has brought the schema to the version it needs.
@@ -25,6 +28,7 @@ import asyncio
 import os
 import sys
 
+from ..utils.audit_verify import ChainKeyMissingError
 from ..utils.exceptions import UniFiMCPException
 
 
@@ -120,6 +124,61 @@ async def _tokens(url: str, args: argparse.Namespace) -> int:
     return 0
 
 
+async def _audit_retention(url: str, args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from pydantic import ValidationError
+
+    from ..config.config import AuditMaintenanceSettings
+    from ..utils.audit import AuditLogger, resolve_chain_key
+    from .db.retention import purge_expired
+    from .db.schema import ensure_current, make_engine
+
+    try:
+        settings = AuditMaintenanceSettings()
+    except ValidationError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    days = args.days if args.days is not None else settings.audit_retention_days
+    if days is None or days < 1:
+        print("error: set UNIFI_AUDIT_RETENTION_DAYS or pass --days N (N >= 1)", file=sys.stderr)
+        return 2
+    if args.confirm and settings.read_only:
+        print("error: UNIFI_READ_ONLY is set; run without --confirm for a dry run", file=sys.stderr)
+        return 2
+    if args.archive_dir:
+        archive_dir = Path(args.archive_dir)
+    elif settings.audit_archive_dir:
+        archive_dir = Path(settings.audit_archive_dir)
+    else:
+        archive_dir = Path(settings.audit_log_file or "audit.log").parent / "audit-archive"
+
+    engine = make_engine(url)
+    try:
+        await ensure_current(engine)
+        # Its admin event is written in the deleting transaction, as a chain
+        # of this run's own.
+        audit = AuditLogger(settings.audit_log_file) if settings.audit_log_enabled else None
+        result = await purge_expired(
+            engine,
+            resolve_chain_key(),
+            retention_days=days,
+            archive_dir=archive_dir,
+            dry_run=not args.confirm,
+            audit=audit,
+        )
+    finally:
+        await engine.dispose()
+    print(json.dumps(result.as_dict(), indent=2))
+    if not args.confirm:
+        print(
+            f"Dry run: {result.records} record(s) would be archived; pass --confirm to do it",
+            file=sys.stderr,
+        )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the fleet registry CLI.
 
@@ -161,11 +220,22 @@ def main(argv: list[str] | None = None) -> int:
     token_commands.add_parser("list", help="List tokens (never their values)")
     revoke = token_commands.add_parser("revoke", help="Revoke a token")
     revoke.add_argument("--name", required=True)
+    retention = commands.add_parser(
+        "audit-retention",
+        help="Archive and delete audit records past UNIFI_AUDIT_RETENTION_DAYS (dry run by default)",
+    )
+    retention.add_argument("--days", type=int, default=None, help="Override the retention period")
+    retention.add_argument(
+        "--archive-dir", default=None, help="Override UNIFI_AUDIT_ARCHIVE_DIR for this run"
+    )
+    retention.add_argument(
+        "--confirm", action="store_true", help="Archive and delete (without it: a dry run)"
+    )
     args = parser.parse_args(argv)
 
     if args.database_url is None:
         migration_url = os.environ.get("MIGRATION_DATABASE_URL")
-        if args.command in ("migrate", "status") and migration_url:
+        if args.command in ("migrate", "status", "audit-retention") and migration_url:
             args.database_url = migration_url
         else:
             args.database_url = os.environ.get("DATABASE_URL")
@@ -179,10 +249,15 @@ def main(argv: list[str] | None = None) -> int:
             return asyncio.run(_status(args.database_url))
         if args.command == "tokens":
             return asyncio.run(_tokens(args.database_url, args))
+        if args.command == "audit-retention":
+            return asyncio.run(_audit_retention(args.database_url, args))
         return asyncio.run(_import(args.database_url, args.name, args.make_default))
     except UniFiMCPException as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    except ChainKeyMissingError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

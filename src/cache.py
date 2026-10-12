@@ -21,11 +21,10 @@ try:
     REDIS_AVAILABLE = True
 except ImportError:
     REDIS_AVAILABLE = False
-    from typing import Any
-
-    redis = None  # type: Any
-    Redis: Any = None
-    RedisError: Any = Exception
+    # Placeholders; every use is guarded by REDIS_AVAILABLE.
+    redis = None  # type: ignore[assignment, unused-ignore]
+    Redis = None  # type: ignore[assignment, misc, unused-ignore]
+    RedisError = Exception  # type: ignore[assignment, misc, unused-ignore]
 
 from .config import Settings
 from .utils import get_logger
@@ -650,14 +649,27 @@ class ReadCache:
 
     async def invalidate_controller(self, controller: str) -> None:
         """Delete every cached read of ``controller`` (after any write to it)."""
+        await self._delete_matching(
+            f"unifi:{KEY_VERSION}:{controller}:*", f"controller {controller}"
+        )
+
+    async def invalidate_all(self) -> None:
+        """Delete the cached reads of every controller.
+
+        For changes whose controller is unknown, such as a UniFi webhook event:
+        the payload does not say which controller sent it.
+        """
+        await self._delete_matching(f"unifi:{KEY_VERSION}:*", "all controllers")
+
+    async def _delete_matching(self, pattern: str, label: str) -> None:
         try:
             client = self._redis()
-            keys = [k async for k in client.scan_iter(match=f"unifi:{KEY_VERSION}:{controller}:*")]
+            keys = [k async for k in client.scan_iter(match=pattern)]
             if keys:
                 await client.delete(*keys)
         except RedisError as e:
             self.logger.error(
-                f"Read cache invalidation for controller {controller} failed; cached reads may "
+                f"Read cache invalidation for {label} failed; cached reads may "
                 f"be stale until they expire: {e}"
             )
 

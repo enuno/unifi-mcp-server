@@ -51,6 +51,13 @@ RUN apk add --no-cache \
     # Remove apk cache
     rm -rf /var/cache/apk/*
 
+# The app runs from /opt/venv, so the base image's pip is never used at
+# runtime; it also vendors old copies of urllib3, msgpack and setuptools'
+# pkg_resources that image scanners flag (and the release workflow blocks
+# on). Remove it, and the ensurepip wheel that bundles the same copies.
+RUN python -m pip uninstall -y pip && \
+    rm -rf /usr/local/lib/python3*/ensurepip
+
 # Create non-root user
 RUN addgroup -S mcp && \
     adduser -S -G mcp -u 1000 -s /sbin/nologin -D mcp

@@ -3,6 +3,7 @@
 Usage::
 
     UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log
+    ... audit_verify audit.log --head 4f9c...e2:1532:7d1a...b0   # an anchored head
 
 Each process appends its own chain (``chain_id``) to the file. For every
 chain this checks that ``seq`` starts at 0 and has no gaps, that each record's
@@ -12,22 +13,31 @@ records. Records written before chaining existed are counted as legacy, but
 an unchained record after a chained one is reported, since stripping the
 chain fields would otherwise hide an edit.
 
-Not detectable from the file alone: removing the *last* records of a chain,
-or a whole chain. Anchoring chain heads outside the server covers that
+Not detectable from the records alone: removing the *last* records of a
+chain, or a whole chain. Give the chain heads recorded elsewhere (``--head
+CHAIN:SEQ:HASH``, e.g. from the SIEM or the Postgres ``audit_chain_heads``
+table) and each chain must reach exactly that head
 (docs/FLEET_SCALING_PLAN.md §3.7).
 
 Exit codes: 0 intact, 1 problems found, 2 usage error or missing key.
 """
 
 import argparse
+import gzip
+import hashlib
 import json
 import sys
-from collections.abc import Iterable
+import zlib
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .audit import GENESIS_HASH, record_hash, resolve_chain_key
+
+
+class UnreadableLogError(Exception):
+    """Raised when a log or archive cannot be read (e.g. a truncated archive)."""
 
 
 class ChainKeyMissingError(Exception):
@@ -42,6 +52,8 @@ class VerifyReport:
     legacy: int = 0
     chains: int = 0
     problems: list[str] = field(default_factory=list)
+    #: The chains seen in the records
+    chain_ids: set[str] = field(default_factory=set)
 
     @property
     def ok(self) -> bool:
@@ -49,12 +61,28 @@ class VerifyReport:
         return not self.problems
 
 
-def verify_file(path: Path, key: bytes | None) -> VerifyReport:
-    """Verify every chain in an audit file.
+#: A chain's expected last record: ``(seq, hash)``.
+Head = tuple[int, str]
+
+#: Where a chain with nothing archived starts: before seq 0.
+GENESIS: Head = (-1, GENESIS_HASH)
+
+
+def verify_file(
+    path: Path,
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+    starts: Mapping[str, Head] | None = None,
+) -> VerifyReport:
+    """Verify every chain in an audit file (gzip-compressed when it ends in ``.gz``).
 
     Args:
-        path: The audit log file
+        path: The audit log file, or an archive written by retention
         key: The chain HMAC key, needed for ``hmac-sha256`` records
+        expected_heads: Chain heads recorded elsewhere, by chain id (see
+            :func:`verify_records`)
+        starts: Where chains whose earlier records were archived resume (see
+            :func:`verify_records`)
 
     Returns:
         What was checked and any problems, each naming its line number
@@ -62,19 +90,56 @@ def verify_file(path: Path, key: bytes | None) -> VerifyReport:
     Raises:
         ChainKeyMissingError: If the file has HMAC-chained records and no key
     """
-    with open(path, encoding="utf-8") as f:
-        return verify_records(
-            ((f"line {number}", line) for number, line in enumerate(f, start=1)), key
-        )
+    return verify_files([path], key, expected_heads, starts)
 
 
-def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> VerifyReport:
+def verify_files(
+    paths: Sequence[Path],
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+    starts: Mapping[str, Head] | None = None,
+) -> VerifyReport:
+    """Verify audit files as one log, in the order given (oldest first).
+
+    Chains continue across rotated files (:func:`~src.utils.audit.audit_files`
+    lists them in order). Same arguments as :func:`verify_file`.
+    """
+
+    def lines() -> Iterator[tuple[str, str]]:
+        for path in paths:
+            prefix = f"{path.name} " if len(paths) > 1 else ""
+            opener: Any = gzip.open if path.suffix == ".gz" else open
+            try:
+                with opener(path, "rt", encoding="utf-8") as f:
+                    for number, line in enumerate(f, start=1):
+                        yield f"{prefix}line {number}", line
+            except (OSError, EOFError, UnicodeDecodeError, zlib.error) as e:
+                raise UnreadableLogError(f"cannot read {path}: {type(e).__name__}: {e}") from e
+
+    return verify_records(lines(), key, expected_heads, starts)
+
+
+def verify_records(
+    records: Iterable[tuple[str, str]],
+    key: bytes | None,
+    expected_heads: Mapping[str, Head] | None = None,
+    starts: Mapping[str, Head] | None = None,
+) -> VerifyReport:
     """Verify every chain in a sequence of stored records, in storage order.
 
     Args:
         records: ``(location, stored JSON)`` pairs, e.g. ``("line 3", ...)``
             for a file or ``("row 17", ...)`` for the Postgres audit store
         key: The chain HMAC key, needed for ``hmac-sha256`` records
+        expected_heads: Chain heads recorded elsewhere, by chain id. Each
+            named chain must end exactly at its head: fewer records means
+            records were removed from the end (or the whole chain was), and
+            more means the head record was rewritten or replaced.
+        starts: For chains whose earlier records were archived and removed by
+            retention, the last archived record as ``(seq, hash)``: the chain
+            must resume right after it. A chain with a start and no records
+            left is complete when its head is that start. Without a start a
+            chain must begin at seq 0.
 
     Returns:
         What was checked and any problems, each naming its location
@@ -119,8 +184,11 @@ def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> Ver
         seq = record.get("seq")
         if chain_id not in heads:
             report.chains += 1
-            if seq != 0 or record.get("prev_hash") != GENESIS_HASH:
-                report.problems.append(f"{number}: chain {chain_id[:8]} does not start at seq 0")
+            report.chain_ids.add(chain_id)
+            start_seq, start_hash = (starts or {}).get(chain_id, GENESIS)
+            if seq != start_seq + 1 or record.get("prev_hash") != start_hash:
+                where = "seq 0" if start_seq < 0 else f"seq {start_seq + 1} after its archive"
+                report.problems.append(f"{number}: chain {chain_id[:8]} does not start at {where}")
         else:
             last_seq, last_hash = heads[chain_id]
             if seq != last_seq + 1:
@@ -134,7 +202,145 @@ def verify_records(records: Iterable[tuple[str, str]], key: bytes | None) -> Ver
                 )
         heads[chain_id] = (seq if isinstance(seq, int) else -1, record["hash"])
 
+    for chain_id, (head_seq, head_hash) in sorted((expected_heads or {}).items()):
+        label = f"chain {chain_id[:8]}"
+        if chain_id not in heads and (starts or {}).get(chain_id) == (head_seq, head_hash):
+            continue  # every record up to the head was archived
+        if chain_id not in heads:
+            report.problems.append(
+                f"{label}: its recorded head is seq {head_seq} but none of its records remain"
+            )
+            continue
+        last_seq, last_hash = heads[chain_id]
+        if last_seq < head_seq:
+            report.problems.append(
+                f"{label}: ends at seq {last_seq} but its recorded head is seq {head_seq} "
+                f"({head_seq - last_seq} record(s) missing from the end)"
+            )
+        elif last_seq > head_seq:
+            report.problems.append(
+                f"{label}: continues to seq {last_seq} past its recorded head at seq {head_seq}"
+            )
+        elif last_hash != head_hash:
+            report.problems.append(
+                f"{label}: its last record (seq {last_seq}) does not match the recorded head"
+            )
+
     return report
+
+
+@dataclass
+class ArchiveManifest:
+    """What retention recorded about one archive (``<archive>.manifest.json``)."""
+
+    sha256: str
+    records: int
+    #: Per chain, the record before the archive's first one (``GENESIS`` for seq 0)
+    starts: dict[str, Head]
+    #: Per chain, the archive's last record
+    heads: dict[str, Head]
+
+
+def read_manifest(path: Path) -> ArchiveManifest:
+    """Read an archive manifest written by audit retention.
+
+    Raises:
+        ValueError: If the file is not a manifest
+    """
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        chains = data["chains"]
+        return ArchiveManifest(
+            sha256=str(data["sha256"]),
+            records=int(data["records"]),
+            starts={
+                str(c["chain_id"]): (int(c["first_seq"]) - 1, str(c["prev_hash"])) for c in chains
+            },
+            heads={str(c["chain_id"]): (int(c["last_seq"]), str(c["last_hash"])) for c in chains},
+        )
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise ValueError(f"not an audit archive manifest: {e}") from e
+
+
+def file_sha256(path: Path) -> str:
+    """Hex SHA-256 of a file's bytes."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def parse_head(value: str) -> tuple[str, Head]:
+    """Parse ``CHAIN:SEQ:HASH`` (``--head``) into ``(chain_id, (seq, hash))``.
+
+    Raises:
+        ValueError: If the value is not in that form
+    """
+    chain_id, sep, rest = value.partition(":")
+    seq_text, sep2, head_hash = rest.partition(":")
+    if not (sep and sep2 and chain_id and head_hash and seq_text.isdigit()):
+        raise ValueError(f"expected CHAIN:SEQ:HASH, got {value!r}")
+    return chain_id, (int(seq_text), head_hash)
+
+
+# Checkpoints written by JSONL retention (src/utils/audit_retention.py).
+
+
+def checkpoints_path(log_file: Path) -> Path:
+    """Where retention records the chain checkpoints of ``log_file``."""
+    return log_file.with_name(f"{log_file.name}.checkpoints.jsonl")
+
+
+def checkpoint_batches(path: Path) -> list[dict[str, Any]]:
+    """Each retention run's checkpoint line, oldest first.
+
+    A run appends its whole batch as one line, so a crash leaves at most a
+    torn last line (no newline, not valid JSON). That line is ignored: its
+    run had not finished writing, so it deleted nothing.
+
+    Raises:
+        ValueError: For any other line that is not a checkpoint batch
+    """
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    batches = []
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        torn = number == len(lines)  # the last piece has no newline after it
+        try:
+            batch = json.loads(line)
+            if not isinstance(batch, dict):
+                raise TypeError("not an object")
+            str(batch["archive"]), str(batch["sha256"])
+            files = [str(name) for name in batch["files"]]
+            chains = [(str(c["chain_id"]), int(c["seq"]), str(c["hash"])) for c in batch["chains"]]
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
+            if torn:
+                print(f"Ignoring an unfinished checkpoint line in {path}", file=sys.stderr)
+                continue
+            raise ValueError(f"line {number} is not a checkpoint batch: {e}") from e
+        batches.append({**batch, "files": files, "chains": chains})
+    return batches
+
+
+def read_checkpoints(path: Path) -> dict[str, Head]:
+    """Per chain, its latest checkpoint ``(seq, hash)``: where it resumes.
+
+    Raises:
+        ValueError: If the file holds something other than checkpoints
+    """
+    if not path.exists():
+        raise ValueError(f"{path} not found")
+    starts: dict[str, Head] = {}
+    for batch in checkpoint_batches(path):
+        for chain_id, seq, digest in batch["chains"]:
+            if seq > starts.get(chain_id, GENESIS)[0]:
+                starts[chain_id] = (seq, digest)
+    return starts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -150,7 +356,16 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m src.utils.audit_verify",
         description="Verify the hash chains in an audit log file.",
     )
-    parser.add_argument("log_file", type=Path, help="Path to the audit log file.")
+    parser.add_argument(
+        "log_files",
+        type=Path,
+        nargs="+",
+        metavar="LOG_FILE",
+        help=(
+            "The audit log file; with rotation, its rotated files first, oldest first "
+            "(audit.log.[0-9]* audit.log)."
+        ),
+    )
     parser.add_argument(
         "--key",
         default=None,
@@ -159,19 +374,110 @@ def main(argv: list[str] | None = None) -> int:
             "key does not appear in shell history."
         ),
     )
+    parser.add_argument(
+        "--head",
+        action="append",
+        default=[],
+        metavar="CHAIN:SEQ:HASH",
+        help=(
+            "A chain head recorded outside this file (repeatable). The chain must end "
+            "exactly there, which detects records removed from its end."
+        ),
+    )
+    parser.add_argument(
+        "--anchors",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Chain anchors exported to the SIEM (JSON lines or a JSON array; other records "
+            "are ignored). The latest anchor of each chain is used like --head."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoints",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Where JSONL retention cut each chain (<log>.checkpoints.jsonl): chains resume "
+            "right after their latest checkpoint."
+        ),
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        metavar="FILE",
+        help=(
+            "Manifest of a retention archive (ARCHIVE.manifest.json): checks the archive's "
+            "SHA-256 and that each chain runs exactly from its recorded start to its end."
+        ),
+    )
     args = parser.parse_args(argv)
-
-    if not args.log_file.exists():
-        print(f"error: log file not found: {args.log_file}", file=sys.stderr)
+    starts: dict[str, Head] = {}
+    try:
+        expected_heads = dict(parse_head(value) for value in args.head)
+    except ValueError as e:
+        print(f"error: --head: {e}", file=sys.stderr)
         return 2
+    if args.anchors is not None:
+        from .siem import load_anchors
+
+        if not args.anchors.exists():
+            print(f"error: anchors file not found: {args.anchors}", file=sys.stderr)
+            return 2
+        anchors = load_anchors(args.anchors)
+        if not anchors:
+            # A wrong or empty export must not pass as "truncation checked".
+            print(f"error: no anchor events in {args.anchors}", file=sys.stderr)
+            return 2
+        expected_heads = {**anchors, **expected_heads}
+
+    for path in args.log_files:
+        if not path.exists():
+            print(f"error: log file not found: {path}", file=sys.stderr)
+            return 2
+    if args.checkpoints is not None:
+        try:
+            starts = read_checkpoints(args.checkpoints)
+        except ValueError as e:
+            print(f"error: --checkpoints: {e}", file=sys.stderr)
+            return 2
+    if args.manifest is not None and len(args.log_files) != 1:
+        print("error: --manifest checks one archive at a time", file=sys.stderr)
+        return 2
+    manifest_problems: list[str] = []
+    if args.manifest is not None:
+        try:
+            manifest = read_manifest(args.manifest)
+        except ValueError as e:
+            print(f"error: --manifest: {e}", file=sys.stderr)
+            return 2
+        starts = {**starts, **manifest.starts}
+        expected_heads = {**manifest.heads, **expected_heads}
+        if file_sha256(args.log_files[0]) != manifest.sha256:
+            manifest_problems.append("archive: SHA-256 does not match its manifest")
     key = args.key.encode("utf-8") if args.key else resolve_chain_key()
 
     try:
-        report = verify_file(args.log_file, key)
+        report = verify_files(args.log_files, key, expected_heads, starts)
     except ChainKeyMissingError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except UnreadableLogError as e:
+        # A truncated or corrupt archive (or an unreadable file) fails the check.
+        print(f"FAILED: {e}")
+        return 1
 
+    report.problems[:0] = manifest_problems
+    if args.manifest is not None:
+        for chain_id in sorted(report.chain_ids - set(manifest.heads)):
+            report.problems.append(f"archive: chain {chain_id[:8]} is not in its manifest")
+    if args.manifest is not None and report.records != manifest.records:
+        report.problems.append(
+            f"archive: holds {report.records} record(s), its manifest says {manifest.records}"
+        )
     for problem in report.problems:
         print(problem)
     status = "OK" if report.ok else f"FAILED ({len(report.problems)} problem(s))"

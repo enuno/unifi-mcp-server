@@ -7,6 +7,8 @@ lightweight wrappers and the new safety / auth / audit / HTTP helpers.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .audit import AuditLog, AuditLogger
 from .auth import AuthContext, AuthManager, CloudAuthProvider, LocalAuthProvider
 from .http_handlers import (
@@ -35,42 +37,42 @@ from .types import (
 )
 
 
-def build_agent_card(*args, **kwargs):
+def build_agent_card(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy agent-card builder when FastMCP is available."""
     from .agent_card import build_agent_card as _build_agent_card
 
     return _build_agent_card(*args, **kwargs)
 
 
-def get_skills_manifest(*args, **kwargs):
+def get_skills_manifest(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy discovery helper when FastMCP is available."""
     from .discovery import get_skills_manifest as _get_skills_manifest
 
     return _get_skills_manifest(*args, **kwargs)
 
 
-def get_resource_endpoints(*args, **kwargs):
+def get_resource_endpoints(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy resource discovery helper when FastMCP is available."""
     from .discovery import get_resource_endpoints as _get_resource_endpoints
 
     return _get_resource_endpoints(*args, **kwargs)
 
 
-def create_delegation_contract(*args, **kwargs):
+def create_delegation_contract(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy delegation helper when FastMCP is available."""
     from .delegation import create_delegation_contract as _create_delegation_contract
 
     return _create_delegation_contract(*args, **kwargs)
 
 
-def execute_delegated_call(*args, **kwargs):
+def execute_delegated_call(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy delegated-call helper when FastMCP is available."""
     from .delegation import execute_delegated_call as _execute_delegated_call
 
     return _execute_delegated_call(*args, **kwargs)
 
 
-def validate_delegation(*args, **kwargs):
+def validate_delegation(*args: Any, **kwargs: Any) -> Any:
     """Lazily invoke the legacy delegation validation helper when FastMCP is available."""
     from .delegation import validate_delegation as _validate_delegation
 

@@ -1,0 +1,7 @@
+lb_image: nginx:1.27-alpine
+lb_listen_port: 443
+# Paths on the lb host; TLS is on when both are set. Without TLS keep the
+# listener on a private network: bearer tokens cross it in the clear.
+lb_tls_certificate: ""
+lb_tls_certificate_key: ""
+lb_config_dir: /opt/unifi-mcp/lb

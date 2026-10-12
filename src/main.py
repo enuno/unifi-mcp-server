@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import importlib.metadata
 import json
@@ -127,18 +128,65 @@ if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.mo
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
     """Start the Postgres registry and audit store with the server, then audit the start."""
-    if hasattr(fleet_registry, "start"):
-        from .fleet.db import audit_store
-
-        audit_store.install(settings, fleet_registry.store.engine)
-        await fleet_registry.start()
-    await audit_server_start()
+    # The forwarder comes first: registry startup can already store audit
+    # records (registry_seeded), and every stored record is exported.
+    forwarder = await start_siem_forwarder(settings)
     try:
-        yield
+        if hasattr(fleet_registry, "start"):
+            from .fleet.db import audit_store
+
+            audit_store.install(settings, fleet_registry.store.engine)
+            await fleet_registry.start()
+        health_listener = start_health_listener(settings, client_pool)
+        try:
+            await audit_server_start()
+            yield
+        finally:
+            if health_listener is not None:
+                health_listener.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await health_listener
+            await client_pool.aclose()
+            if hasattr(fleet_registry, "stop"):
+                await fleet_registry.stop()
     finally:
-        await client_pool.aclose()
-        if hasattr(fleet_registry, "stop"):
-            await fleet_registry.stop()
+        if forwarder is not None:
+            await forwarder.stop()
+
+
+def start_health_listener(current_settings: Settings, pool: Any) -> asyncio.Task[None] | None:
+    """Half-open circuit breakers when a worker reports the controller healthy.
+
+    Needs Redis (the workers publish on it); returns the listening task, or
+    None without Redis.
+    """
+    from .fleet.bus import HealthBus
+
+    bus = HealthBus.from_settings(current_settings)
+    if bus is None:
+        return None
+    return asyncio.create_task(bus.listen(pool.health_ok))
+
+
+async def start_siem_forwarder(current_settings: Settings) -> Any:
+    """Start exporting audit records to ``UNIFI_AUDIT_SIEM_TARGETS``, if set.
+
+    Raises:
+        ConfigurationError: For an invalid target, so a misconfigured export
+            stops the server instead of silently sending nothing
+    """
+    if not current_settings.audit_log_enabled or not current_settings.audit_siem_targets:
+        return None
+    from .utils.audit import get_audit_logger
+    from .utils.siem import SiemForwarder
+
+    forwarder = SiemForwarder.from_settings(current_settings)
+    if forwarder is None:
+        return None
+    get_audit_logger(current_settings.audit_log_file).forwarder = forwarder
+    await forwarder.start()
+    logger.info("Exporting audit records to %d SIEM target(s)", len(forwarder.targets))
+    return forwarder
 
 
 def build_auth_provider(current_settings: Settings, token_store: Any = None) -> Any:
@@ -318,6 +366,57 @@ def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
     server.custom_route("/metrics", methods=["GET"])(_metrics)
 
 
+def register_health_route(server: FastMCP) -> None:
+    """Register ``GET /healthz``: an unauthenticated liveness check.
+
+    Load balancers, container health checks and Kubernetes probes cannot
+    send the bearer token, so this answers without one. It says only that the
+    process is serving HTTP (``{"status": "ok"}``): no version, controller,
+    configuration or registry state, nothing a scanner could use. Readiness
+    to reach controllers is a different question, answered by the
+    ``fleet_health`` tool.
+
+    Args:
+        server: The FastMCP server to register the route on
+    """
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse, Response
+
+    async def _healthz(request: Request) -> Response:
+        return JSONResponse({"status": "ok"}, headers={"Cache-Control": "no-store"})
+
+    server.custom_route("/healthz", methods=["GET"])(_healthz)
+
+
+def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
+    """Mount ``POST /webhooks/unifi`` when ``WEBHOOK_SECRET`` is set.
+
+    Without a secret nothing is mounted, so an unconfigured server exposes no
+    webhook endpoint at all. The route is not behind the MCP bearer token:
+    UniFi cannot send one, and every delivery must instead carry a valid
+    ``X-UniFi-Signature`` (HMAC-SHA256 of the body, keyed with the secret).
+    The default handlers are registered: event logging, and clearing the
+    module's ``read_cache`` (when Redis is configured) on device and client
+    state changes.
+
+    Args:
+        server: The FastMCP server to register the route on
+        current_settings: Loaded application settings
+
+    Returns:
+        The mounted ``WebhookReceiver``, or None when no secret is configured
+    """
+    if not current_settings.webhook_secret:
+        return None
+
+    from .webhooks import WebhookEventHandler, WebhookReceiver
+
+    receiver = WebhookReceiver(current_settings)
+    WebhookEventHandler(current_settings, read_cache=read_cache).register_default_handlers(receiver)
+    server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
+    return receiver
+
+
 if settings.database_url:
     from .fleet.tokens import TokenStore
 
@@ -334,8 +433,8 @@ if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
     agnost_org_id = os.getenv("AGNOST_ORG_ID")
     if agnost_org_id:
         try:
-            from agnost import config as agnost_config  # type: ignore[import-untyped]
-            from agnost import track  # type: ignore[import-untyped]
+            from agnost import config as agnost_config
+            from agnost import track
 
             disable_input = os.getenv("AGNOST_DISABLE_INPUT", "false").lower() in (
                 "true",
@@ -613,6 +712,13 @@ if settings.database_url:
 
     register_admin_tools(mcp, fleet_registry, settings)
 
+    from .fleet.db.snapshots import SnapshotStore
+    from .fleet.fleet_tools import register_fleet_read_tools
+
+    register_fleet_read_tools(
+        mcp, fleet_registry, settings, SnapshotStore(fleet_registry.store.engine)
+    )
+
 # ---------------------------------------------------------------------------
 # Resource handlers
 # ---------------------------------------------------------------------------
@@ -882,6 +988,8 @@ def main() -> None:
         logger.info("MCP authentication: bearer token required (MCP_AUTH_TOKEN)")
         logger.info(f"Server listening on {settings.server_host}:{settings.server_port}")
         register_a2a_routes(mcp, a2a_state, mcp_auth)
+        register_health_route(mcp)
+        logger.info("Liveness endpoint: GET /healthz (no token, no details)")
         logger.info(
             "A2A endpoints (bearer token required): /a2a/agent-card, /a2a/discover, "
             "/a2a/delegate, /a2a/confirm, /a2a/audit"
@@ -889,6 +997,8 @@ def main() -> None:
         if settings.metrics_enabled:
             register_metrics_route(mcp, mcp_auth)
             logger.info("Metrics endpoint: /metrics (Prometheus text format)")
+        if register_webhook_route(mcp, settings) is not None:
+            logger.info("Webhook endpoint: POST /webhooks/unifi (X-UniFi-Signature required)")
 
         # FastMCP's run() only recognizes "streamable-http" (hyphen); our own
         # config, env var, and docs all use "streamable_http" (underscore) to
@@ -897,7 +1007,14 @@ def main() -> None:
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
         run_kwargs: dict[str, Any] = {}
-        if settings.server_transport != TransportMode.SSE:
+        if settings.server_transport != TransportMode.SSE and settings.mcp_stateless_http:
+            # No MCP sessions: any replica can answer any request, but
+            # select_controller is refused (see FleetRouter.stateless). Every
+            # request is sessionless here, so the session guard below would
+            # refuse them all; stateless transports end with each response,
+            # so the session leak it prevents cannot happen.
+            run_kwargs["stateless_http"] = True
+        elif settings.server_transport != TransportMode.SSE:
             # Stop sessionless, non-initialize requests (health checks, probes)
             # from each leaking a registered session in the MCP SDK (issue #173).
             import fastmcp

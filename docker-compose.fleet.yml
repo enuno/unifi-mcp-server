@@ -54,6 +54,18 @@ services:
       UNIFI_LOCAL_VERIFY_SSL: ${UNIFI_LOCAL_VERIFY_SSL:-true}
       UNIFI_AUDIT_LOG_PATH: /app/logs/audit.log
       UNIFI_AUDIT_CHAIN_KEY: ${UNIFI_AUDIT_CHAIN_KEY:-}
+      # SIEM export (SECURITY.md); blank leaves it off.
+      UNIFI_AUDIT_SIEM_TARGETS: ${UNIFI_AUDIT_SIEM_TARGETS:-}
+      UNIFI_AUDIT_SIEM_WEBHOOK_SECRET: ${UNIFI_AUDIT_SIEM_WEBHOOK_SECRET:-}
+      UNIFI_AUDIT_SIEM_OTLP_HEADERS: ${UNIFI_AUDIT_SIEM_OTLP_HEADERS:-}
+      UNIFI_AUDIT_SIEM_CA_FILE: ${UNIFI_AUDIT_SIEM_CA_FILE:-}
+      UNIFI_AUDIT_SIEM_BUFFER_DIR: ${UNIFI_AUDIT_SIEM_BUFFER_DIR:-}
+      UNIFI_AUDIT_SIEM_BUFFER_MAX_MB: ${UNIFI_AUDIT_SIEM_BUFFER_MAX_MB:-100}
+      UNIFI_AUDIT_SIEM_ANCHOR_SECONDS: ${UNIFI_AUDIT_SIEM_ANCHOR_SECONDS:-300}
+      # Read by `python -m src.fleet.cli audit-retention` (SECURITY.md).
+      UNIFI_AUDIT_RETENTION_DAYS: ${UNIFI_AUDIT_RETENTION_DAYS:-}
+      UNIFI_AUDIT_ARCHIVE_DIR: ${UNIFI_AUDIT_ARCHIVE_DIR:-}
+      UNIFI_AUDIT_LOG_ROTATE_MB: ${UNIFI_AUDIT_LOG_ROTATE_MB:-}
       MCP_SERVER_TRANSPORT: streamable_http
       MCP_SERVER_HOST: 0.0.0.0
       MCP_SERVER_PORT: ${MCP_SERVER_PORT:-3000}
@@ -63,6 +75,25 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+
+  # Health checks and site/inventory snapshots (python -m src.worker). Without
+  # Redis run exactly one worker; with REDIS_URL set, scale it freely.
+  worker:
+    build:
+      context: .
+      args:
+        EXTRAS: fleet
+    restart: unless-stopped
+    command: ["python", "-m", "src.worker"]
+    environment:
+      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      UNIFI_FLEET_CREDENTIAL_KEY: ${UNIFI_FLEET_CREDENTIAL_KEY:?UNIFI_FLEET_CREDENTIAL_KEY required}
+      UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
+      UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}
+      UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
+    depends_on:
+      unifi-mcp:
+        condition: service_started
 
 volumes:
   postgres-data:

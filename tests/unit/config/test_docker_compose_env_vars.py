@@ -48,7 +48,9 @@ def test_docker_compose_forwards_names_settings_actually_reads():
     aliases = _settings_aliases()
     forwarded = _compose_env_names()
 
-    unifi_vars = {name for name in forwarded if name.startswith(("UNIFI_", "DRY_RUN", "REDIS_"))}
+    unifi_vars = {
+        name for name in forwarded if name.startswith(("UNIFI_", "DRY_RUN", "REDIS_", "WEBHOOK_"))
+    }
     unrecognized = unifi_vars - aliases - KNOWN_NON_SETTINGS_PASSTHROUGHS
 
     assert not unrecognized, (

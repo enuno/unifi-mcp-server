@@ -54,10 +54,9 @@ async def list_protect_devices(
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
-        response = await client.get(
-            settings.get_protect_integration_path("devices"),
-            params={"limit": final_limit, "offset": final_offset},
-        )
+        # Paginate locally, like the sibling list tools: sending limit/offset
+        # too would apply the offset twice if the API honors them.
+        response = await client.get(settings.get_protect_integration_path("devices"))
 
     devices_data = _extract_collection(response)
     paginated = devices_data[final_offset : final_offset + final_limit]

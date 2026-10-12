@@ -1,0 +1,60 @@
+# Values every role shares, worked out from the inventory. Not for editing:
+# set the inputs (groups, private_address, unifi_mcp_database_url, ...) instead.
+unifi_mcp_network: unifi-mcp
+unifi_mcp_root: /opt/unifi-mcp
+
+# Fleet mode (registry, workers, Postgres audit store) whenever there is a
+# Postgres: an inventory group or an external URL.
+unifi_mcp_fleet: >-
+  {{ groups.get('postgres', []) | length > 0
+     or (unifi_mcp_database_url | default('')) | length > 0 }}
+
+# Whether some MCP host is not this one, so data services must listen on
+# the private network instead of the Docker network alone.
+unifi_mcp_remote_data: >-
+  {{ groups.get('mcp', []) | difference([inventory_hostname]) | length > 0 }}
+
+_pg_host_name: "{{ groups.get('postgres', ['']) | first }}"
+_redis_host_name: "{{ groups.get('redis', ['']) | first }}"
+
+# How a container on this host reaches Postgres and Redis.
+unifi_mcp_postgres_address: >-
+  {{ 'unifi-mcp-postgres' if _pg_host_name == inventory_hostname
+     else hostvars[_pg_host_name].private_address | default(hostvars[_pg_host_name].ansible_host)
+     if _pg_host_name else '' }}
+unifi_mcp_redis_address: >-
+  {{ 'unifi-mcp-redis' if _redis_host_name == inventory_hostname
+     else hostvars[_redis_host_name].private_address | default(hostvars[_redis_host_name].ansible_host)
+     if _redis_host_name else '' }}
+
+# The schema owner runs migrations and retention; with
+# unifi_mcp_least_privilege the server and workers run as the narrower
+# unifi_mcp_runtime role (SECURITY.md). For an external Postgres set
+# unifi_mcp_database_url (what the server uses) and, when that is not the
+# owner, unifi_mcp_migration_database_url.
+_pg_password: "{{ vault_postgres_password | default('') | urlencode | replace('/', '%2F') }}"
+_runtime_password: "{{ vault_runtime_db_password | default('') | urlencode | replace('/', '%2F') }}"
+unifi_mcp_owner_database_url: >-
+  {{ unifi_mcp_migration_database_url | default('', true)
+     or unifi_mcp_database_url | default('', true)
+     or ('postgresql://unifi_mcp:' ~ _pg_password ~ '@' ~ unifi_mcp_postgres_address ~ ':5432/unifi_mcp')
+     if unifi_mcp_fleet | bool else '' }}
+# Whether the playbook creates unifi_mcp_runtime (only on its own Postgres).
+unifi_mcp_manage_runtime_role: >-
+  {{ unifi_mcp_least_privilege | default(true) | bool and _pg_host_name | length > 0
+     and not unifi_mcp_database_url | default('', true) }}
+unifi_mcp_runtime_database_url: >-
+  {{ '' if not unifi_mcp_fleet
+     else unifi_mcp_database_url if unifi_mcp_database_url | default('', true)
+     else ('postgresql://unifi_mcp_runtime:' ~ _runtime_password ~ '@' ~ unifi_mcp_postgres_address ~ ':5432/unifi_mcp')
+     if unifi_mcp_manage_runtime_role | bool else unifi_mcp_owner_database_url }}
+unifi_mcp_effective_redis_url: >-
+  {{ unifi_mcp_redis_url | default(
+       'redis://:' ~ (vault_redis_password | default('') | urlencode | replace('/', '%2F'))
+       ~ '@' ~ unifi_mcp_redis_address ~ ':6379/0', true)
+     if (_redis_host_name or unifi_mcp_redis_url | default('')) else '' }}
+
+# Every server and worker shares each controller's rate limit.
+unifi_mcp_total_processes: >-
+  {{ (groups.get('mcp', []) | length)
+     * ((unifi_mcp_replicas | default(1) | int) + ((unifi_mcp_workers | default(1) | int) if unifi_mcp_fleet | bool else 0)) }}

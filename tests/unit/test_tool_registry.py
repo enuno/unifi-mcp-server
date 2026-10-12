@@ -222,6 +222,27 @@ def test_read_only_mode_exposes_no_mutating_tool_across_all_modules(
     assert not leaked, f"mutating tools registered in read-only mode: {sorted(leaked)}"
 
 
+def test_every_mutating_tool_declares_dry_run() -> None:
+    """Regression guard: UNIFI_DRY_RUN withholds any mutating tool it cannot gate.
+
+    A new write tool without a ``dry_run`` parameter would silently vanish
+    from dry-run sessions, so every mutating tool must declare one.
+    """
+    import inspect as _inspect
+
+    ungated = [
+        f"{module.__name__}.{name}"
+        for module in _iter_tool_modules()
+        for name, obj in _inspect.getmembers(module, _inspect.isfunction)
+        if obj.__module__ == module.__name__
+        and not name.startswith("_")
+        and is_mutating_tool(obj)
+        and "dry_run" not in _inspect.signature(obj).parameters
+    ]
+
+    assert not ungated, f"mutating tools without a dry_run parameter: {sorted(ungated)}"
+
+
 def test_read_only_mode_registers_fewer_tools_than_default(
     settings: MagicMock, read_only_settings: MagicMock
 ) -> None:
@@ -299,6 +320,45 @@ async def test_default_mode_respects_caller_dry_run(settings: MagicMock) -> None
 
     assert seen == [False]
     assert result == {"dry_run": False}
+
+
+@pytest.mark.parametrize(
+    ("sent", "expected"),
+    [("false", False), ("False", False), ("0", False), ("true", True), ("preview", True)],
+)
+async def test_string_dry_run_is_coerced_before_the_tool_sees_it(
+    settings: MagicMock, sent: str, expected: bool
+) -> None:
+    """MCP clients may send dry_run as a string; tools test it with a bare ``if``.
+
+    Without coercion ``"false"`` is truthy, so a confirmed call would return a
+    preview while the wrapper's audit recorded it as a successful change.
+    """
+    seen: list[Any] = []
+
+    async def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
+        seen.append(dry_run)
+        return {}
+
+    from src.tool_registry import _make_tool_wrapper
+
+    await _make_tool_wrapper(_spy_tool, settings)("default", dry_run=sent)
+
+    assert seen == [expected]
+
+
+def test_sync_wrapper_coerces_string_dry_run(settings: MagicMock) -> None:
+    seen: list[Any] = []
+
+    def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
+        seen.append(dry_run)
+        return {}
+
+    from src.tool_registry import _make_tool_wrapper
+
+    _make_tool_wrapper(_spy_tool, settings)("default", dry_run="false")
+
+    assert seen == [False]
 
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-09-26
+**Document Version:** 2026-10-10
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
-**Repository Baseline:** 275 MCP tools registered in local mode across 47 tool modules; 2,240 unit tests passing
+**Repository Baseline:** 343 MCP tools registered in local mode across 60 tool modules; 3,152 unit tests passing; 93% line coverage
 **API Spec Baseline** (audited 2026-09-26): UniFi Network **v10.6.106**, UniFi Protect **v7.3.68**, Site Manager v1.0.0; newly published: Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
 **Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started; API-spec alignment wave in progress)
 
@@ -103,19 +103,20 @@ Describe how to execute the plan without losing sight of the current production 
 | Dynamic DNS | Complete | Full CRUD |
 | Tagged MACs | Complete | Device tag CRUD on legacy `rest/tag` (local only) |
 | Device Migration | Complete | Move between sites (`move-device`), migrate to another controller (`migrate` / `cancel-migrate`); local only |
-| Protect | Partial (v6) | Cameras, devices, NVR, views, events; MCP resources; mocked integration tests. **v7.3.68 (2026) added 39 operations** — arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion — all unmapped (§2.3, Phase 5a) |
+| Protect | Complete (v7.3.68, mock-tested) | Cameras, devices, NVR, views, events, MCP resources, plus the v7 surface (Phase 5a): arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion. Write paths await hardware verification |
+| Mobility / InnerSpace / Carrier Fabric | Complete (mock-tested) | Phase 6: 8 + 6 + 11 tools over the Site Manager client and Cloud Connector proxy |
+| Fleet | Complete | Per-call `controller` routing, Postgres controller registry, shared connection pool, Redis read cache, several replicas, workers and `fleet_*` tools, hardening (fleet Phases 0–5); cloud-account discovery deferred |
 | A2A | Complete | Agent card, discovery, delegation, playbooks; `/a2a/*` served behind bearer auth |
-| Access controls | Partial | Bearer auth on network transports, `UNIFI_READ_ONLY`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` on all write tools |
-| Audit logging | Partial | JSONL append-mode log with credential redaction, 0600 permissions and optional payload encryption (#193); wrapper-level coverage, tamper evidence, Postgres store and SIEM export planned in `docs/FLEET_SCALING_PLAN.md` §3.7 |
+| Access controls | Complete | Bearer auth on network transports, roles over risk tiers with server-issued tokens (fleet Phase 2b), `UNIFI_READ_ONLY`, `UNIFI_DRY_RUN`, `UNIFI_PROFILE` (network, devices, security, system, minimal, protect), `confirm=True` and `dry_run` on every write tool |
+| Audit logging | Complete | Wrapper-level records for every mutating call, credential redaction, optional payload encryption, HMAC hash chain, append-only Postgres store with `DATABASE_URL`, SIEM export (syslog/TLS, signed webhook, OTLP) with chain-head anchors, retention for Postgres and for rotated JSONL files (verify, archive, delete); design in `docs/FLEET_SCALING_PLAN.md` §3.7 |
 
 ### 2.2 Known limitations
 
 - Traffic flow historical trends and streaming are not feasible under the current v2 cap and remain documented as unsupported.
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
-- Multi-controller orchestration is not yet implemented (runbook only).
-- Prometheus metrics and the Redis webhook event bus are not yet implemented (runbooks only).
-- Dry-run covers 32 of 47 tool modules and is not enforced in CI; per-tool RBAC scopes do not exist yet.
+- Multi-controller orchestration: fleet Phases 0–5 shipped; discovering the consoles behind a cloud account is deferred until per-console routing exists (`docs/FLEET_SCALING_PLAN.md` Phase 4b).
+- The Redis webhook event bus is not yet implemented (runbook only). The webhook receiver is served at `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 
 ### 2.3 API specification baseline (audited 2026-09-26)
@@ -202,7 +203,7 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### Deliverables
 
-- Full test coverage for new Phase 1–3 modules — in progress
+- Full test coverage for new Phase 1–3 modules — done (2026-10-10: every module at 80%+)
 - Dynamic DNS full CRUD — done
 - Tagged MAC management — done
 - Device migration tools — done
@@ -230,10 +231,10 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 #### Deliverables
 
-- Multi-controller / multi-site orchestration — open (runbook only)
+- Multi-controller / multi-site orchestration — done (fleet Phases 0–5, `docs/FLEET_SCALING_PLAN.md`; cloud-account discovery deferred)
 - Dry-run / change-safe mode — partial
 - Tool-level RBAC via roles and API tokens — partial (transport-level bearer auth only); design in `docs/FLEET_SCALING_PLAN.md` §3.6, Phases 1 and 2b
-- Append-only audit log — partial (payload encryption done in #193); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5
+- Append-only audit log — done (payload encryption, hash chain, Postgres store, SIEM export and anchors, retention for Postgres and JSONL); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5
 - Prometheus metrics endpoint — open (runbook only)
 - A2A agent card and manifest — done
 - Webhook event bus with Redis pub/sub — partial (receiver only)
@@ -313,18 +314,65 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 
 ---
 
+### Phase 7: Deployment automation (done; a molecule test for the playbook is open)
+
+**Goal:** install the server and its fleet stack (Redis, Postgres) repeatably, from a single host to a cluster, without hand-editing compose files. Today the only paths are `docker-compose.yml` (server only), `docker-compose.fleet.yml` (server, Redis, Postgres on one host) and `docker-compose.fleet-scale.yml` (replicas and workers on one host).
+
+#### 7.1 Ansible playbook (Docker hosts)
+
+**Status: done** (`deploy/ansible/`, `deploy/ansible/README.md`). Redis and Postgres run as single containers; for high availability the inventory points at managed endpoints (`unifi_mcp_redis_url`, `unifi_mcp_database_url`) instead of running Sentinel or Patroni itself. The replicas serve plain HTTP on loopback or the private network, with TLS at nginx. A new unauthenticated `GET /healthz` backs the container health check and the load balancer. CI runs `--syntax-check`; a converge-and-idempotence test (molecule or equivalent) is still open.
+
+- A role-based playbook (`deploy/ansible/`) that installs Docker, then the server, Redis and Postgres as containers, driven by an inventory:
+  - **Single server:** everything on one host, equivalent to `docker-compose.fleet.yml`.
+  - **Multi-server / clustered:** `mcp` hosts running several replicas and workers behind a load balancer with sticky sessions (the Phase 4 session-affinity finding in `docs/FLEET_SCALING_PLAN.md`), a `redis` group (Sentinel or a managed endpoint) and a `postgres` group (primary plus replica, or a managed endpoint).
+- Each component optional, so an operator can point at an existing Redis or Postgres.
+- Secrets (`UNIFI_API_KEY`, `MCP_AUTH_TOKEN`, `UNIFI_AUDIT_CHAIN_KEY`, `UNIFI_AUDIT_LOG_KEY`, `UNIFI_FLEET_CREDENTIAL_KEY`, database passwords) from Ansible Vault or an external lookup, never written into the repository or templates in clear.
+- Runs `python -m src.fleet.cli migrate` once (as `MIGRATION_DATABASE_URL`) and creates the least-privilege runtime role from SECURITY.md.
+- Safe defaults carried over: TLS on network transports, bearer auth on, `UNIFI_AUDIT_FAIL_CLOSED=true`, audit log and SIEM buffer on a persistent volume with 0700 permissions.
+- Idempotent (a second run changes nothing), with `--check` support, and a molecule (or equivalent) test in CI.
+
+#### 7.2 Kubernetes option (Helm chart)
+
+**Status: done** (`deploy/helm/unifi-mcp/`). Redis and Postgres are external endpoints only, given as URLs in the chart's Secret: bundling third-party database charts would tie releases to theirs, and production clusters run operators or managed services. Without fleet mode the audit file sits on an emptyDir, or on a PersistentVolumeClaim with one replica. Metrics are scraped through a ServiceMonitor that sends the bearer token, rather than annotations, because `/metrics` needs it. The release workflow now also publishes `<version>-fleet` images. CI lints and renders the chart, validates it with kubeconform, and runs a kind smoke test in fleet mode.
+
+- A Helm chart (`deploy/helm/unifi-mcp/`) with the server as a Deployment (replica count, HPA optional), workers as a second Deployment, `/healthz` readiness and liveness probes, and `/metrics` scrape annotations.
+- Redis and Postgres either as chart dependencies (off by default for production) or external endpoints via values.
+- Secrets from an existing Kubernetes Secret or External Secrets; the chart never templates secret values from `values.yaml` defaults.
+- A pre-install/upgrade Job for migrations; a PersistentVolumeClaim (or SIEM export as the durable copy) for the audit log.
+- `helm lint` and `helm template` checks in CI, with a kind-based smoke test.
+
+#### 7.3 Pre-canned agent setup prompts
+
+**Status: done** (`docs/deploy-prompts/`), using `/healthz` and an `initialize` call with the bearer token for verification.
+
+Prompts an operator can hand to an AI coding agent (Claude Code or similar) to stand up the infrastructure, kept in `docs/deploy-prompts/`. Each lists what it will ask for, the safety rules it must follow (no secrets in files under version control, confirm before touching existing hosts, verify with `/health` and a read-only tool call) and how to check the result:
+
+1. **MCP server only:** the server with a single UniFi controller, Docker or a Python install, stdio or streamable HTTP with bearer auth.
+2. **MCP server with one Redis and one Postgres:** the single-server fleet stack (`docker-compose.fleet.yml` or the Ansible single-server inventory), including migrations and the first API token.
+3. **Full clustered environment:** several replicas and workers, Redis and Postgres for high availability, load balancer, SIEM export, via the multi-server Ansible inventory or the Helm chart.
+
+#### Exit criteria
+
+- Each of the three prompts, followed by an agent in a clean environment, produces a working deployment that passes its own verification steps
+- Playbook and chart deploy the same settings as the compose files (a test compares the environment variables each one sets)
+- No secret value is ever committed, templated from a default or printed in a log
+- The fleet verification (`make verify-fleet-scale`) passes against a clustered deployment
+
+---
+
 ## 5. Version roadmap
 
 | Version | Scope | Notes |
 |---|---|---|
-| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Next release (prepped 2026-09-27, tag pending)**: 364 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
-| v0.2.5 | Last tagged release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
+| v0.6.0 | Fleet Phases 0–5 + Phase 7 | **Released 2026-10-12**: multi-controller fleet stack (`docs/FLEET_SCALING_PLAN.md`), SIEM export and audit retention, Ansible playbook, Helm chart and `-fleet` images, agent setup prompts |
+| v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
+| v0.2.5 | Earlier release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v0.6.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; Phase 5 items as they land |
+| v0.7.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; a converge-and-idempotence test for the playbook |
 
 ---
 
-> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. Remaining release steps: hardware verification of mock-tested surfaces (below), then `git tag v0.5.0 && git push origin v0.5.0` (triggers `.github/workflows/release.yml`).
+> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. `v0.5.0` was tagged on 2026-09-28 after hardware verification but never published: its release workflow could not start (an account billing lock), and the re-run on 2026-10-12 failed because the job installed unpinned dev tools and a newer black rejected the tagged code. The release job now installs the locked versions (`uv sync --locked`). Everything in v0.5.0 plus fleet Phases 0–5 and Phase 7 ships as **v0.6.0**, the first release published since v0.2.6.
 
 ## 6. Required downstream docs
 

@@ -433,3 +433,114 @@ class TestSettingsRedis:
         text = repr(Settings())
         assert "s3cret" not in text
         assert "urlsecret" not in text
+
+
+class TestSettingsWebhookSecret:
+    """WEBHOOK_SECRET is documented in README, API.md and docker-compose.yml."""
+
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+
+    def test_default_unset(self):
+        assert Settings().webhook_secret is None
+
+    def test_reads_documented_env_name(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("WEBHOOK_SECRET", "hook-secret")  # pragma: allowlist secret
+        assert Settings().webhook_secret == "hook-secret"  # pragma: allowlist secret
+
+    def test_blank_means_unset(self, monkeypatch: pytest.MonkeyPatch):
+        # docker-compose forwards ``${WEBHOOK_SECRET:-}`` as an empty string
+        monkeypatch.setenv("WEBHOOK_SECRET", " ")
+        assert Settings().webhook_secret is None
+
+    def test_not_in_repr(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("WEBHOOK_SECRET", "hook-secret")  # pragma: allowlist secret
+        assert "hook-secret" not in repr(Settings())
+
+
+class TestSettingsStatelessHttp:
+    @pytest.fixture(autouse=True)
+    def _env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.delenv("MCP_STATELESS_HTTP", raising=False)
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+
+    def test_default_off(self):
+        assert Settings().mcp_stateless_http is False
+
+    def test_reads_env(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("MCP_STATELESS_HTTP", "true")
+        assert Settings().mcp_stateless_http is True
+
+
+class TestDocumentedSettings:
+    """Every setting is documented, and the docs name no setting that does not exist."""
+
+    #: Read with os.environ outside Settings (key material and CLI-only URLs).
+    OUTSIDE_SETTINGS = {
+        "MIGRATION_DATABASE_URL",
+        "UNIFI_AUDIT_CHAIN_KEY",
+        "UNIFI_AUDIT_LOG_KEY",
+        "UNIFI_AUDIT_ENCRYPTION_KEY",
+        "UNIFI_FLEET_CREDENTIAL_KEY",
+        "UNIFI_PROFILE",
+    }
+    #: Third-party variables the docs mention (agnost.ai monitoring, MCP Toolbox).
+    THIRD_PARTY = {
+        "AGNOST_ENABLED",
+        "AGNOST_ORG_ID",
+        "AGNOST_ENDPOINT",
+        "AGNOST_DISABLE_INPUT",
+        "AGNOST_DISABLE_OUTPUT",
+        "TOOLBOX_PORT",
+        "TOOLBOX_SERVICE_NAME",
+        "TOOLBOX_VERSION",
+    }
+    #: In Settings but deliberately left out of .env.example.
+    NOT_IN_ENV_EXAMPLE = {"UNIFI_CACHE_TTL"}
+
+    @staticmethod
+    def _aliases() -> set[str]:
+        return {str(field.validation_alias) for field in Settings.model_fields.values()}
+
+    @staticmethod
+    def _read(name: str) -> str:
+        from pathlib import Path
+
+        return (Path(__file__).parents[3] / name).read_text(encoding="utf-8")
+
+    def _api_rows(self) -> set[str]:
+        """Variable names in API.md's environment-variable table."""
+        import re
+
+        text = self._read("API.md")
+        start = text.index("### Environment Variables")
+        end = text.index("\n### ", start + 1)
+        names: set[str] = set()
+        for cell in re.findall(r"^\| ([^|]+) \|", text[start:end], re.M):
+            names.update(re.findall(r"`([A-Z][A-Z0-9_]+)`", cell))
+        return names - {"Variable"}
+
+    def _env_assignments(self) -> set[str]:
+        """Names assigned (or shown commented out) in .env.example."""
+        import re
+
+        return set(re.findall(r"^#? ?([A-Z][A-Z0-9_]+)=", self._read(".env.example"), re.M))
+
+    def test_every_setting_is_in_api_md(self) -> None:
+        assert sorted(self._aliases() - self._api_rows()) == []
+
+    def test_every_setting_is_in_env_example(self) -> None:
+        missing = self._aliases() - self.NOT_IN_ENV_EXAMPLE - self._env_assignments()
+        assert sorted(missing) == []
+
+    def test_api_md_names_no_unknown_setting(self) -> None:
+        unknown = self._api_rows() - self._aliases() - self.OUTSIDE_SETTINGS - self.THIRD_PARTY
+        assert sorted(unknown) == []
+
+    def test_env_example_names_no_unknown_setting(self) -> None:
+        unknown = (
+            self._env_assignments() - self._aliases() - self.OUTSIDE_SETTINGS - self.THIRD_PARTY
+        )
+        assert sorted(unknown) == []

@@ -43,7 +43,7 @@ lint: ## Check formatting, import order, and lint (CI "Lint and Format Check")
 	$(RUN) ruff check $(SRC) $(TESTS)
 
 .PHONY: typecheck
-typecheck: ## Type check with mypy (non-blocking in CI: pre-existing errors)
+typecheck: ## Type check with mypy (CI "Lint and Format Check")
 	$(RUN) mypy $(SRC)
 
 .PHONY: security
@@ -73,8 +73,12 @@ test-cov: ## Run non-integration tests with the CI coverage gate
 	$(RUN) pytest $(TESTS) -m "not integration" --cov=src --cov-report=xml \
 		--cov-report=term-missing --cov-fail-under=$(COVERAGE_MIN)
 
+.PHONY: verify-fleet-scale
+verify-fleet-scale: ## Run 3 replicas + 2 workers locally and check Phase 4 (about a minute)
+	$(RUN) python scripts/verify_fleet_scale.py
+
 .PHONY: ci
-ci: lint security docs-coverage pre-commit test-cov ## Run every blocking CI check locally
+ci: lint typecheck security docs-coverage pre-commit test-cov ## Run every blocking CI check locally
 
 ##@ Run
 

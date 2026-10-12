@@ -380,7 +380,7 @@ CMD ["python", "src/main.py"]
 - **Encrypted Controller Credentials:** With the Postgres fleet registry, controller and cloud-account API keys are Fernet-encrypted with `UNIFI_FLEET_CREDENTIAL_KEY` before they reach the database; the key never does. The server refuses to start without it, a key that cannot decrypt a credential skips that controller instead of failing the fleet, and `rotate_fleet_credentials` re-encrypts under a new key
 - **Role-Based Access Control:** With the fleet registry, callers use server-issued API tokens (only SHA-256 hashes stored, 90-day default lifetime) with a role (`viewer`, `operator`, `admin`, `fleet-admin`) that grants tool risk tiers, optionally narrowed by tool-module patterns and controller labels. Enforcement happens in the tool wrapper before any controller is contacted, and every refusal is audited. Revocation takes effect within 30 seconds; a database error refuses the token. `MCP_AUTH_TOKEN` and stdio remain break-glass `fleet-admin` callers, flagged in audit records
 - **Append-Only Postgres Audit Store:** With DATABASE_URL, audit records go to `audit_log`, where a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and each server's hash chain is kept with its head in `audit_chain_heads`. `verify_audit_chain` and `search_audit_log` are `fleet-admin` tools, and every query is audited
-- **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records
+- **Tamper-Evident Audit Log:** Records are hash-chained, HMAC-keyed with `UNIFI_AUDIT_CHAIN_KEY`; `python -m src.utils.audit_verify` detects edited, deleted, inserted and reordered records, and with an anchored head (`--head`, or `--anchors` for the SIEM's anchor events) also records removed from the end. `verify_audit_chain` checks each Postgres chain against its `audit_chain_heads` entry (a chain with records but no head is reported too), so deleting the newest records, a whole chain or the whole table is caught, and checks every searchable column (operation, result, principal, controller, time, seq, hash) against the sealed record, so a record cannot be hidden from `search_audit_log` by editing its columns. A drill (`tests/unit/fleet/test_drill_tamper.py`) makes each of these changes as the database superuser with triggers disabled and expects every one to be caught
 
 ### Phase 4 Mutating Tools Safety Mechanisms
 
@@ -490,9 +490,111 @@ CMD ["python", "src/main.py"]
    ```
 
    Removing the last records of a chain is not detectable from the file
-   alone; exporting chain heads off the server (planned SIEM export) closes
-   that gap. Use a different value from the payload key and keep it in your
-   secret manager, never in the repository.
+   alone. Pass a head recorded elsewhere and the chain must end exactly
+   there:
+
+   ```bash
+   python -m src.utils.audit_verify audit.log --head CHAIN_ID:SEQ:HASH
+   ```
+
+   In Postgres, `verify_audit_chain` compares every chain with its
+   `audit_chain_heads` entry. Someone with write access to the database could
+   rewrite the records and that table together; only a head kept off the
+   server catches that, which is what the SIEM anchors below are for. Use a
+   different value from the payload key and keep it in your secret manager,
+   never in the repository.
+
+   **SIEM export and anchors:** set `UNIFI_AUDIT_SIEM_TARGETS` to copy every
+   stored record (the encrypted-payload form, exactly as written) to one or
+   more destinations:
+
+   | Target | Format |
+   |---|---|
+   | `syslog+tls://host:6514` | RFC 5424 over TLS with octet-counted framing (RFC 5425), facility local0; `syslog+tcp://` sends without TLS (warned about unless loopback) |
+   | `https://host/path` | JSON array POST, signed: `X-UniFi-MCP-Signature: sha256=HMAC(secret, "<X-UniFi-MCP-Timestamp>.<body>")` with `UNIFI_AUDIT_SIEM_WEBHOOK_SECRET` (required); `http://` only to loopback |
+   | `otlp+https://collector:4318` | OpenTelemetry logs (OTLP/HTTP JSON, `/v1/logs`); extra headers from `UNIFI_AUDIT_SIEM_OTLP_HEADERS`; `otlp+http://` warned about unless loopback |
+
+   Delivery never blocks a tool call. Records wait in an on-disk buffer per
+   target (directory 0700, files 0600, `UNIFI_AUDIT_SIEM_BUFFER_DIR`,
+   default `siem-buffer` next to the audit log) and are retried with backoff
+   up to 60 s. The buffer survives a restart; past
+   `UNIFI_AUDIT_SIEM_BUFFER_MAX_MB` the oldest records are dropped and
+   counted in a warning. Delivery is at least once, so deduplicate on
+   `event_id`. Verify targets with `UNIFI_AUDIT_SIEM_CA_FILE` for a private
+   CA. Records are only exported once stored, so a record the server refused
+   to write is never sent.
+
+   Every `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` (default 300) and on shutdown, the
+   server also sends an `anchor` event per chain that moved: `chain_id`,
+   `seq` and `hash` of its latest record. Anchors are tracked per target, so a
+   target that missed one (a failed write, or its buffer dropping it over the
+   cap) gets it again at the next interval. Export the anchors from the SIEM as
+   JSON lines (or a JSON array) and check a log against them (a file with no
+   anchor events is an error, not a pass):
+
+   ```bash
+   UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify audit.log --anchors anchors.jsonl
+   ```
+
+   Records rewritten together with their heads in Postgres no longer match
+   the anchor the SIEM holds, and the drill in `test_drill_tamper.py` shows
+   it. Records written after the last anchor are covered by the next one, so
+   keep the interval short enough for your needs.
+
+   **Retention:** with `UNIFI_AUDIT_RETENTION_DAYS` set, run the retention job
+   as the schema owner (it uses `MIGRATION_DATABASE_URL` when set), for example
+   daily from cron or a Kubernetes CronJob:
+
+   ```bash
+   python -m src.fleet.cli audit-retention            # dry run: what would go
+   python -m src.fleet.cli audit-retention --confirm  # archive, then delete
+   ```
+
+   It refuses to delete anything unless the whole store verifies. Expired
+   records go to a gzip archive in `UNIFI_AUDIT_ARCHIVE_DIR` (default
+   `audit-archive` next to the audit log; directory 0700, files 0600) with a
+   manifest, both written to disk before the delete commits. Move archives to
+   storage of their own; check one with:
+
+   ```bash
+   UNIFI_AUDIT_CHAIN_KEY=... python -m src.utils.audit_verify \
+     audit-before-....jsonl.gz --manifest audit-before-....jsonl.gz.manifest.json
+   ```
+
+   `audit_archives` records where each chain was cut, so `verify_audit_chain`
+   keeps checking what remains and reports archive rows that were removed.
+   The append-only trigger allows a DELETE only by the table's owner inside
+   the retention transaction; the server itself never deletes audit records.
+   The run's `audit_retention` admin event is written in the same
+   transaction as the delete, the job needs no controller credentials
+   (no `UNIFI_API_KEY`), and `UNIFI_READ_ONLY` refuses `--confirm`.
+
+   **JSONL rotation and retention:** without Postgres, set
+   `UNIFI_AUDIT_LOG_ROTATE_MB` and the server renames the full audit file to
+   `audit.log.<UTC time>Z` and starts a new one; the hash chain continues
+   across files, so verify them together, oldest first (`[0-9]*` matches
+   only the rotated files, not the checkpoint file retention adds). Rotation
+   renames the file, so it must live in a writable directory: in Docker,
+   mount a directory and point `UNIFI_AUDIT_LOG_PATH` into it rather than
+   mounting the file itself:
+
+   ```bash
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log
+   ```
+
+   Retention removes rotated files whose records are all past
+   `UNIFI_AUDIT_RETENTION_DAYS` (never the file being written), after the
+   same verify-then-archive steps, and records where each chain was cut in
+   `audit.log.checkpoints.jsonl`:
+
+   ```bash
+   python -m src.utils.audit_retention /var/log/unifi-mcp/audit.log --confirm
+   python -m src.utils.audit_verify /var/log/unifi-mcp/audit.log.[0-9]* /var/log/unifi-mcp/audit.log \
+     --checkpoints /var/log/unifi-mcp/audit.log.checkpoints.jsonl
+   ```
+
+   Whoever can rewrite the log can rewrite the checkpoint file too, so keep
+   the archives (or the SIEM copy) on storage the server cannot change.
 
    **Least-privilege database role (optional):** the server needs no DDL and
    no UPDATE/DELETE on the audit table. Run migrations as the schema owner
@@ -505,9 +607,15 @@ CMD ["python", "src/main.py"]
      TO unifi_mcp_runtime;
    GRANT SELECT, INSERT ON audit_log TO unifi_mcp_runtime;
    GRANT SELECT, INSERT, UPDATE ON audit_chain_heads TO unifi_mcp_runtime;
+   GRANT SELECT ON audit_archives TO unifi_mcp_runtime;
    GRANT USAGE ON SEQUENCE audit_log_id_seq TO unifi_mcp_runtime;
    GRANT SELECT ON unifi_mcp_alembic_version TO unifi_mcp_runtime;
+   -- Workers replace each controller's site and device snapshots.
+   GRANT SELECT, INSERT, UPDATE, DELETE ON sites, device_inventory TO unifi_mcp_runtime;
    ```
+
+   The Ansible playbook (`deploy/ansible/`) creates this role and these grants
+   when it runs Postgres itself.
 
    The append-only trigger then backs up the missing grants rather than
    being the only control.

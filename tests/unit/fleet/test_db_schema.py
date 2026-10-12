@@ -23,7 +23,7 @@ from src.fleet.db.schema import (  # noqa: E402
     upgrade,
 )
 
-TABLES = {"credentials", "cloud_accounts", "controllers"}
+TABLES = {"credentials", "cloud_accounts", "controllers", "sites", "device_inventory"}
 
 
 async def _tables(engine: Any) -> set[str]:

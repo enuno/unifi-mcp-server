@@ -50,7 +50,7 @@ Give operators a fast, safe reading order for understanding what the server does
 
 ## 📋 Version Notice
 
-**Current Stable Release**: 0.2.5 (May 1, 2026) 🎉
+**Current Stable Release**: 0.6.0 (October 12, 2026) 🎉
 
 **Installation:**
 
@@ -244,6 +244,21 @@ services:
       - "127.0.0.1:3000:3000"
 ```
 
+### Deploying with Ansible
+
+`deploy/ansible/` deploys to one host or several: the MCP server alone, a
+single-server fleet (server, worker, Redis, Postgres), or a cluster with
+nginx in front of replicas on several hosts. See
+[deploy/ansible/README.md](deploy/ansible/README.md). To have an AI agent run
+the deployment for you, start from one of the prompts in
+[docs/deploy-prompts/](docs/deploy-prompts/README.md).
+
+### Deploying on Kubernetes
+
+`deploy/helm/unifi-mcp/` is a Helm chart for the server alone or in fleet
+mode with workers, taking credentials and the Postgres and Redis URLs from
+an existing Secret. See [its README](deploy/helm/unifi-mcp/README.md).
+
 ### Connecting via MCP Gateway
 
 Once running in Streamable HTTP mode, configure your MCP gateway to connect:
@@ -342,6 +357,7 @@ unifi-mcp-server
 - **Confirmation Required**: All mutating operations require explicit `confirm=True` flag
 - **Global Dry-Run Mode**: Set `UNIFI_DRY_RUN=true` to force every `dry_run`-gated tool into preview mode at call time (caller-supplied values are overridden), and to withhold registration of mutating tools that have no dry-run gate — no write can reach the controller
 - **Metrics Endpoint**: Set `UNIFI_METRICS_ENABLED=true` to serve `GET /metrics` (Prometheus text exposition: `unifi_mcp_tool_calls_total`, `unifi_mcp_tool_call_duration_seconds` histogram, `unifi_mcp_tools_registered`) on network transports; bearer-token protected like `/mcp`
+- **Liveness Endpoint**: `GET /healthz` answers `{"status": "ok"}` on network transports without a token, for load balancers and container health checks; it reveals nothing else
 - **Audit Logging**: Append-only JSON-lines audit trail for mutation paths; optional at-rest Fernet encryption of sensitive payload fields via `UNIFI_AUDIT_LOG_KEY` with non-destructive key rotation (see SECURITY.md; decrypt with `python -m src.utils.audit_decrypt`)
 - **Tool Scoping**: Planned API-key-based RBAC for least-privilege access
 - **Input Validation**: Comprehensive parameter validation with detailed error messages
@@ -353,8 +369,8 @@ unifi-mcp-server
 
 - **Async Support**: Built with async/await for high performance and concurrency
 - **MCP Protocol**: Standard Model Context Protocol for AI agent integration
-- **Comprehensive Testing**: 1,236 tests with high coverage, all passing across Python 3.10–3.13
-- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (18 checks)
+- **Comprehensive Testing**: 3,152 unit tests at 93% line coverage, all passing across Python 3.10–3.13
+- **CI/CD Pipelines**: Automated testing, security scanning, and Docker builds (25 checks)
 - **Multi-Architecture**: Docker images for amd64, arm64, arm/v7 (32-bit ARM), and arm64/v8
 - **Security Hardened**: Updated critical dependencies (FastMCP, MCP SDK, cryptography)
 - **Quality Metrics**: Black formatting, Ruff linting, comprehensive type hints, Pydantic validation
@@ -1188,7 +1204,7 @@ pytest -m integration
 
 **Current Test Coverage**:
 
-- 1,236 tests passing across Python 3.10-3.13
+- 3,152 unit tests passing across Python 3.10-3.13 (93% line coverage)
 - Coverage and module-level reporting are tracked in Codecov and CI
 - Module-specific targets are maintained in `DEVELOPMENT_PLAN.md` and the test suite
 
@@ -1254,7 +1270,7 @@ unifi-mcp-server/
 │   ├── unifi-security.md  # Firewall, ZBF, ACLs, VPN, content filtering
 │   └── unifi-system.md    # Sites, backups, traffic flows, DPI, RADIUS
 ├── src/
-│   ├── main.py            # MCP server entry point (215+ tools registered)
+│   ├── main.py            # MCP server entry point (343 tools registered in local mode)
 │   ├── cache.py           # Redis caching implementation
 │   ├── memory.py          # Supermemory operator notes/context storage
 │   ├── config/            # Configuration management
@@ -1460,13 +1476,13 @@ Security is a top priority. Please see [SECURITY.md](SECURITY.md) for:
 
 **Quality Achievements:**
 
-- [x] 1,236 tests passing
-- [x] 18/18 CI/CD checks passing
+- [x] 3,152 unit tests passing
+- [x] 25/25 CI/CD checks passing
 - [x] Zero security vulnerabilities
 - [x] 30+ AI assistant example prompts
 - [x] Comprehensive documentation (docs/archive/VERIFICATION_REPORT.md, API.md)
 
-**Total: 364 MCP tools + Comprehensive documentation and verification**
+**Total: 343 MCP tools in local mode (60 tool modules) + Comprehensive documentation and verification**
 
 ### Version 0.3.0 (Future - Planned)
 

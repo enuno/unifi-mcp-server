@@ -106,30 +106,57 @@ Configure the MCP server using environment variables:
 | `UNIFI_RATE_LIMIT_PERIOD` | Rate limit period in seconds | No | `60` |
 | `UNIFI_REQUEST_TIMEOUT` | Request timeout in seconds | No | `30` |
 | `UNIFI_MAX_RETRIES` | Maximum retry attempts | No | `3` |
+| `UNIFI_RETRY_BACKOFF_FACTOR` | Exponential backoff factor between retries | No | `2.0` |
+| `UNIFI_RETRY_TOTAL_TIMEOUT` | Wall-clock budget in seconds for one request, including all retries and backoff waits | No | `60` |
 | `UNIFI_PROFILE` | Tool exposure profile: `network`, `devices`, `security`, `system`, `minimal`, `protect`. An unrecognised value logs a warning and falls back to all modules | No | unset |
 | `UNIFI_READ_ONLY` | Register only non-mutating tools. State-changing tools are not exposed to the client at all | No | `false` |
-| `UNIFI_CONTROLLERS` | JSON/YAML controller registry for multi-controller operation | No | unset |
-| `DRY_RUN` | Preview write/destructive tool actions without execution | No | `false` |
+| `UNIFI_DRY_RUN` | Change-safe mode: every tool with a `dry_run` parameter runs as a preview, and mutating tools without one are not registered | No | `false` |
 | `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
 | `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
 | `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
+| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md) | No | unset |
+| `UNIFI_AUDIT_SIEM_WEBHOOK_SECRET` | HMAC-SHA256 key signing webhook deliveries; required for `https://` targets | With a webhook | unset |
+| `UNIFI_AUDIT_SIEM_OTLP_HEADERS` | Extra headers for OTLP targets, `key=value,key=value` | No | unset |
+| `UNIFI_AUDIT_SIEM_CA_FILE` | CA bundle used to verify SIEM targets | No | system roots |
+| `UNIFI_AUDIT_SIEM_BUFFER_DIR` | On-disk buffer for undelivered records | No | `siem-buffer` next to the audit log |
+| `UNIFI_AUDIT_SIEM_BUFFER_MAX_MB` | Most undelivered data kept per target; the oldest is dropped beyond it | No | `100` |
+| `UNIFI_AUDIT_LOG_ROTATE_MB` | Rotate the JSONL audit file at this size into `<log>.<UTC time>Z` files; the chain continues across them | No | unset (never rotate) |
+| `UNIFI_AUDIT_RETENTION_DAYS` | Archive and delete audit records older than this: Postgres with `python -m src.fleet.cli audit-retention --confirm`, rotated JSONL files with `python -m src.utils.audit_retention LOG --confirm` (see SECURITY.md) | No | unset (keep forever) |
+| `UNIFI_AUDIT_ARCHIVE_DIR` | Where retention writes its archives | No | `audit-archive` next to the audit log |
+| `UNIFI_AUDIT_SIEM_ANCHOR_SECONDS` | How often each chain's head is sent to the SIEM as an anchor | No | `300` |
 | `DATABASE_URL` | Postgres URL of the fleet controller registry. When set, controllers come from Postgres instead of the `UNIFI_*` settings (needs the `[fleet]` extra and `python -m src.fleet.cli migrate`) | No | unset |
 | `UNIFI_FLEET_CREDENTIAL_KEY` | Encrypts the controller API keys stored in Postgres; required with `DATABASE_URL` | With `DATABASE_URL` | unset |
 | `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS` | How often each server reloads the registry from Postgres | No | `30` |
 | `UNIFI_FLEET_MAX_OPEN_CLIENTS` | Most controller connections each server keeps open; least recently used idle ones are closed beyond this (controller state such as cached auth is kept) | No | `256` |
+| `UNIFI_FLEET_EXPECTED_REPLICAS` | How many processes (server replicas and workers) share each controller's rate limit. While Redis is unavailable each falls back to `UNIFI_RATE_LIMIT_REQUESTS` divided by this (at least 1), so together they stay near the controller's budget | No | `1` |
+| `UNIFI_FLEET_FANOUT_CONCURRENCY` | Most controllers one `fleet_fanout` call reaches at once | No | `20` |
+| `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS` | Default per-controller timeout of `fleet_fanout` | No | `15` |
+| `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS` | Default overall deadline of `fleet_fanout`; controllers not done by then are reported as timed out | No | `60` |
+| `UNIFI_FLEET_WORKER_HEALTH_SECONDS` | Worker (`python -m src.worker`): how often each controller is health-checked | No | `60` |
+| `UNIFI_FLEET_WORKER_SYNC_SECONDS` | Worker: how often each controller's sites and device inventory are refreshed | No | `900` |
+| `UNIFI_FLEET_WORKER_CONCURRENCY` | Worker: most controller jobs one worker runs at once | No | `20` |
+| `UNIFI_FLEET_WORKER_LEASE_SECONDS` | Worker: how long membership and controller leases last without renewal; a dead worker's controllers move to the others after this | No | `30` |
+| `UNIFI_FLEET_WORKER_DOWN_AFTER` | Worker: consecutive failed health checks before a controller is `down` (earlier failures mark it `degraded`) | No | `3` |
 | `MIGRATION_DATABASE_URL` | Used by `python -m src.fleet.cli migrate`/`status` instead of `DATABASE_URL`, so the schema owner can differ from the server's least-privilege role | No | unset |
 | `UNIFI_STDIO_ROLE` | Role of the local stdio caller: `viewer`, `operator`, `admin` or `fleet-admin` | No | `fleet-admin` |
 | `UNIFI_METRICS_ENABLED` | Enable Prometheus metrics server | No | `false` |
-| `UNIFI_WEBHOOK_REDIS_URL` | Redis URL for webhook/event bus fan-out | No | unset |
+| `WEBHOOK_SECRET` | HMAC-SHA256 key verifying `X-UniFi-Signature` on `POST /webhooks/unifi`; without it the receiver refuses every request | To receive webhooks | unset |
+| `UNIFI_CACHE_ENABLED` | Use the Redis read cache when Redis is configured; set `false` to bypass it | No | `true` |
 | `REDIS_URL` | Redis URL for the response cache; takes precedence over `REDIS_HOST`/`PORT`/`DB`/`PASSWORD` | No | unset |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` / `REDIS_PASSWORD` | Redis location for the response cache | No | `localhost` / `6379` / `0` / unset |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable Site Manager API multi-site tools | No | `false` |
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address for `http`/`sse`/`streamable_http` | No | `127.0.0.1` |
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
+| `MCP_STATELESS_HTTP` | Run the HTTP transports without MCP sessions so any replica can answer any request (ignored for stdio and SSE). `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs per-client sticky routing across replicas, keyed on something stable from `initialize` onward (see `MULTI_CONTROLLER.md`) | No | `false` |
 | `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
+| `LOG_API_REQUESTS` | Log each controller API request | No | `true` |
+| `UNIFI_CACHE_TTL` | Accepted but not used: read-cache lifetimes are fixed per resource type (sites, networks and WLANs 5 min, devices 1 min, clients 30 s) | No | `300` |
+| `UNIFI_BACKUP_DOWNLOAD_DIR` | Directory `download_backup` writes into; the caller names only the file | No | `.` |
+| `SUPERMEMORY_ENABLED` | Enable the Supermemory integration for operator notes | No | `false` |
+| `SUPERMEMORY_API_KEY` | Supermemory API key | With `SUPERMEMORY_ENABLED` | unset |
 
 - Required when `UNIFI_API_TYPE=local`.
 
@@ -470,7 +497,7 @@ Show which controller a call without `controller` would target, and whether it c
 
 ### Fleet Registry Administration
 
-Available only when `DATABASE_URL` is set, and never in read-only mode. These tools manage the controller registry rather than a controller, so they take no `controller` argument. They are `fleet-admin` tier, need `confirm=true`, accept `dry_run`, and every call is audited as an `admin` event with API keys redacted. A change is routable on the server that made it immediately, and on other servers within `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`.
+Available only when `DATABASE_URL` is set, and never in read-only mode. These tools manage the controller registry rather than a controller, so they take no `controller` argument. They are `fleet-admin` tier, need `confirm=true`, accept `dry_run`, and every call is audited as an `admin` event with API keys redacted. A change is routable on the server that made it immediately, on other servers at once when Redis is configured (`registry:changed` pub/sub), and otherwise within `UNIFI_FLEET_REGISTRY_REFRESH_SECONDS`.
 
 #### `register_controller`
 
@@ -518,7 +545,7 @@ Search the Postgres audit trail, newest first, with payloads decrypted when the 
 
 #### `verify_audit_chain`
 
-Check every server's hash chain for edited, missing or reordered records; returns the chain heads to keep off the server. **Parameters:** None
+Check every server's hash chain for edited, missing or reordered records, that each chain ends exactly at its `audit_chain_heads` entry (so records deleted from the end of a chain, a whole chain, or the whole table are reported, and so is a chain whose head was deleted), and that each row's searchable columns match its sealed record. Returns the chain heads to keep off the server. **Parameters:** None
 
 #### `export_audit_log`
 
@@ -533,6 +560,60 @@ python -m src.fleet.cli import --name hq     # register the UNIFI_* controller
 python -m src.fleet.cli tokens create --name first-admin --role fleet-admin
 python -m src.fleet.cli tokens list
 python -m src.fleet.cli tokens revoke --name first-admin
+```
+
+### Fleet-Wide Reads
+
+Available when `DATABASE_URL` is set. All four are `read` tier, from the module `fleet` (so `deny_modules: ["fleet"]` removes them), take no `controller` argument, and cover only the controllers inside the caller's `controller_labels` scope. Naming a controller that is unknown, disabled or out of scope is refused without saying which.
+
+`fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; every entry says how many seconds old it is. Without a running worker they report `unknown` health and no sites or devices.
+
+#### `fleet_health`
+
+Each enabled controller's last health check: `ok`, `degraded` (failing), `down` (`UNIFI_FLEET_WORKER_DOWN_AFTER` failures in a row) or `unknown` (never checked), the failure detail, `capabilities` (`network_version` on local controllers), and ages. An entry is `stale` when its last check is more than three health intervals old. Also returns a count per state.
+
+**Parameters:** `health` (`ok`, `degraded`, `down` or `unknown`), `labels` (controllers carrying all of these)
+
+#### `fleet_sites`
+
+Every controller's sites: controller, `site_id` (UUID), short name, display name, age.
+
+**Parameters:** `controllers` (names), `labels`
+
+#### `fleet_inventory`
+
+Devices across the fleet (local controllers; the worker does not inventory cloud controllers): controller, site, id, MAC, name, model, firmware, state, age. Also the total match count and a count per model.
+
+**Parameters:** `model` (substring, case-insensitive, e.g. `UDM`), `firmware_below` (numeric comparison, e.g. `4.1.0`; devices without a version are left out), `state` (e.g. `OFFLINE`), `controllers`, `labels`, `limit` (default 200, max 1000), `offset`
+
+```json
+// fleet_inventory(model="UDM", firmware_below="4.1")
+{
+  "devices": [
+    {"controller": "store-017", "site_id": "88f7af54-...", "id": "a1b2...", "mac": "aa:bb:cc:00:11:22",
+     "name": "Gateway", "model": "UDM-Pro", "firmware_version": "4.0.9", "state": "ONLINE",
+     "synced_seconds_ago": 412.7}
+  ],
+  "total": 1, "offset": 0, "by_model": {"UDM-Pro": 1}
+}
+```
+
+#### `fleet_fanout`
+
+Run one `read`-tier controller tool live on many controllers: at most `UNIFI_FLEET_FANOUT_CONCURRENCY` at once, each with its own timeout, all under one deadline. Each controller gets its own result, so one unreachable controller never fails the call. Every per-controller call goes through the normal pipeline: the caller's role, module filters and controller scope apply to it, and cached reads are served from the read cache. Write, destructive and `fleet_*` tools are refused. Prefer the snapshot tools above when they cover the question.
+
+**Parameters:** `tool` (required, e.g. `list_devices`), `arguments` (the tool's arguments except `controller`), `controllers`, `labels`, `timeout_seconds` (default `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS`), `deadline_seconds` (default `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS`)
+
+```json
+// fleet_fanout(tool="get_application_info", labels={"region": "west"})
+{
+  "tool": "get_application_info",
+  "results": {
+    "store-001": {"ok": true, "data": {"application_version": "9.4.19"}},
+    "store-007": {"ok": false, "error": "timed out after 15s"}
+  },
+  "succeeded": 1, "failed": 1, "elapsed_seconds": 15.02
+}
 ```
 
 ### Protect Phase 3 Tools
@@ -3084,18 +3165,41 @@ Independently of Redis, every server keeps one long-lived connection per control
 **Cache Invalidation:**
 Caches are automatically invalidated when mutating operations are performed on related resources.
 
+### Liveness (`GET /healthz`)
+
+On a network transport the server answers `GET /healthz` with
+`{"status": "ok"}` (`Cache-Control: no-store`) without a bearer token, for
+load balancers and container health checks. It says only that the process is
+serving HTTP: no version, controller or configuration. Use the `health_check`
+tool or `/metrics` (both behind the token) for more.
+
 ### Webhooks (Optional)
 
-The MCP server can receive webhooks from UniFi for real-time event processing.
+On a network transport (`http`, `sse`, `streamable_http`) the server serves
+`POST /webhooks/unifi` when `WEBHOOK_SECRET` is set, with the default handlers
+below registered. Without the secret the route is not mounted at all; over
+stdio there is no HTTP surface.
 
-**Configuration:**
-Set `WEBHOOK_SECRET` environment variable for signature verification.
+**Authentication:** the route does not use the MCP bearer token (UniFi cannot
+send one). Each request must carry `X-UniFi-Signature`: the hex HMAC-SHA256 of
+the raw request body, keyed with `WEBHOOK_SECRET`.
 
-**Webhook Endpoint:**
+The receiver (`src/webhooks/`) is a Starlette endpoint and can also be mounted
+on another app:
 
+```python
+from src.webhooks import WebhookEventHandler, WebhookReceiver
+
+receiver = WebhookReceiver(settings, app=starlette_app)  # POST /webhooks/unifi
+WebhookEventHandler(settings).register_default_handlers(receiver)
 ```
-POST /webhooks/unifi
-```
+
+An unconfigured receiver mounted this way refuses every request (`503`).
+
+**Responses:** `200` processed (or `{"status": "duplicate"}` for a repeated
+`event_id` within 5 minutes), `400` invalid JSON or event, `401` missing or
+invalid signature, `429` more than 100 events per site per minute, `503` no
+secret configured (receiver mounted by hand only).
 
 **Supported Events:**
 
@@ -3107,7 +3211,10 @@ POST /webhooks/unifi
 - `event.occurred` - Generic event
 
 **Event Handlers:**
-Webhooks automatically invalidate relevant caches and can trigger custom handlers.
+`device.*` and `client.*` events clear the server's read cache (when Redis is
+configured). A payload does not say which controller sent it, so the cached
+reads of every controller are cleared. Custom handlers can be registered with
+`receiver.register_handler(event_type, handler)`.
 
 ## MCP Resources
 

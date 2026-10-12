@@ -83,12 +83,14 @@ class UniFiClient:
         # controller's long-lived HTTP client, rate limiter and circuit breaker.
         self._pool = active_pool.get()
         self._connection = self._pool.acquire(settings) if self._pool is not None else None
+        self._pooled = self._connection is not None
         if self._connection is not None:
             self.client = self._connection.client
             if self._connection.rate_limiter is None:
-                self._connection.rate_limiter = RateLimiter(
-                    settings.rate_limit_requests, settings.rate_limit_period
-                )
+                from .rate_limit import make_rate_limiter
+
+                # Shared across replicas when Redis is configured.
+                self._connection.rate_limiter = make_rate_limiter(settings, RateLimiter)
             self.rate_limiter = self._connection.rate_limiter
             return
 
@@ -102,11 +104,10 @@ class UniFiClient:
             follow_redirects=False,  # Prevent HTTP redirects that might downgrade protocol
         )
 
-        # Initialize rate limiter
-        self.rate_limiter = RateLimiter(
-            settings.rate_limit_requests,
-            settings.rate_limit_period,
-        )
+        # Shared across replicas when Redis is configured, as on the pooled path.
+        from .rate_limit import make_rate_limiter
+
+        self.rate_limiter = make_rate_limiter(settings, RateLimiter)
 
     async def __aenter__(self) -> "UniFiClient":
         """Async context manager entry."""
@@ -117,10 +118,15 @@ class UniFiClient:
         await self.close()
 
     async def close(self) -> None:
-        """Close the HTTP client (or hand a pooled connection back to the pool)."""
-        if self._connection is not None and self._pool is not None:
-            self._pool.release(self._connection)
-            self._connection = None
+        """Close the HTTP client (or hand a pooled connection back to the pool).
+
+        Idempotent: a pooled client is shared, so it is never closed here, even
+        on a second call after the connection was released.
+        """
+        if self._pooled:
+            if self._connection is not None and self._pool is not None:
+                self._pool.release(self._connection)
+                self._connection = None
             return
         await self.client.aclose()
 

@@ -1,0 +1,8 @@
+postgres_image: postgres:16-alpine
+postgres_db: unifi_mcp
+postgres_owner: unifi_mcp
+# Address other hosts reach Postgres on; on a single host only the Docker
+# network is used and no port is published.
+postgres_bind_address: "{{ private_address | default(ansible_host) }}"
+postgres_port: 5432
+postgres_data_dir: /opt/unifi-mcp/postgres

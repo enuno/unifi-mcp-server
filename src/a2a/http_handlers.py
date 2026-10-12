@@ -69,14 +69,16 @@ async def _payload_from_request(request: Any) -> dict[str, Any]:
         return dict(request)
     if hasattr(request, "json"):
         result = request.json()
-        return dict(await result) if hasattr(result, "__await__") else dict(result)
+        decoded = await result if hasattr(result, "__await__") else result
+        return dict(decoded) if isinstance(decoded, Mapping) else {}
     if hasattr(request, "body"):
         body = request.body()
         raw = await body if hasattr(body, "__await__") else body
         if isinstance(raw, bytes) and raw:
-            return json.loads(raw.decode("utf-8"))
+            raw = raw.decode("utf-8")
         if isinstance(raw, str) and raw:
-            return json.loads(raw)
+            decoded = json.loads(raw)
+            return dict(decoded) if isinstance(decoded, Mapping) else {}
     return {}
 
 
@@ -208,7 +210,7 @@ async def delegate_handler(
     else:
         result = executor(tool_name, params)
         if hasattr(result, "__await__"):
-            result = await result  # type: ignore[func-returns-value]
+            result = await result
 
     duration_ms = (datetime.now(tz=timezone.utc) - started).total_seconds() * 1000.0
     active_state.audit_logger.log_invocation(
@@ -361,6 +363,8 @@ class A2AHTTPRouter:
         body = bytearray()
         while True:
             message = await receive()
+            if message.get("type") == "http.disconnect":
+                return  # terminal: the client is gone, no more body will arrive
             if message.get("type") != "http.request":
                 continue
             body.extend(message.get("body", b""))

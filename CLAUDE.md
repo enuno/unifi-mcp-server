@@ -6,7 +6,7 @@ This file provides project-specific instructions for AI coding assistants workin
 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
 
-**Current Version**: v0.2.5 (package version; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
+**Current Version**: v0.6.0 (see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 **Python Version**: 3.10+
 **Framework**: FastMCP
 
@@ -26,7 +26,7 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
    - `src/api/` - UniFi API client
    - `src/models/` - Pydantic data models
    - `src/tools/` - MCP tool implementations
-   - `tests/unit/` - Unit tests (2,240 tests passing)
+   - `tests/unit/` - Unit tests (3,152 tests passing, 93% line coverage)
 
 ### Development Workflow
 
@@ -78,13 +78,13 @@ The server supports three UniFi API access modes:
 
 ### Current Development Focus
 
-Phases 0–3 are complete (docs cleanup, Network API, Site Manager API, Protect API). **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
+Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are complete. **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
 
-**Phase 4 open items**: per-module coverage to 80%, doc sync, release prep.
+**Phase 4 open items**: none (v0.6.0 released; v0.5.0 was tagged but not published, see `DEVELOPMENT_PLAN.md` §5).
 
-**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` mode, bearer auth on network transports, credential-redacted audit log.
+**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` and `UNIFI_DRY_RUN` modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, hash-chained wrapper-level audit log, `/metrics`, and the fleet stack (Phases 0–4 of `docs/FLEET_SCALING_PLAN.md`: routing, Postgres registry, pool and read cache, several replicas, workers, `fleet_*` read tools).
 
-**Total**: 275 MCP tools registered in local mode, 2,240 unit tests passing
+**Total**: 343 MCP tools registered in local mode across 60 tool modules, 3,152 unit tests passing
 
 ### Important Constraints
 
@@ -117,5 +117,5 @@ Phases 0–3 are complete (docs cleanup, Network API, Site Manager API, Protect 
 
 ---
 
-**Last Updated**: 2026-09-24
+**Last Updated**: 2026-10-10
 **Maintained By**: Development Team

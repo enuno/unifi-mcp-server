@@ -238,6 +238,42 @@ jobs:
         working-directory: deploy/ansible
         run: ansible-lint --offline site.yml
 
+  helm:
+    name: Helm Chart Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.2
+
+      - name: Lint and render the chart
+        run: |
+          for values in deploy/helm/unifi-mcp/ci/*.yaml; do
+            helm lint deploy/helm/unifi-mcp -f "$values"
+            helm template ci deploy/helm/unifi-mcp -f "$values" > "/tmp/$(basename "$values")"
+          done
+
+      - name: Validate the manifests
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar xz kubeconform
+          ./kubeconform -strict -summary -kubernetes-version 1.30.0 -skip ServiceMonitor /tmp/*-values.yaml
+
+      - name: Build the fleet image
+        run: docker build --build-arg EXTRAS=fleet -t unifi-mcp-server:ci .
+
+      - name: Create a kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: ci
+
+      - name: Install the chart with Postgres and smoke-test it
+        run: scripts/helm_smoke_test.sh unifi-mcp-server:ci ci
+
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest

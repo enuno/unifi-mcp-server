@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "unifi-mcp.fullname" . }}
+  labels:
+    {{- include "unifi-mcp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  type: {{ .Values.service.type }}
+  {{- if and (not .Values.server.statelessHttp) (gt (int .Values.server.replicas) 1) }}
+  sessionAffinity: {{ .Values.service.sessionAffinity }}
+  {{- end }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "unifi-mcp.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server

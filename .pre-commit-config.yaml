@@ -16,6 +16,8 @@ repos:
         name: Check YAML syntax
         # Parse for syntax only, so Compose tags such as !reset are accepted.
         args: [--unsafe]
+        # Helm templates are Go templates, not YAML, until rendered.
+        exclude: ^deploy/helm/[^/]+/templates/
       - id: check-json
         name: Check JSON syntax
       - id: check-toml
@@ -107,6 +109,7 @@ repos:
       - id: yamllint
         name: Lint YAML files
         args: [-c=.yamllint.yaml]
+        exclude: ^deploy/helm/[^/]+/templates/
 
   # Conventional Commits
   - repo: https://github.com/compilerla/conventional-pre-commit

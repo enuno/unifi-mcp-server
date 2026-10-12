@@ -1,0 +1,26 @@
+{{- if .Values.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "unifi-mcp.fullname" . }}
+  labels:
+    {{- include "unifi-mcp.labels" . | nindent 4 }}
+    {{- with .Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "unifi-mcp.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.serviceMonitor.interval }}
+      # /metrics takes the same bearer token as /mcp.
+      authorization:
+        type: Bearer
+        credentials:
+          name: {{ .Values.existingSecret }}
+          key: MCP_AUTH_TOKEN
+{{- end }}

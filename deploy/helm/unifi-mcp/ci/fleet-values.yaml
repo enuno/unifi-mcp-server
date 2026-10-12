@@ -1,0 +1,29 @@
+# Used by `helm lint` / `helm template` in CI: fleet mode with every option on.
+existingSecret: unifi-mcp  # pragma: allowlist secret (a Secret's name)
+controller:
+  localHost: 192.0.2.1
+server:
+  replicas: 3
+  extraEnv:
+    UNIFI_PROFILE: network
+fleet:
+  enabled: true
+  workers:
+    replicas: 2
+audit:
+  retentionDays: 365
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr$http_authorization"
+serviceMonitor:
+  enabled: true
+podDisruptionBudget:
+  enabled: true
+networkPolicy:
+  enabled: true
+  from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx

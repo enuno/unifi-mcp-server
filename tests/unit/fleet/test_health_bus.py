@@ -19,8 +19,9 @@ from collections.abc import Iterator
 import pytest
 
 fakeredis = pytest.importorskip("fakeredis")
-# Bound at import, before tests/unit/test_cache.py stubs sys.modules["redis"].
-import redis.asyncio  # noqa: E402,F401
+# Bind the real redis.asyncio now, before tests/unit/test_cache.py stubs
+# sys.modules["redis"].
+pytest.importorskip("redis.asyncio")
 
 from src.api.pool import CircuitBreaker, CircuitOpenError, ClientPool, connection_key  # noqa: E402
 from src.config.config import Settings  # noqa: E402

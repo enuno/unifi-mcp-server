@@ -284,6 +284,65 @@ def parse_head(value: str) -> tuple[str, Head]:
     return chain_id, (int(seq_text), head_hash)
 
 
+# Checkpoints written by JSONL retention (src/utils/audit_retention.py).
+
+
+def checkpoints_path(log_file: Path) -> Path:
+    """Where retention records the chain checkpoints of ``log_file``."""
+    return log_file.with_name(f"{log_file.name}.checkpoints.jsonl")
+
+
+def checkpoint_batches(path: Path) -> list[dict[str, Any]]:
+    """Each retention run's checkpoint line, oldest first.
+
+    A run appends its whole batch as one line, so a crash leaves at most a
+    torn last line (no newline, not valid JSON). That line is ignored: its
+    run had not finished writing, so it deleted nothing.
+
+    Raises:
+        ValueError: For any other line that is not a checkpoint batch
+    """
+    if not path.exists():
+        return []
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    batches = []
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        torn = number == len(lines)  # the last piece has no newline after it
+        try:
+            batch = json.loads(line)
+            if not isinstance(batch, dict):
+                raise TypeError("not an object")
+            str(batch["archive"]), str(batch["sha256"])
+            files = [str(name) for name in batch["files"]]
+            chains = [(str(c["chain_id"]), int(c["seq"]), str(c["hash"])) for c in batch["chains"]]
+        except (ValueError, KeyError, TypeError, AttributeError) as e:
+            if torn:
+                print(f"Ignoring an unfinished checkpoint line in {path}", file=sys.stderr)
+                continue
+            raise ValueError(f"line {number} is not a checkpoint batch: {e}") from e
+        batches.append({**batch, "files": files, "chains": chains})
+    return batches
+
+
+def read_checkpoints(path: Path) -> dict[str, Head]:
+    """Per chain, its latest checkpoint ``(seq, hash)``: where it resumes.
+
+    Raises:
+        ValueError: If the file holds something other than checkpoints
+    """
+    if not path.exists():
+        raise ValueError(f"{path} not found")
+    starts: dict[str, Head] = {}
+    for batch in checkpoint_batches(path):
+        for chain_id, seq, digest in batch["chains"]:
+            if seq > starts.get(chain_id, GENESIS)[0]:
+                starts[chain_id] = (seq, digest)
+    return starts
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the audit-chain verification CLI.
 
@@ -380,8 +439,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: log file not found: {path}", file=sys.stderr)
             return 2
     if args.checkpoints is not None:
-        from .audit_retention import read_checkpoints
-
         try:
             starts = read_checkpoints(args.checkpoints)
         except ValueError as e:

@@ -174,10 +174,14 @@ class TestLifespan:
 
         registry = MagicMock()
         registry.start = registry_start
+        # Imported here so the patch below does not depend on test order.
+        pytest.importorskip("sqlalchemy")
+        from src.fleet.db import audit_store
+
         with (
             patch.object(main_mod, "start_siem_forwarder", start_forwarder),
             patch.object(main_mod, "fleet_registry", registry),
-            patch("src.fleet.db.audit_store.install"),
+            patch.object(audit_store, "install"),
             pytest.raises(RuntimeError, match="database down"),
         ):
             async with main_mod._lifespan(None):

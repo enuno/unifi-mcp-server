@@ -260,3 +260,24 @@ class TestHelmRender:
         )
         assert result.returncode != 0
         assert "leak" not in result.stdout
+
+    def test_an_existing_archive_claim_replaces_the_charts_own(self):
+        base = [
+            "--set", "existingSecret=s", "--set", "controller.localHost=192.0.2.1",
+            "--set", "fleet.enabled=true", "--set", "audit.retentionDays=30",
+        ]  # fmt: skip
+
+        def render(*extra: str) -> list[dict]:
+            result = self._template(*base, *extra)
+            assert result.returncode == 0, result.stderr
+            return [d for d in yaml.safe_load_all(result.stdout) if d]
+
+        def archive_claims(docs: list[dict]) -> tuple[list[str], str]:
+            created = [d["metadata"]["name"] for d in docs if d["kind"] == "PersistentVolumeClaim"]
+            (cron,) = [d for d in docs if d["kind"] == "CronJob"]
+            volumes = cron["spec"]["jobTemplate"]["spec"]["template"]["spec"]["volumes"]
+            (archive,) = [v for v in volumes if v["name"] == "archive"]
+            return created, archive["persistentVolumeClaim"]["claimName"]
+
+        assert archive_claims(render()) == (["t-unifi-mcp-archive"], "t-unifi-mcp-archive")
+        assert archive_claims(render("--set", "audit.archive.existingClaim=mine")) == ([], "mine")

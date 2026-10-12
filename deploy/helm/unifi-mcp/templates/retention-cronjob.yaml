@@ -50,7 +50,7 @@ spec:
           volumes:
             - name: archive
               persistentVolumeClaim:
-                claimName: {{ include "unifi-mcp.fullname" . }}-archive
+                claimName: {{ .Values.audit.archive.existingClaim | default (printf "%s-archive" (include "unifi-mcp.fullname" .)) }}
             - name: tmp
               emptyDir: {}
 {{- end }}

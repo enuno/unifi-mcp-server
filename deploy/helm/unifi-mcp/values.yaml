@@ -70,8 +70,13 @@ audit:
   # Fleet only: a CronJob archives, then deletes, older records.
   retentionDays: ""
   retentionSchedule: "17 3 * * *"
-  # Archives written by the retention job.
+  # Archives written by the retention job. The chart creates this claim
+  # unless existingClaim names one. Only the CronJob mounts it, so with a
+  # WaitForFirstConsumer storage class (kind, most clouds) it stays Pending
+  # until the first run and `helm --wait` waits for it: wait on the
+  # Deployments instead, or pre-create the claim and set existingClaim.
   archive:
+    existingClaim: ""
     storageClass: ""
     size: 5Gi
   # SIEM export (SECURITY.md); secrets for it go in existingSecret.

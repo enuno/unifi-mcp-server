@@ -74,7 +74,11 @@ a Redis operator) for high availability.
   schema.
 - **Retention CronJob** (fleet, with `audit.retentionDays`). Archives
   expired audit records to a PersistentVolumeClaim, then deletes them. Only
-  one run happens at a time.
+  one run happens at a time. With a storage class that binds on first use
+  (`WaitForFirstConsumer`, the default on kind and most clouds), that claim
+  stays `Pending` until the first run, so `helm install --wait` would wait
+  for it. Wait on the Deployments instead (`kubectl rollout status`), or
+  create the claim yourself and set `audit.archive.existingClaim`.
 - **Service, plus optional Ingress, ServiceMonitor, PodDisruptionBudget and
   NetworkPolicy.** The ServiceMonitor reads the bearer token for
   `/metrics` from the Secret.

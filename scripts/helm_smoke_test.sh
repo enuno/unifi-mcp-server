@@ -89,7 +89,10 @@ kubectl -n "$ns" create secret generic unifi-mcp \
   --from-literal=DATABASE_URL="$url" \
   --from-literal=MIGRATION_DATABASE_URL="$url"
 
-helm install "$release" "$chart" --namespace "$ns" --wait --timeout 5m \
+# No --wait: the archive claim binds only when the retention job first runs
+# (WaitForFirstConsumer), so wait on the Deployments instead. The migration
+# hook still runs, and must succeed, before install returns.
+helm install "$release" "$chart" --namespace "$ns" --timeout 5m \
   --set image.repository="${image%:*}" --set image.tag="${image##*:}" \
   --set image.pullPolicy=Never \
   --set existingSecret=unifi-mcp \
@@ -97,6 +100,7 @@ helm install "$release" "$chart" --namespace "$ns" --wait --timeout 5m \
   --set server.replicas=2 \
   --set fleet.enabled=true \
   --set audit.retentionDays=30
+kubectl -n "$ns" rollout status "deployment/${release}-unifi-mcp" --timeout=300s
 
 kubectl -n "$ns" port-forward "svc/${release}-unifi-mcp" 3000:3000 >/dev/null &
 forward=$!
@@ -123,5 +127,6 @@ echo "--- one audit retention run"
 kubectl -n "$ns" create job retention-now --from="cronjob/${release}-unifi-mcp-audit-retention"
 kubectl -n "$ns" wait --for=condition=complete job/retention-now --timeout=180s
 kubectl -n "$ns" logs job/retention-now
+test "$(kubectl -n "$ns" get pvc "${release}-unifi-mcp-archive" -o jsonpath='{.status.phase}')" = Bound
 
 echo "smoke test passed"

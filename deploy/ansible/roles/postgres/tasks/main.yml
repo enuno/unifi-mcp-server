@@ -1,3 +1,10 @@
+- name: Check the settings
+  ansible.builtin.assert:
+    that:
+      - vault_postgres_password | default('') | length > 0
+    fail_msg: Set vault_postgres_password (vault.yml.example).
+    quiet: true
+
 - name: Create the Postgres data directory
   ansible.builtin.file:
     path: "{{ postgres_data_dir }}"
@@ -38,3 +45,30 @@
   retries: 30
   delay: 2
   changed_when: false
+
+# POSTGRES_PASSWORD only applies when the data directory is first created;
+# set it on every run so a changed vault_postgres_password takes effect.
+- name: Apply the owner password
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - -i
+      - -e
+      - OWNER_PASSWORD
+      - unifi-mcp-postgres
+      - psql
+      - -q
+      - -v
+      - ON_ERROR_STOP=1
+      - -U
+      - "{{ postgres_owner }}"
+      - -d
+      - "{{ postgres_db }}"
+    stdin: |
+      \getenv owner_password OWNER_PASSWORD
+      ALTER ROLE {{ postgres_owner }} PASSWORD :'owner_password';
+  environment:
+    OWNER_PASSWORD: "{{ vault_postgres_password }}"
+  changed_when: false
+  no_log: true

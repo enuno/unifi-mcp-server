@@ -1,3 +1,10 @@
+- name: Check the settings
+  ansible.builtin.assert:
+    that:
+      - vault_redis_password | default('') | length > 0
+    fail_msg: Set vault_redis_password (vault.yml.example).
+    quiet: true
+
 - name: Create the Redis data directory
   ansible.builtin.file:
     path: "{{ redis_data_dir }}"

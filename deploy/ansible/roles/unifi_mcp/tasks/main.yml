@@ -7,10 +7,13 @@
       - unifi_mcp_api_type != 'local' or unifi_mcp_local_host | length > 0
       - not unifi_mcp_fleet | bool or vault_fleet_credential_key | default('') | length > 0
       - not unifi_mcp_manage_runtime_role | bool or vault_runtime_db_password | default('') | length > 0
+      - groups.get('postgres', []) | length == 0 or vault_postgres_password | default('') | length > 0
+      - groups.get('redis', []) | length == 0 or vault_redis_password | default('') | length > 0
       - unifi_mcp_audit_retention_days | string | length == 0 or vault_audit_chain_key | default('') | length > 0
     fail_msg: >-
       Set vault_unifi_api_key, vault_mcp_auth_token (32+ characters), and with
-      Postgres vault_fleet_credential_key and vault_runtime_db_password
+      Postgres vault_postgres_password, vault_fleet_credential_key and
+      vault_runtime_db_password, with Redis vault_redis_password
       (vault.yml.example), vault_audit_chain_key for audit retention, and
       unifi_mcp_local_host for the local API.
     quiet: true
@@ -213,22 +216,22 @@
   delay: 2
   loop: "{{ range(unifi_mcp_replicas | int) | list }}"
 
-- name: Install the audit retention job
+- name: Write the retention script
+  ansible.builtin.template:
+    src: audit-retention.sh.j2
+    dest: "{{ unifi_mcp_root }}/audit-retention.sh"
+    mode: "0700"
   when: unifi_mcp_audit_retention_days | string | length > 0
-  block:
-    - name: Write the retention script
-      ansible.builtin.template:
-        src: audit-retention.sh.j2
-        dest: "{{ unifi_mcp_root }}/audit-retention.sh"
-        mode: "0700"
 
-    # Fleet mode: one job for the shared Postgres, on the first mcp host.
-    - name: Schedule the retention job
-      ansible.builtin.cron:
-        name: unifi-mcp audit retention
-        minute: "{{ unifi_mcp_retention_minute }}"
-        hour: "{{ unifi_mcp_retention_hour }}"
-        job: "{{ unifi_mcp_root }}/audit-retention.sh >> {{ unifi_mcp_root }}/logs/retention.log 2>&1"
-        state: >-
-          {{ 'present' if not unifi_mcp_fleet | bool
-             or inventory_hostname == (groups['mcp'] | first) else 'absent' }}
+# Fleet mode: one job for the shared Postgres, on the first mcp host. Without
+# a retention period the job is removed, so clearing the setting turns it off.
+- name: Schedule the retention job
+  ansible.builtin.cron:
+    name: unifi-mcp audit retention
+    minute: "{{ unifi_mcp_retention_minute }}"
+    hour: "{{ unifi_mcp_retention_hour }}"
+    job: "{{ unifi_mcp_root }}/audit-retention.sh >> {{ unifi_mcp_root }}/logs/retention.log 2>&1"
+    state: >-
+      {{ 'present' if unifi_mcp_audit_retention_days | string | length > 0
+         and (not unifi_mcp_fleet | bool or inventory_hostname == (groups['mcp'] | first))
+         else 'absent' }}

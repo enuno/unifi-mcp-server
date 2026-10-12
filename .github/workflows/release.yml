@@ -209,7 +209,9 @@ jobs:
           tags: ${{ steps.docker-meta-fleet.outputs.tags }}
           labels: ${{ steps.docker-meta-fleet.outputs.labels }}
           cache-from: type=gha
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8
+          # The fleet extras (greenlet, asyncpg, SQLAlchemy) publish musl
+          # wheels for amd64 and arm64 only; 32-bit ARM would compile them.
+          platforms: linux/amd64,linux/arm64
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0

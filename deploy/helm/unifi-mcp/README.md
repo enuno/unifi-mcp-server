@@ -123,8 +123,9 @@ in `server.extraEnv`. The chart refuses to put a secret there.
 
 The default image is `ghcr.io/enuno/unifi-mcp-server:<appVersion>`. With
 `fleet.enabled` it is `...:<appVersion>-fleet`, the image built with the
-Redis and Postgres extras that the release workflow publishes. To build
-your own, run `docker build --build-arg EXTRAS=fleet .` and set
+Redis and Postgres extras that the release workflow publishes for
+`linux/amd64` and `linux/arm64` (the base image also covers 32-bit ARM). To
+build your own, run `docker build --build-arg EXTRAS=fleet .` and set
 `image.repository` and `image.tag`.
 
 ## Tests

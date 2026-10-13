@@ -1,808 +1,275 @@
 # AI Agent Guidelines for UniFi MCP Server
 
-This document provides universal rules, workflows, and best practices for all AI coding agents contributing to the UniFi MCP Server project. These guidelines ensure consistency, quality, and security across all AI-assisted development.
+Rules and workflows for every AI coding agent that contributes to the UniFi MCP Server. `CLAUDE.md` is the short version; the skills in `.claude/skills/` cover each tool set in detail.
 
 ## Table of Contents
 
 - [Core Principles](#core-principles)
-- [File Structure and Organization](#file-structure-and-organization)
-- [Workflow Guidelines](#workflow-guidelines)
-- [Do's and Don'ts](#dos-and-donts)
+- [Project Layout](#project-layout)
+- [Workflow](#workflow)
+- [Writing a Tool](#writing-a-tool)
 - [Testing Requirements](#testing-requirements)
 - [Security Guardrails](#security-guardrails)
+- [UniFi API Guidelines](#unifi-api-guidelines)
 - [Code Quality Standards](#code-quality-standards)
 - [Documentation Requirements](#documentation-requirements)
 - [Approval and Merge Policies](#approval-and-merge-policies)
+- [XERJ (code search)](#xerj-code-search)
 
 ## Core Principles
 
-All AI agents must adhere to these fundamental principles:
+1. **Safety first.** No write operation runs without explicit confirmation, and every write supports a dry run. Validate inputs. Never commit or log secrets.
+2. **Evidence over assumption.** Read the code before you describe it. UniFi endpoints differ between firmware versions, so a test against mocks proves the request shape, not that the endpoint exists. Say which one you verified.
+3. **Consistency.** Copy the pattern of the nearest existing tool. Do not add a second way to do something the codebase already does.
+4. **Small, reviewable changes.** One logical change per commit. Do not refactor code that the task does not need.
 
-### 1. Safety First
+## Project Layout
 
-- Never perform destructive operations without explicit confirmation
-- Always validate inputs and handle errors gracefully
-- Implement proper authentication and authorization checks
-- Never commit or expose sensitive data
-
-### 2. Clarity and Transparency
-
-- Write clear, self-documenting code with appropriate comments
-- Document all decisions and trade-offs
-- Tag AI-generated contributions appropriately
-- Explain complex logic in docstrings
-
-### 3. Consistency
-
-- Follow the project's established patterns and conventions
-- Maintain consistent code style (enforced by linting tools)
-- Use consistent naming conventions throughout the codebase
-- Adhere to the project's architecture and design patterns
-
-### 4. Quality Over Speed
-
-- Prioritize correctness and maintainability over quick delivery
-- Include comprehensive tests for all code changes
-- Ensure code passes all quality checks before submission
-- Perform self-review before requesting human review
-
-## File Structure and Organization
-
-### Project Layout
-
-```
-unifi-mcp-server/
-├── .github/
-│   └── workflows/          # CI/CD pipeline definitions
-├── src/
-│   ├── __init__.py
-│   ├── main.py            # MCP server entry point
-│   ├── config/            # Configuration management
-│   │   ├── __init__.py
-│   │   ├── settings.py    # Pydantic settings models
-│   │   └── config.yaml    # Default configuration
-│   ├── api/               # UniFi API client
-│   │   ├── __init__.py
-│   │   ├── client.py      # HTTP client wrapper
-│   │   └── endpoints.py   # API endpoint definitions
-│   ├── tools/             # MCP tool definitions
-│   │   ├── __init__.py
-│   │   ├── devices.py     # Device management tools
-│   │   ├── networks.py    # Network configuration tools
-│   │   └── firewall.py    # Firewall rule tools
-│   ├── resources/         # MCP resource definitions
-│   │   ├── __init__.py
-│   │   └── schemas.py     # Resource URI schemas
-│   └── utils/             # Utility functions
-│       ├── __init__.py
-│       └── validators.py  # Input validation helpers
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py        # Pytest fixtures
-│   ├── unit/              # Unit tests
-│   └── integration/       # Integration tests
-├── docs/                  # Additional documentation
-├── .env.example           # Environment variable template
-├── .gitignore
-├── .aiignore
-├── pyproject.toml
-├── README.md
-└── ...
+```text
+src/
+├── main.py              # Entry point: tool module lists per API mode and profile, registration
+├── tool_registry.py     # Tool wrapper: routing, risk tiers, read-only/dry-run, audit, cache
+├── access.py            # Roles and the risk tiers each role may call
+├── cache.py             # Redis read cache (optional)
+├── memory.py            # Supermemory operator notes (optional)
+├── config/config.py     # Settings (every environment variable) and URL path helpers
+├── api/                 # UniFiClient, ProtectClient, SiteManagerClient, pool, rate limiter
+├── tools/               # One module per feature area; every public async function is a tool
+├── models/              # Pydantic models
+├── resources/           # MCP resources
+├── fleet/               # Multi-controller registry, router, tokens, fleet_* and admin tools
+├── worker/              # Background health and sync workers
+├── a2a/                 # A2A agent card and endpoints
+└── utils/               # Validators, exceptions, audit log, metrics, SIEM export
+tests/
+├── conftest.py          # Clears UNIFI_* environment variables for every test
+├── unit/                # Unit tests; tests/unit/tools/ holds the tool module tests
+└── integration/         # Needs a real controller; marked with @pytest.mark.integration
 ```
 
-### File Naming Conventions
+Naming: modules and functions use snake_case, classes use PascalCase, and test files start with `test_`.
 
-- **Python files:** Use `snake_case` (e.g., `device_manager.py`)
-- **Classes:** Use `PascalCase` (e.g., `UniFiClient`)
-- **Functions/variables:** Use `snake_case` (e.g., `get_devices()`)
-- **Constants:** Use `UPPER_SNAKE_CASE` (e.g., `DEFAULT_TIMEOUT`)
-- **Test files:** Prefix with `test_` (e.g., `test_device_manager.py`)
+## Workflow
 
-## Workflow Guidelines
+### Before you start
 
-### Before Starting Work
+1. Read `README.md`, `API.md` and, for UniFi endpoint details, `docs/UNIFI_API.md`.
+2. Load the skill for the tool set you will change (listed in `CLAUDE.md`).
+3. Find the nearest existing tool and its test, and copy their pattern.
+4. Create a feature branch. Never commit to `main`.
 
-1. **Understand the Context:**
-   - Read relevant documentation (`README.md`, `API.md`, `CONTRIBUTING.md`)
-   - Review related issues and pull requests
-   - Understand the feature request or bug report completely
+### While you work
 
-2. **Plan Your Approach:**
-   - Break down the task into smaller, manageable steps
-   - Identify affected files and components
-   - Consider potential edge cases and error conditions
-   - Plan for comprehensive test coverage
+1. Write the failing test first, and watch it fail for the reason you expect. Then write the code.
+2. Keep each commit to one logical change.
+3. Update `API.md` when you add or change a tool, and `CHANGELOG.md` under `[Unreleased]`.
 
-3. **Check Existing Code:**
-   - Review similar implementations in the codebase
-   - Identify reusable functions and patterns
-   - Ensure your approach is consistent with existing code
+### Before you open a pull request
 
-### During Development
+1. `make test`, `make typecheck` and `make lint` pass. `make ci` runs every blocking CI check.
+2. `pre-commit run --files <changed files>` passes, apart from the known problems listed in `CLAUDE.md`.
+3. Review your own diff. State in the pull request what you verified against mocks only.
 
-1. **Write Code Incrementally:**
-   - Implement one feature or fix at a time
-   - Test each change before moving to the next
-   - Commit logical units of work separately
+## Writing a Tool
 
-2. **Follow TDD (Test-Driven Development):**
-   - Write tests first when possible
-   - Ensure tests fail before implementing the feature
-   - Verify tests pass after implementation
-   - Maintain minimum 80% code coverage
+Tools are plain async functions. `register_module_tools()` in `src/tool_registry.py` registers every public `async def` in a module that `src/main.py` lists. There is no decorator. A leading `_` keeps a helper out of the tool list.
 
-3. **Document as You Go:**
-   - Add docstrings to all public functions and classes
-   - Update relevant documentation files
-   - Add inline comments for complex logic
-   - Keep `API.md` updated for new MCP tools/resources
+A write tool, shortened from `src/tools/protect_relays.py`:
 
-### After Implementation
+```python
+async def update_protect_relay(
+    relay_id: str,
+    settings: Settings,
+    name: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Update Protect relay settings.
 
-1. **Self-Review:**
-   - Review your own code critically
-   - Ensure all tests pass: `pytest`
-   - Run linting and formatting: `pre-commit run --all-files`
-   - Check for security issues: `bandit -r src/`
+    Args:
+        relay_id: Protect relay identifier
+        settings: Application settings
+        name: New display name
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
 
-2. **Create a Pull Request:**
-   - Write a clear, descriptive PR title (conventional commits format)
-   - Fill out the PR template completely
-   - Link related issues
-   - Tag the PR as AI-assisted
-   - Request human review
+    Returns:
+        The updated record as returned by the controller
+    """
+    validate_confirmation(confirm, "update Protect relay", dry_run)
+    payload: dict[str, Any] = {}
+    if name is not None:
+        payload["name"] = name
+    if not payload:
+        raise ValidationError("No updates provided")
 
-3. **Respond to Feedback:**
-   - Address all review comments
-   - Make requested changes promptly
-   - Explain decisions when necessary
-   - Re-request review after making changes
+    if coerce_bool(dry_run):
+        return {"dry_run": True, "operation": "update_protect_relay", "payload": payload}
 
-## Do's and Don'ts
+    async with ProtectClient(settings) as client:
+        await client.authenticate()
+        response = await client.patch(
+            settings.get_protect_integration_path(f"relays/{relay_id}"),
+            json_data=payload,
+        )
+    return ProtectRelay.model_validate(_extract_item(response)).model_dump(by_alias=True)
+```
 
-### Do's ✅
+The rules this example follows:
 
-- **DO** validate all user inputs
-- **DO** handle errors gracefully with try/except blocks
-- **DO** use type hints for all function signatures
-- **DO** write comprehensive docstrings
-- **DO** add tests for all new code
-- **DO** use async/await for I/O-bound operations
-- **DO** centralize API interactions in dedicated modules
-- **DO** use environment variables for configuration
-- **DO** log important events and errors appropriately
-- **DO** follow the principle of least privilege
-- **DO** ask for clarification when requirements are unclear
-- **DO** use Pydantic models for data validation
-- **DO** keep functions small and focused (single responsibility)
-- **DO** reuse existing code when possible
-
-### Don'ts ❌
-
-- **DON'T** commit credentials, API keys, or secrets
-- **DON'T** merge code without human approval
-- **DON'T** skip writing tests
-- **DON'T** ignore linting errors or warnings
-- **DON'T** expose sensitive information in logs or error messages
-- **DON'T** make breaking changes without discussion
-- **DON'T** copy-paste code - create reusable functions instead
-- **DON'T** use bare except clauses - catch specific exceptions
-- **DON'T** hardcode values that should be configurable
-- **DON'T** submit incomplete or experimental code to main
-- **DON'T** bypass security checks or pre-commit hooks
-- **DON'T** write code without understanding its purpose
-- **DON'T** use deprecated libraries or functions
-- **DON'T** ignore type errors from MyPy
+- **Mutating means `confirm` or `dry_run` in the signature.** The registry uses those two parameter names to classify a tool as a write. A write tool must have both.
+- **Check confirmation first.** `validate_confirmation(confirm, operation, dry_run)` raises `ValidationError` unless `confirm` is true or the call is a dry run.
+- **Return the dry run before you open a client.** No request may reach the controller on a dry run.
+- **Optional update fields default to `None`.** Send only the fields the caller set. Some UniFi endpoints need the whole object (read, merge, write); the network and security skills list which ones.
+- **Do not audit in the tool.** The registry wrapper audits every mutating call. It also removes write tools under `UNIFI_READ_ONLY` and forces `dry_run` under `UNIFI_DRY_RUN`.
+- **Register the module.** Add it to `_LOCAL_TOOL_MODULES` or `_CLOUD_TOOL_MODULES` in `src/main.py`, and to the `UNIFI_PROFILE` sets that should include it.
+- **Update the tier snapshot.** Run `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py`. A destructive tool needs a `delete_`, `remove_` or `bulk_delete_` prefix, or an entry in `DESTRUCTIVE_TOOLS`. A write tool whose name has a risky word ("disable", "block", "reset" and others) must be in `DESTRUCTIVE_TOOLS` or in `RISKY_NAME_EXEMPTIONS` with a reason.
 
 ## Testing Requirements
 
-### Test Coverage
+- **Coverage.** The CI gate is 80% (`--cov-fail-under=80` in `pyproject.toml`). New code paths need tests; a bug fix needs a regression test that fails without the fix.
+- **Async.** `asyncio_mode = auto` is set in `pytest.ini`. The only declared marker is `integration`, and `--strict-markers` rejects any other.
+- **Environment.** `tests/conftest.py` clears every `UNIFI_*` variable. Set what a test needs with `monkeypatch.setenv`.
+- **HTTP.** Tool tests patch the module's client class and assert the request path and body. Shortened from `tests/unit/tools/test_acls_tools.py`:
 
-All AI-generated code must include tests:
+```python
+@pytest.fixture
+def local_settings(monkeypatch):
+    monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+    monkeypatch.setenv("UNIFI_API_TYPE", "local")
+    monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+    return Settings()
 
-- **Minimum Coverage:** 80% overall
-- **New Features:** 100% coverage of new code paths
-- **Bug Fixes:** Regression tests for the fixed bug
-- **Refactoring:** Maintain or improve existing coverage
 
-### Test Types
+async def test_list_acl_rules_local_mode(local_settings):
+    with patch("src.tools.acls.UniFiClient") as client_class:
+        client = AsyncMock()
+        client.resolve_site_id = AsyncMock(return_value=SITE_UUID)
+        client.get = AsyncMock(return_value={"data": [rule]})
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client_class.return_value = client
 
-1. **Unit Tests:**
+        result = await list_acl_rules("default", local_settings)
 
-   ```python
-   import pytest
-   from src.api.client import UniFiClient
+    assert client.get.await_args.args[0] == (
+        f"/proxy/network/integration/v1/sites/{SITE_UUID}/acl-rules"
+    )
+```
 
-   @pytest.mark.unit
-   async def test_client_initialization():
-       """Test that UniFi client initializes correctly."""
-       client = UniFiClient(
-           api_key="test-api-key",
-           api_type="cloud",
-           host="api.ui.com"
-       )
-       assert client.host == "api.ui.com"
-       assert client.api_type == "cloud"
-       assert client.api_key == "test-api-key"
-   ```
+- **Make `__aexit__` return `False`.** A bare `AsyncMock()` returns a truthy value, and the `async with` block then swallows every exception, so a broken tool returns `None` and the test can pass for the wrong reason.
+- **Use a real `Settings` when the path matters.** A `MagicMock` path helper hides wrong prefixes.
+- **Do not test only the mock.** Assert what reaches the boundary (path, method, body) and what the tool returns.
 
-2. **Integration Tests:**
-
-   ```python
-   import pytest
-
-   @pytest.mark.integration
-   async def test_get_devices_from_real_api():
-       """Test fetching devices from real UniFi Cloud API."""
-       # This test requires UNIFI_API_KEY environment variable
-       client = UniFiClient.from_env()
-       devices = await client.get_devices()
-       assert isinstance(devices, list)
-   ```
-
-3. **Mock Tests:**
-
-   ```python
-   from unittest.mock import AsyncMock, patch
-
-   @pytest.mark.unit
-   async def test_get_devices_handles_error():
-       """Test error handling when API fails."""
-       with patch('src.api.client.httpx.AsyncClient.get') as mock_get:
-           mock_get.side_effect = httpx.HTTPError("Connection failed")
-           client = UniFiClient(
-               api_key="test-key",
-               host="api.ui.com",
-               api_type="cloud"
-           )
-           with pytest.raises(APIError):
-               await client.get_devices()
-   ```
-
-### Running Tests
+Commands:
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src --cov-report=html --cov-report=term-missing
-
-# Run only unit tests
-pytest -m unit
-
-# Run only integration tests (requires UniFi controller)
-pytest -m integration
-
-# Run specific test file
-pytest tests/unit/test_client.py
-
-# Run tests matching pattern
-pytest -k "test_device"
+make test                                      # all unit tests
+make test-cov                                  # with the CI coverage gate
+pytest tests/unit/tools/test_acls_tools.py     # one file
+pytest -k local_mode                           # by name
+pytest -m integration                          # needs a real controller
 ```
 
 ## Security Guardrails
 
-### Credential Management
-
-**NEVER include API keys or credentials in code:**
-
-```python
-# ❌ BAD - Hardcoded API key
-client = UniFiClient(
-    api_key="abc123def456ghi789...",
-    host="api.ui.com"
-)
-
-# ✅ GOOD - Load from environment
-from src.config.settings import Settings
-
-settings = Settings()  # Loads from environment
-client = UniFiClient(
-    api_key=settings.unifi_api_key,
-    host=settings.unifi_host,
-    api_type=settings.unifi_api_type
-)
-```
-
-### Input Validation
-
-Always validate and sanitize inputs:
-
-```python
-from pydantic import BaseModel, Field, validator
-
-class NetworkConfig(BaseModel):
-    name: str = Field(..., min_length=1, max_length=32)
-    vlan_id: int = Field(..., ge=1, le=4094)
-    subnet: str
-
-    @validator('subnet')
-    def validate_subnet(cls, v):
-        import ipaddress
-        try:
-            ipaddress.ip_network(v)
-        except ValueError:
-            raise ValueError('Invalid subnet format')
-        return v
-```
-
-### Error Handling
-
-Don't expose sensitive information in errors:
-
-```python
-# ❌ BAD - Exposes API key in logs
-logging.error(f"Auth failed with API key: {api_key}")
-
-# ✅ GOOD - Safe error message
-logging.error(f"Authentication failed for host '{host}' (API key: {api_key[:8]}...)")
-
-# ✅ EVEN BETTER - No key exposure
-logging.error(f"Authentication failed for host '{host}'. Check your UNIFI_API_KEY.")
-```
-
-### Secret Detection
-
-Pre-commit hooks will prevent committing secrets:
-
-```bash
-# Initialize pre-commit
-pre-commit install
-
-# Manually check for secrets
-detect-secrets scan
-```
+- **Credentials.** Read keys only through `Settings` (`src/config/config.py`), which loads the environment and `.env`. `.env` is git-ignored; `.env.example` holds placeholders only. The detect-secrets pre-commit hook and the CI "Secret Scanning" job check every commit.
+- **Logs and errors.** Never put an API key or token in a log line or an error message. Pass log text through `sanitize_log_message()`.
+- **Inputs.** Validate with the helpers in `src/utils/validators.py` (`validate_site_id`, `validate_limit_offset` and others) or with Pydantic models.
+- **Network transports.** The server refuses to start an HTTP transport without authentication. Callers authenticate with `MCP_AUTH_TOKEN` or with server-issued tokens (`src/fleet/tokens.py`), and `src/access.py` limits each role to its risk tiers.
+- **Audit.** Every mutating call writes a hash-chained audit record. `UNIFI_AUDIT_FAIL_CLOSED` (on by default) refuses the call when the record cannot be written.
 
 ## UniFi API Guidelines
 
-### Authentication with API Keys
+### Authentication
 
-This project uses the **official UniFi Cloud API** with API key authentication. All AI agents must follow these guidelines:
+The server authenticates with an API key in the `X-API-KEY` header (`Settings.get_headers()`). There are no sessions or cookies.
 
-**Authentication Method:**
+### API modes
 
-- Use `UNIFI_API_KEY` environment variable for authentication
-- API key is passed via the `X-API-Key` HTTP header
-- No session management or cookies required (stateless authentication)
+| `UNIFI_API_TYPE` | Base URL | Scope |
+|------------------|----------|-------|
+| `local` (recommended) | `https://{UNIFI_LOCAL_HOST}:{UNIFI_LOCAL_PORT}` | Full Network and Protect API, plus the Phase 6 cloud APIs |
+| `cloud-v1` | `UNIFI_CLOUD_API_URL` (default `https://api.ui.com`) | Aggregate statistics, Site Manager, connector proxy |
+| `cloud-ea` (the code default) | same | Early Access; same limits |
 
-**NEVER hardcode API keys:**
+### URL spaces
 
-```python
-# ❌ BAD - Hardcoded API key
-headers = {
-    "X-API-Key": "abc123def456..."
-}
+Build paths with the helpers on `Settings`; never hardcode a prefix:
 
-# ✅ GOOD - Load from environment
-from src.config.settings import Settings
+| Helper | Local result | Used for |
+|--------|--------------|----------|
+| `get_integration_path(ep)` | `/proxy/network/integration/v1/{ep}` | Network integration API (site IDs are UUIDs) |
+| `get_protect_integration_path(ep)` | `/proxy/protect/integration/v1/{ep}` | Protect |
+| `get_v2_api_path(site)` | `/proxy/network/v2/api/site/{site}` | v2 API (firewall policies, zones); local only |
+| `get_site_api_path(site, ep)` | `/proxy/network/api/s/{site}/{ep}` | Legacy API |
 
-settings = Settings()
-headers = {
-    "X-API-Key": settings.unifi_api_key
-}
-```
+Many tools write legacy calls as `/ea/sites/{site_id}/...`. `UniFiClient` translates those for local mode and converts between site names and site UUIDs. `UniFiClient.resolve_site_id()` returns the UUID that the integration API needs.
 
-### API Access Modes
+### Rate limits
 
-Support both cloud and local gateway access modes:
+`UNIFI_RATE_LIMIT_REQUESTS` (default 100) per `UNIFI_RATE_LIMIT_PERIOD` seconds (default 60) per controller. The limiter is in `src/api/rate_limit.py`; with Redis it is shared across replicas. Do not add another limiter in a tool.
 
-**Cloud API (Default):**
+### Errors
 
-```python
-# Base URL: https://api.ui.com/v1/
-settings.unifi_api_type = "cloud"
-settings.unifi_host = "api.ui.com"
-settings.unifi_port = 443
-```
+Use the exceptions in `src/utils/exceptions.py`. `UniFiClient` maps HTTP 404 to `ResourceNotFoundError`, 401 and 403 to `AuthenticationError`, and other errors to `APIError`. Tools raise `ValidationError` for bad input.
 
-**Local Gateway Proxy:**
+### API documentation
 
-```python
-# Base URL: https://{gateway-ip}/proxy/network/integration/v1/
-settings.unifi_api_type = "local"
-settings.unifi_host = "192.168.2.1"
-settings.unifi_port = 443
-```
+- Official docs: [developer.ui.com](https://developer.ui.com/site-manager-api/gettingstarted)
+- Project notes: `docs/UNIFI_API.md`
+- Spec snapshots: `scripts/` (Network, Protect, Mobility, InnerSpace, Carrier Fabric)
 
-### Read-Only Limitation
-
-**IMPORTANT:** The Early Access API is currently **read-only**.
-
-```python
-# ✅ ALLOWED - Read operations
-async def list_devices(site_id: str):
-    """List all devices - read operation."""
-    devices = await client.get(f"/v1/sites/{site_id}/devices")
-    return devices
-
-# ❌ NOT AVAILABLE - Write operations (will fail)
-async def create_network(name: str, vlan_id: int):
-    """Create network - not yet supported in EA API."""
-    # This will return 403 Forbidden in current API version
-    raise NotImplementedError(
-        "Write operations are not available in the Early Access API. "
-        "This feature will be available in v1 Stable release."
-    )
-```
-
-**Handling write requests:**
-
-- Document that write operations are not yet available
-- Return clear error messages to users
-- Consider implementing a "preview" mode that shows what would be created
-- Monitor UniFi API release notes for v1 Stable availability
-
-### Rate Limiting Considerations
-
-Implement proper rate limiting to respect API limits:
-
-**Current Limits:**
-
-- Early Access: 100 requests/minute
-- v1 Stable (future): 10,000 requests/minute
-
-**Implementation Example:**
-
-```python
-import asyncio
-from collections import deque
-from datetime import datetime, timedelta
-
-class UniFiRateLimiter:
-    """Rate limiter for UniFi API requests."""
-
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window = timedelta(seconds=window_seconds)
-        self.requests = deque()
-
-    async def acquire(self):
-        """Wait if necessary to respect rate limits."""
-        now = datetime.now()
-
-        # Remove old requests outside the window
-        while self.requests and self.requests[0] < now - self.window:
-            self.requests.popleft()
-
-        # Wait if at limit
-        if len(self.requests) >= self.max_requests:
-            sleep_time = (self.requests[0] + self.window - now).total_seconds()
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-
-        self.requests.append(now)
-```
-
-**Best Practices:**
-
-- Cache frequently accessed data (devices, sites, networks)
-- Batch operations when possible
-- Implement exponential backoff for 429 errors
-- Use configurable rate limits via `UNIFI_RATE_LIMIT` environment variable
-- Log rate limit warnings for monitoring
-
-### API Error Handling
-
-Handle UniFi API-specific errors gracefully:
-
-```python
-import httpx
-from typing import Dict, Any
-
-class UniFiAPIError(Exception):
-    """Base exception for UniFi API errors."""
-    pass
-
-class UniFiAuthenticationError(UniFiAPIError):
-    """Authentication failed - invalid API key."""
-    pass
-
-class UniFiRateLimitError(UniFiAPIError):
-    """Rate limit exceeded."""
-    pass
-
-async def safe_api_request(
-    client: httpx.AsyncClient,
-    method: str,
-    endpoint: str,
-    **kwargs
-) -> Dict[str, Any]:
-    """
-    Make a safe API request with proper error handling.
-
-    Args:
-        client: HTTP client
-        method: HTTP method (GET, POST, etc.)
-        endpoint: API endpoint
-        **kwargs: Additional request parameters
-
-    Returns:
-        Response data as dictionary
-
-    Raises:
-        UniFiAuthenticationError: Invalid API key
-        UniFiRateLimitError: Rate limit exceeded
-        UniFiAPIError: Other API errors
-    """
-    try:
-        response = await client.request(method, endpoint, **kwargs)
-        response.raise_for_status()
-        return response.json()
-
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 401:
-            raise UniFiAuthenticationError(
-                "Invalid API key. Please check your UNIFI_API_KEY."
-            )
-        elif e.response.status_code == 429:
-            retry_after = e.response.headers.get("Retry-After", 60)
-            raise UniFiRateLimitError(
-                f"Rate limit exceeded. Retry after {retry_after} seconds."
-            )
-        else:
-            raise UniFiAPIError(f"API error: {e.response.status_code}")
-
-    except httpx.RequestError as e:
-        raise UniFiAPIError(f"Request failed: {str(e)}")
-```
-
-### Official API Documentation
-
-Always reference the official UniFi API documentation:
-
-**Primary Resources:**
-
-- **Getting Started**: [https://developer.ui.com/site-manager-api/gettingstarted](https://developer.ui.com/site-manager-api/gettingstarted)
-- **Project Reference**: `docs/UNIFI_API.md` (comprehensive guide)
-- **API Tutorial**: [https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access](https://www.makewithdata.tech/p/build-a-mcp-server-for-ai-access)
-
-**When implementing new features:**
-
-1. Review official API documentation first
-2. Check `docs/UNIFI_API.md` for project-specific guidance
-3. Ensure endpoint paths match official specifications
-4. Test against real UniFi Cloud API or gateway proxy
-5. Document any API limitations or quirks discovered
-
-### API Key Security Checklist
-
-Before committing code, verify:
-
-- [ ] No hardcoded API keys in source code
-- [ ] API key loaded from environment variables
-- [ ] No API keys in log messages (even debug logs)
-- [ ] API keys redacted in error messages
-- [ ] `.env` file in `.gitignore`
-- [ ] `.env.example` has placeholder, not real key
-- [ ] Pre-commit hooks detect-secrets passing
-- [ ] Documentation mentions API key security
+Before you implement an endpoint, find it in a spec snapshot or in `docs/UNIFI_API.md`. If it is in neither, say so in the pull request.
 
 ## Code Quality Standards
 
-### Type Hints
-
-All functions must have type hints:
-
-```python
-from typing import List, Dict, Optional
-import httpx
-
-async def get_devices(
-    client: httpx.AsyncClient,
-    site_id: str = "default"
-) -> List[Dict[str, Any]]:
-    """Fetch devices from UniFi controller."""
-    response = await client.get(f"/api/s/{site_id}/stat/device")
-    return response.json()["data"]
-```
-
-### Docstrings
-
-Use Google-style docstrings:
-
-```python
-def calculate_network_capacity(
-    bandwidth_mbps: int,
-    devices: int,
-    overhead_percent: float = 0.2
-) -> float:
-    """
-    Calculate available bandwidth per device.
-
-    Args:
-        bandwidth_mbps: Total bandwidth in Mbps
-        devices: Number of connected devices
-        overhead_percent: Network overhead as decimal (default: 0.2 for 20%)
-
-    Returns:
-        Available bandwidth per device in Mbps
-
-    Raises:
-        ValueError: If bandwidth or devices is less than 1
-
-    Example:
-        >>> calculate_network_capacity(100, 10)
-        8.0
-    """
-    if bandwidth_mbps < 1 or devices < 1:
-        raise ValueError("Bandwidth and devices must be positive")
-
-    available = bandwidth_mbps * (1 - overhead_percent)
-    return available / devices
-```
-
-### Code Formatting
-
-Code is automatically formatted by pre-commit hooks:
-
-```bash
-# Format code
-black src/ tests/
-
-# Sort imports
-isort src/ tests/
-
-# Lint code
-ruff check src/ tests/ --fix
-```
+- **Type hints** on every function signature. `make typecheck` runs mypy over `src/`.
+- **Docstrings** in Google style on every public function. Tool docstrings are the descriptions MCP clients see, so list every argument. The CI "Documentation Coverage" job checks them (`make docs-coverage`).
+- **Formatting.** black, isort and ruff, run by `make format` and checked by `make lint`.
+- **Errors.** Catch specific exceptions, never a bare `except:`.
 
 ## Documentation Requirements
 
-### Code Documentation
-
-- **All public functions:** Require docstrings
-- **Complex logic:** Add inline comments
-- **Type hints:** Required for all functions
-- **Examples:** Include in docstrings when helpful
-
-### Project Documentation
-
-Update relevant documentation files:
-
-- `README.md` - For user-facing changes
-- `API.md` - For new MCP tools or resources
-- `CONTRIBUTING.md` - For workflow changes
-- `SECURITY.md` - For security-related changes
-
-### API Documentation
-
-When adding new MCP tools, document in `API.md`:
-
-```markdown
-### get_device
-
-Retrieve information about a specific UniFi device.
-
-**Parameters:**
-- `mac_address` (string, required): Device MAC address
-- `site_id` (string, optional): Site identifier (default: "default")
-
-**Returns:**
-Object containing device information
-
-**Example:**
-\`\`\`python
-result = await mcp.call_tool("get_device", {
-    "mac_address": "aa:bb:cc:dd:ee:ff",
-    "site_id": "default"
-})
-\`\`\`
-```
+- **`API.md`** for every new or changed tool: parameters, return value, and an example.
+- **`README.md`** for user-facing features and settings. A docs test requires every setting to be listed in `API.md` and `.env.example`.
+- **`CHANGELOG.md`** under `[Unreleased]`.
+- **Skills.** When you change how a tool set works, update its skill in `.claude/skills/`. `tests/unit/test_agent_docs.py` checks that `CLAUDE.md`, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist.
 
 ## Approval and Merge Policies
 
-### Auto-Merge Restrictions
+AI agents must not:
 
-AI agents **MUST NOT**:
+- merge a pull request without a human's approval
+- push directly to `main`
+- bypass branch protection, skip CI, or disable pre-commit hooks
 
-- Automatically merge pull requests
-- Bypass code review requirements
-- Push directly to the `main` branch
-- Override branch protection rules
-- Disable or skip CI/CD checks
+Every AI-assisted pull request needs:
 
-### Required Approvals
+- one human approval, passing CI, and no unresolved review comments
+- a note that it was AI-assisted, and what was verified only against mocks
 
-All AI-generated code requires:
+Changes to these areas need extra human review: authentication and authorization, audit logging, data deletion, the MCP tool contract (names, parameters, return shapes), and configuration that affects production.
 
-- At least one human reviewer approval
-- All CI/CD checks passing
-- No unresolved review comments
-- Up-to-date with the `main` branch
+## XERJ (code search)
 
-### Human-in-the-Loop
+This project uses XERJ for reference coding. Local setup for this checkout uses
+`XERJ_URL=http://127.0.0.1:9300` and the project source prefix `unifi`. Before
+writing code that touches unfamiliar territory, search this repo with explicit
+URL and prefix so commands do not fall back to the default `localhost:9200`:
 
-Critical changes require additional human review:
-
-- Security-related code
-- Authentication/authorization logic
-- Data deletion or modification
-- API contract changes
-- Database schema changes
-- Configuration changes affecting production
-
-### Tagging AI Contributions
-
-Mark AI-assisted PRs in the description:
-
-```markdown
-## AI Assistance
-
-This PR was created with assistance from Claude Code.
-
-**Human Review Status:** ✅ Reviewed and approved by @username
-**Test Coverage:** 95%
-**Security Review:** Completed
+```bash
+xerj def --url http://127.0.0.1:9300 --prefix unifi "<symbol>"
+xerj search --url http://127.0.0.1:9300 --prefix unifi "<plain words>"
 ```
 
-## Special Considerations
+Before implementing a non-trivial change, search the reference corpus and cite
+any borrowed pattern:
 
-### MCP-Specific Guidelines
-
-When implementing MCP tools and resources:
-
-```python
-from fastmcp import FastMCP
-
-mcp = FastMCP("UniFi Network")
-
-@mcp.tool()
-async def get_devices(site_id: str = "default") -> list:
-    """
-    Get all devices for a site.
-
-    Args:
-        site_id: Site identifier (default: "default")
-
-    Returns:
-        List of device objects
-    """
-    # Implementation
-    pass
-
-@mcp.resource("sites://{site_id}/devices")
-async def list_site_devices(site_id: str) -> str:
-    """List all devices in a site."""
-    # Return JSON string of devices
-    pass
+```bash
+XERJ_URL=http://127.0.0.1:9300 xerj code unifi-mcp-reference "<problem or pattern>"
 ```
 
-### UniFi API Integration
-
-Centralize API calls in dedicated modules:
-
-```python
-# src/api/client.py
-class UniFiClient:
-    async def request(
-        self,
-        method: str,
-        endpoint: str,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """
-        Make authenticated request to UniFi API.
-
-        Handles authentication, retries, and error handling.
-        """
-        # Centralized implementation
-        pass
-```
-
-## Conclusion
-
-By following these guidelines, AI agents can contribute effectively to the UniFi MCP Server project while maintaining high standards of quality, security, and maintainability.
-
-**Remember:** When in doubt, ask for human guidance. It's better to request clarification than to make assumptions that could introduce bugs or security issues.
-
----
-
-**Last Updated:** 2025-10-17
-
-For additional guidance, see:
-
-- `AI_CODING_ASSISTANT.md` - Project-specific AI guidelines
-- `AI_GIT_PRACTICES.md` - AI-specific Git practices
-- `CONTRIBUTING.md` - General contribution guidelines
-- `SECURITY.md` - Security policies
+That corpus contains FastMCP, the MCP Python SDK, aiounifi, and pyunifiprotect.
+Index or refresh a repo with `xerj autoindex <folder>`. Cite file:line for
+anything you rely on.

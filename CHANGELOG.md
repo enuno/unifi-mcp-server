@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The ACL rule tools (`list_acl_rules`, `get_acl_rule`, `create_acl_rule`, `update_acl_rule`, `delete_acl_rule`) and the traffic matching list tools work in local mode. They are registered only in local mode, but a guard refused local mode, so every call failed with `NotImplementedError`. The Network integration API serves both resources on the local console at `/proxy/network/integration/v1/` (Network API spec v10.6.106).
+
 ## [0.6.0] - 2026-10-12
 
 Fleet scaling Phases 0–5 (one server for many controllers: per-call routing, a Postgres controller registry, access control with server-issued tokens, a tamper-evident Postgres audit store, shared connections and a Redis read cache, several replicas and a worker tier, SIEM export and audit retention) and Phase 7 deployment automation (Ansible playbook, Helm chart, agent setup prompts). The fleet features stay off until `DATABASE_URL` is set; a server without it behaves as before. Also the first published release of everything under `[0.5.0]`, whose tag was never released. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.0` (amd64, arm64, arm/v7) and, with the fleet extras, `:0.6.0-fleet` (amd64, arm64).

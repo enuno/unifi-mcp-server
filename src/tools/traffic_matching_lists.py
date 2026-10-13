@@ -3,7 +3,7 @@
 from typing import Any
 
 from ..api import UniFiClient
-from ..config import APIType, Settings
+from ..config import Settings
 from ..models.traffic_matching_list import TrafficMatchingList, TrafficMatchingListCreate
 from ..utils import (
     ResourceNotFoundError,
@@ -15,15 +15,6 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
-
-
-def _ensure_cloud_api(settings: Settings) -> None:
-    """Raise if the current API type is local — traffic matching lists are integration-only."""
-    if settings.api_type == APIType.LOCAL:
-        raise NotImplementedError(
-            "Traffic matching lists are only available via the UniFi integration API (cloud). "
-            "Use list_firewall_groups for local gateway access."
-        )
 
 
 async def list_traffic_matching_lists(
@@ -46,7 +37,6 @@ async def list_traffic_matching_lists(
     site_id = validate_site_id(site_id)
     limit, offset = validate_limit_offset(limit, offset)
     logger = get_logger(__name__, settings.log_level)
-    _ensure_cloud_api(settings)
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
@@ -89,7 +79,6 @@ async def get_traffic_matching_list(
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
-    _ensure_cloud_api(settings)
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
@@ -142,7 +131,6 @@ async def create_traffic_matching_list(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "traffic matching list operation", dry_run)
     logger = get_logger(__name__, settings.log_level)
-    _ensure_cloud_api(settings)
 
     # Validate list type
     valid_types = ["PORTS", "IPV4_ADDRESSES", "IPV6_ADDRESSES"]
@@ -249,7 +237,6 @@ async def update_traffic_matching_list(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "traffic matching list operation", dry_run)
     logger = get_logger(__name__, settings.log_level)
-    _ensure_cloud_api(settings)
 
     # Validate list type if provided
     if list_type is not None:
@@ -376,7 +363,6 @@ async def delete_traffic_matching_list(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "traffic matching list operation", dry_run)
     logger = get_logger(__name__, settings.log_level)
-    _ensure_cloud_api(settings)
 
     parameters = {"site_id": site_id, "list_id": list_id}
 

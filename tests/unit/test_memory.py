@@ -23,8 +23,8 @@ def _settings(
 @pytest.fixture
 def sdk() -> MagicMock:
     client = MagicMock()
-    client.documents.add = AsyncMock()
-    client.search.memories = AsyncMock()
+    client.add = AsyncMock()
+    client.search = AsyncMock()
     factory = MagicMock(return_value=client)
     with (
         patch.object(memory, "SUPERMEMORY_AVAILABLE", True),
@@ -69,17 +69,17 @@ class TestRemember:
 
     @pytest.mark.asyncio
     async def test_stores_scoped_note(self, sdk: MagicMock) -> None:
-        sdk.return_value.documents.add.return_value = MagicMock(id="doc-1")
+        sdk.return_value.add.return_value = MagicMock(id="doc-1")
         client = MemoryClient(_settings())
 
         assert await client.remember("VLAN 30 moved", "default") == "doc-1"
-        sdk.return_value.documents.add.assert_awaited_once_with(
-            content="VLAN 30 moved", container_tag="default", metadata={}
+        sdk.return_value.add.assert_awaited_once_with(
+            "default", content="VLAN 30 moved", metadata={}
         )
 
     @pytest.mark.asyncio
     async def test_error_returns_none(self, sdk: MagicMock) -> None:
-        sdk.return_value.documents.add.side_effect = RuntimeError("quota")
+        sdk.return_value.add.side_effect = RuntimeError("quota")
         client = MemoryClient(_settings())
 
         assert await client.remember("n", "site", metadata={"by": "op"}) is None
@@ -94,15 +94,13 @@ class TestRecall:
     async def test_returns_dumped_results(self, sdk: MagicMock) -> None:
         hit = MagicMock()
         hit.model_dump.return_value = {"memory": "VLAN 30 moved"}
-        sdk.return_value.search.memories.return_value = MagicMock(results=[hit])
+        sdk.return_value.search.return_value = MagicMock(results=[hit])
         client = MemoryClient(_settings())
 
         assert await client.recall("vlan", "default", limit=3) == [{"memory": "VLAN 30 moved"}]
-        sdk.return_value.search.memories.assert_awaited_once_with(
-            q="vlan", container_tag="default", limit=3
-        )
+        sdk.return_value.search.assert_awaited_once_with("default", query="vlan", limit=3)
 
     @pytest.mark.asyncio
     async def test_error_returns_empty(self, sdk: MagicMock) -> None:
-        sdk.return_value.search.memories.side_effect = RuntimeError("down")
+        sdk.return_value.search.side_effect = RuntimeError("down")
         assert await MemoryClient(_settings()).recall("q", "site") == []

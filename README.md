@@ -790,7 +790,7 @@ WEBHOOK_SECRET=your-webhook-secret-here
 # AGNOST_DISABLE_OUTPUT=false # Set to true to disable output tracking
 
 # Supermemory (optional - operator notes/context storage, scoped per site)
-# Requires: pip install supermemory
+# Requires: pip install 'supermemory>=5.0.0'
 # Get your API key from https://console.supermemory.ai
 # SUPERMEMORY_ENABLED=true
 # SUPERMEMORY_API_KEY=your-supermemory-api-key-here

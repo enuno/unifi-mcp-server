@@ -39,7 +39,7 @@ class MemoryClient:
         if settings.supermemory_enabled and not SUPERMEMORY_AVAILABLE:
             self.logger.warning(
                 "Supermemory not available (supermemory package not installed). "
-                "Memory storage is disabled. Install with: pip install supermemory"
+                "Memory storage is disabled. Install with: pip install 'supermemory>=5.0.0'"
             )
             self.enabled = False
         elif settings.supermemory_enabled and not settings.supermemory_api_key:
@@ -52,14 +52,14 @@ class MemoryClient:
     async def remember(
         self,
         content: str,
-        container_tag: str,
+        namespace: str,
         metadata: dict[str, Any] | None = None,
     ) -> str | None:
-        """Store a note, scoped to a container tag (e.g. a site ID).
+        """Store a note, scoped to a namespace (e.g. a site ID).
 
         Args:
             content: Note/context text to store
-            container_tag: Identifier to scope the memory (e.g. site ID)
+            namespace: Namespace to scope the memory (e.g. site ID)
             metadata: Optional metadata to attach
 
         Returns:
@@ -69,9 +69,9 @@ class MemoryClient:
             return None
 
         try:
-            response = await self._client.documents.add(
+            response = await self._client.add(
+                namespace,
                 content=content,
-                container_tag=container_tag,
                 metadata=metadata or {},
             )
             return cast(str | None, response.id)
@@ -82,14 +82,14 @@ class MemoryClient:
     async def recall(
         self,
         query: str,
-        container_tag: str,
+        namespace: str,
         limit: int = 10,
     ) -> list[dict[str, Any]]:
-        """Search stored notes, scoped to a container tag.
+        """Search stored notes, scoped to a namespace.
 
         Args:
             query: Search query
-            container_tag: Identifier to scope the search (e.g. site ID)
+            namespace: Namespace to scope the search (e.g. site ID)
             limit: Maximum number of results to return
 
         Returns:
@@ -99,11 +99,7 @@ class MemoryClient:
             return []
 
         try:
-            response = await self._client.search.memories(
-                q=query,
-                container_tag=container_tag,
-                limit=limit,
-            )
+            response = await self._client.search(namespace, query=query, limit=limit)
             return [result.model_dump() for result in response.results]
         except Exception as e:
             self.logger.error(f"Supermemory recall error: {e}")

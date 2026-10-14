@@ -8,6 +8,7 @@ from src.utils.validators import (
     validate_confirmation,
     validate_device_id,
     validate_ip_address,
+    validate_ip_or_cidr,
     validate_limit_offset,
     validate_mac_address,
     validate_port,
@@ -416,3 +417,87 @@ class TestRateLimitError:
         err = RateLimitError(message="Too many requests", retry_after=30)
         assert "Too many requests" in str(err)
         assert err.retry_after == 30
+
+
+class TestValidateIpAddressStrict:
+    """Inputs Python's int() accepts but that are not dotted-quad IPv4 (issue #217)."""
+
+    @pytest.mark.parametrize(
+        "ip",
+        [
+            "+192.168.1.10",  # sign
+            " 192.168.1.10",  # leading whitespace
+            "192.168.1.10 ",  # trailing whitespace
+            "192.168.1.10\n",  # trailing newline
+            "192.168.1_0.10",  # digit separator
+            "192.168.001.010",  # leading zeros (octal-looking)
+            "010.0.0.1",
+            "\u0661\u0669\u0662.168.1.10",  # Arabic-Indic digits
+            "192.168.1.",  # empty octet
+            "",
+            "1.2.3.4/24",  # a network is not an address
+        ],
+    )
+    def test_rejects_malformed(self, ip):
+        with pytest.raises(ValidationError, match="Invalid IP address"):
+            validate_ip_address(ip)
+
+    @pytest.mark.parametrize("value", [3232235786, None, b"192.168.1.10", ["192.168.1.10"]])
+    def test_rejects_non_strings(self, value):
+        # ipaddress.IPv4Address(3232235786) would happily return 192.168.1.10.
+        with pytest.raises(ValidationError, match="Invalid IP address"):
+            validate_ip_address(value)  # type: ignore[arg-type]
+
+    def test_returns_canonical_form(self):
+        assert validate_ip_address("10.0.0.1") == "10.0.0.1"
+
+
+class TestValidateIpOrCidr:
+    def test_plain_address(self):
+        assert validate_ip_or_cidr("192.168.1.10") == "192.168.1.10"
+
+    def test_network(self):
+        assert validate_ip_or_cidr("192.168.1.0/24") == "192.168.1.0/24"
+
+    def test_host_bits_are_cleared(self):
+        assert validate_ip_or_cidr("192.168.1.10/24") == "192.168.1.0/24"
+
+    def test_host_prefix(self):
+        assert validate_ip_or_cidr("192.168.1.10/32") == "192.168.1.10/32"
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "192.168.1.0/99",  # prefix out of range
+            "192.168.1.0/abc",
+            "192.168.1.0/",
+            "192.168.1.0/-1",
+            "192.168.1.0/ 24",
+            "192.168.1.0/24/8",
+            " 192.168.1.0/24",
+            "192.168.001.0/24",
+            "+192.168.1.10",
+            "/24",
+            "",
+        ],
+    )
+    def test_rejects_malformed(self, value):
+        with pytest.raises(ValidationError, match="Invalid IP address or CIDR"):
+            validate_ip_or_cidr(value)
+
+    def test_rejects_non_string(self):
+        with pytest.raises(ValidationError, match="Invalid IP address or CIDR"):
+            validate_ip_or_cidr(3232235786)  # type: ignore[arg-type]
+
+
+class TestValidatePortStrict:
+    @pytest.mark.parametrize("value", [True, False])
+    def test_rejects_booleans(self, value):
+        # bool is a subclass of int, so True used to pass as port 1.
+        with pytest.raises(ValidationError, match="Invalid port number"):
+            validate_port(value)
+
+    @pytest.mark.parametrize("value", ["80", 80.0, None])
+    def test_rejects_non_integers(self, value):
+        with pytest.raises(ValidationError, match="Invalid port number"):
+            validate_port(value)  # type: ignore[arg-type]

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Port forwarding rejects malformed addresses and ports** ([#217](https://github.com/enuno/unifi-mcp-server/issues/217)). `validate_ip_address` checked each octet with `int()`, which also accepts whitespace, a `+` sign, `_` separators, leading zeros and non-ASCII digits, and then returned the input unchanged, so `create_port_forward` and `update_port_forward` sent values such as `" 192.168.1.10"` or `"010.0.0.1"` to the controller. It now parses with `ipaddress` and returns the canonical form, and rejects non-string input. A new `validate_ip_or_cidr` checks the whole `src` value, including its prefix length (`/99` and `/abc` were never checked), and clears host bits. `validate_port` no longer accepts `True` as port 1.
+
 ## [0.6.1] - 2026-10-14
 
 Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, fixes the ACL rule and traffic matching list tools in local mode, registers the Mobility, InnerSpace and Carrier tools in cloud mode, makes firewall policy changes admin only, and carries the Supermemory v5 migration and corrected agent docs. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.1` (amd64, arm64, arm/v7) and `:0.6.1-fleet` (amd64, arm64).

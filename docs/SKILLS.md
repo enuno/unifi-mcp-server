@@ -1,155 +1,108 @@
 # UniFi MCP Server — Skills Guide
 
-This guide explains how to use the UniFi MCP Server's skill files with AI agents, and how to reduce LLM context overhead using tool profiles.
+Agent skills are Markdown files with YAML frontmatter (`name`, `description`) that an AI agent reads on demand. They tell the agent which UniFi tools exist, which API mode each needs, and how to use them safely, without keeping every tool definition in context.
 
-## Overview
+This repository ships two sets of skills in `skills/`, one folder per skill:
 
-When the UniFi MCP Server runs as a full MCP server, it loads all 215+ tool definitions into the LLM context for every conversation — even when you're not doing anything network-related. The skill system solves this in two complementary ways:
+- **Operator skills** help an agent *use* a running UniFi MCP server.
+- **Developer skills** help a coding agent *change* this codebase.
 
-| Approach | How it works | Best for |
-|---|---|---|
-| **SKILL.md** | A lightweight capability manifest the AI reads on-demand | Always-on awareness without context cost |
-| **skills/ files** | Granular domain skills loaded per-task | Targeted guidance for specific tasks |
-| **UNIFI_PROFILE** | Server-side tool filtering | Reducing tool count in a persistent MCP session |
+The root `SKILL.md` is a one-file overview of the whole server (setup, API modes, capability domains, example prompts).
 
 ---
 
-## SKILL.md — Top-Level Manifest
+## Operator skills (using the server)
 
-`SKILL.md` at the repo root is a Claude Code-compatible skill file with YAML frontmatter. It describes all UniFi capabilities, setup instructions, the API mode feature matrix, and example prompts.
-
-### Installation
-
-```bash
-# Personal skill (applies to all your Claude Code sessions)
-cp SKILL.md ~/.claude/skills/unifi.md
-
-# Project-local skill (only active in this project's sessions)
-cp SKILL.md .claude/skills/unifi.md
-```
-
-Once installed, Claude Code will see the `unifi` skill in its skill list. The frontmatter `triggers:` section specifies keywords that tell the agent when to load this skill:
-
-```yaml
-triggers:
-  - UniFi
-  - Ubiquiti
-  - network clients
-  - access point
-  - firewall policy
-  - ...
-```
-
-When a conversation matches a trigger, the agent reads the skill to understand what's available, then decides whether to invoke the MCP server for that task — rather than always keeping 215+ tool definitions in context.
-
-### Frontmatter tuning
-
-If your AI agent responds inconsistently to the skill, you can tune the `description:` field. The description is the primary signal agents use to decide when to load the skill:
-
-```yaml
-# More specific (agent loads skill only for explicit UniFi tasks)
-description: Manage UniFi Network Controller devices, clients, VLANs, and firewall
-
-# Broader (agent loads skill for any network management topic)
-description: Network infrastructure management via UniFi — clients, devices, firewall,
-  VLANs, WiFi, backups, traffic analysis, and more
-```
-
----
-
-## Domain Skill Files
-
-The `skills/` directory contains four focused skill files, one per capability domain. Use these when you want tighter guidance for a specific type of task.
-
-| File | Domain | Key tools |
-|---|---|---|
-| `skills/unifi-network.md` | Networking | Clients, VLANs, WiFi, DHCP, DNS, WAN, vouchers |
-| `skills/unifi-devices.md` | Hardware | Inventory, adoption, control, ports, switching, topology |
-| `skills/unifi-security.md` | Security | Firewall, ZBF, ACLs, port forwards, VPN, content filtering |
-| `skills/unifi-system.md` | Operations | Sites, backups, traffic flows, DPI, RADIUS, QoS |
-
-### Installing domain skills
-
-```bash
-# Install all four
-cp skills/*.md ~/.claude/skills/
-
-# Or install just the ones you use
-cp skills/unifi-security.md ~/.claude/skills/
-```
-
-### When to use domain skills vs. SKILL.md
-
-- **Use `SKILL.md`** when you want general UniFi awareness across all domains. Good default.
-- **Use domain skills** when you're doing extended work in one area (e.g., a firewall audit session) and want the agent to have detailed tool references without loading unrelated tools.
-- **Use both** — they complement each other. `SKILL.md` gives the overview; domain skills give depth.
-
----
-
-## UNIFI_PROFILE — Server-Side Tool Filtering
-
-When you're running the MCP server full-time (e.g., in Claude Desktop or Cursor), you can reduce the number of tool definitions injected into the LLM context by setting `UNIFI_PROFILE`.
-
-### Available profiles
-
-| Profile | Modules loaded | Tool count (approx.) |
-|---|---|---|
-| `network` | clients, client_management, networks, network_config, wifi, dhcp_reservations, dns_management, wans, vouchers | ~25 |
-| `devices` | devices, device_control, port_profiles, switching, topology, diagnostics | ~20 |
-| `security` | firewall, firewall_groups, firewall_zones, firewall_policies, acls, port_forwarding, vpn, site_vpn, content_filtering | ~25 |
-| `system` | sites, site_manager, backups, qos, traffic_flows, traffic_matching_lists, dpi, dpi_tools, radius, application | ~40 |
-| `minimal` | sites, clients, devices | ~10 |
-| *(unset)* | All modules for the API type | 215+ |
-
-### Planned application modes
-
-The existing profile system is the natural place to add more granular, application-specific tool exposure modes that reduce context-window bloat in larger deployments.
-
-| Planned mode | Intended tool surface |
+| Skill | Covers |
 |---|---|
-| `network` | network, switching, WiFi, DHCP, DNS, traffic, client tools |
-| `protect` | cameras, NVR, events, talkback, Protect workflows |
-| `access` | doors, readers, credentials, visitors, access workflows |
-| `talk` | UniFi Talk devices, calls, lines, telephony workflows |
-| `drive` | UniFi Drive storage, files, sharing, drive workflows |
-| `read-only` | `get_*`, `list_*`, `stat_*`, `search_*` only |
+| `skills/unifi-network/` | Clients, networks and VLANs, WiFi, DHCP reservations, DNS, WAN, vouchers |
+| `skills/unifi-devices/` | Inventory, adoption, restarts and upgrades, radios, port profiles, switching, topology, diagnostics |
+| `skills/unifi-security/` | Firewall rules and groups, zone-based firewall, ACL rules, port forwarding, VPN, content filtering |
+| `skills/unifi-system/` | Sites, backups, QoS and traffic routes, traffic flows, DPI, RADIUS, guest portal, traffic matching lists |
+| `skills/unifi-channel-planning/` | Building a low-interference WiFi channel plan from neighbor scans |
 
-### Configuration examples
+## Developer skills (changing the codebase)
 
-#### Claude Desktop — security-focused session
+| Skill | Covers |
+|---|---|
+| `skills/unifi-mcp-tool-builder/` | The workflow for adding any MCP tool: model, tool function, registration, tests, docs |
+| `skills/unifi-network-config-tools/` | Network configuration tools: URL spaces, site ID translation, read-modify-write updates, caching |
+| `skills/unifi-security-tools/` | Firewall, ZBF, ACL, traffic matching list, port forward and RADIUS tools, and their risk tiers |
+| `skills/unifi-protect-tools/` | The `protect_*` modules: Protect client and paths, v7 models, the write pattern |
+| `skills/unifi-cloud-fleet-tools/` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, and the fleet stack |
 
-```json
-{
-  "mcpServers": {
-    "unifi": {
-      "command": "uvx",
-      "args": ["unifi-mcp-server"],
-      "env": {
-        "UNIFI_API_KEY": "your-api-key",
-        "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.2.1",
-        "UNIFI_PROFILE": "security"
-      }
-    }
-  }
-}
+The developer skills are also kept in `.claude/skills/` (Claude Code loads them automatically in this repository) and `.agents/skills/` (Codex and other agents). `skills/` is the source of truth: `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that the developer skills cite only paths and names that exist.
+
+---
+
+## Installing
+
+Claude Code loads a skill from a folder that contains a `SKILL.md`: `~/.claude/skills/<name>/SKILL.md` for every session, or `.claude/skills/<name>/SKILL.md` for one project. Copy the folders you want.
+
+```bash
+git clone https://github.com/enuno/unifi-mcp-server.git
+cd unifi-mcp-server
+
+# All operator skills, for every Claude Code session
+mkdir -p ~/.claude/skills
+cp -r skills/unifi-network skills/unifi-devices skills/unifi-security \
+      skills/unifi-system skills/unifi-channel-planning ~/.claude/skills/
+
+# Or just one
+cp -r skills/unifi-security ~/.claude/skills/
+
+# The one-file overview, as a skill named "unifi"
+mkdir -p ~/.claude/skills/unifi && cp SKILL.md ~/.claude/skills/unifi/SKILL.md
+
+# Into another project instead of your home directory
+cp -r skills/unifi-network /path/to/project/.claude/skills/
 ```
 
-#### Multiple scoped servers (different profiles for different purposes)
+Other agents that read the same format (for example Codex, from `.agents/skills/`) take the same folders. Copy them into that agent's skills directory.
+
+To update, pull the repository and copy the folders again.
+
+## Using
+
+You don't call a skill directly. The agent sees each skill's `description` and loads the skill when your request matches, then uses the UniFi MCP tools it describes. The MCP server must be configured in the same client (see the README's quick start), because the skills describe its tools but do not call the controller themselves.
+
+Example prompts:
+
+- "Which clients are on the guest VLAN right now?" (`unifi-network`)
+- "Audit the zone-based firewall for rules that allow WAN to LAN." (`unifi-security`)
+- "Which APs share a 5 GHz channel with a neighbor? Propose a channel plan." (`unifi-channel-planning`)
+- "Back up the default site, then list the backups." (`unifi-system`)
+
+If the agent does not pick a skill up, name it in the request ("use the unifi-security skill") or make its `description` broader.
+
+### Safety
+
+The skills follow the server's rules: every mutating tool needs `confirm=True`, `dry_run=True` previews a change, and `UNIFI_READ_ONLY=true` removes mutating tools from the server. With bearer tokens, the token's role decides what a call may do: `viewer` reads, `operator` makes ordinary changes, and `admin` is needed for destructive changes, including firewall policy changes.
+
+---
+
+## UNIFI_PROFILE — server-side tool filtering
+
+A skill keeps tool guidance out of context until needed. `UNIFI_PROFILE` goes further and registers only some tool modules, so the client sees fewer tool definitions. Counts are tools the server lists in local mode, including the 4 fleet tools every profile gets.
+
+| Profile | Modules | Tools |
+|---|---|---|
+| `network` | channel_planning, client_management, clients, dhcp_reservations, dns_management, network_config, networks, vouchers, wans, wifi | 48 |
+| `devices` | device_control, device_migration, devices, diagnostics, mac_tags, port_profiles, switching, topology | 53 |
+| `security` | acls, content_filtering, firewall, firewall_groups, firewall_policies, firewall_zones, port_forwarding, site_vpn, vpn | 47 |
+| `system` | application, backups, connector, dpi, dpi_tools, events, integration_api, the Protect modules, qos, radius, reference_data, site_manager, sites, traffic_flows, traffic_matching_lists | 182 |
+| `protect` | the 15 `protect_*` modules | 75 |
+| `mobility` / `innerspace` / `carrier` | one module each (cloud APIs, every mode) | 12 / 10 / 15 |
+| `minimal` | clients, devices, sites | 19 |
+| *(unset or `all`)* | every module for the API type | 343 local, 71 cloud |
+
+An unknown profile logs a warning and loads every module. To expose only non-mutating tools in any profile, set `UNIFI_READ_ONLY=true`.
+
+Example, a security-focused server in Claude Desktop:
 
 ```json
 {
   "mcpServers": {
-    "unifi-network": {
-      "command": "uvx",
-      "args": ["unifi-mcp-server"],
-      "env": {
-        "UNIFI_API_KEY": "your-api-key",
-        "UNIFI_API_TYPE": "local",
-        "UNIFI_LOCAL_HOST": "192.168.2.1",
-        "UNIFI_PROFILE": "network"
-      }
-    },
     "unifi-security": {
       "command": "uvx",
       "args": ["unifi-mcp-server"],
@@ -164,107 +117,18 @@ The existing profile system is the natural place to add more granular, applicati
 }
 ```
 
-#### Environment variable (shell / .env)
-
-```bash
-export UNIFI_API_KEY=your-api-key
-export UNIFI_API_TYPE=local
-export UNIFI_LOCAL_HOST=192.168.2.1
-export UNIFI_PROFILE=devices
-
-unifi-mcp-server
-# Logs: "Local API mode, profile=devices - registering 6 tool module(s)"
-```
-
-### When profiles take effect
-
-Profiles filter at server startup — only the specified tool modules are registered with FastMCP. This means the tool definitions sent to the LLM are fewer, not just hidden. If you need tools from a different profile, restart the server with `UNIFI_PROFILE` changed (or omit it for all tools).
+Profiles apply at startup. Restart the server to change one. Pair a profile with the matching operator skill (for example `UNIFI_PROFILE=security` with `skills/unifi-security/`).
 
 ---
 
-## bin/unifi-cli — CLI Wrapper
+## bin/unifi-cli — CLI wrapper
 
-`bin/unifi-cli` is an executable shell script that delegates to the `unifi-mcp-server cli` subcommand. It's useful for:
-
-- Running single tool calls from a terminal without starting a persistent MCP server
-- Scripting UniFi operations from shell scripts or Makefiles
-- Giving AI agents a CLI surface they can invoke as a subprocess
-
-### Setup
+`bin/unifi-cli` calls `unifi-mcp-server cli`, so you can run one tool from a shell or script without a persistent MCP server:
 
 ```bash
-# Make available on your PATH
-cp bin/unifi-cli /usr/local/bin/unifi-cli
-chmod +x /usr/local/bin/unifi-cli
-
-# Or add the repo's bin/ to PATH
 export PATH="$PATH:/path/to/unifi-mcp-server/bin"
-```
-
-### Usage
-
-```bash
-export UNIFI_API_KEY=your-api-key
-export UNIFI_API_TYPE=local
-export UNIFI_LOCAL_HOST=192.168.2.1
+export UNIFI_API_KEY=your-api-key UNIFI_API_TYPE=local UNIFI_LOCAL_HOST=192.168.2.1
 
 unifi-cli list-clients --site default
-unifi-cli get-device-details --site default --device-id <id>
 unifi-cli list-firewall-policies --site default
 ```
-
-### In AI agent skill instructions
-
-If you're writing a custom skill that instructs an agent to use the CLI:
-
-```markdown
-When the user asks about their UniFi network, use the `unifi-cli` tool
-to run commands. Example:
-- List clients: `unifi-cli list-clients --site default`
-- Block a client: `unifi-cli block-client --site default --mac aa:bb:cc:dd:ee:ff --confirm`
-```
-
----
-
-## Comparison: Full MCP vs. Skill + Profile
-
-| | Full MCP (no profile) | SKILL.md only | Profile MCP | Skill + Profile |
-|---|---|---|---|---|
-| Tool definitions in LLM context | All 215+ | None | Subset | Subset |
-| Works without MCP server running | No | Yes (read-only awareness) | No | No |
-| Best for | Power users, automation | Casual awareness | Focused sessions | Focused sessions with AI guide |
-| Setup complexity | Low | Minimal | Low | Low |
-
-**Recommended setup for most users:**
-
-1. Install `SKILL.md` as a personal Claude Code skill for always-on awareness.
-2. Configure the MCP server in your AI client with `UNIFI_PROFILE=network` or the domain you use most.
-3. Spin up a second scoped MCP entry (e.g., `UNIFI_PROFILE=security`) when you need it.
-
----
-
-## Troubleshooting
-
-**Agent doesn't use the skill**
-
-The skill's `description:` field needs to match how you phrase your requests. Try broadening it:
-
-```yaml
-description: >
-  Manage UniFi network infrastructure — use for anything involving Ubiquiti
-  devices, WiFi, VLANs, firewall, clients, or network monitoring.
-```
-
-**Profile loads wrong tools**
-
-Check the server log on startup — it logs the active profile and module count:
-
-```
-INFO: Local API mode, profile=security - registering 9 tool module(s)
-```
-
-If a tool you need isn't available, either switch profiles or unset `UNIFI_PROFILE` to load all tools.
-
-**Unknown profile name**
-
-If `UNIFI_PROFILE` is set to an unrecognized value, the server falls back to loading all modules for the API type. Valid values: `network`, `devices`, `security`, `system`, `minimal`, `all` (or unset).

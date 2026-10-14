@@ -128,6 +128,28 @@ def test_known_tiers(name: str, tier: str):
     assert tool_tier(_all_tools()[name]) == tier
 
 
+#: Tools that change firewall policy: admin only, never the operator role.
+FIREWALL_POLICY_TOOLS = (
+    "assign_network_to_zone",
+    "create_firewall_policy",
+    "create_firewall_rule",
+    "unassign_network_from_zone",
+    "update_firewall_policy",
+    "update_firewall_rule",
+    "update_zbf_policy",
+)
+
+
+@pytest.mark.parametrize("name", FIREWALL_POLICY_TOOLS)
+def test_firewall_policy_changes_need_admin(name: str):
+    from src.access import Principal
+
+    tier = tool_tier(_all_tools()[name])
+    assert tier == "destructive"
+    assert not Principal(id="t", name="t", role="operator").can_use(tier)
+    assert Principal(id="t", name="t", role="admin").can_use(tier)
+
+
 def test_registration_records_tiers():
     from src.tools import backups
 

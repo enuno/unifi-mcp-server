@@ -468,11 +468,17 @@ if os.getenv("AGNOST_ENABLED", "false").lower() in ("true", "1", "yes"):
 # Conditional tool modules based on API type
 # ---------------------------------------------------------------------------
 
+# Registered in every API mode. Mobility, InnerSpace and Carrier Fabric are
+# cloud APIs on api.ui.com (SiteManagerClient), like Site Manager, so they
+# belong here rather than with the local-only modules.
 _CLOUD_TOOL_MODULES = [
     sites_tools,
     site_manager_tools,
     connector_tools,
     integration_api_tools,
+    carrier_tools,
+    innerspace_tools,
+    mobility_tools,
 ]
 
 _LOCAL_TOOL_MODULES = [
@@ -497,9 +503,6 @@ _LOCAL_TOOL_MODULES = [
     firewall_groups_tools,
     firewall_policies_tools,
     firewall_zones_tools,
-    carrier_tools,
-    innerspace_tools,
-    mobility_tools,
     mac_tags_tools,
     network_config_tools,
     networks_tools,

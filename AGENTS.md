@@ -234,7 +234,7 @@ Before you implement an endpoint, find it in a spec snapshot or in `docs/UNIFI_A
 - **`API.md`** for every new or changed tool: parameters, return value, and an example.
 - **`README.md`** for user-facing features and settings. A docs test requires every setting to be listed in `API.md` and `.env.example`.
 - **`CHANGELOG.md`** under `[Unreleased]`.
-- **Skills.** When you change how a tool set works, update its skill in `.claude/skills/`. `tests/unit/test_agent_docs.py` checks that `CLAUDE.md`, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist.
+- **Skills.** When you change how a tool set works, update its skill in `skills/<name>/SKILL.md` and copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`; when you change what an operator can do, update the operator skill in `skills/`. `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that `CLAUDE.md`, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist.
 
 ## Approval and Merge Policies
 

@@ -9,8 +9,9 @@ description: >
 
 # UniFi Network Operations
 
-API mode requirements: most tools work with `local`; ACLs and traffic matching
-lists require `cloud-v1` or `cloud-ea`.
+API mode requirements: these tools use `local` mode. ACL rules and traffic
+matching lists also need `local` (see the `unifi-security` and `unifi-system`
+skills).
 
 ## Client Management
 

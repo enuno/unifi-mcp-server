@@ -525,7 +525,7 @@ Re-encrypt every stored API key under the newest `UNIFI_FLEET_CREDENTIAL_KEY` ke
 
 #### Access control
 
-Every tool has a risk tier: `read`, `write`, `destructive` or `fleet-admin`. A caller's role grants tiers: `viewer` (read), `operator` (+ write), `admin` (+ destructive), `fleet-admin` (+ registry, token and audit tools). A token can be narrowed further by `allow_modules`/`deny_modules` (patterns over tool module names, e.g. `protect_*`) and `controller_labels` (a controller must carry all of them). A refused call fails with `Permission denied: <tool> needs the '<tier>' tier` and is recorded as a `denied` audit event. `MCP_AUTH_TOKEN` tokens and stdio are break-glass `fleet-admin` callers (stdio's role is set by `UNIFI_STDIO_ROLE`).
+Every tool has a risk tier: `read`, `write`, `destructive` or `fleet-admin`. A caller's role grants tiers: `viewer` (read), `operator` (+ write), `admin` (+ destructive), `fleet-admin` (+ registry, token and audit tools). Destructive tools include deletes, restores, restarts, client blocking and firewall policy changes (`create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone`, `unassign_network_from_zone`), so an `operator` cannot change which traffic the firewall allows. A token can be narrowed further by `allow_modules`/`deny_modules` (patterns over tool module names, e.g. `protect_*`) and `controller_labels` (a controller must carry all of them). A refused call fails with `Permission denied: <tool> needs the '<tier>' tier` and is recorded as a `denied` audit event. `MCP_AUTH_TOKEN` tokens and stdio are break-glass `fleet-admin` callers (stdio's role is set by `UNIFI_STDIO_ROLE`).
 
 #### `create_api_token`
 

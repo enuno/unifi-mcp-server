@@ -12,9 +12,15 @@ description: >
 # UniFi Security Operations
 
 **API mode requirements:**
+
 - Zone-based firewall, firewall rules/zones/groups: `local` only
-- ACLs, traffic matching lists: `cloud-v1` or `cloud-ea` only
+- ACLs, traffic matching lists: `local` only (the console's integration API)
 - Port forwarding, VPN: `local` only
+
+**Roles:** with bearer tokens, creating or updating firewall policies, ZBF
+policies, legacy firewall rules and network-to-zone assignments needs the
+`admin` role. The `operator` role can still manage ACL rules, port forwards,
+groups, zones and traffic matching lists.
 
 ## Traditional Firewall Rules
 
@@ -77,7 +83,7 @@ Groups are reusable IP/port sets referenced by rules.
 | `block_application_by_zone` | Block a DPI application category in a zone |
 | `list_blocked_applications` | List applications blocked by zone policies |
 
-## ACL Rules (cloud-v1/cloud-ea only)
+## ACL Rules (local API)
 
 | Tool | Description |
 |---|---|

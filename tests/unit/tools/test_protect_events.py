@@ -48,7 +48,8 @@ async def test_list_protect_device_updates_success(mock_settings, mock_client):
         "list_protect_device_updates",
     )
 
-    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
+    # protect_events re-exports the single definition in protect_devices.
+    with patch("src.tools.protect_devices.ProtectClient", return_value=mock_client):
         result = await list_protect_device_updates(mock_settings)
 
     mock_client.authenticate.assert_awaited_once()
@@ -95,3 +96,11 @@ async def test_send_protect_alarm_webhook_empty_id_raises(mock_settings):
 
     with pytest.raises(ValidationError, match="webhook_id"):
         await send_protect_alarm_webhook("", mock_settings, confirm=True)
+
+
+def test_list_protect_device_updates_is_defined_once():
+    """protect_events re-exports protect_devices' tool rather than redefining it."""
+    from src.tools import protect_devices
+
+    assert protect_events.list_protect_device_updates is protect_devices.list_protect_device_updates
+    assert protect_events.list_protect_device_updates.__module__ == protect_devices.__name__

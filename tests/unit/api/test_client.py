@@ -170,6 +170,17 @@ class TestUniFiClientEndpointTranslation:
         await client.close()
 
     @pytest.mark.asyncio
+    async def test_translate_local_uuid_networkconf_item(self, mock_settings_local):
+        """A site UUID with a networkconf item path maps to the site name (site_vpn)."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"abc-123-uuid": "default"}
+
+        result = client._translate_endpoint("/ea/sites/abc-123-uuid/rest/networkconf/vpn-1")
+        assert result == "/proxy/network/api/s/default/rest/networkconf/vpn-1"
+
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_translate_local_site_detail(self, mock_settings_local):
         client = UniFiClient(mock_settings_local)
 

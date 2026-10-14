@@ -5,13 +5,13 @@ Path: @/src
 ### Overview
 
 - The `src/` package is the complete server implementation, with `main.py` as the FastMCP entry point and subdirectories for the API client, tools, models, resources, config, and utilities.
-- `main.py` instantiates the `FastMCP` server, registers every MCP tool and resource via `@mcp.tool()` / `@mcp.resource()` decorators, and starts the server through `mcp.run()`.
+- `main.py` instantiates the `FastMCP` server, registers the tool modules through `register_module_tools()` (`@/src/tool_registry.py`) and the resources with `@mcp.resource()`, and starts the server through `mcp.run()`.
 - All tool and resource logic lives in subdirectories (`@/src/tools/`, `@/src/resources/`); `main.py` acts as the registration layer, forwarding calls to the implementations.
 
 ### How it fits into the larger codebase
 
 - `main.py` is the sole consumer of `@/src/tools/` and `@/src/resources/` — it imports every module at startup and wraps each exported function in an MCP decorator.
-- A single `Settings` instance (from `@/src/config/`) is created at module load and captured in all `@mcp.tool()` closures, making the tool layer effectively stateless.
+- A single `Settings` instance (from `@/src/config/`) is created at module load and bound into every tool by the registry wrapper, making the tool layer effectively stateless.
 - `@/src/api/` (`UniFiClient`) is not imported directly by `main.py`; individual tool modules open their own `async with UniFiClient(settings)` contexts per request.
 - The `agnost.ai` integration is the only **optional external dependency** initialized at module load; all other dependencies are mandatory and imported unconditionally.
 
@@ -32,7 +32,7 @@ AGNOST_ENABLED=false (default) or AGNOST_ORG_ID missing
     └─► agnost code never runs, no imports attempted
 ```
 
-- **Tool registration**: Each tool module is imported as an alias (e.g., `from .tools import radius as radius_tools`) and each exported async function is wrapped in a thin `@mcp.tool()` closure that binds the singleton `settings` and forwards all other arguments.
+- **Tool registration**: Each tool module is imported as an alias (e.g., `from .tools import radius as radius_tools`) and `register_module_tools()` wraps each public async function: it binds `settings`, adds the `controller` argument, and applies tiers, read-only and dry-run modes, audit and the read cache.
 - **DEBUG tool**: A `debug_api_request` tool is conditionally registered only when `DEBUG=true`, and its `UniFiClient` import is deferred to the function body via a local `from .api import UniFiClient`.
 - **MCP Resources**: Resources are registered via `@mcp.resource("protocol://path")` and delegate to `@/src/resources/` handler classes instantiated at module load.
 

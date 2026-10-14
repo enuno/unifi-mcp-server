@@ -182,140 +182,107 @@ class YourResponseModel(BaseModel):
 
 ### 2.2 Implement the MCP Tool
 
-**Location**: `src/tools/{category}.py` (or new file if new category)
+**Location**: `src/tools/{category}.py` (or a new module for a new feature area)
+
+Tools are plain async functions. Every public `async def` in a module that `src/main.py` lists becomes a tool; there is no `@mcp.tool()` decorator. The registry passes `settings` and hides it from the tool's public signature. Name helpers with a leading `_` so they are not registered.
+
+A read tool:
 
 ```python
-from fastmcp import Context
-from src.models.your_model import YourRequestModel, YourResponseModel
-from src.api.client import UniFiClient
-from src.utils.validators import validate_site_id
+from typing import Any
 
-@mcp.tool()
-async def your_tool_name(
-    site_id: str,
-    resource_id: str,
-    options: dict | None = None,
-    settings: Context = None,
-    confirm: bool = False,
-    dry_run: bool = False,
-) -> dict:
-    """Brief one-line description of what this tool does.
+from ..api.client import UniFiClient
+from ..config import Settings
+from ..utils import ValidationError, get_logger, sanitize_log_message, validate_site_id
 
-    Detailed explanation of the tool's purpose, when to use it,
-    and what it accomplishes. Include examples of common use cases.
+
+async def list_your_resources(site_id: str, settings: Settings) -> list[dict[str, Any]]:
+    """List your resources on a site.
 
     Args:
-        site_id: UniFi site identifier (e.g., 'default')
-        resource_id: Resource to operate on
-        options: Optional configuration dictionary
-        settings: FastMCP context (auto-injected)
-        confirm: Required for mutating operations (default: False)
-        dry_run: Preview changes without applying (default: False)
+        site_id: Site identifier (name or UUID)
+        settings: Application settings
 
     Returns:
-        Dictionary containing:
-        - success: Operation success status
-        - resource_id: Modified resource identifier
-        - message: Human-readable result message
-        - details: (if dry_run) Preview of changes
-
-    Raises:
-        ValueError: If site_id is invalid or resource not found
-        PermissionError: If confirm=True not provided for mutation
-
-    Examples:
-        >>> # Read-only operation
-        >>> result = await your_tool_name(site_id="default", resource_id="abc123")
-
-        >>> # Mutating operation (requires confirmation)
-        >>> result = await your_tool_name(
-        ...     site_id="default",
-        ...     resource_id="abc123",
-        ...     confirm=True
-        ... )
-
-        >>> # Preview changes first
-        >>> preview = await your_tool_name(
-        ...     site_id="default",
-        ...     resource_id="abc123",
-        ...     dry_run=True
-        ... )
+        List of resource records
     """
-    # Validate inputs
-    validate_site_id(site_id)
-
-    # Get client from context
-    client: UniFiClient = settings.get("client")
-
-    # MUTATING OPERATIONS: Require confirmation
-    if not dry_run:
-        if not confirm:
-            raise PermissionError(
-                "This operation modifies network configuration. "
-                "Set confirm=True to proceed, or use dry_run=True to preview changes."
-            )
-
-    # Dry-run mode: Preview changes
-    if dry_run:
-        return {
-            "success": True,
-            "dry_run": True,
-            "preview": {
-                "operation": "your_operation",
-                "resource_id": resource_id,
-                "changes": {"key": "value"},
-            },
-            "message": "Dry-run completed. Set confirm=True to apply changes."
-        }
-
-    # Execute operation
-    try:
-        response = await client.request(
-            method="POST",
-            endpoint=f"/api/s/{site_id}/rest/your_endpoint",
-            json={"resource_id": resource_id, **(options or {})},
-        )
-
-        return {
-            "success": True,
-            "resource_id": resource_id,
-            "message": f"Successfully processed resource {resource_id}",
-            "data": response.get("data", {}),
-        }
-
-    except Exception as e:
-        # Provide actionable error messages
-        if "not found" in str(e).lower():
-            raise ValueError(
-                f"Resource '{resource_id}' not found in site '{site_id}'. "
-                f"Use list_resources tool to see available resources."
-            ) from e
-        raise
+    site_id = validate_site_id(site_id)
+    logger = get_logger(__name__, settings.log_level)
+    async with UniFiClient(settings) as client:
+        if not client.is_authenticated:
+            await client.authenticate()
+        response = await client.get(f"/ea/sites/{site_id}/rest/your_resource")
+    data = response if isinstance(response, list) else response.get("data", [])
+    logger.info(sanitize_log_message(f"Listed {len(data)} resources for site {site_id}"))
+    return [YourModel(**item).model_dump() for item in data]
 ```
+
+A write tool:
+
+```python
+from ..utils.validators import coerce_bool, validate_confirmation
+
+
+async def update_your_resource(
+    site_id: str,
+    resource_id: str,
+    settings: Settings,
+    name: str | None = None,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Update a resource.
+
+    Args:
+        site_id: Site identifier (name or UUID)
+        resource_id: Resource identifier
+        settings: Application settings
+        name: New name (unchanged when omitted)
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+
+    Returns:
+        The updated record, or the planned change on a dry run
+    """
+    validate_confirmation(confirm, "update your resource", dry_run)
+    site_id = validate_site_id(site_id)
+    payload: dict[str, Any] = {}
+    if name is not None:
+        payload["name"] = name
+    if not payload:
+        raise ValidationError("No updates provided")
+
+    if coerce_bool(dry_run):
+        return {"dry_run": True, "operation": "update_your_resource", "payload": payload}
+
+    async with UniFiClient(settings) as client:
+        if not client.is_authenticated:
+            await client.authenticate()
+        response = await client.put(
+            f"/ea/sites/{site_id}/rest/your_resource/{resource_id}", json_data=payload
+        )
+    return response
+```
+
+Build paths with the `Settings` helpers (`get_integration_path`, `get_protect_integration_path`, `get_v2_api_path`) or the `/ea/sites/{site_id}/...` form that `UniFiClient` translates. Never hardcode `/proxy/network/...`. The tool-set skills (`unifi-protect-tools`, `unifi-network-config-tools`, `unifi-security-tools`, `unifi-cloud-fleet-tools`) list the paths and gotchas per area.
 
 **Implementation checklist:**
 
-- [ ] FastMCP `@mcp.tool()` decorator
-- [ ] Comprehensive docstring with examples
-- [ ] Input validation (use existing validators in `src/utils/validators.py`)
-- [ ] Confirm requirement for mutating operations
-- [ ] Dry-run mode support for previewing changes
-- [ ] Actionable error messages that guide LLM to correct usage
-- [ ] Async/await for all I/O operations
-- [ ] Proper exception handling with context
+- [ ] Public `async def` with `settings: Settings`; helpers start with `_`
+- [ ] Google-style docstring that lists every argument (MCP clients show it)
+- [ ] Input validation with `src/utils/validators.py`
+- [ ] Write tools: `confirm` and `dry_run`, `validate_confirmation()` first, dry run returned before any request
+- [ ] Optional update arguments default to `None`
+- [ ] No audit code in the tool (the registry wrapper audits every write)
+- [ ] Errors from `src/utils/exceptions.py` (`ValidationError` for bad input); no broad `except` that hides the cause
 
-### 2.3 Register Tool in Main Server
+### 2.3 Register the Module
 
 **Location**: `src/main.py`
 
-Add your tool to the imports and ensure it's registered:
-
-```python
-from src.tools.your_category import your_tool_name
-
-# Tools are auto-registered via @mcp.tool() decorator
-# No manual registration needed with FastMCP
-```
+- A new function in an existing module needs no registration.
+- A new module: import it, add it to `_LOCAL_TOOL_MODULES` or `_CLOUD_TOOL_MODULES`, and add it to the `UNIFI_PROFILE` sets that should include it.
+- Regenerate the risk-tier snapshot: `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py`. Destructive tools need a `delete_`, `remove_` or `bulk_delete_` prefix or an entry in `DESTRUCTIVE_TOOLS` (`src/tool_registry.py`). A write tool with a risky word in its name needs an entry in `DESTRUCTIVE_TOOLS` or `RISKY_NAME_EXEMPTIONS`.
 
 ### 2.4 Follow Code Quality Standards
 
@@ -350,115 +317,61 @@ mypy src/tools/your_file.py
 
 ### 3.2 Test Structure
 
+**Location**: `tests/unit/tools/test_{module}_tools.py`
+
 ```python
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from src.tools.your_category import your_tool_name
 
-class TestYourToolName:
-    """Test suite for your_tool_name."""
+from src.config import Settings
+from src.tools.your_category import update_your_resource
+from src.utils.exceptions import ValidationError
 
-    @pytest.fixture
-    def mock_context(self):
-        """Mock FastMCP context with UniFi client."""
-        context = MagicMock()
-        client = AsyncMock()
-        context.get.return_value = client
-        return context, client
 
-    @pytest.mark.asyncio
-    async def test_successful_operation(self, mock_context):
-        """Test successful tool execution."""
-        context, client = mock_context
-        client.request.return_value = {
-            "data": {"_id": "abc123", "name": "test"}
-        }
+@pytest.fixture
+def settings(monkeypatch):
+    monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+    monkeypatch.setenv("UNIFI_API_TYPE", "local")
+    monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+    return Settings()
 
-        result = await your_tool_name(
-            site_id="default",
-            resource_id="abc123",
-            settings=context,
-            confirm=True
-        )
 
-        assert result["success"] is True
-        assert result["resource_id"] == "abc123"
-        client.request.assert_called_once()
+def _client(client_class, **responses):
+    client = AsyncMock()
+    client.is_authenticated = True
+    for method, value in responses.items():
+        setattr(client, method, AsyncMock(return_value=value))
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
+    client_class.return_value = client
+    return client
 
-    @pytest.mark.asyncio
-    async def test_requires_confirmation(self, mock_context):
-        """Test that mutating operations require confirm=True."""
-        context, client = mock_context
 
-        with pytest.raises(PermissionError, match="Set confirm=True"):
-            await your_tool_name(
-                site_id="default",
-                resource_id="abc123",
-                settings=context,
-                confirm=False
-            )
+async def test_update_sends_only_changed_fields(settings):
+    with patch("src.tools.your_category.UniFiClient") as client_class:
+        client = _client(client_class, put={"data": [{"_id": "abc", "name": "new"}]})
 
-    @pytest.mark.asyncio
-    async def test_dry_run_mode(self, mock_context):
-        """Test dry-run preview mode."""
-        context, client = mock_context
+        await update_your_resource("default", "abc", settings, name="new", confirm=True)
 
-        result = await your_tool_name(
-            site_id="default",
-            resource_id="abc123",
-            settings=context,
-            dry_run=True
-        )
+    assert client.put.await_args.kwargs["json_data"] == {"name": "new"}
 
-        assert result["dry_run"] is True
-        assert "preview" in result
-        client.request.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_invalid_site_id(self, mock_context):
-        """Test validation of site_id."""
-        context, client = mock_context
+async def test_update_refuses_without_confirm(settings):
+    with patch("src.tools.your_category.UniFiClient") as client_class:
+        with pytest.raises(ValidationError, match="confirm"):
+            await update_your_resource("default", "abc", settings, name="new")
+    client_class.assert_not_called()
 
-        with pytest.raises(ValueError, match="Invalid site"):
-            await your_tool_name(
-                site_id="",
-                resource_id="abc123",
-                settings=context
-            )
 
-    @pytest.mark.asyncio
-    async def test_resource_not_found(self, mock_context):
-        """Test handling of not found errors."""
-        context, client = mock_context
-        client.request.side_effect = Exception("Resource not found")
-
-        with pytest.raises(ValueError, match="not found"):
-            await your_tool_name(
-                site_id="default",
-                resource_id="nonexistent",
-                settings=context,
-                confirm=True
-            )
-
-    @pytest.mark.asyncio
-    async def test_with_optional_parameters(self, mock_context):
-        """Test tool with optional parameters."""
-        context, client = mock_context
-        client.request.return_value = {"data": {"_id": "abc123"}}
-
-        result = await your_tool_name(
-            site_id="default",
-            resource_id="abc123",
-            options={"key": "value"},
-            settings=context,
-            confirm=True
-        )
-
-        assert result["success"] is True
-        # Verify options were passed to API
-        call_args = client.request.call_args
-        assert call_args[1]["json"]["key"] == "value"
+async def test_update_dry_run_makes_no_request(settings):
+    with patch("src.tools.your_category.UniFiClient") as client_class:
+        result = await update_your_resource("default", "abc", settings, name="new", dry_run=True)
+    assert result["dry_run"] is True
+    client_class.assert_not_called()
 ```
+
+`asyncio_mode = auto` is set, so tests need no asyncio marker. `--strict-markers` rejects any marker except `integration`.
 
 **Test coverage requirements:**
 
@@ -556,9 +469,9 @@ result = await mcp.call_tool("your_tool_name", {
 
 **Error Handling**:
 
-- `ValueError`: Invalid site_id or resource not found
-- `PermissionError`: Mutating operation requires confirm=True
-- `APIError`: UniFi API returned error (check message for details)
+- `ValidationError`: Invalid input, or confirm=True missing on a write
+- `ResourceNotFoundError`: The resource does not exist (HTTP 404)
+- `APIError`: UniFi API returned another error (check the message)
 
 **API Endpoint**: `POST /api/s/{site}/rest/your_endpoint`
 
@@ -607,7 +520,7 @@ pytest tests/unit/
 # Verify no regressions
 pytest tests/unit/ --cov=src --cov-report=term-missing
 
-# Check overall coverage (should remain ≥78%)
+# Check overall coverage (the CI gate is 80%)
 pytest tests/unit/ --cov=src --cov-report=html
 ```
 
@@ -706,7 +619,7 @@ Before submitting:
 - [ ] `mypy` type checking passes
 - [ ] `bandit` security scan passes
 - [ ] `pytest` all tests pass
-- [ ] Coverage ≥78% overall, ≥85% for new code
+- [ ] Coverage ≥80% overall (CI gate), ≥85% for new code
 - [ ] Pre-commit hooks pass
 - [ ] MCP Inspector manual testing successful
 
@@ -714,117 +627,16 @@ Before submitting:
 
 ## Common Patterns in UniFi MCP Server
 
-### Pattern 1: List/Query Tools (Read-Only)
+Copy a real tool rather than a sketch:
 
-```python
-@mcp.tool()
-async def list_resources(
-    site_id: str,
-    filters: dict | None = None,
-    settings: Context = None,
-) -> list[dict]:
-    """List resources in the UniFi controller.
-
-    This is a read-only operation requiring no confirmation.
-    """
-    client = settings.get("client")
-    response = await client.request(
-        method="GET",
-        endpoint=f"/api/s/{site_id}/rest/resource",
-        params=filters or {}
-    )
-    return response.get("data", [])
-```
-
-### Pattern 2: Mutating Tools with Confirmation
-
-```python
-@mcp.tool()
-async def update_resource(
-    site_id: str,
-    resource_id: str,
-    updates: dict,
-    settings: Context = None,
-    confirm: bool = False,
-    dry_run: bool = False,
-) -> dict:
-    """Update a resource (requires confirmation).
-
-    Mutating operations always require confirm=True.
-    """
-    if not dry_run and not confirm:
-        raise PermissionError("Set confirm=True to proceed")
-
-    if dry_run:
-        return {"dry_run": True, "preview": updates}
-
-    client = settings.get("client")
-    response = await client.request(
-        method="PUT",
-        endpoint=f"/api/s/{site_id}/rest/resource/{resource_id}",
-        json=updates
-    )
-    return response
-```
-
-### Pattern 3: Tools with Pagination
-
-```python
-@mcp.tool()
-async def list_large_dataset(
-    site_id: str,
-    limit: int = 100,
-    offset: int = 0,
-    settings: Context = None,
-) -> dict:
-    """List resources with pagination support."""
-    client = settings.get("client")
-    response = await client.request(
-        method="GET",
-        endpoint=f"/api/s/{site_id}/rest/resource",
-        params={"limit": limit, "offset": offset}
-    )
-
-    return {
-        "data": response.get("data", []),
-        "total": response.get("meta", {}).get("total", 0),
-        "limit": limit,
-        "offset": offset
-    }
-```
-
-### Pattern 4: Multi-Site Aggregation
-
-```python
-@mcp.tool()
-async def aggregate_across_sites(
-    settings: Context = None,
-) -> dict:
-    """Aggregate data across all sites."""
-    client = settings.get("client")
-
-    # Get all sites
-    sites_response = await client.request(
-        method="GET",
-        endpoint="/api/self/sites"
-    )
-    sites = sites_response.get("data", [])
-
-    # Aggregate data
-    results = []
-    for site in sites:
-        site_id = site["name"]
-        site_data = await client.request(
-            method="GET",
-            endpoint=f"/api/s/{site_id}/rest/resource"
-        )
-        results.append({
-            "site_id": site_id,
-            "data": site_data.get("data", [])
-        })
-
-    return {"sites": results}
-```
+| Pattern | Copy from |
+|---------|-----------|
+| Read tool, legacy API | `list_wlans` in `src/tools/wifi.py` |
+| Read tool, integration API | `list_acl_rules` in `src/tools/acls.py` |
+| Write tool with a partial update | `update_protect_relay` in `src/tools/protect_relays.py` |
+| Read-modify-write update | `update_port_profile` in `src/tools/port_profiles.py` |
+| Paginated list | `list_protect_relays` in `src/tools/protect_relays.py` (uses `validate_limit_offset()`) |
+| Data across many controllers | `fleet_fanout` in `src/fleet/fleet_tools.py` (reads only) |
 
 ---
 
@@ -836,7 +648,7 @@ async def aggregate_across_sites(
 - `API.md` - Complete MCP tool reference
 - `AGENTS.md` - AI agent development guidelines
 - `DEVELOPMENT_PLAN.md` - Roadmap and feature planning
-- `TESTING_PLAN.md` - Testing strategy and coverage goals
+- `docs/archive/TESTING_PLAN.md` - Testing strategy (archived)
 - `CONTRIBUTING.md` - Contribution guidelines
 
 ### UniFi API Documentation
@@ -848,11 +660,11 @@ async def aggregate_across_sites(
 
 - `src/tools/devices.py` - Device management examples
 - `src/tools/firewall.py` - Firewall rule management patterns
-- `src/tools/zbf_tools.py` - Zone-Based Firewall implementation
+- `src/tools/firewall_policies.py` - Zone-Based Firewall policies
 - `src/tools/qos.py` - QoS profile management examples
-- `tests/unit/test_topology.py` - High-coverage test examples (95%+)
+- `tests/unit/tools/test_protect_relays.py` - Write-gate and dry-run test examples
 
 ---
 
-**Last Updated**: 2026-01-25
+**Last Updated**: 2026-10-13
 **Maintained By**: UniFi MCP Server Team

@@ -477,3 +477,39 @@ async def test_delete_traffic_matching_list_not_found(mock_settings):
                     mock_settings,
                     confirm=True,
                 )
+
+
+SITE_UUID = "88f7af54-98f8-306a-a1c7-c9349722b1f6"
+
+
+@pytest.fixture
+def local_settings(monkeypatch):
+    from src.config import Settings
+
+    monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+    monkeypatch.setenv("UNIFI_API_TYPE", "local")
+    monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+    return Settings()
+
+
+@pytest.mark.asyncio
+async def test_list_traffic_matching_lists_local_mode_uses_local_integration_api(
+    local_settings,
+):
+    """The Network integration API serves traffic-matching-lists on the local console too."""
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        client = AsyncMock()
+        client.resolve_site_id = AsyncMock(return_value=SITE_UUID)
+        client.get = AsyncMock(
+            return_value=[{"id": "tml-1", "type": "PORTS", "name": "Web", "items": ["443"]}]
+        )
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = client
+
+        result = await list_traffic_matching_lists("default", local_settings)
+
+    assert [r["id"] for r in result] == ["tml-1"]
+    assert client.get.await_args.args[0] == (
+        f"/proxy/network/integration/v1/sites/{SITE_UUID}/traffic-matching-lists"
+    )

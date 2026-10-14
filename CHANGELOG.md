@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.1] - 2026-10-14
 
-Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, and carries the Supermemory v5 migration. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.1` (amd64, arm64, arm/v7) and `:0.6.1-fleet` (amd64, arm64).
+Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, fixes the ACL rule and traffic matching list tools in local mode, and carries the Supermemory v5 migration and corrected agent docs. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.1` (amd64, arm64, arm/v7) and `:0.6.1-fleet` (amd64, arm64).
 
 ### Changed
 
@@ -17,11 +17,13 @@ Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, a
 
 ### Fixed
 
+- The ACL rule tools (`list_acl_rules`, `get_acl_rule`, `create_acl_rule`, `update_acl_rule`, `delete_acl_rule`) and the traffic matching list tools work in local mode. They are registered only in local mode, but a guard refused local mode, so every call failed with `NotImplementedError`. The Network integration API serves both resources on the local console at `/proxy/network/integration/v1/` (Network API spec v10.6.106).
 - **Release workflow: attach assets under immutable releases.** The v0.6.0 run published the GitHub release and then tried to upload the wheel, sdist and SBOM, which an immutable release refuses (422), so v0.6.0 shipped with notes and images but no assets. The workflow now creates the release as a draft, uploads every asset, then publishes it, and fails with a clear error if the tag's release is already published.
 
 ### Documentation
 
 - The README opens with the project logo in a centered header.
+- `CLAUDE.md` and `AGENTS.md` are corrected against the code, and `.claude/skills/` gains tool-set skills for Network configuration, security, Protect, and cloud and fleet tools, with `tests/unit/test_agent_docs.py` checking the docs' claims.
 
 ## [0.6.0] - 2026-10-12
 

@@ -542,3 +542,62 @@ async def test_delete_acl_rule_no_confirm(mock_settings):
             confirm=False,
         )
     assert "requires confirmation" in str(excinfo.value)
+
+
+SITE_UUID = "88f7af54-98f8-306a-a1c7-c9349722b1f6"
+
+
+@pytest.fixture
+def local_settings(monkeypatch):
+    from src.config import Settings
+
+    monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+    monkeypatch.setenv("UNIFI_API_TYPE", "local")
+    monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+    return Settings()
+
+
+def _local_client(mock_client_class, **responses) -> AsyncMock:
+    mock_client = AsyncMock()
+    mock_client.resolve_site_id = AsyncMock(return_value=SITE_UUID)
+    for method, value in responses.items():
+        setattr(mock_client, method, AsyncMock(return_value=value))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client_class.return_value = mock_client
+    return mock_client
+
+
+@pytest.mark.asyncio
+async def test_list_acl_rules_local_mode_uses_local_integration_api(local_settings):
+    """The Network integration API serves acl-rules on the local console too."""
+    with patch("src.tools.acls.UniFiClient") as mock_client_class:
+        client = _local_client(
+            mock_client_class,
+            get={"data": [{"id": "acl-1", "name": "Block IoT", "action": "BLOCK"}]},
+        )
+
+        result = await list_acl_rules("default", local_settings)
+
+    assert [r["id"] for r in result] == ["acl-1"]
+    client.get.assert_awaited_once()
+    assert client.get.await_args.args[0] == (
+        f"/proxy/network/integration/v1/sites/{SITE_UUID}/acl-rules"
+    )
+
+
+@pytest.mark.asyncio
+async def test_create_acl_rule_local_mode_posts_to_local_integration_api(local_settings):
+    with patch("src.tools.acls.UniFiClient") as mock_client_class:
+        client = _local_client(
+            mock_client_class, post={"id": "acl-9", "name": "Block cams", "action": "BLOCK"}
+        )
+
+        result = await create_acl_rule(
+            "default", "Block cams", "BLOCK", local_settings, confirm=True
+        )
+
+    assert result["id"] == "acl-9"
+    assert client.post.await_args.args[0] == (
+        f"/proxy/network/integration/v1/sites/{SITE_UUID}/acl-rules"
+    )

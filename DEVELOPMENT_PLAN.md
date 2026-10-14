@@ -364,6 +364,7 @@ Prompts an operator can hand to an AI coding agent (Claude Code or similar) to s
 
 | Version | Scope | Notes |
 |---|---|---|
+| v0.6.1 | Patch | **Released 2026-10-14**: publishes the wheel, sdist and SBOM missing from v0.6.0 (immutable-release asset upload fixed), Supermemory v5 client |
 | v0.6.0 | Fleet Phases 0–5 + Phase 7 | **Released 2026-10-12**: multi-controller fleet stack (`docs/FLEET_SCALING_PLAN.md`), SIEM export and audit retention, Ansible playbook, Helm chart and `-fleet` images, agent setup prompts |
 | v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
 | v0.2.5 | Earlier release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
@@ -372,7 +373,7 @@ Prompts an operator can hand to an AI coding agent (Claude Code or similar) to s
 
 ---
 
-> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. `v0.5.0` was tagged on 2026-09-28 after hardware verification but never published: its release workflow could not start (an account billing lock), and the re-run on 2026-10-12 failed because the job installed unpinned dev tools and a newer black rejected the tagged code. The release job now installs the locked versions (`uv sync --locked`). Everything in v0.5.0 plus fleet Phases 0–5 and Phase 7 ships as **v0.6.0**, the first release published since v0.2.6.
+> **Versioning reconciled 2026-09-27 (release prep).** The next release is **v0.5.0**: `pyproject.toml` bumped 0.2.5 → 0.5.0, `CHANGELOG.md` folds `[0.4.0]` + `[Unreleased]` into `[0.5.0]`. The roadmap's earlier v1.1.0/v1.2.0 rows for Phases 5a/6 are superseded — both shipped before the first release cut and ride in v0.5.0. The `v0.2.6` tag remains a branch-only historical artifact and does not conflict. `v0.5.0` was tagged on 2026-09-28 after hardware verification but never published: its release workflow could not start (an account billing lock), and the re-run on 2026-10-12 failed because the job installed unpinned dev tools and a newer black rejected the tagged code. The release job now installs the locked versions (`uv sync --locked`). Everything in v0.5.0 plus fleet Phases 0–5 and Phase 7 ships as **v0.6.0**, the first release published since v0.2.6. The v0.6.0 release page has no assets: the repository has immutable releases on, and the workflow published before uploading the wheel, sdist and SBOM. The workflow now uploads to a draft and then publishes, and **v0.6.1** (2026-10-14) is the first release with its assets attached.
 
 ## 6. Required downstream docs
 

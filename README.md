@@ -62,7 +62,7 @@ Give operators a fast, safe reading order for understanding what the server does
 
 ## 📋 Version Notice
 
-**Current Stable Release**: 0.6.0 (October 12, 2026) 🎉
+**Current Stable Release**: 0.6.1 (October 14, 2026) 🎉
 
 **Installation:**
 

@@ -7,9 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-14
+
+Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, and carries the Supermemory v5 migration. Images: `ghcr.io/enuno/unifi-mcp-server:0.6.1` (amd64, arm64, arm/v7) and `:0.6.1-fleet` (amd64, arm64).
+
+### Changed
+
+- **Supermemory client moved to the v5 API (breaking for the optional memory integration).** `remember()` calls `client.add(namespace, ...)` and `recall()` calls `client.search(namespace, query=..., limit=...)`, using the v5 hybrid default so a new note is found as a chunk before v5 forms a memory from it. The `container_tag` parameter is renamed to `namespace` with no alias; existing container tag values work unchanged as namespace values. Requires `supermemory>=5.0.0`. Servers that do not use the memory integration are unaffected.
+
 ### Fixed
 
 - **Release workflow: attach assets under immutable releases.** The v0.6.0 run published the GitHub release and then tried to upload the wheel, sdist and SBOM, which an immutable release refuses (422), so v0.6.0 shipped with notes and images but no assets. The workflow now creates the release as a draft, uploads every asset, then publishes it, and fails with a clear error if the tag's release is already published.
+
+### Documentation
+
+- The README opens with the project logo in a centered header.
 
 ## [0.6.0] - 2026-10-12
 

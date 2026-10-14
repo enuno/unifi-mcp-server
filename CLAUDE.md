@@ -6,7 +6,7 @@ This file provides project-specific instructions for AI coding assistants workin
 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
 
-**Current Version**: v0.6.0 (see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
+**Current Version**: v0.6.1 (see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 **Python Version**: 3.10+
 **Framework**: FastMCP
 
@@ -80,7 +80,7 @@ The server supports three UniFi API access modes:
 
 Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are complete. **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
 
-**Phase 4 open items**: none (v0.6.0 released; v0.5.0 was tagged but not published, see `DEVELOPMENT_PLAN.md` §5).
+**Phase 4 open items**: none (v0.6.1 released; v0.5.0 was tagged but not published, see `DEVELOPMENT_PLAN.md` §5).
 
 **Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` and `UNIFI_DRY_RUN` modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, hash-chained wrapper-level audit log, `/metrics`, and the fleet stack (Phases 0–4 of `docs/FLEET_SCALING_PLAN.md`: routing, Postgres registry, pool and read cache, several replicas, workers, `fleet_*` read tools).
 

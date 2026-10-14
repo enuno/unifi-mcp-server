@@ -18,7 +18,7 @@ Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, f
 
 ### Fixed
 
-- **Mobility, InnerSpace and Carrier Fabric tools register in cloud mode.** They are cloud APIs on `api.ui.com`, but were listed with the local-only modules, so `UNIFI_API_TYPE=cloud-v1` and `cloud-ea` never registered them. They now load in every mode (cloud mode goes from 42 to 67 tools), and `UNIFI_PROFILE=mobility`, `innerspace` and `carrier` work in cloud mode.
+- **Mobility, InnerSpace and Carrier Fabric tools register in cloud mode.** They are cloud APIs on `api.ui.com`, but were listed with the local-only modules, so `UNIFI_API_TYPE=cloud-v1` and `cloud-ea` never registered them. They now load in every mode (cloud mode goes from 46 to 71 tools), and `UNIFI_PROFILE=mobility`, `innerspace` and `carrier` work in cloud mode.
 - **Site-to-site VPN tools accept a site UUID.** `site_vpn.py` built `/proxy/network/api/s/{site_id}/...` itself, so the UUID that `list_sites` returns reached the legacy API unchanged and failed. It now sends `/ea/sites/{site_id}/rest/networkconf`, which the client translates to the site name.
 - **`list_protect_device_updates` is defined once.** It was defined in both `protect_devices.py` and `protect_events.py`; only the first registered. `protect_events.py` now imports it, and a new test fails if any tool name is defined in two modules (`list_countries` and `list_radius_profiles` are listed as known duplicates).
 - The ACL rule tools (`list_acl_rules`, `get_acl_rule`, `create_acl_rule`, `update_acl_rule`, `delete_acl_rule`) and the traffic matching list tools work in local mode. They are registered only in local mode, but a guard refused local mode, so every call failed with `NotImplementedError`. The Network integration API serves both resources on the local console at `/proxy/network/integration/v1/` (Network API spec v10.6.106).
@@ -26,7 +26,8 @@ Patch release that publishes the wheel, sdist and SBOM that v0.6.0 is missing, f
 
 ### Documentation
 
-- The README opens with the project logo in a centered header.
+- **Agent skills are published in `skills/`.** Each skill is now a folder with a `SKILL.md` (the layout Claude Code installs from `~/.claude/skills/<name>/`), so `cp -r skills/<name> ~/.claude/skills/` installs it. The five operator skills (`unifi-network`, `unifi-devices`, `unifi-security`, `unifi-system`, `unifi-channel-planning`) move from flat files into folders, and the five developer skills (`unifi-mcp-tool-builder` and the four tool-set skills) are published there too. `skills/` is the source; `.claude/skills/` and `.agents/skills/` hold copies that a test keeps identical. The operator skills no longer say ACL rules and traffic matching lists need a cloud mode (they run in `local` mode), and `docs/SKILLS.md` is rewritten with install and use steps and the current profile tool counts.
+- **README rewritten.** It opens with the project logo, adds an Agent skills section (install and use), and drops the release notes for v0.2.x, the v0.2.0 roadmap checklist, version labels on features, "planned" profiles that already exist, and maintainer publishing steps (moved to `docs/RELEASE_PROCESS.md`). Its examples are fixed: valid `UNIFI_API_TYPE` values, `UNIFI_LOCAL_HOST`, the `cloud-ea` default, and a working FastMCP client example in place of one that used an API that does not exist.
 - `CLAUDE.md` and `AGENTS.md` are corrected against the code, and `.claude/skills/` gains tool-set skills for Network configuration, security, Protect, and cloud and fleet tools, with `tests/unit/test_agent_docs.py` checking the docs' claims.
 
 ## [0.6.0] - 2026-10-12

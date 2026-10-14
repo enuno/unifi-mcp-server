@@ -30,7 +30,7 @@ Fleet tools are built inside functions, not defined at module level, so the "eve
 ## API modes and gating
 
 - `APIType` (`src/config/config.py`) is `local`, `cloud-v1` or `cloud-ea`. The code default is `cloud-ea`.
-- Cloud modes register only `_CLOUD_TOOL_MODULES` (`src/main.py`): `sites`, `site_manager`, `connector`, `integration_api`, `carrier`, `innerspace` and `mobility`. Local mode registers these too. In cloud mode `get_site_statistics` is left out, because its endpoints return 404 on the cloud API. That gives 67 tools.
+- Cloud modes register only `_CLOUD_TOOL_MODULES` (`src/main.py`): `sites`, `site_manager`, `connector`, `integration_api`, `carrier`, `innerspace` and `mobility`. Local mode registers these too. In cloud mode `get_site_statistics` is left out, because its endpoints return 404 on the cloud API. That gives 71 tools, including the 4 fleet tools.
 - Local mode registers both lists, so the cloud tools are available there too.
 - Site Manager tools need `UNIFI_SITE_MANAGER_ENABLED=true`:
   - `site_manager` tools use the `require_site_manager` decorator;

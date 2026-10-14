@@ -14,14 +14,23 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
+#: Developer skills. ``skills/`` is the source of truth; the agent
+#: directories hold copies that must match it.
+DEV_SKILLS = [
+    "unifi-protect-tools",
+    "unifi-network-config-tools",
+    "unifi-security-tools",
+    "unifi-cloud-fleet-tools",
+]
+SKILL_COPY_DIRS = (".claude/skills", ".agents/skills")
+#: Copied like the developer skills, but not citation-checked.
+COPIED_SKILLS = [*DEV_SKILLS, "unifi-mcp-tool-builder"]
+
 DOCS = [
     "CLAUDE.md",
     "AGENTS.md",
     ".claude/skills/zbf-implementation-guide.md",
-    ".claude/skills/unifi-protect-tools/SKILL.md",
-    ".claude/skills/unifi-network-config-tools/SKILL.md",
-    ".claude/skills/unifi-security-tools/SKILL.md",
-    ".claude/skills/unifi-cloud-fleet-tools/SKILL.md",
+    *(f"skills/{name}/SKILL.md" for name in DEV_SKILLS),
 ]
 
 SKILLS = [doc for doc in DOCS if doc.endswith("/SKILL.md")]
@@ -42,7 +51,7 @@ FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 INLINE_CODE = re.compile(r"`([^`\n]+)`")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 REPO_PATH = re.compile(
-    r"^((?:src|tests|docs|scripts|\.claude|\.github)/[\w./-]+?)(?::(\d+)(?:-(\d+))?)?(?:,\d+)*$"
+    r"^((?:src|tests|docs|scripts|skills|\.claude|\.agents|\.github)/[\w./-]+?)(?::(\d+)(?:-(\d+))?)?(?:,\d+)*$"
 )
 SNAKE_NAME = re.compile(r"^_{0,2}[a-z][a-z0-9]*(?:_[a-z0-9]+)+(?:\(\))?$")
 UPPER_NAME = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
@@ -124,3 +133,28 @@ def test_skill_frontmatter_names_its_folder(skill_name: str) -> None:
     fields = dict(line.split(":", 1) for line in frontmatter.group(1).splitlines() if ":" in line)
     assert fields.get("name", "").strip() == skill.parent.name
     assert len(fields.get("description", "").strip()) >= 40
+
+
+@pytest.mark.parametrize("copy_dir", SKILL_COPY_DIRS)
+@pytest.mark.parametrize("name", COPIED_SKILLS)
+def test_skill_copies_match_skills_dir(name: str, copy_dir: str):
+    """Agent-directory copies of a skill are identical to ``skills/<name>/SKILL.md``."""
+    source = ROOT / "skills" / name / "SKILL.md"
+    copy = ROOT / copy_dir / name / "SKILL.md"
+    assert copy.read_text() == source.read_text(), (
+        f"{copy_dir}/{name}/SKILL.md differs from skills/{name}/SKILL.md; "
+        f"edit skills/ and copy it: cp skills/{name}/SKILL.md {copy_dir}/{name}/"
+    )
+
+
+@pytest.mark.parametrize(
+    "skill_dir", sorted(p.name for p in (ROOT / "skills").iterdir() if p.is_dir())
+)
+def test_published_skills_are_installable(skill_dir: str):
+    """Each ``skills/<name>/SKILL.md`` has frontmatter naming the folder and a description."""
+    text = (ROOT / "skills" / skill_dir / "SKILL.md").read_text()
+    match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    assert match, f"skills/{skill_dir}/SKILL.md has no YAML frontmatter"
+    frontmatter = match.group(1)
+    assert re.search(rf"^name:\s*{re.escape(skill_dir)}\s*$", frontmatter, re.M)
+    assert re.search(r"^description:", frontmatter, re.M)

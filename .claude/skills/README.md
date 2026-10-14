@@ -23,7 +23,7 @@ Think of skills as expert consultants that guide you through complex processes, 
 | [unifi-cloud-fleet-tools](unifi-cloud-fleet-tools/SKILL.md) | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, and the fleet stack |
 | [unifi-mcp-tool-builder](unifi-mcp-tool-builder/SKILL.md) | The general workflow for adding any tool |
 
-`tests/unit/test_agent_docs.py` checks that the four tool-set skills cite only paths and names that exist.
+These five are published in the repository's `skills/` directory, which is the source of truth (see `docs/SKILLS.md` for installing them). Edit `skills/<name>/SKILL.md`, then copy it here and to `.agents/skills/`; `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that the four tool-set skills cite only paths and names that exist.
 
 ### Priority 1: Immediate Value (Use Daily)
 

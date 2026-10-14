@@ -9,7 +9,7 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 - **Version**: v0.6.1 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 - **Python**: 3.10+
 - **Framework**: FastMCP, with httpx for HTTP and Pydantic v2 for models
-- **Size**: 343 tools in local mode and 46 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.
+- **Size**: 343 tools in local mode and 71 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.
 
 ## Before Starting Work
 
@@ -78,7 +78,7 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 
 ## Skills
 
-Project skills are in `.claude/skills/`. Load the one that covers your change:
+Project skills are in `.claude/skills/` (Claude Code loads them here). Their source is `skills/<name>/SKILL.md`, which also holds the operator skills for using the server. Load the one that covers your change:
 
 | Skill | Use it when you change |
 |-------|------------------------|
@@ -88,7 +88,7 @@ Project skills are in `.claude/skills/`. Load the one that covers your change:
 | `unifi-cloud-fleet-tools` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, or the fleet stack |
 | `unifi-mcp-tool-builder` | Adding a new tool in any area (the general workflow) |
 
-`tests/unit/test_agent_docs.py` checks that this file, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist. Run it after you edit them.
+To change a skill, edit `skills/<name>/SKILL.md` and copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`. `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that this file, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist. Run it after you edit them.
 
 ## Current Development Focus
 

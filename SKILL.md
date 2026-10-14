@@ -24,8 +24,8 @@ triggers:
 
 # UniFi MCP Server Skill
 
-Interact with your UniFi Network Controller using 86+ MCP tools across six
-capability domains. The server supports three API modes (local gateway,
+Interact with UniFi Network, Protect and the UniFi cloud APIs using 343 MCP
+tools (local mode) across six capability domains. The server supports three API modes (local gateway,
 cloud-v1, cloud-ea) and requires UniFi Network 9.0+ for zone-based firewall
 features.
 
@@ -73,28 +73,33 @@ unifi-cli get-device-details --site default --device-id <id>
 Start the server with only the tools you need:
 
 ```bash
-unifi-mcp-server --profile network    # clients, VLANs, WiFi, DHCP, DNS
-unifi-mcp-server --profile devices    # device management and control
-unifi-mcp-server --profile security   # firewall, VPN, ACLs, content filtering
-unifi-mcp-server --profile system     # backups, QoS, traffic flows, sites
+UNIFI_PROFILE=network unifi-mcp-server    # clients, VLANs, WiFi, DHCP, DNS
+UNIFI_PROFILE=devices unifi-mcp-server    # device management and control
+UNIFI_PROFILE=security unifi-mcp-server   # firewall, VPN, ACLs, content filtering
+UNIFI_PROFILE=system unifi-mcp-server     # backups, QoS, traffic flows, sites
+UNIFI_PROFILE=protect unifi-mcp-server    # cameras, NVRs, sensors, alarms
 ```
 
 ---
 
 ## Capability Domains
 
-### Network Operations (`skills/unifi-network.md`)
+### Network Operations (`skills/unifi-network/`)
+
 Clients · VLANs · WiFi (SSIDs) · DHCP reservations · DNS · WAN · Vouchers
 
-### Device Management (`skills/unifi-devices.md`)
+### Device Management (`skills/unifi-devices/`)
+
 Inventory · Adoption · Restarts/upgrades · Radio config · Port profiles ·
 Switching/stacks · Topology · Diagnostics
 
-### Security (`skills/unifi-security.md`)
+### Security (`skills/unifi-security/`)
+
 Firewall rules · Firewall groups · Zone-based firewall (ZBF) · ACLs ·
 Port forwarding · VPN · Site-to-site VPN · Content filtering
 
-### System & Monitoring (`skills/unifi-system.md`)
+### System & Monitoring (`skills/unifi-system/`)
+
 Sites · Multi-site aggregation · Backups · QoS / traffic routes ·
 Traffic flow analytics · DPI · RADIUS · Guest portal · Hotspot packages
 
@@ -105,7 +110,7 @@ Traffic flow analytics · DPI · RADIUS · Guest portal · Hotspot packages
 | Variable | Description | Default |
 |---|---|---|
 | `UNIFI_API_KEY` | API key from UniFi controller or unifi.ui.com | required |
-| `UNIFI_API_TYPE` | `local`, `cloud-v1`, or `cloud-ea` | `cloud-v1` |
+| `UNIFI_API_TYPE` | `local`, `cloud-v1`, or `cloud-ea` | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` | Gateway IP (local mode only) | — |
 | `UNIFI_SITE` | Default site ID | `default` |
 | `UNIFI_VERIFY_SSL` | Verify TLS certificates | `true` |
@@ -117,10 +122,12 @@ Traffic flow analytics · DPI · RADIUS · Guest portal · Hotspot packages
 | Zone-based firewall | ✅ | ❌ | ❌ |
 | Traffic flows | ✅ | ❌ | ❌ |
 | Firewall rules/zones | ✅ | ❌ | ❌ |
-| ACLs | ❌ | ✅ | ✅ |
-| Traffic matching lists | ❌ | ✅ | ✅ |
-| Site aggregation | ✅ | ✅ | ✅ |
-| Device management | ✅ | ✅ | ✅ |
+| ACLs | ✅ | ❌ | ❌ |
+| Traffic matching lists | ✅ | ❌ | ❌ |
+| Device and client management | ✅ | ❌ | ❌ |
+| Protect | ✅ | ❌ | ❌ |
+| Sites and aggregate statistics | ✅ | ✅ | ✅ |
+| Site Manager, Mobility, InnerSpace, Carrier (needs `UNIFI_SITE_MANAGER_ENABLED=true`) | ✅ | ✅ | ✅ |
 
 ## Usage Examples
 

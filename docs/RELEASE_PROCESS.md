@@ -49,12 +49,42 @@ twine upload dist/*
 
 ```bash
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
-docker pull ghcr.io/enuno/unifi-mcp-server:v0.2.5
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1        # semver tags have no leading v
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1-fleet  # with the fleet extras (amd64, arm64)
 ```
 
-#### MCP registry or related manifests
+#### npm (metadata wrapper)
 
-Update any package metadata or registry manifests that ship with the release payload.
+```bash
+# Ensure package.json is up to date
+cat package.json
+
+# Login to npm (if not already)
+npm login
+
+# Publish package
+npm publish --access public
+
+# Verify publication
+npm view unifi-mcp-server
+```
+
+#### MCP Registry
+
+```bash
+# Install mcp-publisher
+brew install mcp-publisher
+# Or: curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher && sudo mv mcp-publisher /usr/local/bin/
+
+# Authenticate with GitHub (for io.github.enuno namespace)
+mcp-publisher login github
+
+# Publish to registry (requires npm package published first)
+mcp-publisher publish
+
+# Verify
+curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.enuno/unifi-mcp-server"
+```
 
 ---
 

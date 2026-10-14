@@ -84,7 +84,7 @@ Requires cloud API or Site Manager access.
 | `export_traffic_flows` | Export flows to JSON/CSV |
 | `stream_traffic_flows` | Stream real-time flow events |
 
-## Traffic Matching Lists (cloud-v1/cloud-ea only)
+## Traffic Matching Lists (local API)
 
 | Tool | Description |
 |---|---|

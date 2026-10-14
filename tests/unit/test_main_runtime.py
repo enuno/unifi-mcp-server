@@ -282,6 +282,51 @@ class TestImportTimeBranches:
         assert "not implemented" in result["error"]
 
 
+class TestToolModuleSets:
+    # Tool names defined in two modules before this guard existed. The module
+    # registered first wins and the other copy is never reachable. Remove an
+    # entry once its duplicate is gone; never add one.
+    _KNOWN_DUPLICATES = {"list_countries", "list_radius_profiles"}
+
+    _CLOUD_API_TOOLS = (
+        "list_mobility_workspaces",
+        "list_innerspace_access_points",
+        "list_carrier_service_plans",
+    )
+
+    @pytest.mark.parametrize("api_type", ["cloud-v1", "cloud-ea", "local"])
+    def test_cloud_api_modules_register_in_every_mode(self, api_type: str) -> None:
+        from src.tool_registry import _get_registered_tool_names
+
+        mod = _reload_main(UNIFI_API_TYPE=api_type)
+        names = _get_registered_tool_names(mod.mcp)
+        for tool in self._CLOUD_API_TOOLS:
+            assert tool in names, f"{tool} not registered with UNIFI_API_TYPE={api_type}"
+
+    def test_cloud_api_profiles_work_in_cloud_mode(self) -> None:
+        from src.tool_registry import _get_registered_tool_names
+
+        mod = _reload_main(UNIFI_API_TYPE="cloud-v1", UNIFI_PROFILE="mobility")
+        assert mod._TOOL_MODULES == [mod.mobility_tools]
+        assert "list_mobility_workspaces" in _get_registered_tool_names(mod.mcp)
+
+    def test_no_tool_name_is_defined_in_two_modules(self, main_mod: ModuleType) -> None:
+        import collections
+        import inspect
+
+        owners: dict[str, list[str]] = collections.defaultdict(list)
+        modules = dict.fromkeys(main_mod._CLOUD_TOOL_MODULES + main_mod._LOCAL_TOOL_MODULES)
+        for module in modules:
+            for name, obj in inspect.getmembers(module, inspect.iscoroutinefunction):
+                if not name.startswith("_") and obj.__module__ == module.__name__:
+                    owners[name].append(module.__name__)
+        duplicates = {name for name, mods in owners.items() if len(mods) > 1}
+        assert duplicates - self._KNOWN_DUPLICATES == set(), {
+            name: owners[name] for name in duplicates - self._KNOWN_DUPLICATES
+        }
+        assert "list_protect_device_updates" not in duplicates
+
+
 def teardown_module() -> None:
     # Leave a default (local, stdio) src.main behind for later test modules.
     _reload_main()

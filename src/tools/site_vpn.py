@@ -15,7 +15,7 @@ async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
-        response = await client.get(f"/proxy/network/api/s/{site_id}/rest/networkconf")
+        response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
         networks = response if isinstance(response, list) else response.get("data", [])
         vpns = [n for n in networks if n.get("purpose") == "site-vpn"]
         logger.info(sanitize_log_message(f"Retrieved {len(vpns)} site-to-site VPNs"))
@@ -29,7 +29,7 @@ async def get_site_to_site_vpn(site_id: str, vpn_id: str, settings: Settings) ->
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
-        response = await client.get(f"/proxy/network/api/s/{site_id}/rest/networkconf")
+        response = await client.get(f"/ea/sites/{site_id}/rest/networkconf")
         networks = response if isinstance(response, list) else response.get("data", [])
 
         for n in networks:
@@ -61,7 +61,7 @@ async def update_site_to_site_vpn(
         await client.authenticate()
 
         # Get current config
-        response = await client.get(f"/proxy/network/api/s/{site_id}/rest/networkconf/{vpn_id}")
+        response = await client.get(f"/ea/sites/{site_id}/rest/networkconf/{vpn_id}")
         current = response if isinstance(response, dict) and "_id" in response else None
         if not current:
             resp_list = response if isinstance(response, list) else response.get("data", [])
@@ -90,6 +90,6 @@ async def update_site_to_site_vpn(
 
         # Merge and update
         payload = {**current, **updates}
-        await client.put(f"/proxy/network/api/s/{site_id}/rest/networkconf/{vpn_id}", payload)
+        await client.put(f"/ea/sites/{site_id}/rest/networkconf/{vpn_id}", payload)
         logger.info(sanitize_log_message(f"Updated VPN {vpn_id}"))
         return {"success": True, "vpn_id": vpn_id, "updates": updates}

@@ -108,7 +108,7 @@ Rules for them:
 
 ## Known defects (not fixed)
 
-- `src/tools/site_vpn.py` hardcodes `/proxy/network/api/s/{site_id}`, so a site UUID is passed to the legacy API unchanged. A site name works.
+- `src/tools/site_vpn.py` sends `/ea/sites/{site_id}/rest/networkconf`, which the client translates to the legacy path with the site name, so a site UUID and a site name both work.
 - The confirmation checks are not the same everywhere. `site_vpn` returns `{"error": ...}` where other modules raise, and the DHCP and DNS modules raise `ValueError` where others raise `ValidationError`.
 - Dry-run replies differ between modules: `{"dry_run": True, "would_create": ...}` in `network_config` and `{"status": "dry_run", ...}` in `dhcp_reservations`.
 - `qos.py` maps site UUIDs to names by hand through `client._site_uuid_to_name`, which the client now does for v2 paths anyway.

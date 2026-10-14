@@ -81,8 +81,8 @@ MUTATING_TOOLS_WITHOUT_GATE = frozenset(
 #: so a newly added delete tool cannot land in a lower tier by omission.
 _DESTRUCTIVE_PREFIXES = ("delete_", "remove_", "bulk_delete_")
 
-#: Mutating tools that delete, restore, re-image, cut service or lock out, and
-#: whose names do not carry a destructive prefix.
+#: Mutating tools that delete, restore, re-image, cut service, lock out or
+#: change firewall policy, and whose names do not carry a destructive prefix.
 DESTRUCTIVE_TOOLS = frozenset(
     {
         # Raw API passthrough: arbitrary requests to the controller.
@@ -113,6 +113,15 @@ DESTRUCTIVE_TOOLS = frozenset(
         # Physical security posture.
         "disable_protect_alarm",
         "set_current_protect_arm_profile",
+        # Firewall policy: these decide which traffic is allowed, so a bad
+        # change can open the network or lock the operator out. Admin only.
+        "assign_network_to_zone",
+        "create_firewall_policy",
+        "create_firewall_rule",
+        "unassign_network_from_zone",
+        "update_firewall_policy",
+        "update_firewall_rule",
+        "update_zbf_policy",
     }
 )
 

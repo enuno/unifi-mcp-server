@@ -6,9 +6,14 @@ from typing import Any
 
 from ..api import ProtectClient
 from ..config import Settings
-from ..models import ProtectAlarmWebhookResult, ProtectDeviceUpdateMessage, ProtectEventMessage
+from ..models import ProtectAlarmWebhookResult, ProtectEventMessage
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
 from ..utils.validators import coerce_bool, validate_confirmation
+
+# Defined once in protect_devices, which registers it as an MCP tool. Importing it
+# here keeps the compatibility wrappers below working; register_module_tools skips
+# imported functions, so the tool is not registered twice.
+from .protect_devices import list_protect_device_updates
 
 
 def _extract_collection(response: Any) -> list[dict[str, Any]]:
@@ -28,37 +33,6 @@ def _extract_item(response: Any) -> dict[str, Any]:
             return data
         return response
     return {}
-
-
-async def list_protect_device_updates(
-    settings: Settings,
-    limit: int | None = None,
-    offset: int | None = None,
-) -> dict[str, Any]:
-    """Get Protect device update messages."""
-    logger = get_logger(__name__, settings.log_level)
-    final_limit, final_offset = validate_limit_offset(limit, offset)
-
-    async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.get(settings.get_protect_integration_path("subscribe/devices"))
-
-    updates_data = _extract_collection(response)
-    paginated = updates_data[final_offset : final_offset + final_limit]
-    updates = [
-        ProtectDeviceUpdateMessage.model_validate(item).model_dump(by_alias=True)
-        for item in paginated
-    ]
-    total_count = len(updates_data)
-    logger.info(sanitize_log_message(f"Retrieved {len(updates)} Protect device update messages"))
-
-    return {
-        "offset": final_offset,
-        "limit": final_limit,
-        "count": len(updates),
-        "totalCount": total_count,
-        "data": updates,
-    }
 
 
 async def get_protect_subscribe_devices(

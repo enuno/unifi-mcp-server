@@ -118,3 +118,31 @@ class TestUpdateSiteToSiteVpn:
         with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
             with pytest.raises(ResourceNotFoundError):
                 await update_site_to_site_vpn("default", "net-1", mock_settings, confirm=True)
+
+
+class TestSiteIdTranslation:
+    """site_vpn sends /ea/sites/{site_id}/... so the client maps a site UUID to its name."""
+
+    SITE_UUID = "88f7af54-98f8-306a-a1c7-c9349722b1f6"
+
+    async def test_list_uses_translatable_path(self, mock_settings):
+        mock_client = create_mock_client([make_vpn()])
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
+            await list_site_to_site_vpns(self.SITE_UUID, mock_settings)
+        mock_client.get.assert_awaited_once_with(f"/ea/sites/{self.SITE_UUID}/rest/networkconf")
+
+    async def test_get_uses_translatable_path(self, mock_settings):
+        mock_client = create_mock_client([make_vpn()])
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
+            await get_site_to_site_vpn(self.SITE_UUID, "vpn-1", mock_settings)
+        mock_client.get.assert_awaited_once_with(f"/ea/sites/{self.SITE_UUID}/rest/networkconf")
+
+    async def test_update_uses_translatable_paths(self, mock_settings):
+        mock_client = create_mock_client(make_vpn())
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
+            await update_site_to_site_vpn(
+                self.SITE_UUID, "vpn-1", mock_settings, name="New Name", confirm=True
+            )
+        path = f"/ea/sites/{self.SITE_UUID}/rest/networkconf/vpn-1"
+        mock_client.get.assert_awaited_once_with(path)
+        assert mock_client.put.await_args.args[0] == path

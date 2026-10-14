@@ -71,7 +71,8 @@ The integration API needs a site UUID; get it with `await client.resolve_site_id
 ## Risk tiers
 
 - `tool_tier()` (`src/tool_registry.py`) makes a tool destructive when its name starts with `delete_`, `remove_` or `bulk_delete_`, or when it is in `DESTRUCTIVE_TOOLS`.
-- Everything else that mutates is `write` tier, which the operator role can call. That includes `create_firewall_policy`, `update_firewall_policy` and `unassign_network_from_zone`.
+- Tools that change firewall policy are in `DESTRUCTIVE_TOOLS`, so only the admin role can call them: `create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone` and `unassign_network_from_zone` (`test_firewall_policy_changes_need_admin`).
+- Everything else that mutates is `write` tier, which the operator role can call. That includes ACL rules, port forwards, firewall groups and zones, traffic matching lists and the content filter.
 - When a new tool can cut off traffic, decide with the owner whether it belongs in `DESTRUCTIVE_TOOLS`.
 - A tool with a risky word in its name (`block`, `disable` and others) must be in `DESTRUCTIVE_TOOLS` or in `RISKY_NAME_EXEMPTIONS` (`tests/unit/fleet/test_tiers.py`).
 - Regenerate the snapshot after any tool change: `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py`.

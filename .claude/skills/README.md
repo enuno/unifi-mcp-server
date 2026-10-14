@@ -13,6 +13,18 @@ Think of skills as expert consultants that guide you through complex processes, 
 
 ## Available Skills
 
+### Tool-Set Skills (load before you change a tool set)
+
+| Skill | Covers |
+|-------|--------|
+| [unifi-protect-tools](unifi-protect-tools/SKILL.md) | The 15 `protect_*` modules: Protect client and paths, v7 models, write pattern, tests, known API gaps |
+| [unifi-network-config-tools](unifi-network-config-tools/SKILL.md) | Networks, WiFi, WAN, DHCP, DNS, QoS, port profiles, switching, VPN: URL spaces, read-modify-write updates, cache |
+| [unifi-security-tools](unifi-security-tools/SKILL.md) | Firewall rules and policies, zones, groups, ACLs, traffic matching lists, content filtering, port forwarding, RADIUS |
+| [unifi-cloud-fleet-tools](unifi-cloud-fleet-tools/SKILL.md) | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, and the fleet stack |
+| [unifi-mcp-tool-builder](unifi-mcp-tool-builder/SKILL.md) | The general workflow for adding any tool |
+
+`tests/unit/test_agent_docs.py` checks that the four tool-set skills cite only paths and names that exist.
+
 ### Priority 1: Immediate Value (Use Daily)
 
 #### 1. test-strategy
@@ -57,22 +69,14 @@ I want to create a tool to delete a QoS profile. Can you review my design?
 
 #### 3. zbf-implementation-guide
 
-**When to use:** Working on Zone-Based Firewall features (v0.2.0 P0)
+**When to use:** Working on Zone-Based Firewall (ZBF) features
 
-Comprehensive guide for implementing Zone-Based Firewall support, including architecture, data models, migration strategies, and best practices for the critical v0.2.0 feature.
-
-**Key features:**
-
-- ZBF architecture guidance
-- Data model design patterns
-- API endpoint verification
-- Migration from traditional firewall
-- Zone template systems
+Explains which ZBF APIs exist (v2 policies and zones, integration zones), the two zone ID spaces, what the server implements, and what the UniFi API does not offer. For the coding rules, use `unifi-security-tools`.
 
 **Example usage:**
 
 ```
-I need to complete the ZBF Phase 1 implementation
+Which ZBF endpoints can I use to add a zone policy tool?
 ```
 
 ### Priority 2: Near-Term Value (Use Weekly)
@@ -187,7 +191,7 @@ Help me plan the QoS and Traffic Management implementation
 |-------|---------|----------|---------------|
 | test-strategy | Improve test coverage | HIGH | Daily |
 | tool-design-reviewer | Review tool designs | HIGH | Daily |
-| zbf-implementation-guide | ZBF feature guidance | HIGH | Weekly (v0.2.0) |
+| zbf-implementation-guide | ZBF API facts and gaps | MEDIUM | Per-feature |
 | unifi-api-explorer | API research & testing | MEDIUM-HIGH | Weekly |
 | refactor-assistant | Code quality improvement | MEDIUM | Weekly |
 | api-doc-generator | Documentation automation | MEDIUM | Monthly |

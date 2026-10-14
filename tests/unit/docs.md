@@ -19,7 +19,7 @@ Path: @/tests/unit
 - **`test_main_agnost_import.py`**: Regression tests for issue #42. Verifies that `src.main` can be imported (i.e., the server starts) regardless of the state of the `agnost` package — whether it is missing, has a broken API, or has removed exports. Tests use `_reload_main()` which purges `src.main` from `sys.modules` and reimports it with controlled env vars and a patched `sys.modules["agnost"]`.
 - **`test_security.py`**: Tests for PII handling, credential redaction, and input validation behaviors across the server.
 - **`test_cache.py`**: Tests for the optional Redis caching layer in `@/src/cache.py`.
-- **Tool subdirectory** (`@/tests/unit/tools/`): One test file per tool module, covering CRUD surface and edge cases for every `@mcp.tool()` registered in `main.py`.
+- **Tool subdirectory** (`@/tests/unit/tools/`): One test file per tool module, covering CRUD surface and edge cases for every tool function registered from `main.py`.
 
 ### Things to Know
 

@@ -3,7 +3,7 @@
 from typing import Any
 
 from ..api.client import UniFiClient
-from ..config import APIType, Settings
+from ..config import Settings
 from ..models import ACLRule
 from ..utils import (
     audit_action,
@@ -18,15 +18,6 @@ logger = get_logger(__name__)
 # The UniFi integration API accepts only these values on ACL rules.
 _VALID_ACTIONS = ("ALLOW", "BLOCK")
 _VALID_TYPES = ("IPV4", "MAC")
-
-
-def _ensure_cloud_api(settings: Settings) -> None:
-    """Raise if the current API type is local — ACL rules are integration-only."""
-    if settings.api_type == APIType.LOCAL:
-        raise NotImplementedError(
-            "ACL rules are only available via the UniFi integration API (cloud). "
-            "Use list_firewall_rules or list_firewall_policies for local gateway access."
-        )
 
 
 def _normalise_action(action: str) -> str:
@@ -83,7 +74,6 @@ async def list_acl_rules(
         List of ACL rules
     """
     site_id = validate_site_id(site_id)
-    _ensure_cloud_api(settings)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Listing ACL rules for site {site_id}"))
 
@@ -120,7 +110,6 @@ async def get_acl_rule(site_id: str, acl_rule_id: str, settings: Settings) -> di
         ACL rule details
     """
     site_id = validate_site_id(site_id)
-    _ensure_cloud_api(settings)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Getting ACL rule {acl_rule_id} for site {site_id}"))
 
@@ -194,7 +183,6 @@ async def create_acl_rule(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "create ACL rule", dry_run)
 
-    _ensure_cloud_api(settings)
     normalised_action = _normalise_action(action)
     normalised_type = _normalise_type(type)
 
@@ -310,7 +298,6 @@ async def update_acl_rule(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "update ACL rule", dry_run)
 
-    _ensure_cloud_api(settings)
     normalised_action = _normalise_action(action) if action is not None else None
     normalised_type = _normalise_type(type) if type is not None else None
 
@@ -401,7 +388,6 @@ async def delete_acl_rule(
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "delete ACL rule", dry_run)
 
-    _ensure_cloud_api(settings)
     async with UniFiClient(settings) as client:
         logger.info(sanitize_log_message(f"Deleting ACL rule {acl_rule_id} for site {site_id}"))
 

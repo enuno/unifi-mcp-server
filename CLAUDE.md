@@ -1,121 +1,114 @@
 # UniFi MCP Server - Claude Instructions
 
-This file provides project-specific instructions for AI coding assistants working on the UniFi MCP Server.
+Project-specific instructions for AI coding assistants working on the UniFi MCP Server. `AGENTS.md` has the full rules for all agents; this file is the short version plus what Claude needs to start.
 
 ## Project Overview
 
-The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network Controller API, enabling AI agents and applications to interact with UniFi network infrastructure in a standardized way.
+The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network, Protect and Site Manager APIs as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface.
 
-**Current Version**: v0.6.0 (see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
-**Python Version**: 3.10+
-**Framework**: FastMCP
+- **Version**: v0.6.0 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
+- **Python**: 3.10+
+- **Framework**: FastMCP, with httpx for HTTP and Pydantic v2 for models
+- **Size**: 343 tools in local mode and 46 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.
 
-## Quick Start for AI Assistants
+## Before Starting Work
 
-### Before Starting Work
+1. Read the documentation that applies to the task:
+   - `README.md` - features and configuration
+   - `AGENTS.md` - rules for all AI agents
+   - `API.md` - reference for every MCP tool
+   - `DEVELOPMENT_PLAN.md` and `TODO.md` - roadmap and live status
+   - `docs/UNIFI_API.md` - UniFi API notes, including endpoints that do not exist on some firmware
+2. Load the skill for the tool set you will change (see [Skills](#skills)).
+3. Work on a feature branch. Never commit to `main`.
 
-1. **Read Key Documentation**:
-   - `README.md` - Project overview and features
-   - `AGENTS.md` - Universal AI agent guidelines
-   - `DEVELOPMENT_PLAN.md` - Roadmap and priorities
-   - `TODO.md` - Current tasks and phase breakdown
-   - `API.md` - Complete MCP tool documentation
+## Architecture
 
-2. **Understand the Architecture**:
-   - `src/main.py` - MCP server entry point
-   - `src/api/` - UniFi API client
-   - `src/models/` - Pydantic data models
-   - `src/tools/` - MCP tool implementations
-   - `tests/unit/` - Unit tests (3,152 tests passing, 93% line coverage)
+| Path | What it holds |
+|------|---------------|
+| `src/main.py` | Server entry point. Builds the tool module lists per API mode and profile, and registers them |
+| `src/tool_registry.py` | Wraps every tool: routing, risk tier, read-only and dry-run modes, audit, cache |
+| `src/config/config.py` | `Settings` (all environment variables) and the URL path helpers |
+| `src/api/` | `UniFiClient` (Network), `ProtectClient`, `SiteManagerClient`, the connection pool and the rate limiter |
+| `src/tools/` | One module per feature area. Every public async function is a tool |
+| `src/models/` | Pydantic models |
+| `src/resources/` | MCP resources |
+| `src/fleet/`, `src/worker/` | Multi-controller fleet: registry, router, tokens, `fleet_*` tools, background workers |
+| `src/a2a/` | A2A agent card and endpoints |
+| `src/utils/` | Validators, exceptions, the hash-chained audit log, metrics |
+| `tests/unit/` | Unit tests (`tests/unit/tools/` for tool modules) |
 
-### Development Workflow
+## How Tools Work
 
-1. **Feature Development**:
-   - Create feature branch: `git checkout -b feature/your-feature`
-   - Follow TDD: Write tests first, then implementation
-   - Maintain 80% minimum test coverage for new code
-   - Use Pydantic models for all data structures
-   - Add comprehensive docstrings (Google style)
+- **Registration.** There is no `@mcp.tool()` decorator. `register_module_tools()` in `src/tool_registry.py` registers every public `async def` in a module that `src/main.py` lists. A leading `_` keeps a function private. The wrapper hides the `settings` argument and adds a keyword-only `controller` argument.
+- **Modes and profiles.** `_CLOUD_TOOL_MODULES` and `_LOCAL_TOOL_MODULES` in `src/main.py` decide which modules load for `UNIFI_API_TYPE`, and `UNIFI_PROFILE` narrows the set. A new module must be added to the right list and to the matching profile.
+- **Write tools.** A tool counts as mutating when its signature has `confirm` or `dry_run`. Use `confirm: bool | str = False, dry_run: bool | str = False`, and call `validate_confirmation(confirm, "<operation>", dry_run)` (`src/utils/validators.py`) before any request. On a dry run, return the planned payload without calling the API.
+- **Risk tiers.** `tool_tier()` gives each tool `read`, `write` or `destructive`. Names that start with `delete_`, `remove_` or `bulk_delete_`, and names in `DESTRUCTIVE_TOOLS`, are destructive. Roles map to tiers in `src/access.py`.
+- **When you add or rename a tool**, regenerate the tier snapshot: `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py`. A mutating tool whose name has a risky word ("disable", "block", "reset" and others) must be in `DESTRUCTIVE_TOOLS` or in `RISKY_NAME_EXEMPTIONS` with a reason.
+- **Audit.** The registry wrapper audits every mutating call. Do not add a second audit path to a new tool.
 
-2. **Code Quality**:
-   - Run tests: `pytest tests/unit/`
-   - Format: `black src/ tests/` and `isort src/ tests/`
-   - Lint: `ruff check src/ tests/ --fix`
-   - Type check: `mypy src/`
-   - Pre-commit: `pre-commit run --all-files`
-   - Or via `make`: `make lint`, `make test`, `make typecheck`, and `make ci` for every blocking CI check (`make help` lists all targets)
+## Commands
 
-3. **Safety Mechanisms**:
-   - All mutating operations require `confirm=True`
-   - Implement dry-run mode for preview
-   - Add audit logging for operations
-   - Validate all user inputs
-   - Never commit secrets or credentials
+`make help` lists every target. The main ones:
 
-### Technology Stack
+| Command | Does |
+|---------|------|
+| `make test` | Unit tests |
+| `make test-cov` | Tests with the CI coverage gate |
+| `make typecheck` | mypy over `src/` |
+| `make lint` | black, isort and ruff checks |
+| `make ci` | Every blocking CI check |
+| `make run` | Start the server from `.env` |
 
-- **Language**: Python 3.10+
-- **Framework**: FastMCP (MCP server framework)
-- **API Client**: httpx (async HTTP)
-- **Data Validation**: Pydantic v2
-- **Testing**: pytest with asyncio support
-- **Caching**: Redis (optional)
-- **Monitoring**: agnost.ai (optional)
+**Known local problems** (not caused by your change; report them, do not fix them in a feature branch):
 
-### API Modes
+- The pre-commit mypy hook fails with "Duplicate module named src" when you pass file names. It passes `src` in `args` and pre-commit also adds the file names. Use `make typecheck`.
+- `.git/hooks/pre-commit` may not be installed (`make hooks` installs it), so `git commit` can run no hooks. Run `pre-commit run --files <changed files>` yourself.
+- markdownlint reports MD024 (duplicate heading) on `CHANGELOG.md`. That error is already on `main`.
 
-The server supports three UniFi API access modes:
+## API Modes
 
-1. **Local Gateway API** (Recommended): Full feature support
-   - `UNIFI_API_TYPE=local`
-   - `UNIFI_LOCAL_HOST=192.168.2.1`
+| `UNIFI_API_TYPE` | Tools | Notes |
+|------------------|-------|-------|
+| `local` (recommended) | 343 | Gateway at `UNIFI_LOCAL_HOST`. Network, Protect, and the Phase 6 cloud APIs |
+| `cloud-v1` | 46 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy |
+| `cloud-ea` (the code default) | 46 | Early Access cloud API, same limits |
 
-2. **Cloud V1 API**: Stable, aggregate statistics only
-   - `UNIFI_API_TYPE=cloud-v1`
+`UNIFI_READ_ONLY` removes every write tool, and `UNIFI_DRY_RUN` forces `dry_run` on. Some features need UniFi Network 9.0+, and some documented endpoints do not exist on all firmware. Check `docs/UNIFI_API.md` before you rely on one.
 
-3. **Cloud EA API**: Early Access, aggregate statistics only
-   - `UNIFI_API_TYPE=cloud-ea`
+## Skills
 
-### Current Development Focus
+Project skills are in `.claude/skills/`. Load the one that covers your change:
 
-Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are complete. **Phase 4** (testing, polish, minor gaps, developer experience) is active, and Phase 5 is partially started. See `TODO.md` and `DEVELOPMENT_PLAN.md` for the live status of each item.
+| Skill | Use it when you change |
+|-------|------------------------|
+| `unifi-protect-tools` | Any `src/tools/protect_*.py` module |
+| `unifi-network-config-tools` | Networks, WiFi, WAN, DHCP, DNS, QoS, port profiles, switching, VPN |
+| `unifi-security-tools` | Firewall rules and policies, zones, groups, ACLs, content filtering, port forwarding, RADIUS |
+| `unifi-cloud-fleet-tools` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, or the fleet stack |
+| `unifi-mcp-tool-builder` | Adding a new tool in any area (the general workflow) |
 
-**Phase 4 open items**: none (v0.6.0 released; v0.5.0 was tagged but not published, see `DEVELOPMENT_PLAN.md` §5).
+`tests/unit/test_agent_docs.py` checks that this file, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist. Run it after you edit them.
 
-**Phase 5 already in place**: A2A agent card and endpoints (behind bearer auth), `UNIFI_PROFILE` tool profiles, `UNIFI_READ_ONLY` and `UNIFI_DRY_RUN` modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, hash-chained wrapper-level audit log, `/metrics`, and the fleet stack (Phases 0–4 of `docs/FLEET_SCALING_PLAN.md`: routing, Postgres registry, pool and read cache, several replicas, workers, `fleet_*` read tools).
+## Current Development Focus
 
-**Total**: 343 MCP tools registered in local mode across 60 tool modules, 3,152 unit tests passing
-
-### Important Constraints
-
-1. **UniFi Network 9.0+ Required**: Some features require Network 9.0+
-2. **Local API Recommended**: Cloud APIs have limited functionality
-3. **Endpoint Verification**: Some documented API endpoints may not exist in all versions
-4. **Testing**: Integration tests require real UniFi hardware
-
-### Getting Help
-
-- **Issues**: [GitHub Issues](https://github.com/enuno/unifi-mcp-server/issues)
-- **Documentation**: See `API.md` for complete tool reference
-- **Examples**: Check `docs/examples/` for AI assistant prompts
+Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are complete. Phase 4 has no open items (v0.6.0 is released; v0.5.0 was tagged but not published, see `DEVELOPMENT_PLAN.md` §5). Phase 5 is partly in place: the A2A agent card, `UNIFI_PROFILE`, read-only and dry-run modes, bearer auth on network transports, roles over risk tiers with server-issued tokens, the hash-chained audit log, `/metrics`, and the fleet stack (Phases 0–4 of `docs/FLEET_SCALING_PLAN.md`). See `TODO.md` for the live status.
 
 ## Key Principles
 
-1. **Safety First**: Never perform destructive operations without confirmation
-2. **Quality Over Speed**: Maintain high test coverage and code quality
-3. **Clarity**: Write self-documenting code with clear docstrings
-4. **Consistency**: Follow existing patterns and conventions
-5. **Security**: Never commit credentials, validate all inputs
+1. **Safety first**: no write without `confirm=True`, and every write supports `dry_run`.
+2. **Test first**: write the failing test, then the code. Integration tests need real UniFi hardware, so say when a change is verified only against mocks.
+3. **Consistency**: copy the pattern of the nearest existing tool.
+4. **Security**: never commit credentials, and never log an API key.
 
 ## Additional Resources
 
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-- [SECURITY.md](SECURITY.md) - Security policy and best practices
-- [AGENTS.md](AGENTS.md) - Detailed AI agent guidelines
-- [TESTING_PLAN.md](docs/archive/TESTING_PLAN.md) - Testing strategy
-- [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) - Complete roadmap
+- [AGENTS.md](AGENTS.md) - rules for all AI agents
+- [CONTRIBUTING.md](CONTRIBUTING.md) - contribution guidelines
+- [SECURITY.md](SECURITY.md) - security policy
+- [docs/archive/TESTING_PLAN.md](docs/archive/TESTING_PLAN.md) - testing strategy (archived)
+- [Issues](https://github.com/enuno/unifi-mcp-server/issues)
 
 ---
 
-**Last Updated**: 2026-10-10
-**Maintained By**: Development Team
+**Last Updated**: 2026-10-13

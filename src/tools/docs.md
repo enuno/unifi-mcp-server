@@ -5,20 +5,20 @@ Path: @/src/tools
 ### Overview
 
 - Contains all MCP tool implementations for the UniFi MCP Server, covering every area of UniFi network management from RADIUS to firewall to traffic monitoring.
-- Each module corresponds to a functional domain (e.g., `radius.py`, `firewall.py`, `wifi.py`) and exports async functions that are registered as `@mcp.tool()` wrappers in `@/src/main.py`.
+- Each module corresponds to a functional domain (e.g., `radius.py`, `firewall.py`, `wifi.py`) and exports async functions. Every public `async def` in a module that `@/src/main.py` lists is registered as a tool by `register_module_tools()` in `@/src/tool_registry.py`; there is no decorator, and a leading `_` keeps a helper private.
 - Tools follow a consistent CRUD pattern: list/get/create/update/delete, with all mutating operations requiring `confirm=True` and supporting `dry_run` mode.
 
 ### How it fits into the larger codebase
 
-- `@/src/main.py` is the sole consumer: it imports each tool module as an alias (e.g., `radius as radius_tools`) and wraps each function with `@mcp.tool()` to expose it to MCP clients.
+- `@/src/main.py` is the sole consumer: it imports each tool module as an alias (e.g., `radius as radius_tools`), puts it in `_LOCAL_TOOL_MODULES` or `_CLOUD_TOOL_MODULES`, and passes the chosen modules to `register_module_tools()`.
 - Tools call into `@/src/api/client.py` (`UniFiClient`) for all HTTP communication with the UniFi controller. Each function opens an `async with UniFiClient(settings) as client:` context for its request(s).
-- Pydantic models from `@/src/models/` validate and serialize API responses before they are returned; raw dicts from the API are never returned directly.
+- Pydantic models from `@/src/models/` validate and serialize most API responses before they are returned. Some modules (for example `network_config.py` and `site_manager.py`) return raw controller records.
 - `@/src/utils/` provides three shared utilities used throughout: `audit_action` (mutation logging), `get_logger`, and `validate_confirmation` (enforces `confirm=True` guard).
 - `@/src/config/` (`Settings`) is threaded through every tool function as a parameter so the tool layer is stateless.
 
 ### Core Implementation
 
-- **Tool registration flow**: `src/tools/<module>.py` defines async functions → `src/main.py` wraps them in `@mcp.tool()` closures that capture the singleton `settings` object and forward all other arguments.
+- **Tool registration flow**: `src/tools/<module>.py` defines async functions → `src/main.py` selects modules by API mode and `UNIFI_PROFILE` → `register_module_tools()` wraps each function. The wrapper binds `settings` (per controller when the fleet router is on), adds a keyword-only `controller` argument, applies read-only and dry-run modes, and audits every mutating call.
 - **Payload construction pattern**: Update functions build a sparse `payload` dict from only the `Optional` arguments that are not `None`, then validate the payload is non-empty *before* opening the `UniFiClient` context. This prevents wasted network connections and allows `ValueError` to propagate cleanly in tests (see Things to Know).
 - **Password/secret redaction**: Functions that handle credentials (`radius.py`) redact sensitive fields (`x_password`, `auth_secret`, `acct_secret`) in API responses and in audit log payloads before any data leaves the function.
 - **Response normalization**: All API responses are normalized via `data = response if isinstance(response, list) else response.get("data", response)` followed by list-unwrapping, because the UniFi API inconsistently returns bare lists, wrapped lists, or wrapped dicts.

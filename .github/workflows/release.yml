@@ -302,19 +302,24 @@ jobs:
           \`\`\`
           EOF
 
+      # Immutable releases freeze a release, assets included, the moment it is
+      # published, so upload to a draft first and publish once every file is on.
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
-          body_path: CHANGELOG.tmp
-          draft: false
-          prerelease: false
-          files: |
-            dist/*
-            sbom.cyclonedx.json
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.version }}
+        run: |
+          state=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null || echo missing)
+          if [ "$state" = "false" ]; then
+            echo "::error::Release $TAG is already published; with immutable releases it cannot take assets. Cut a new version."
+            exit 1
+          fi
+          if [ "$state" = "missing" ]; then
+            gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+              --title "Release $TAG" --notes-file CHANGELOG.tmp
+          fi
+          gh release upload "$TAG" dist/* sbom.cyclonedx.json --clobber
+          gh release edit "$TAG" --draft=false --latest
 
   announce:
     name: Create Release Announcement

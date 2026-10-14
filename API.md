@@ -2269,11 +2269,11 @@ Create a port forwarding rule.
 
 - `site_id` (string, required): Site identifier
 - `name` (string, required): Rule name/description
-- `dst_port` (integer, required): Destination port (external/WAN port)
-- `fwd_ip` (string, required): Forward to IP address (internal/LAN)
+- `dst_port` (integer, required): Destination port (external/WAN port), 1-65535
+- `fwd_ip` (string, required): Forward to IPv4 address (internal/LAN), dotted quad without leading zeros
 - `fwd_port` (integer, required): Forward to port (internal)
 - `protocol` (string, optional): Protocol (tcp, udp, tcp_udp) (default: tcp_udp)
-- `src` (string, optional): Source restriction (any, or specific IP/network) (default: any)
+- `src` (string, optional): Source restriction: `any`, an IPv4 address, or a CIDR network such as `203.0.113.0/24` (host bits are cleared, so `203.0.113.7/24` is sent as `203.0.113.0/24`) (default: any)
 - `enabled` (boolean, optional): Enable the rule immediately (default: true)
 - `log` (boolean, optional): Enable logging for this rule (default: false)
 - **`confirm`** (boolean, required): Confirmation flag

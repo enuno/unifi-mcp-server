@@ -1,5 +1,6 @@
 """Input validation functions for UniFi MCP Server."""
 
+import ipaddress
 import logging
 import re
 
@@ -32,30 +33,58 @@ def validate_mac_address(mac: str) -> str:
 
 
 def validate_ip_address(ip: str) -> str:
-    """Validate IPv4 address.
+    """Validate an IPv4 address in dotted-quad form.
+
+    Parsed with :mod:`ipaddress`, which accepts only four ASCII decimal octets
+    of 0-255 without leading zeros. Whitespace, signs, ``_`` digit separators,
+    non-ASCII digits and octal-looking octets such as ``010`` are rejected
+    rather than passed on to the controller.
 
     Args:
         ip: IP address string
 
     Returns:
-        Validated IP address
+        The address in canonical dotted-quad form
 
     Raises:
         ValidationError: If IP address is invalid
     """
-    parts = ip.split(".")
-    if len(parts) != 4:
-        raise ValidationError(f"Invalid IP address format: {ip}")
-
+    # ipaddress also accepts integers (3232235786 -> 192.168.1.10), so insist on str.
+    if not isinstance(ip, str):
+        raise ValidationError(f"Invalid IP address format: {ip!r}")
     try:
-        for part in parts:
-            num = int(part)
-            if num < 0 or num > 255:
-                raise ValidationError(f"Invalid IP address octet: {part}")
+        return str(ipaddress.IPv4Address(ip))
     except ValueError as e:
-        raise ValidationError(f"Invalid IP address format: {ip}") from e
+        raise ValidationError(f"Invalid IP address format: {ip!r}") from e
 
-    return ip
+
+def validate_ip_or_cidr(value: str) -> str:
+    """Validate an IPv4 address or an IPv4 network in CIDR form.
+
+    A value without ``/`` is validated as an address. A value with ``/`` must
+    have a valid address and a prefix length of 0-32 (or a netmask); host bits
+    are cleared, so ``192.168.1.10/24`` becomes ``192.168.1.0/24``.
+
+    Args:
+        value: Address (``192.168.1.10``) or network (``192.168.1.0/24``)
+
+    Returns:
+        The address or network in canonical form
+
+    Raises:
+        ValidationError: If the value is not a valid address or network
+    """
+    if not isinstance(value, str):
+        raise ValidationError(f"Invalid IP address or CIDR: {value!r}")
+    if "/" not in value:
+        try:
+            return validate_ip_address(value)
+        except ValidationError as e:
+            raise ValidationError(f"Invalid IP address or CIDR: {value!r}") from e
+    try:
+        return str(ipaddress.IPv4Network(value, strict=False))
+    except ValueError as e:
+        raise ValidationError(f"Invalid IP address or CIDR: {value!r}") from e
 
 
 def validate_port(port: int) -> int:
@@ -70,8 +99,9 @@ def validate_port(port: int) -> int:
     Raises:
         ValidationError: If port is invalid
     """
-    if not isinstance(port, int) or port < 1 or port > 65535:
-        raise ValidationError(f"Invalid port number: {port}")
+    # bool is a subclass of int; without this check True passes as port 1.
+    if isinstance(port, bool) or not isinstance(port, int) or port < 1 or port > 65535:
+        raise ValidationError(f"Invalid port number: {port!r}")
 
     return port
 

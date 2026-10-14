@@ -13,6 +13,7 @@ from ..utils import (
     sanitize_log_message,
     validate_confirmation,
     validate_ip_address,
+    validate_ip_or_cidr,
     validate_limit_offset,
     validate_port,
     validate_site_id,
@@ -80,11 +81,12 @@ async def create_port_forward(
         site_id: Site identifier
         name: Rule name/description
         dst_port: Destination port (external/WAN port)
-        fwd_ip: Forward to IP address (internal/LAN)
+        fwd_ip: Forward to IPv4 address (internal/LAN), dotted quad
         fwd_port: Forward to port (internal)
         settings: Application settings
         protocol: Protocol (tcp, udp, tcp_udp)
-        src: Source restriction (any, or specific IP/network)
+        src: Source restriction: "any", an IPv4 address, or a CIDR network
+            (host bits are cleared)
         enabled: Enable the rule immediately
         log: Enable logging for this rule
         confirm: Confirmation flag (must be True to execute)
@@ -105,8 +107,8 @@ async def create_port_forward(
     validate_port(dst_port)
     validate_port(fwd_port)
 
-    # Validate forward IP
-    validate_ip_address(fwd_ip)
+    # Validate forward IP (canonical form goes into the payload)
+    fwd_ip = validate_ip_address(fwd_ip)
 
     # Validate protocol
     valid_protocols = ["tcp", "udp", "tcp_udp"]
@@ -115,7 +117,7 @@ async def create_port_forward(
 
     # Validate source if not "any"
     if src != "any":
-        validate_ip_address(src.split("/")[0])  # Validate IP part of CIDR
+        src = validate_ip_or_cidr(src)
 
     # Build port forward data
     pf_data = {
@@ -209,10 +211,11 @@ async def update_port_forward(
         settings: Application settings
         name: New rule name/description
         dst_port: New destination port (external/WAN port)
-        fwd_ip: New forward-to IP address (internal/LAN)
+        fwd_ip: New forward-to IPv4 address (internal/LAN), dotted quad
         fwd_port: New forward-to port (internal)
         protocol: New protocol (tcp, udp, tcp_udp)
-        src: New source restriction (any, or specific IP/network)
+        src: New source restriction: "any", an IPv4 address, or a CIDR
+            network (host bits are cleared)
         enabled: Enable or disable the rule
         log: Enable or disable logging for this rule
         confirm: Confirmation flag (must be True to execute)
@@ -236,7 +239,7 @@ async def update_port_forward(
     if fwd_port is not None:
         validate_port(fwd_port)
     if fwd_ip is not None:
-        validate_ip_address(fwd_ip)
+        fwd_ip = validate_ip_address(fwd_ip)
     if protocol is not None:
         valid_protocols = ["tcp", "udp", "tcp_udp"]
         if protocol not in valid_protocols:
@@ -244,7 +247,7 @@ async def update_port_forward(
                 f"Invalid protocol '{protocol}'. Must be one of: {valid_protocols}"
             )
     if src is not None and src != "any":
-        validate_ip_address(src.split("/")[0])  # Validate IP part of CIDR
+        src = validate_ip_or_cidr(src)
 
     parameters = {
         "site_id": site_id,

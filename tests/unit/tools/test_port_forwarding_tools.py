@@ -607,3 +607,111 @@ async def test_delete_port_forward_no_confirm(mock_settings):
         await delete_port_forward("default", "pf1", mock_settings, confirm=False)
 
     assert "requires confirmation" in str(excinfo.value).lower()
+
+
+# =============================================================================
+# Address and port validation (issue #217)
+# =============================================================================
+
+MALFORMED_IPS = [
+    "+192.168.1.10",
+    " 192.168.1.10",
+    "192.168.1_0.10",
+    "192.168.001.010",
+    "192.168.1.10\n",
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fwd_ip", MALFORMED_IPS)
+async def test_create_port_forward_rejects_malformed_fwd_ip(mock_settings, fwd_ip):
+    with pytest.raises(ValidationError):
+        await create_port_forward(
+            "default", "Rule", 443, fwd_ip, 443, mock_settings, confirm=True, dry_run=True
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("src", ["10.0.0.0/99", "10.0.0.0/abc", " 10.0.0.1", "010.0.0.1"])
+async def test_create_port_forward_rejects_malformed_src(mock_settings, src):
+    with pytest.raises(ValidationError):
+        await create_port_forward(
+            "default",
+            "Rule",
+            443,
+            "192.168.2.10",
+            443,
+            mock_settings,
+            src=src,
+            confirm=True,
+            dry_run=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_port_forward_rejects_boolean_port(mock_settings):
+    with pytest.raises(ValidationError):
+        await create_port_forward(
+            "default", "Rule", True, "192.168.2.10", 443, mock_settings, confirm=True, dry_run=True
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_port_forward_sends_canonical_src(mock_settings):
+    result = await create_port_forward(
+        "default",
+        "Rule",
+        443,
+        "192.168.2.10",
+        443,
+        mock_settings,
+        src="203.0.113.7/24",
+        confirm=True,
+        dry_run=True,
+    )
+    assert result["would_create"]["src"] == "203.0.113.0/24"
+    assert result["would_create"]["fwd"] == "192.168.2.10"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"fwd_ip": " 192.168.2.10"},
+        {"fwd_ip": "192.168.002.10"},
+        {"src": "10.0.0.0/33"},
+        {"dst_port": True},
+        {"fwd_port": False},
+    ],
+)
+async def test_update_port_forward_rejects_malformed(mock_settings, kwargs):
+    with pytest.raises(ValidationError):
+        await update_port_forward(
+            "default", "pf1", mock_settings, confirm=True, dry_run=True, **kwargs
+        )
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_dry_run_shows_canonical_src(mock_settings):
+    result = await update_port_forward(
+        "default", "pf1", mock_settings, src="198.51.100.9/24", confirm=True, dry_run=True
+    )
+    assert result["would_update"]["src"] == "198.51.100.0/24"
+
+
+@pytest.mark.asyncio
+async def test_update_port_forward_writes_canonical_src(mock_settings):
+    existing = {"_id": "pf1", "name": "Web", "src": "any", "fwd": "192.168.2.10"}
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value={"data": [existing]})
+    mock_client.put = AsyncMock(return_value={"data": [existing]})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    with patch.object(pf_module, "UniFiClient", return_value=mock_client):
+        await update_port_forward(
+            "default", "pf1", mock_settings, src="198.51.100.9/24", confirm=True
+        )
+
+    assert mock_client.put.await_args.kwargs["json_data"]["src"] == "198.51.100.0/24"

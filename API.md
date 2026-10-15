@@ -6,6 +6,7 @@ This document provides comprehensive documentation for the Model Context Protoco
 
 - [Overview](#overview)
 - [Configuration](#configuration)
+- [SuperMemory Operator Notes](#supermemory-operator-notes)
 - [Authentication](#authentication)
 - [Performance Tracking](#performance-tracking)
 - [MCP Tools](#mcp-tools)
@@ -93,6 +94,7 @@ Use this reference to verify the exposed MCP surface before changing configs, wr
 Configure the MCP server using environment variables:
 
 > Note: the table below includes both currently supported settings and planned controls that will become active as Phase 5 lands.
+
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
 | `UNIFI_API_KEY` | UniFi API Key (used for both Network and Site Manager APIs) | Yes | - |
@@ -380,6 +382,40 @@ MCP Toolbox provides:
 See [MCP_TOOLBOX.md](MCP_TOOLBOX.md) for complete documentation.
 
 ---
+
+## SuperMemory Operator Notes
+
+`src.memory.MemoryClient` is an optional Python helper for persistent operator notes and context. It is not an MCP tool or resource: no memory tools are registered, and UniFi tool calls do not automatically save or retrieve notes. Call it explicitly from Python as shown in the [README example](README.md#supermemory-operator-notes-optional).
+
+### Setup
+
+Install `pip install 'supermemory>=5.0.0'` in the caller's Python environment, obtain a key from the [Supermemory console](https://console.supermemory.ai), and configure:
+
+```env
+SUPERMEMORY_ENABLED=true
+SUPERMEMORY_API_KEY=your-supermemory-api-key-here
+```
+
+Construct `MemoryClient(Settings())`; settings load from the environment and `.env`. `SUPERMEMORY_ENABLED` defaults to `false` and the key defaults to unset. Both settings and the optional SDK are required to enable storage. Existing UniFi settings remain required by `Settings`.
+
+### Python methods
+
+| Method | Parameters | Return value |
+|--------|------------|--------------|
+| `MemoryClient(settings, logger=None)` | `settings: Settings`; optional Python logger | Client with an `enabled` flag; constructs the async SDK client when enabled |
+| `await remember(content, namespace, metadata=None)` | `content: str` note text; `namespace: str` storage scope; optional `metadata: dict[str, Any]` (defaults to an empty dictionary) | Stored document ID (`str`), or `None` when disabled or the request fails |
+| `await recall(query, namespace, limit=10)` | `query: str` search text; `namespace: str` matching the stored note; `limit: int` maximum results (default `10`) | List of SDK result dictionaries from `model_dump()`, or `[]` when disabled, no matches are found, or the request fails |
+
+The helper calls SDK v5 `add(namespace, content=..., metadata=...)` and `search(namespace, query=..., limit=...)`. Search uses the SDK's default hybrid mode. A result may have `memory: None` with text in `chunk`; callers should handle both fields. Result dictionaries are passed through rather than normalized into a fixed project schema. Newly stored content may not be immediately searchable.
+
+### Scoping and operational behavior
+
+- Reuse the exact namespace for storage and search. Include controller identity in fleet namespaces (for example, `branch-gateway-default`) because site names can repeat. The helper forwards namespaces as supplied without site resolution or controller authorization checks.
+- Only explicit `remember()` calls store notes. Metadata can hold site IDs, ticket references, or note categories; `recall()` exposes no metadata-filter argument.
+- Content and metadata go to the external Supermemory service. The helper is separate from the Redis response cache and hash-chained audit log.
+- A missing SDK or API key disables the helper and logs a warning when enabled. Store/search request exceptions are logged and converted to `None`/`[]`; an empty result alone cannot distinguish a service failure from no matches. SDK client construction errors are not caught by these request fallbacks.
+- The helper exposes no update, delete, retention, or automatic synchronization operation. Disabling it does not delete remote notes.
+- Direct calls bypass the MCP registry wrapper: these methods have no `confirm`/`dry_run` parameters and do not inherit its audit, read-only, or forced dry-run controls. An enabled `remember()` call writes to Supermemory.
 
 ## Authentication
 

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- Document SuperMemory setup, Python storage/search usage, namespace scoping, fallback behavior, and current integration limits in README and API reference.
+- Fix the API configuration table by separating it from the preceding blockquote.
+
 ### Fixed
 
 - The ACL rule tools (`list_acl_rules`, `get_acl_rule`, `create_acl_rule`, `update_acl_rule`, `delete_acl_rule`) and the traffic matching list tools work in local mode. They are registered only in local mode, but a guard refused local mode, so every call failed with `NotImplementedError`. The Network integration API serves both resources on the local console at `/proxy/network/integration/v1/` (Network API spec v10.6.106).

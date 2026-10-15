@@ -360,7 +360,7 @@ unifi-mcp-server
 - **Automatic Cache Invalidation**: Smart cache invalidation when configuration changes
 - **Event Handlers**: Built-in handlers for device, client, and alert events
 - **Performance Tracking**: Optional agnost.ai integration for monitoring MCP tool performance and usage analytics
-- **Operator Memory**: Optional Supermemory integration for persisting operator notes/context across tool calls, scoped per site
+- **Operator Memory**: Optional [SuperMemory Python helper](#supermemory-operator-notes-optional) for storing and searching notes in explicit namespaces
 - **Roadmap-aligned controls**: RBAC and audit logging planned; dry-run and metrics shipped (see Safety & Security)
 
 ### Safety & Security
@@ -1166,6 +1166,56 @@ async def main():
 
 asyncio.run(main())
 ```
+
+### SuperMemory operator notes (optional)
+
+Supermemory provides persistent storage and search for operator context such as change rationale, troubleshooting findings, and maintenance notes. The Python helper in `src/memory.py` stores text with optional metadata and searches within a caller-supplied namespace.
+
+**Current scope:** this is a programmatic helper. The server does not register `remember` or `recall` as MCP tools or call them automatically. Enabling the settings alone does not capture tool calls or give MCP clients access to stored notes.
+
+1. Install the optional SDK in the same Python environment as your code:
+
+   ```bash
+   pip install 'supermemory>=5.0.0'
+   ```
+
+2. Obtain a key from the [Supermemory console](https://console.supermemory.ai) and add it to your local `.env` or secret-managed environment alongside your UniFi settings:
+
+   ```env
+   SUPERMEMORY_ENABLED=true
+   SUPERMEMORY_API_KEY=your-supermemory-api-key-here
+   ```
+
+3. From a source checkout, call the helper explicitly:
+
+   ```python
+   import asyncio
+
+   from src.config import Settings
+   from src.memory import MemoryClient
+
+   async def main():
+       memory = MemoryClient(Settings())
+       # Include controller identity because site names can repeat in a fleet.
+       namespace = "branch-gateway-default"
+       document_id = await memory.remember(
+           content="VLAN 30 is reserved for guest WiFi; keep it isolated from LAN.",
+           namespace=namespace,
+           metadata={"site_id": "default", "category": "network-design"},
+       )
+       print("Stored document:", document_id)
+       results = await memory.recall("guest WiFi VLAN", namespace, limit=5)
+       for result in results:
+           print(result.get("memory") or result.get("chunk") or result)
+
+   asyncio.run(main())
+   ```
+
+Notes and metadata are sent to the external Supermemory service. Keep credentials out of notes and choose namespaces explicitly; the helper does not resolve sites or enforce fleet permissions.
+
+The integration defaults to disabled. A missing SDK/key disables storage with a warning when enabled. Disabled calls or store/search request failures return `None` from `remember()` and `[]` from `recall()`; request failures are logged. New notes may take time to appear in search. Setting `SUPERMEMORY_ENABLED=false` stops helper calls but does not delete existing remote notes.
+
+See the [SuperMemory API reference](API.md#supermemory-operator-notes) for parameters, return values, and limitations.
 
 ## API Documentation
 

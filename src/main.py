@@ -1009,7 +1009,26 @@ def main() -> None:
         # translate at this one call site rather than changing the public
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
+        from starlette.middleware import Middleware
+
         run_kwargs: dict[str, Any] = {}
+        middleware: list[Middleware] = []
+        if settings.mcp_auth_max_failures > 0:
+            # Outermost, so a client over its budget of 401s is answered 429
+            # before any other layer reads its request.
+            from .utils.auth_throttle import BearerFailureLimiter
+
+            middleware.append(
+                Middleware(
+                    BearerFailureLimiter,
+                    max_failures=settings.mcp_auth_max_failures,
+                    window_seconds=settings.mcp_auth_failure_window_seconds,
+                )
+            )
+            logger.info(
+                f"Bearer failures limited to {settings.mcp_auth_max_failures} per "
+                f"{settings.mcp_auth_failure_window_seconds:g}s per client address"
+            )
         if settings.server_transport != TransportMode.SSE and settings.mcp_stateless_http:
             # No MCP sessions: any replica can answer any request, but
             # select_controller is refused (see FleetRouter.stateless). Every
@@ -1021,13 +1040,14 @@ def main() -> None:
             # Stop sessionless, non-initialize requests (health checks, probes)
             # from each leaking a registered session in the MCP SDK (issue #173).
             import fastmcp
-            from starlette.middleware import Middleware
 
             from .utils.session_guard import SessionlessRequestGuard
 
-            run_kwargs["middleware"] = [
+            middleware.append(
                 Middleware(SessionlessRequestGuard, path=fastmcp.settings.streamable_http_path)
-            ]
+            )
+        if middleware:
+            run_kwargs["middleware"] = middleware
         mcp.run(
             transport=transport,
             host=settings.server_host,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Failed bearer checks are rate limited on the network transports.** Nothing limited how fast a client could try tokens against `/mcp`, `/a2a/*` or `/metrics`. After `MCP_AUTH_MAX_FAILURES` (default 10) `401` responses from one client address within `MCP_AUTH_FAILURE_WINDOW_SECONDS` (default 60), that address is answered `429` with `Retry-After` until the oldest failure leaves the window. A successful call does not reset the count, and `/healthz` is exempt. Behind a reverse proxy every client shares the proxy's address unless uvicorn trusts its `X-Forwarded-For`; set `MCP_AUTH_MAX_FAILURES=0` to turn the limit off.
+
 ### Changed
 
 - **CI installs from `uv.lock`.** The lint, test and security jobs ran `uv pip install -e`, which resolves fresh, so `uv.lock` was only exercised by the release workflow. They now run `uv sync --locked`, which also fails when `pyproject.toml` changed without `uv lock`. Dependabot (`.github/dependabot.yml`) opens weekly update PRs for `uv.lock`, the workflow actions and the Docker base image.

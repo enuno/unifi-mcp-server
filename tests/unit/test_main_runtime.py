@@ -221,7 +221,11 @@ class TestMainEntryPoint:
         webhook.assert_called_once_with(mod.mcp, mod.settings)
         kwargs = run.call_args.kwargs
         assert kwargs["transport"] == "streamable-http"
-        assert [m.cls.__name__ for m in kwargs["middleware"]] == ["SessionlessRequestGuard"]
+        assert [m.cls.__name__ for m in kwargs["middleware"]] == [
+            "BearerFailureLimiter",
+            "SessionlessRequestGuard",
+        ]
+        assert kwargs["middleware"][0].kwargs == {"max_failures": 10, "window_seconds": 60.0}
 
     def test_stateless_http_is_passed_to_streamable_http(self) -> None:
         mod = _reload_main(
@@ -234,7 +238,8 @@ class TestMainEntryPoint:
 
         assert run.call_args.kwargs["stateless_http"] is True
         # The session guard would answer every sessionless call with 400.
-        assert "middleware" not in run.call_args.kwargs
+        names = [m.cls.__name__ for m in run.call_args.kwargs["middleware"]]
+        assert names == ["BearerFailureLimiter"]
 
     def test_stateful_by_default(self) -> None:
         mod = _reload_main(
@@ -255,7 +260,31 @@ class TestMainEntryPoint:
             mod.main()
 
         assert run.call_args.kwargs["transport"] == "sse"
+        names = [m.cls.__name__ for m in run.call_args.kwargs["middleware"]]
+        assert names == ["BearerFailureLimiter"]
+
+    def test_bearer_failure_limit_configurable_and_can_be_disabled(self) -> None:
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="sse",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+            MCP_AUTH_MAX_FAILURES="0",
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
         assert "middleware" not in run.call_args.kwargs
+
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="sse",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+            MCP_AUTH_MAX_FAILURES="3",
+            MCP_AUTH_FAILURE_WINDOW_SECONDS="300",
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
+        assert run.call_args.kwargs["middleware"][0].kwargs == {
+            "max_failures": 3,
+            "window_seconds": 300.0,
+        }
 
 
 class TestImportTimeBranches:

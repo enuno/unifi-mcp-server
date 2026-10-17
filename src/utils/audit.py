@@ -35,7 +35,7 @@ from .audit_encryption import (
 from .exceptions import UniFiMCPException
 from .helpers import get_iso_timestamp
 from .logger import get_logger
-from .sanitize import sanitize_credentials
+from .sanitize import sanitize_credentials, sanitize_error_text
 
 #: Environment variable holding the HMAC key for the audit hash chain.
 CHAIN_KEY_ENV = "UNIFI_AUDIT_CHAIN_KEY"
@@ -229,7 +229,7 @@ class AuditLogger:
             if site_id:
                 report["site_id"] = site_id
             if error:
-                report["error"] = error
+                report["error"] = sanitize_error_text(error)
             reports.append(report)
             return
 
@@ -256,7 +256,7 @@ class AuditLogger:
             audit_record["site_id"] = site_id
 
         if error:
-            audit_record["error"] = error
+            audit_record["error"] = sanitize_error_text(error)
 
         if self.sink is not None:
             self._schedule(audit_record)
@@ -296,7 +296,8 @@ class AuditLogger:
         if parameters is not None:
             record["parameters"] = sanitize_credentials(parameters)
         if error:
-            record["error"] = error
+            # Controller errors quote what they were sent, credentials included.
+            record["error"] = sanitize_error_text(error)
         record.update({key: value for key, value in fields.items() if value is not None})
         return record
 

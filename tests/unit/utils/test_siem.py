@@ -195,10 +195,35 @@ class TestBuildExporters:
         settings = _settings(
             monkeypatch, tmp_path, UNIFI_AUDIT_SIEM_TARGETS="syslog+tcp://127.0.0.1:1"
         )
+        monkeypatch.setenv("UNIFI_AUDIT_CHAIN_KEY", "chain-key")  # pragma: allowlist secret
         forwarder = SiemForwarder.from_settings(settings)
         assert forwarder is not None
         assert (tmp_path / "siem-buffer").is_dir()
         assert stat.S_IMODE((tmp_path / "siem-buffer").stat().st_mode) == 0o700
+
+    def test_targets_need_the_chain_key(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # An unkeyed chain can be recomputed after editing the records, so the
+        # SIEM copy and its anchors would prove nothing (AC-531).
+        settings = _settings(
+            monkeypatch, tmp_path, UNIFI_AUDIT_SIEM_TARGETS="syslog+tcp://127.0.0.1:1"
+        )
+        with pytest.raises(ConfigurationError, match="UNIFI_AUDIT_CHAIN_KEY"):
+            SiemForwarder.from_settings(settings)
+        assert not (tmp_path / "siem-buffer").exists()
+
+    def test_blank_chain_key_counts_as_unset(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        settings = _settings(
+            monkeypatch,
+            tmp_path,
+            UNIFI_AUDIT_SIEM_TARGETS="syslog+tcp://127.0.0.1:1",
+            UNIFI_AUDIT_CHAIN_KEY="  ",
+        )
+        with pytest.raises(ConfigurationError, match="UNIFI_AUDIT_CHAIN_KEY"):
+            SiemForwarder.from_settings(settings)
 
 
 # ---------------------------------------------------------------------------
@@ -779,11 +804,25 @@ class TestServerWiring:
         with pytest.raises(ConfigurationError):
             await start_siem_forwarder(settings)
 
-    async def test_configured_target_is_attached_to_the_audit_logger(
+    async def test_target_without_chain_key_stops_startup(
         self, monkeypatch: Any, tmp_path: Path
     ) -> None:
         settings = _settings(
             monkeypatch, tmp_path, UNIFI_AUDIT_SIEM_TARGETS="syslog+tcp://127.0.0.1:1"
+        )
+        from src.main import start_siem_forwarder
+
+        with pytest.raises(ConfigurationError, match="UNIFI_AUDIT_CHAIN_KEY"):
+            await start_siem_forwarder(settings)
+
+    async def test_configured_target_is_attached_to_the_audit_logger(
+        self, monkeypatch: Any, tmp_path: Path
+    ) -> None:
+        settings = _settings(
+            monkeypatch,
+            tmp_path,
+            UNIFI_AUDIT_SIEM_TARGETS="syslog+tcp://127.0.0.1:1",
+            UNIFI_AUDIT_CHAIN_KEY="chain-key",  # pragma: allowlist secret
         )
         from src.main import start_siem_forwarder
         from src.utils.audit import get_audit_logger

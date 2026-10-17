@@ -286,6 +286,10 @@ def _make_tool_wrapper(
 
         family = cache_family(module, metric_tool_name)
         ttl = CacheConfig.get_ttl(family) if family else 0
+    # UNIFI_AUDIT_READS: give read calls the same attempt and outcome records.
+    # The outcome never carries the tool's result, so no response payload
+    # (client lists, device inventory) reaches the audit store.
+    audit_reads = getattr(settings, "audit_reads", False) is True
     role_setting = getattr(settings, "stdio_role", None)
     local_role = cast(Role, role_setting if role_setting in ROLES else "fleet-admin")
 
@@ -302,8 +306,9 @@ def _make_tool_wrapper(
             fresh = coerce_bool(kwargs.pop("fresh", False)) if family is not None else False
             principal = request_principal(local_role)
             audit = _audit_logger_for(settings)
-            # Reads are not audited unless refused; every mutating call is (plan §3.7).
-            audited = audit is not None and (mutating or always_audit)
+            # Every mutating call is audited (plan §3.7); reads only when refused,
+            # unless UNIFI_AUDIT_READS is on.
+            audited = audit is not None and (mutating or always_audit or audit_reads)
             context: dict[str, Any] = {}
             if audit is not None:
                 session_id, request_id = _request_ids()
@@ -353,7 +358,7 @@ def _make_tool_wrapper(
                     controller, call_settings = resolution.name, resolution.settings
                     labels = dict(resolution.labels)
             except (ResourceNotFoundError, ValidationError) as e:
-                if mutating:
+                if mutating or audited:
                     await record_denied(e, requested)
                 raise
 

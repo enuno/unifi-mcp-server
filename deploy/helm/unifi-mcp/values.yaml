@@ -79,6 +79,8 @@ audit:
     existingClaim: ""
     storageClass: ""
     size: 5Gi
+  # Also audit read calls: principal, tool, arguments, outcome; never the response.
+  reads: false
   # SIEM export (SECURITY.md); secrets for it go in existingSecret.
   siemTargets: ""
   siemCaFile: ""

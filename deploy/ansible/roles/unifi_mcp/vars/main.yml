@@ -17,6 +17,7 @@ unifi_mcp_server_env_base:
   UNIFI_AUDIT_CHAIN_KEY: "{{ vault_audit_chain_key | default('') }}"
   UNIFI_AUDIT_LOG_KEY: "{{ vault_audit_log_key | default('') }}"
   UNIFI_AUDIT_LOG_ROTATE_MB: "{{ unifi_mcp_audit_log_rotate_mb }}"
+  UNIFI_AUDIT_READS: "{{ unifi_mcp_audit_reads | bool | lower }}"
   UNIFI_AUDIT_RETENTION_DAYS: "{{ unifi_mcp_audit_retention_days }}"
   # Read by the retention job: Postgres archives go to their own volume.
   UNIFI_AUDIT_ARCHIVE_DIR: "{{ '/app/archive' if unifi_mcp_fleet | bool else '/app/logs/audit-archive' }}"

@@ -370,11 +370,23 @@ class Settings(BaseSettings):
     audit_fail_closed: bool = Field(
         default=True,
         description=(
-            "Refuse a mutating tool call when its audit record cannot be "
-            "written, so no change reaches a controller unrecorded. Set to "
+            "Refuse a mutating tool call (and, with UNIFI_AUDIT_READS, a read) "
+            "when its audit record cannot be written, so no change reaches a "
+            "controller unrecorded. Set to "
             "false only as a break-glass measure."
         ),
         validation_alias="UNIFI_AUDIT_FAIL_CLOSED",
+    )
+
+    audit_reads: bool = Field(
+        default=False,
+        description=(
+            "Also audit read tool calls: an attempt and an outcome record with the "
+            "principal, tool, arguments and result, never the response payload. Off "
+            "by default; turn it on to see what a token read, e.g. inventory pulled "
+            "with a leaked bearer. UNIFI_AUDIT_FAIL_CLOSED then applies to reads too."
+        ),
+        validation_alias="UNIFI_AUDIT_READS",
     )
 
     # SIEM export (src/utils/siem.py, docs/FLEET_SCALING_PLAN.md §3.7).

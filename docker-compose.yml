@@ -46,6 +46,8 @@ services:
       # Rotation renames the file, which a file bind mount (./audit.log below)
       # does not allow: with it, also set UNIFI_AUDIT_LOG_PATH=/app/logs/audit.log.
       UNIFI_AUDIT_LOG_ROTATE_MB: ${UNIFI_AUDIT_LOG_ROTATE_MB:-}
+      # Also audit read calls (no response payloads); see SECURITY.md.
+      UNIFI_AUDIT_READS: ${UNIFI_AUDIT_READS:-false}
       UNIFI_METRICS_ENABLED: ${UNIFI_METRICS_ENABLED:-false}
       UNIFI_WEBHOOK_REDIS_URL: ${UNIFI_WEBHOOK_REDIS_URL:-}
       UNIFI_CONTROLLERS: ${UNIFI_CONTROLLERS:-}

@@ -57,6 +57,7 @@ from urllib.parse import urlsplit
 import httpx
 
 from ..config import Settings
+from .audit import CHAIN_KEY_ENV, resolve_chain_key
 from .exceptions import ConfigurationError
 from .logger import get_logger
 
@@ -468,11 +469,20 @@ class SiemForwarder:
         """A forwarder for ``UNIFI_AUDIT_SIEM_TARGETS``, or None when unset.
 
         Raises:
-            ConfigurationError: For an invalid target (see :func:`build_exporters`)
+            ConfigurationError: For an invalid target (see :func:`build_exporters`),
+                or when ``UNIFI_AUDIT_CHAIN_KEY`` is unset
         """
         exporters = build_exporters(settings)
         if not exporters:
             return None
+        # Without the key the chain is plain SHA-256, which anyone holding the
+        # records can recompute after editing them, so the copy the SIEM keeps
+        # (and the anchors it is sent) would prove nothing.
+        if resolve_chain_key() is None:
+            raise ConfigurationError(
+                f"UNIFI_AUDIT_SIEM_TARGETS needs {CHAIN_KEY_ENV}: an unkeyed audit chain "
+                "can be recomputed after tampering, so exported records could not be trusted"
+            )
         buffer_dir = settings.audit_siem_buffer_dir
         if buffer_dir:
             root = Path(buffer_dir)

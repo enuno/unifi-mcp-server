@@ -300,3 +300,50 @@ def sanitize_credentials(data: dict[str, Any]) -> dict[str, Any]:
             sanitized[key] = value
 
     return sanitized
+
+
+# A credential-named key followed by ``:`` or ``=`` and its value, in free
+# text: JSON and Python reprs (``"x_passphrase": "..."``), query strings
+# (``?apikey=...``) and headers (``X-API-KEY: ...``). The key matches the way
+# :func:`sanitize_credentials` matches dict keys: by substring.
+_CREDENTIAL_PAIR = re.compile(
+    r"""(?P<lead>(?P<q>["']?)[\w.-]*(?:"""
+    + "|".join(sorted(CREDENTIAL_FIELDS, key=len, reverse=True))
+    + r""")[\w.-]*(?P=q)\s*[:=]\s*)"""
+    r"""(?P<value>"[^"]*"|'[^']*'|[^\s,;&}\]"']+)""",
+    re.IGNORECASE,
+)
+
+#: ``Authorization: Bearer <token>`` and similar schemes.
+_AUTH_SCHEME = re.compile(r"\b(?P<scheme>Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
+
+#: Credentials in a URL: ``scheme://user:password@host``.  # pragma: allowlist secret
+_URL_USERINFO = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.IGNORECASE)
+
+
+def sanitize_error_text(text: str) -> str:
+    """Redact credentials quoted back in error text, leaving identifiers intact.
+
+    Controller and HTTP errors echo what they were sent: a rejected WLAN
+    payload with its passphrase, a request URL with an API key, a header.
+    Audit records store that text, so it gets the same rule as
+    :func:`sanitize_credentials` applies to parameters: secrets go, while
+    identifiers such as the MAC in ``api.err.MacUsed`` stay readable.
+
+    Args:
+        text: Error message
+
+    Returns:
+        The message with credential values replaced by ``***``
+    """
+    if not isinstance(text, str):
+        return text
+
+    def pair(match: re.Match[str]) -> str:
+        value = match.group("value")
+        quote = value[0] if value[:1] in ("'", '"') else ""
+        return f"{match.group('lead')}{quote}***{quote}"
+
+    text = _URL_USERINFO.sub(lambda m: f"{m.group('scheme')}***@", text)
+    text = _AUTH_SCHEME.sub(lambda m: f"{m.group('scheme')} ***", text)
+    return _CREDENTIAL_PAIR.sub(pair, text)

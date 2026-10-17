@@ -529,3 +529,30 @@ class TestConnectorPathAllowlist:
             f"connector/consoles/{console_id}/proxy/{app}/"
             "proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/"
         )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("console_id", ["c1\n", " c1 ", "\tc1\r\n"])
+    async def test_surrounding_whitespace_stripped_in_endpoint(
+        self, mock_settings, tool, app, method, console_id
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client({"ok": True})
+            await tool(settings=mock_settings, **_all_kwargs(method, console_id=console_id))
+        call = getattr(mock_cls.return_value, method)
+        assert call.await_args.args[0] == f"connector/consoles/c1/proxy/{app}/v1/thing"
+
+
+@pytest.mark.parametrize(
+    ("tool", "app", "method", "dry_key", "sends_body"), WRITE_TOOLS, ids=WRITE_IDS
+)
+@pytest.mark.asyncio
+async def test_dry_run_preview_uses_stripped_console_id(
+    mock_settings, tool, app, method, dry_key, sends_body
+):
+    with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+        result = await tool(
+            settings=mock_settings,
+            **_write_kwargs(sends_body, console_id="c1\n", dry_run=True),
+        )
+    mock_cls.assert_not_called()
+    assert result[dry_key] == f"connector/consoles/c1/proxy/{app}/v1/thing"

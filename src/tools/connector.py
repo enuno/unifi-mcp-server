@@ -23,16 +23,17 @@ from ..config import Settings
 from ..utils import get_logger, validate_confirmation, validate_path_segment, validate_proxy_path
 
 
-def _validate_connector_params(console_id: str, path: str) -> str:
-    """Validate console_id and path, return normalised path (no leading slash).
+def _validate_connector_params(console_id: str, path: str) -> tuple[str, str]:
+    """Validate console_id and path, return both normalised.
 
     Both are interpolated into
     ``connector/consoles/{console_id}/proxy/<app>/{path}``, so neither may
     carry ``/``, ``..``, or query characters that would retarget the request
-    outside the proxy prefix.
+    outside the proxy prefix. Callers must use the returned values, not the
+    raw arguments: the console ID comes back stripped and the path without
+    its leading slash.
     """
-    validate_path_segment(console_id, "console_id")
-    return validate_proxy_path(path)
+    return validate_path_segment(console_id, "console_id"), validate_proxy_path(path)
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +69,7 @@ async def connector_network_get(
     if not settings.site_manager_enabled:
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
@@ -106,7 +107,7 @@ async def connector_network_post(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_post", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -143,7 +144,7 @@ async def connector_network_put(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_put", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -180,7 +181,7 @@ async def connector_network_patch(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_patch", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -215,7 +216,7 @@ async def connector_network_delete(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_delete", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -260,7 +261,7 @@ async def connector_protect_get(
     if not settings.site_manager_enabled:
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
@@ -294,7 +295,7 @@ async def connector_protect_post(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_post", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -331,7 +332,7 @@ async def connector_protect_put(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_put", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -368,7 +369,7 @@ async def connector_protect_patch(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_patch", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -403,7 +404,7 @@ async def connector_protect_delete(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_delete", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 

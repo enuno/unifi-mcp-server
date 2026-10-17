@@ -35,11 +35,10 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # From uv.lock, so CI tests the versions a release ships with; --locked
+      # also fails if pyproject.toml changed without re-running `uv lock`.
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev,fleet]"
+        run: uv sync --locked --python 3.10 --extra dev --extra fleet
 
       - name: Check code formatting with Black
         run: |
@@ -83,11 +82,10 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # From uv.lock, so CI tests the versions a release ships with; --locked
+      # also fails if pyproject.toml changed without re-running `uv lock`.
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev,fleet]"
+        run: uv sync --locked --python ${{ matrix.python-version }} --extra dev --extra fleet
 
       - name: Run unit tests with coverage gate
         run: |
@@ -120,11 +118,10 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
+      # From uv.lock, so CI tests the versions a release ships with; --locked
+      # also fails if pyproject.toml changed without re-running `uv lock`.
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev,fleet]"
+        run: uv sync --locked --python 3.10 --extra dev --extra fleet
 
       - name: Run Bandit security linter
         run: |

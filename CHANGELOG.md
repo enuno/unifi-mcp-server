@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **CI installs from `uv.lock`.** The lint, test and security jobs ran `uv pip install -e`, which resolves fresh, so `uv.lock` was only exercised by the release workflow. They now run `uv sync --locked`, which also fails when `pyproject.toml` changed without `uv lock`. Dependabot (`.github/dependabot.yml`) opens weekly update PRs for `uv.lock`, the workflow actions and the Docker base image.
+- **Scanner actions pinned to commits.** `trufflesecurity/trufflehog@main` and `aquasecurity/trivy-action@master` are pinned to the commits of v3.99.2 and v0.36.0. Both run with the repository token, and the release workflow's Trivy step gates the image push.
+
 ### Fixed
 
 - **`connector_*` tools return JSON array replies** ([#222](https://github.com/enuno/unifi-mcp-server/issues/222)). The ten Cloud Connector passthrough tools were annotated `-> dict[str, Any]`, so FastMCP built an object output schema and rejected an endpoint that answers with an array (`structured_content must be a dict or None. Got list: []`), which many `proxy/network/v2/api/...` endpoints do. They are now annotated `dict[str, Any] | list[Any]`, and FastMCP wraps an array as `{"result": [...]}`. `SiteManagerClient.get`, `post`, `put`, `patch` and `delete` no longer cast the reply to `dict`; their return type says it can be either, and the typed wrappers (`list_hosts`, `list_sites` and the rest) raise `APIError` naming the endpoint if one answers with an array.

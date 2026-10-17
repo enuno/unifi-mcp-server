@@ -6,14 +6,22 @@ on:
 
 jobs:
   bug-handler:
-    # Only run for issues with [Bug] in the title
-    if: startsWith(github.event.issue.title, '[Bug]')
+    # Only run for issues with [Bug] in the title, written by an owner, org
+    # member or collaborator. The issue body is the prompt and this job can
+    # push branches and open PRs, so it must not run on text from an arbitrary
+    # account. The action's own write check covers the actor (github.actor),
+    # which on the edited and labeled events is the maintainer touching the
+    # issue, not its author.
+    if: |
+      startsWith(github.event.issue.title, '[Bug]') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association)
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
       issues: write
-      id-token: write
+      # No id-token: github_token and anthropic_api_key are both passed in, so
+      # the action never requests an OIDC token.
       actions: read
     steps:
       - name: Checkout repository

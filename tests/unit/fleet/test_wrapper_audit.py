@@ -200,6 +200,24 @@ class TestDeniedAndFailClosed:
         (denied,) = _records(log_path)
         assert denied["controller"] == "nope"
 
+    @pytest.mark.parametrize("confirm", [False, "false"])
+    async def test_unconfirmed_write_is_denied_before_the_tool_runs(
+        self, settings, log_path, confirm
+    ):
+        calls: list[str] = []
+
+        async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
+            calls.append(site_id)
+
+        with pytest.raises(ValidationError, match="requires confirmation"):
+            await _make_tool_wrapper(guarded, settings)("default", confirm=confirm)
+
+        (denied,) = _records(log_path)
+        assert denied["event_type"] == "denied"
+        assert denied["result"] == "denied"
+        assert denied["controller"] == "default"
+        assert calls == []
+
     async def test_unwritable_audit_log_blocks_writes(self, monkeypatch, tmp_path):
         blocked = tmp_path / "is-a-directory"
         blocked.mkdir()

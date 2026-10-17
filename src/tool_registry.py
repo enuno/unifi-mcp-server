@@ -272,6 +272,11 @@ def _make_tool_wrapper(
     # filtered at registration), so forcing here is always safe.
     force_dry_run = "dry_run" in params
 
+    # Every tool that takes ``confirm`` is refused here unless the caller
+    # confirmed or asked for a preview, so a handler that forgets the check, or
+    # tests the raw string with a bare ``if``, cannot write unconfirmed.
+    requires_confirm = "confirm" in params
+
     # Metric labels must match the public MCP tool name, not the private
     # module-level spelling (tools are defined as ``_list_devices`` but
     # registered as ``list_devices``).
@@ -298,6 +303,7 @@ def _make_tool_wrapper(
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             _coerce_dry_run(kwargs)
+            _coerce_confirm(kwargs)
             requested = kwargs.pop("controller", None)
             fresh = coerce_bool(kwargs.pop("fresh", False)) if family is not None else False
             principal = request_principal(local_role)
@@ -366,6 +372,11 @@ def _make_tool_wrapper(
 
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
+            if requires_confirm:
+                unconfirmed = _confirmation_refusal(metric_tool_name, public_sig, args, kwargs)
+                if unconfirmed is not None:
+                    await record_denied(unconfirmed, controller)
+                    raise unconfirmed
             cache_key = None
             if family is not None and controller is not None:
                 cache_arguments = dict(public_sig.bind_partial(*args, **kwargs).arguments)
@@ -444,8 +455,13 @@ def _make_tool_wrapper(
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             _coerce_dry_run(kwargs)
+            _coerce_confirm(kwargs)
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
+            if requires_confirm:
+                refusal = _confirmation_refusal(metric_tool_name, public_sig, args, kwargs)
+                if refusal is not None:
+                    raise refusal
             kwargs["settings"] = settings
             if not getattr(settings, "metrics_enabled", False):
                 return fn(*args, **kwargs)
@@ -475,6 +491,38 @@ def _coerce_dry_run(kwargs: dict[str, Any]) -> None:
             kwargs["dry_run"] = value.strip().lower() not in ("false", "0", "no", "")
         else:
             kwargs["dry_run"] = coerce_bool(value)
+
+
+def _coerce_confirm(kwargs: dict[str, Any]) -> None:
+    """Normalise a caller-supplied ``confirm`` to a bool in place.
+
+    Only ``"true"``, ``"1"`` and ``"yes"`` confirm; any other string, including
+    ``"false"``, does not. Handlers then see a real bool, so a bare
+    ``if not confirm`` reads the caller's intent rather than string truthiness.
+    """
+    if "confirm" in kwargs:
+        kwargs["confirm"] = coerce_bool(kwargs["confirm"])
+
+
+def _confirmation_refusal(
+    name: str, sig: inspect.Signature, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> ValidationError | None:
+    """Return the error refusing an unconfirmed call, or None if it may proceed.
+
+    A call proceeds when ``confirm`` is true or ``dry_run`` is true (a preview
+    changes nothing). Both are read after coercion, so ``"false"`` counts as
+    false. If the arguments do not bind, only the keyword arguments are read,
+    so a malformed call is still refused rather than waved through.
+    """
+    try:
+        arguments: dict[str, Any] = dict(sig.bind_partial(*args, **kwargs).arguments)
+    except TypeError:
+        arguments = kwargs
+    if coerce_bool(arguments.get("dry_run", False)) or coerce_bool(arguments.get("confirm", False)):
+        return None
+    return ValidationError(
+        f"Operation '{name}' requires confirmation. Set confirm=true to proceed."
+    )
 
 
 def _with_controller_param(sig: inspect.Signature) -> inspect.Signature:

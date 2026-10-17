@@ -13,6 +13,7 @@ from src.access import (
     token_fingerprint,
 )
 from src.tool_registry import _make_tool_wrapper
+from src.utils import tool_kind
 
 TOKEN = "s3cret-bearer-token-value"  # pragma: allowlist secret
 
@@ -54,6 +55,7 @@ async def test_wrapper_binds_principal_for_the_call_only(monkeypatch: pytest.Mon
     monkeypatch.setattr("src.access.get_access_token", _access_token)
     seen: list[Any] = []
 
+    @tool_kind.read_tool
     async def spy(site_id: str, settings: Any = None) -> None:
         seen.append(current_principal.get())
 

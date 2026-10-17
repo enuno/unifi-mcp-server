@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectLinkStation
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -37,6 +38,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_link_stations(
     settings: Settings,
     limit: int | None = None,
@@ -70,6 +72,7 @@ async def list_protect_link_stations(
     }
 
 
+@read_tool
 async def get_protect_link_station(link_station_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect link station."""
     logger = get_logger(__name__, settings.log_level)
@@ -86,6 +89,7 @@ async def get_protect_link_station(link_station_id: str, settings: Settings) -> 
     return link_station.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_link_station(
     link_station_id: str,
     settings: Settings,

@@ -14,8 +14,10 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import write_tool
 
 
+@write_tool
 async def create_network(
     site_id: str,
     name: str,
@@ -164,6 +166,7 @@ async def create_network(
         raise
 
 
+@write_tool
 async def update_network(
     site_id: str,
     network_id: str,
@@ -332,6 +335,7 @@ async def update_network(
         raise
 
 
+@write_tool
 async def delete_network(
     site_id: str,
     network_id: str,

@@ -14,6 +14,7 @@ from ..utils import (
     log_audit,
     sanitize_log_message,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation, validate_site_id
 
 logger = get_logger(__name__)
@@ -237,6 +238,7 @@ def _redact_dynamic_dns_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+@read_tool
 async def list_wan_connections(site_id: str, settings: Settings) -> list[dict]:
     """List all WAN connections for a site.
 
@@ -263,6 +265,7 @@ async def list_wan_connections(site_id: str, settings: Settings) -> list[dict]:
         return [WANConnection(**wan).model_dump(exclude_none=True) for wan in data]
 
 
+@read_tool
 async def list_dynamic_dns(site_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List Dynamic DNS configurations for a site.
 
@@ -290,6 +293,7 @@ async def list_dynamic_dns(site_id: str, settings: Settings) -> list[dict[str, A
         return [_normalize_dynamic_dns(item) for item in _unwrap_response(response)]
 
 
+@read_tool
 async def get_dynamic_dns(
     dynamic_dns_id: str,
     site_id: str,
@@ -322,6 +326,7 @@ async def get_dynamic_dns(
         return _normalize_dynamic_dns(items[0])
 
 
+@write_tool
 async def create_dynamic_dns(
     site_id: str,
     settings: Settings,
@@ -417,6 +422,7 @@ async def create_dynamic_dns(
         return _normalize_dynamic_dns(items[0] if items else {})
 
 
+@write_tool
 async def update_dynamic_dns(
     dynamic_dns_id: str,
     site_id: str,
@@ -521,6 +527,7 @@ async def update_dynamic_dns(
         return _normalize_dynamic_dns(items[0])
 
 
+@write_tool
 async def delete_dynamic_dns(
     dynamic_dns_id: str,
     site_id: str,

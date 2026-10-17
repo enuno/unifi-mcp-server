@@ -15,6 +15,7 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 _REDACTED = "***REDACTED***"
 _WLAN_SECRET_FIELDS = ("x_passphrase", "x_iapp_key")
@@ -42,6 +43,7 @@ def _redact_wlan(wlan: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+@read_tool
 async def list_wlans(
     site_id: str,
     settings: Settings,
@@ -79,6 +81,7 @@ async def list_wlans(
         return [_redact_wlan(wlan) for wlan in paginated]
 
 
+@write_tool
 async def create_wlan(
     site_id: str,
     name: str,
@@ -327,6 +330,7 @@ async def create_wlan(
         raise
 
 
+@write_tool
 async def update_wlan(
     site_id: str,
     wlan_id: str,
@@ -564,6 +568,7 @@ async def update_wlan(
         raise
 
 
+@write_tool
 async def delete_wlan(
     site_id: str,
     wlan_id: str,
@@ -644,6 +649,7 @@ async def delete_wlan(
         raise
 
 
+@read_tool
 async def get_wlan_statistics(
     site_id: str,
     settings: Settings,

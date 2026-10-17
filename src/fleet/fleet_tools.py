@@ -31,6 +31,7 @@ from ..access import ROLES, Principal, request_principal
 from ..config import Settings
 from ..tool_registry import TOOL_TIERS, _make_tool_wrapper
 from ..utils.exceptions import ValidationError
+from ..utils.tool_kind import read_tool
 from .db.snapshots import FleetStatus, SnapshotStore
 from .registry import ControllerRegistry
 
@@ -115,6 +116,7 @@ def build_snapshot_tools(
             "capabilities": health.capabilities,
         }
 
+    @read_tool
     async def fleet_health(
         health: str | None = None,
         labels: dict[str, str] | None = None,
@@ -147,6 +149,7 @@ def build_snapshot_tools(
             entries = [e for e in entries if e["health"] == health]
         return {"controllers": entries, "counts": counts, "total": len(names)}
 
+    @read_tool
     async def fleet_sites(
         controllers: list[str] | None = None,
         labels: dict[str, str] | None = None,
@@ -180,6 +183,7 @@ def build_snapshot_tools(
             "count": len(sites),
         }
 
+    @read_tool
     async def fleet_inventory(
         model: str | None = None,
         firmware_below: str | None = None,
@@ -266,6 +270,7 @@ def build_fanout_tool(mcp: FastMCP, registry: ControllerRegistry, config: Settin
             return structured.get("result")
         return structured
 
+    @read_tool
     async def fleet_fanout(
         tool: str,
         arguments: dict[str, Any] | None = None,

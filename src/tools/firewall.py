@@ -13,8 +13,10 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def list_firewall_rules(
     site_id: str,
     settings: Settings,
@@ -78,6 +80,7 @@ async def list_firewall_rules(
         return paginated
 
 
+@write_tool
 async def create_firewall_rule(
     site_id: str,
     name: str,
@@ -248,6 +251,7 @@ async def create_firewall_rule(
         raise
 
 
+@write_tool
 async def update_firewall_rule(
     site_id: str,
     rule_id: str,
@@ -399,6 +403,7 @@ async def update_firewall_rule(
         raise
 
 
+@write_tool
 async def delete_firewall_rule(
     site_id: str,
     rule_id: str,

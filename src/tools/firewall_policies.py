@@ -14,6 +14,7 @@ from ..utils import (
     sanitize_log_message,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_limit_offset
 
 logger = get_logger(__name__)
@@ -297,6 +298,7 @@ async def _resolve_zone_id(
     )
 
 
+@read_tool
 async def list_firewall_zones_v2(
     site_id: str,
     settings: Settings,
@@ -366,6 +368,7 @@ async def list_firewall_zones_v2(
         ]
 
 
+@read_tool
 async def list_firewall_policies(
     site_id: str,
     settings: Settings,
@@ -439,6 +442,7 @@ async def list_firewall_policies(
         return all_policies
 
 
+@read_tool
 async def get_firewall_policy(
     policy_id: str,
     site_id: str,
@@ -502,6 +506,7 @@ async def get_firewall_policy(
         return FirewallPolicy(**data).model_dump()
 
 
+@write_tool
 async def create_firewall_policy(
     name: str,
     action: str,
@@ -791,6 +796,7 @@ async def create_firewall_policy(
         raise
 
 
+@write_tool
 async def update_firewall_policy(
     policy_id: str,
     site_id: str = "default",
@@ -1124,6 +1130,7 @@ async def update_firewall_policy(
         return FirewallPolicy(**data).model_dump()
 
 
+@write_tool
 async def delete_firewall_policy(
     policy_id: str,
     site_id: str = "default",
@@ -1218,6 +1225,7 @@ async def delete_firewall_policy(
         }
 
 
+@read_tool
 async def get_zone_policy_matrix(
     site_id: str,
     settings: Settings,

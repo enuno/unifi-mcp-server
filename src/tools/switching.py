@@ -13,8 +13,10 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def list_switch_stacks(
     site_id: str,
     settings: Settings,
@@ -54,6 +56,7 @@ async def list_switch_stacks(
         return stacks
 
 
+@read_tool
 async def get_switch_stack(
     site_id: str,
     switch_stack_id: str,
@@ -99,6 +102,7 @@ async def get_switch_stack(
         return stack.model_dump(exclude_none=True)
 
 
+@read_tool
 async def list_mclag_domains(
     site_id: str,
     settings: Settings,
@@ -138,6 +142,7 @@ async def list_mclag_domains(
         return domains
 
 
+@read_tool
 async def get_mclag_domain(
     site_id: str,
     mclag_domain_id: str,
@@ -185,6 +190,7 @@ async def get_mclag_domain(
         return domain.model_dump(exclude_none=True)
 
 
+@read_tool
 async def list_lags(
     site_id: str,
     settings: Settings,
@@ -224,6 +230,7 @@ async def list_lags(
         return lags
 
 
+@read_tool
 async def get_lag_details(
     site_id: str,
     lag_id: str,

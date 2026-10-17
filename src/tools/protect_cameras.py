@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectCamera
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool
 
 
 def _validate_camera_id(camera_id: str) -> str:
@@ -17,6 +18,7 @@ def _validate_camera_id(camera_id: str) -> str:
     return camera_id
 
 
+@read_tool
 async def list_protect_cameras(
     settings: Settings,
     limit: int | None = None,
@@ -49,6 +51,7 @@ async def list_protect_cameras(
     }
 
 
+@read_tool
 async def get_protect_camera(camera_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect camera."""
     logger = get_logger(__name__, settings.log_level)

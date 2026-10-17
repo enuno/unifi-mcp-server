@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectSiren
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -43,6 +44,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_sirens(
     settings: Settings,
     limit: int | None = None,
@@ -74,6 +76,7 @@ async def list_protect_sirens(
     }
 
 
+@read_tool
 async def get_protect_siren(siren_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect siren."""
     logger = get_logger(__name__, settings.log_level)
@@ -88,6 +91,7 @@ async def get_protect_siren(siren_id: str, settings: Settings) -> dict[str, Any]
     return siren.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_siren(
     siren_id: str,
     settings: Settings,
@@ -142,6 +146,7 @@ async def update_protect_siren(
     return siren.model_dump(by_alias=True)
 
 
+@write_tool
 async def play_protect_siren(
     siren_id: str,
     settings: Settings,
@@ -187,6 +192,7 @@ async def play_protect_siren(
     return {"success": True, "siren_id": siren_id, "response": _extract_item(response)}
 
 
+@write_tool
 async def stop_protect_siren(
     siren_id: str,
     settings: Settings,
@@ -222,6 +228,7 @@ async def stop_protect_siren(
     return {"success": True, "siren_id": siren_id, "response": _extract_item(response)}
 
 
+@write_tool
 async def test_protect_siren_sound(
     siren_id: str,
     settings: Settings,

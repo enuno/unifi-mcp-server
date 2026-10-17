@@ -19,6 +19,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -43,6 +44,7 @@ def _voucher_items(response: Any) -> list[dict]:
     return []
 
 
+@read_tool
 async def list_vouchers(
     site_id: str,
     settings: Settings,
@@ -86,6 +88,7 @@ async def list_vouchers(
         ]
 
 
+@read_tool
 async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict:
     """Get details for a specific voucher.
 
@@ -113,6 +116,7 @@ async def get_voucher(site_id: str, voucher_id: str, settings: Settings) -> dict
         return Voucher(**data).model_dump(exclude_none=True)
 
 
+@write_tool
 async def create_vouchers(
     site_id: str,
     name: str,
@@ -216,6 +220,7 @@ async def create_vouchers(
         return {"success": True, "count": count, "vouchers": vouchers}
 
 
+@write_tool
 async def delete_voucher(
     site_id: str,
     voucher_id: str,
@@ -265,6 +270,7 @@ async def delete_voucher(
         return {"success": True, "message": f"Voucher {voucher_id} deleted successfully"}
 
 
+@write_tool
 async def bulk_delete_vouchers(
     site_id: str,
     filter_expr: str,

@@ -21,8 +21,10 @@ from ..utils import (
     sanitize_log_message,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def list_events(
     site_id: str,
     settings: Settings,
@@ -100,6 +102,7 @@ async def list_events(
         return events
 
 
+@read_tool
 async def list_alarms(
     site_id: str,
     settings: Settings,
@@ -155,6 +158,7 @@ async def list_alarms(
         return alarms
 
 
+@read_tool
 async def list_neighboring_aps(
     site_id: str,
     settings: Settings,

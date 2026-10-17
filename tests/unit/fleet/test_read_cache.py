@@ -17,6 +17,7 @@ from src.config.config import APIType, Settings  # noqa: E402
 from src.fleet import ControllerProfile  # noqa: E402
 from src.fleet.router import FleetRouter  # noqa: E402
 from src.tool_registry import _make_tool_wrapper  # noqa: E402
+from src.utils import tool_kind  # noqa: E402
 from src.utils.metrics import MetricsRegistry  # noqa: E402
 
 from .test_router import StaticRegistry  # noqa: E402
@@ -84,10 +85,12 @@ class Controller:
         self.reads = 0
         self.version = 1
 
+    @tool_kind.read_tool
     async def list_devices(self, site_id: str, settings: Any = None) -> dict:
         self.reads += 1
         return {"host": settings.local_host, "site": site_id, "version": self.version}
 
+    @tool_kind.write_tool
     async def update_device(
         self, site_id: str, confirm: bool = False, dry_run: bool = False, settings: Any = None
     ) -> dict:
@@ -191,6 +194,7 @@ class TestReadThrough:
     async def test_concurrent_misses_share_one_controller_call(self, settings, router, cache):
         calls = 0
 
+        @tool_kind.read_tool
         async def slow_devices(site_id: str, settings: Any = None) -> dict:
             nonlocal calls
             calls += 1
@@ -208,6 +212,7 @@ class TestReadThrough:
     async def test_results_that_do_not_round_trip_are_not_cached(self, settings, router, cache):
         calls = 0
 
+        @tool_kind.read_tool
         async def tuple_devices(site_id: str, settings: Any = None) -> dict:
             nonlocal calls
             calls += 1

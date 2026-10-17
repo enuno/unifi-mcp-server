@@ -42,6 +42,7 @@ from src.fleet.registry import ControllerProfile  # noqa: E402
 from src.fleet.router import FleetRouter  # noqa: E402
 from src.tool_registry import _make_tool_wrapper  # noqa: E402
 from src.utils.exceptions import ResourceNotFoundError  # noqa: E402
+from src.utils.tool_kind import read_tool  # noqa: E402
 
 
 class _Registry:
@@ -81,6 +82,7 @@ class Fleet:
         return httpx.Response(200, json={"data": [{"mac": "aa:bb:cc:dd:ee:ff", "state": 1}]})
 
 
+@read_tool
 async def list_devices(site_id: str, settings: Any = None) -> dict[str, Any]:
     """A read tool written like the real ones: open a client, authenticate, read."""
     async with UniFiClient(settings) as client:

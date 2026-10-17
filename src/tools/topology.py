@@ -18,6 +18,8 @@ from src.utils.exceptions import (
 )
 from src.utils.validators import validate_site_id
 
+from ..utils.tool_kind import read_tool
+
 # The Integration API reports "ONLINE"; older/legacy payloads use "CONNECTED".
 _ONLINE_DEVICE_STATES = frozenset({"ONLINE", "CONNECTED"})
 
@@ -196,6 +198,7 @@ def _resolve_depth(device_id: str, uplinks: dict[str, str], cache: dict[str, int
     return cache[device_id]
 
 
+@read_tool
 async def get_network_topology(
     site_id: str,
     settings: Settings,
@@ -423,6 +426,7 @@ def _resolve_topology_node(topology: dict[str, Any], device_id: str) -> str:
     raise ResourceNotFoundError("device", device_id)
 
 
+@read_tool
 async def get_device_connections(
     site_id: str,
     device_id: str | None,
@@ -465,6 +469,7 @@ async def get_device_connections(
     return connections
 
 
+@read_tool
 async def get_port_mappings(
     site_id: str,
     device_id: str,
@@ -535,6 +540,7 @@ async def get_port_mappings(
     return {"device_id": node_id, "requested_id": device_id, "ports": port_map}
 
 
+@read_tool
 async def export_topology(
     site_id: str,
     format: Literal["json", "graphml", "dot"],
@@ -640,6 +646,7 @@ async def export_topology(
     return ""
 
 
+@read_tool
 async def get_topology_statistics(
     site_id: str,
     settings: Settings,

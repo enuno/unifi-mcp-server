@@ -21,6 +21,7 @@ from ..models.site_manager import (
 )
 from ..utils import get_logger, sanitize_log_message
 from ..utils.exceptions import ResourceNotFoundError
+from ..utils.tool_kind import read_tool
 
 logger = get_logger(__name__)
 
@@ -47,6 +48,7 @@ def require_site_manager(func: Any) -> Any:
     return wrapper
 
 
+@read_tool
 @require_site_manager
 async def list_all_sites_aggregated(settings: Settings) -> list[dict[str, Any]]:
     """List all sites with aggregated stats from Site Manager API.
@@ -75,6 +77,7 @@ async def list_all_sites_aggregated(settings: Settings) -> list[dict[str, Any]]:
         return sites
 
 
+@read_tool
 @require_site_manager
 async def get_internet_health(settings: Settings, site_id: str | None = None) -> dict[str, Any]:
     """Get internet health metrics across sites.
@@ -107,6 +110,7 @@ async def get_internet_health(settings: Settings, site_id: str | None = None) ->
             }
 
 
+@read_tool
 @require_site_manager
 async def get_site_health_summary(
     settings: Settings, site_id: str | None = None
@@ -146,6 +150,7 @@ async def get_site_health_summary(
                 return []
 
 
+@read_tool
 @require_site_manager
 async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
     """Get aggregate statistics across multiple sites.
@@ -219,6 +224,7 @@ async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
         ).model_dump()
 
 
+@read_tool
 @require_site_manager
 async def list_vantage_points(settings: Settings) -> list[dict[str, Any]]:
     """List all Vantage Points.
@@ -243,6 +249,7 @@ async def list_vantage_points(settings: Settings) -> list[dict[str, Any]]:
             return []
 
 
+@read_tool
 @require_site_manager
 async def get_site_inventory(
     settings: Settings, site_id: str | None = None
@@ -325,6 +332,7 @@ async def get_site_inventory(
             return inventories
 
 
+@read_tool
 @require_site_manager
 async def compare_site_performance(settings: Settings) -> dict[str, Any]:
     """Compare performance metrics across all sites.
@@ -443,6 +451,7 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
         return comparison.model_dump()
 
 
+@read_tool
 @require_site_manager
 async def search_across_sites(
     settings: Settings,
@@ -567,6 +576,7 @@ async def search_across_sites(
 
 
 # ISP Metrics Tools (added 2026-02-16)
+@read_tool
 @require_site_manager
 async def get_isp_metrics(settings: Settings, site_id: str) -> dict[str, Any]:
     """Get ISP metrics for a specific site.
@@ -595,6 +605,7 @@ async def get_isp_metrics(settings: Settings, site_id: str) -> dict[str, Any]:
             return {"error": "isp/metrics endpoint not available", "site_id": site_id}
 
 
+@read_tool
 @require_site_manager
 async def query_isp_metrics(
     settings: Settings,
@@ -632,6 +643,7 @@ async def query_isp_metrics(
 
 
 # SD-WAN Configuration Tools (added 2026-02-16)
+@read_tool
 @require_site_manager
 async def list_sdwan_configs(settings: Settings) -> list[dict[str, Any]]:
     """List all SD-WAN configurations.
@@ -662,6 +674,7 @@ async def list_sdwan_configs(settings: Settings) -> list[dict[str, Any]]:
             return []
 
 
+@read_tool
 @require_site_manager
 async def get_sdwan_config(settings: Settings, config_id: str) -> dict[str, Any]:
     """Get SD-WAN configuration by ID.
@@ -686,6 +699,7 @@ async def get_sdwan_config(settings: Settings, config_id: str) -> dict[str, Any]
         return SDWANConfig(**data).model_dump()
 
 
+@read_tool
 @require_site_manager
 async def get_sdwan_config_status(settings: Settings, config_id: str) -> dict[str, Any]:
     """Get SD-WAN configuration deployment status.
@@ -711,6 +725,7 @@ async def get_sdwan_config_status(settings: Settings, config_id: str) -> dict[st
 
 
 # Host Management Tools (added 2026-02-16)
+@read_tool
 @require_site_manager
 async def list_hosts(
     settings: Settings, limit: int | None = None, offset: int | None = None
@@ -741,6 +756,7 @@ async def list_hosts(
             return []
 
 
+@read_tool
 @require_site_manager
 async def get_host(settings: Settings, host_id: str) -> dict[str, Any]:
     """Get host details by ID.
@@ -766,6 +782,7 @@ async def get_host(settings: Settings, host_id: str) -> dict[str, Any]:
 
 
 # Version Control Tool (added 2026-02-16)
+@read_tool
 @require_site_manager
 async def get_version_control(settings: Settings) -> dict[str, Any]:
     """Get API version control information.

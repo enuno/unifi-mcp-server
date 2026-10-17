@@ -5,7 +5,7 @@ Path: @/src/tools
 ### Overview
 
 - Contains all MCP tool implementations for the UniFi MCP Server, covering every area of UniFi network management from RADIUS to firewall to traffic monitoring.
-- Each module corresponds to a functional domain (e.g., `radius.py`, `firewall.py`, `wifi.py`) and exports async functions. Every public `async def` in a module that `@/src/main.py` lists is registered as a tool by `register_module_tools()` in `@/src/tool_registry.py`; there is no decorator, and a leading `_` keeps a helper private.
+- Each module corresponds to a functional domain (e.g., `radius.py`, `firewall.py`, `wifi.py`) and exports async functions. Every public `async def` in a module that `@/src/main.py` lists is registered as a tool by `register_module_tools()` in `@/src/tool_registry.py`. Each tool is declared `@read_tool` or `@write_tool` (`@/src/utils/tool_kind.py`); registration fails without one. A leading `_` keeps a helper private.
 - Tools follow a consistent CRUD pattern: list/get/create/update/delete, with all mutating operations requiring `confirm=True` and supporting `dry_run` mode.
 
 ### How it fits into the larger codebase

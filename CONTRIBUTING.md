@@ -359,11 +359,11 @@ See `AI_GIT_PRACTICES.md` and `CONTRIBUTION_BEST_PRACTICES.md` for additional AI
 
 ### Bug Report Handler
 
-The repository includes an automated bug report handler that activates when issues are created with `[Bug]` in the title:
+The repository includes an automated bug report handler that activates when issues are created with `[Bug]` in the title by a repository owner, organization member or collaborator:
 
 **How It Works:**
 
-1. **Automatic Trigger:** The workflow activates when a new issue is opened with `[Bug]` in the title
+1. **Automatic Trigger:** The workflow activates when an issue with `[Bug]` in the title is opened, edited or labeled, and its author's association with the repository is `OWNER`, `MEMBER` or `COLLABORATOR`. Bug reports from other accounts are not sent to the automated handler, because the handler can push branches and open pull requests and the issue text is its prompt. A maintainer reviews those reports by hand.
 2. **Intelligent Analysis:** Claude AI analyzes the bug report to determine if it's:
    - A real bug that needs fixing
    - A usage misunderstanding that needs clarification
@@ -376,7 +376,7 @@ The repository includes an automated bug report handler that activates when issu
 
 **What to Expect:**
 
-- The workflow typically responds within a few minutes
+- For bug reports from owners, members and collaborators, the workflow typically responds within a few minutes
 - It will add appropriate labels (bug, documentation, needs-investigation, etc.)
 - It may create a pull request if the bug can be automatically fixed
 - It will always provide helpful feedback to the issue reporter

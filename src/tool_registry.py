@@ -94,6 +94,7 @@ DESTRUCTIVE_TOOLS = frozenset(
         "connector_protect_patch",
         "connector_protect_post",
         "connector_protect_put",
+        "debug_api_request",
         # Restore, re-image, or hand a device to another controller.
         "migrate_device",
         "restore_backup",

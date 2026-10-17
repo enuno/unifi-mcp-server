@@ -479,6 +479,7 @@ class TestDocumentedSettings:
 
     #: Read with os.environ outside Settings (key material and CLI-only URLs).
     OUTSIDE_SETTINGS = {
+        "DEBUG",
         "MIGRATION_DATABASE_URL",
         "UNIFI_AUDIT_CHAIN_KEY",
         "UNIFI_AUDIT_LOG_KEY",

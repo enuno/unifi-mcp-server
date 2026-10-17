@@ -47,6 +47,7 @@
   "create_traffic_matching_list": "write",
   "create_vouchers": "write",
   "create_wlan": "write",
+  "debug_api_request": "destructive",
   "delete_acl_rule": "destructive",
   "delete_backup": "destructive",
   "delete_content_filter": "destructive",

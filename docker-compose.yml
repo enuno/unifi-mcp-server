@@ -24,6 +24,8 @@ services:
       UNIFI_LOCAL_PORT: ${UNIFI_LOCAL_PORT:-443}
       UNIFI_LOCAL_HOST: ${UNIFI_LOCAL_HOST:-}
       UNIFI_LOCAL_VERIFY_SSL: ${UNIFI_LOCAL_VERIFY_SSL:-true}
+      # Path inside the container: mount the CA certificate as a volume too.
+      UNIFI_LOCAL_CA_FILE: ${UNIFI_LOCAL_CA_FILE:-}
       UNIFI_DEFAULT_SITE: ${UNIFI_DEFAULT_SITE:-default}
 
       # MCP Server Transport Configuration

@@ -21,6 +21,7 @@ from fastmcp.server.dependencies import get_context
 
 from ..config import Settings, TransportMode
 from ..utils.exceptions import ValidationError
+from ..utils.logger import get_logger
 from .registry import ControllerProfile, ControllerRegistry
 
 #: Session-state key holding the controller chosen with ``select_controller``.
@@ -30,6 +31,8 @@ SESSION_KEY = "unifi.active_controller"
 #: call. Set by the tool wrapper so logs, metrics and audit records can read it
 #: without threading it through every signature.
 current_controller: ContextVar[str | None] = ContextVar("unifi_current_controller", default=None)
+
+logger = get_logger(__name__)
 
 Source = Literal["explicit", "session", "default"]
 
@@ -65,6 +68,7 @@ class FleetRouter:
         self.base = base
         self.registry = registry
         self._derived: dict[str, tuple[ControllerProfile, Settings]] = {}
+        self._tls_warned: set[tuple[str, str, str | None]] = set()
 
     @property
     def stateless(self) -> bool:
@@ -172,5 +176,31 @@ class FleetRouter:
         derived = profile.apply_to(self.base)
         if derived == self.base:
             derived = self.base
+        else:
+            self._warn_tls(profile.name, derived)
         self._derived[profile.name] = (profile, derived)
         return derived
+
+    def _warn_tls(self, name: str, settings: Settings) -> None:
+        """Log a controller's TLS warnings once per effective configuration.
+
+        The base settings are warned about at startup (``main``); this covers
+        registry profiles, which can turn verification off for one controller.
+        """
+        warnings = settings.tls_warnings(controller=name)
+        key = (name, settings.base_url, settings.local_ca_file)
+        if not warnings or key in self._tls_warned:
+            return
+        self._tls_warned.add(key)
+        for message in warnings:
+            logger.warning(message)
+
+    async def warn_insecure_controllers(self) -> None:
+        """Log TLS warnings for every registered controller.
+
+        Run once the registry has loaded, so a database-backed controller with
+        verification off is reported at startup, not only on its first call.
+        Profiles added or changed later are reported when first resolved.
+        """
+        for profile in await self.registry.list_controllers():
+            self.settings_for(profile)

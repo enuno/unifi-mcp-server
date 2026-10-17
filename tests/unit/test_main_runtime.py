@@ -188,6 +188,31 @@ class TestLifespan:
                 pass  # pragma: no cover - startup fails first
         assert order == ["forwarder.start", "registry.start", "forwarder.stop"]
 
+    @pytest.mark.asyncio
+    async def test_warns_about_registry_controllers_after_loading(
+        self, main_mod: ModuleType
+    ) -> None:
+        order: list[str] = []
+        registry = MagicMock()
+        registry.start = AsyncMock(side_effect=lambda: order.append("registry.start"))
+        registry.stop = AsyncMock()
+        pytest.importorskip("sqlalchemy")
+        from src.fleet.db import audit_store
+
+        async def warn() -> None:
+            order.append("warn")
+
+        with (
+            patch.object(main_mod, "fleet_registry", registry),
+            patch.object(main_mod.fleet_router, "warn_insecure_controllers", warn),
+            patch.object(main_mod, "audit_server_start", AsyncMock()),
+            patch.object(main_mod.client_pool, "aclose", AsyncMock()),
+            patch.object(audit_store, "install"),
+        ):
+            async with main_mod._lifespan(None):
+                pass
+        assert order == ["registry.start", "warn"]
+
 
 class TestMainEntryPoint:
     def test_stdio(self, main_mod: ModuleType) -> None:

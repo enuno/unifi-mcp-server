@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The MCP Toolbox container sends no telemetry by default.** `docker-compose.yml` pointed the toolbox's OTLP exporter at `https://api.agnost.ai/v1/otel/${AGNOST_ORG_ID}` unconditionally, even with `AGNOST_ENABLED=false` and an empty org ID, while the server's own agnost tracking is opt-in. The endpoint now comes from `TOOLBOX_TELEMETRY_OTLP`, and toolbox exports nothing when it is unset. To keep sending to agnost.ai, set it to that URL with your org ID.
+
 ### Fixed
+
+- **The stock `docker-compose.yml` can run read-only or preview-only.** Its explicit `environment:` block (there is no `env_file`) did not forward `UNIFI_READ_ONLY` or `UNIFI_DRY_RUN`, so setting either in `.env` had no effect, and the `DRY_RUN` it did forward is a name the server never reads. Both are now forwarded under their real names and `DRY_RUN` is gone. If your `.env` sets `DRY_RUN`, rename it to `UNIFI_DRY_RUN`.
+- **The compose healthcheck checks the right thing.** It requested `/health`, but the liveness route is `/healthz`, and with the default stdio transport there is no HTTP listener at all, so the container was never reported healthy. Over a network transport it now requests `/healthz` on the configured host and port and fails on an error status; over stdio it checks that the settings load, as the image's own `HEALTHCHECK` does.
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.
 - **Port forwarding rejects malformed addresses and ports** ([#217](https://github.com/enuno/unifi-mcp-server/issues/217)). `validate_ip_address` checked each octet with `int()`, which also accepts whitespace, a `+` sign, `_` separators, leading zeros and non-ASCII digits, and then returned the input unchanged, so `create_port_forward` and `update_port_forward` sent values such as `" 192.168.1.10"` or `"010.0.0.1"` to the controller. It now parses with `ipaddress` and returns the canonical form, and rejects non-string input. A new `validate_ip_or_cidr` checks the whole `src` value, including its prefix length (`/99` and `/abc` were never checked), and clears host bits. `validate_port` no longer accepts `True` as port 1.

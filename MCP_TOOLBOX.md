@@ -80,9 +80,12 @@ nano .env  # or use your preferred editor
 # UniFi API Configuration
 UNIFI_API_KEY=your-unifi-api-key-here
 
-# Agnost Configuration (required for Toolbox)
+# Agnost Configuration (optional)
 AGNOST_ENABLED=true
 AGNOST_ORG_ID=your-organization-id-here
+
+# Toolbox telemetry export (optional; off when unset)
+TOOLBOX_TELEMETRY_OTLP=https://api.agnost.ai/v1/otel/your-organization-id-here
 ```
 
 ```bash
@@ -120,13 +123,14 @@ docker-compose down -v
 | `AGNOST_ORG_ID` | Yes* | - | Your agnost organization ID |
 | `AGNOST_ENDPOINT` | No | `https://api.agnost.ai` | Agnost API endpoint |
 
-*Required if AGNOST_ENABLED=true or using Toolbox
+*Required if AGNOST_ENABLED=true
 
 #### Toolbox Configuration
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `TOOLBOX_PORT` | No | `8080` | Dashboard web interface port |
+| `TOOLBOX_TELEMETRY_OTLP` | No | unset | OTLP endpoint the toolbox exports telemetry to. Unset, it exports nothing. For agnost.ai: `https://api.agnost.ai/v1/otel/<AGNOST_ORG_ID>` |
 | `TOOLBOX_AUTH_ENABLED` | No | `false` | Enable authentication |
 | `TOOLBOX_USERNAME` | No | `admin` | Admin username (if auth enabled) |
 | `TOOLBOX_PASSWORD` | No | - | Admin password (if auth enabled) |

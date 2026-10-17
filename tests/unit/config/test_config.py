@@ -495,6 +495,7 @@ class TestDocumentedSettings:
         "AGNOST_DISABLE_OUTPUT",
         "TOOLBOX_PORT",
         "TOOLBOX_SERVICE_NAME",
+        "TOOLBOX_TELEMETRY_OTLP",
         "TOOLBOX_VERSION",
     }
     #: In Settings but deliberately left out of .env.example.

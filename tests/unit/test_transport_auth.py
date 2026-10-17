@@ -60,6 +60,53 @@ def test_auth_tokens_split_on_comma() -> None:
     assert settings.mcp_auth_tokens == ["a", "b", "c"]
 
 
+def test_auth_token_roles_default_to_fleet_admin() -> None:
+    settings = _settings(MCP_AUTH_TOKEN="a,b")
+    assert settings.mcp_auth_token_roles == {"a": "fleet-admin", "b": "fleet-admin"}
+
+
+def test_auth_token_role_prefix() -> None:
+    settings = _settings(
+        MCP_AUTH_TOKEN="viewer:v, operator: o ,admin:a,fleet-admin:f,plain,other:x:y"
+    )
+    assert settings.mcp_auth_token_roles == {
+        "v": "viewer",
+        "o": "operator",
+        "a": "admin",
+        "f": "fleet-admin",
+        "plain": "fleet-admin",
+        # Only the four role names are prefixes; anything else is the whole token.
+        "other:x:y": "fleet-admin",
+    }
+    assert settings.mcp_auth_tokens == ["v", "o", "a", "f", "plain", "other:x:y"]
+
+
+def test_auth_token_prefix_strips_only_the_role() -> None:
+    settings = _settings(MCP_AUTH_TOKEN="viewer:abc:def")
+    assert settings.mcp_auth_token_roles == {"abc:def": "viewer"}
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ("viewer:", "has no token"),
+        ("viewer:  ,s3cr3t", "has no token"),
+        ("viewer:s3cr3t,admin:s3cr3t", "two different roles"),
+        ("s3cr3t,viewer:s3cr3t", "two different roles"),
+    ],
+)
+def test_build_auth_provider_refuses_bad_token_entries(raw, message) -> None:
+    main = _reload_main()
+    with pytest.raises(SystemExit, match=message) as err:
+        main.build_auth_provider(_settings(MCP_AUTH_TOKEN=raw))
+    assert "s3cr3t" not in str(err.value)
+
+
+def test_auth_token_repeated_with_one_role_is_accepted() -> None:
+    settings = _settings(MCP_AUTH_TOKEN="viewer:tok,viewer:tok")
+    assert settings.mcp_auth_token_roles == {"tok": "viewer"}
+
+
 # --------------------------------------------------------------------------- #
 # build_auth_provider / ensure_network_transport_authenticated
 # --------------------------------------------------------------------------- #
@@ -76,6 +123,18 @@ def test_build_auth_provider_verifier_with_token() -> None:
     main = _reload_main()
     provider = main.build_auth_provider(_settings(MCP_AUTH_TOKEN="tok-1,tok-2"))
     assert isinstance(provider, StaticTokenVerifier)
+
+
+async def test_static_verifier_attaches_each_tokens_role() -> None:
+    main = _reload_main()
+    provider = main.build_auth_provider(_settings(MCP_AUTH_TOKEN="viewer:tok-v,tok-f"))
+
+    viewer = await provider.verify_token("tok-v")
+    full = await provider.verify_token("tok-f")
+
+    assert viewer.claims["static_role"] == "viewer"
+    assert full.claims["static_role"] == "fleet-admin"
+    assert await provider.verify_token("viewer:tok-v") is None
 
 
 def test_stdio_never_requires_a_token() -> None:

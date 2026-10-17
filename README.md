@@ -140,7 +140,7 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 | `UNIFI_PROFILE` | Register only one group of tools ([profiles](#tool-profiles-and-safety-controls)) | all |
 | `UNIFI_READ_ONLY` / `UNIFI_DRY_RUN` | Read-only or preview-only server | `false` |
 | `MCP_SERVER_TRANSPORT` | `stdio`, `streamable_http`, `http` or `sse` | `stdio` |
-| `MCP_AUTH_TOKEN` | Bearer token, required on network transports | — |
+| `MCP_AUTH_TOKEN` | Bearer token, required on network transports; `viewer:<token>` (or `operator:`, `admin:`) limits a token's role | — |
 | `REDIS_URL` | Optional response cache | — |
 | `WEBHOOK_SECRET` | HMAC secret for incoming UniFi webhooks | — |
 | `DATABASE_URL` | Turns on fleet mode (Postgres) | — |

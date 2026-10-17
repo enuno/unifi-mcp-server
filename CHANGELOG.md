@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Roles for `MCP_AUTH_TOKEN` tokens.** An entry can now be written `<role>:<token>` (`viewer`, `operator`, `admin` or `fleet-admin`), so a single host without the Postgres fleet registry can hand out a read-only token: `MCP_AUTH_TOKEN=viewer:<token>,<admin-token>`. Clients send only the token part. A bare token is still a break-glass `fleet-admin`, so existing configurations behave as before, with one exception: a token that itself starts with `viewer:`, `operator:`, `admin:` or `fleet-admin:` is now read as a role and the rest of the entry. The server refuses to start when an entry has a role and no token, or lists one token with two roles. Static tokens with a role below `fleet-admin` are not flagged as break-glass in audit records. Works the same with and without `DATABASE_URL`.
+
 ### Fixed
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.

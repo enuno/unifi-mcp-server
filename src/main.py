@@ -196,6 +196,8 @@ def build_auth_provider(current_settings: Settings, token_store: Any = None) -> 
     accepting ``MCP_AUTH_TOKEN`` tokens and server-issued API tokens. Otherwise
     returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
     ``MCP_AUTH_TOKEN`` when at least one is configured, otherwise ``None``.
+    Either way each ``MCP_AUTH_TOKEN`` token carries its role (``<role>:<token>``,
+    default ``fleet-admin``) as the ``static_role`` claim.
     Over stdio the provider is ignored; over a network transport ``None``
     means the server refuses to start (see
     :func:`ensure_network_transport_authenticated`).
@@ -206,19 +208,29 @@ def build_auth_provider(current_settings: Settings, token_store: Any = None) -> 
 
     Returns:
         A FastMCP auth provider, or None when no token is configured
+
+    Raises:
+        SystemExit: If ``MCP_AUTH_TOKEN`` has an entry with a role and no
+            token, or gives one token two roles
     """
-    tokens = current_settings.mcp_auth_tokens
+    try:
+        token_roles = current_settings.mcp_auth_token_roles
+    except ValueError as e:
+        raise SystemExit(f"Invalid MCP_AUTH_TOKEN: {e}") from None
     if token_store is not None:
         from .fleet.tokens import FleetTokenVerifier
 
-        return FleetTokenVerifier(tokens, token_store)
-    if not tokens:
+        return FleetTokenVerifier(token_roles, token_store)
+    if not token_roles:
         return None
 
     from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
     return StaticTokenVerifier(
-        tokens={token: {"client_id": "mcp-client", "scopes": []} for token in tokens}
+        tokens={
+            token: {"client_id": "mcp-client", "scopes": [], "static_role": role}
+            for token, role in token_roles.items()
+        }
     )
 
 

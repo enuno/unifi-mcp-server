@@ -695,7 +695,7 @@ viewers = await mcp.call_tool("list_protect_viewers", {})
 - `get_protect_event_messages(limit=None, offset=None)` compatibility alias
 - `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
 - `get_protect_device_updates(limit=None, offset=None)` compatibility alias
-- `send_protect_alarm_webhook(webhook_id, payload=None)`
+- `send_protect_alarm_webhook(webhook_id, payload=None)`: `webhook_id` is the alarm's webhook trigger ID, one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`
 
 ```python
 events = await mcp.call_tool("list_protect_events", {})

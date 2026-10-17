@@ -457,3 +457,75 @@ class TestConnectorWriteTools:
         kwargs["path"] = "  "
         with pytest.raises(ValidationError, match="path must not be empty"):
             await tool(settings=mock_settings, **kwargs)
+
+
+# =============================================================================
+# Path and console_id allowlist (all ten passthroughs)
+# =============================================================================
+
+ALL_TOOLS = [
+    (connector_network_get, "network", "get"),
+    (connector_protect_get, "protect", "get"),
+] + [(t[0], t[1], t[2]) for t in WRITE_TOOLS]
+ALL_IDS = [t[0].__name__ for t in ALL_TOOLS]
+
+BAD_PATHS = [
+    "../../../v1/hosts",
+    "api/s/default/../../../../v1/hosts",
+    "api/./s/default",
+    "api/s/default/stat/device?mac=00:11:22:33:44:55",
+    "api/s/default/stat/device#frag",
+    "api/%2e%2e/v1/hosts",
+    "api//s/default",
+    "api\\s\\default",
+    "api/s/default stat",
+    "api/s/default\n/stat",
+    "a" * 2049,
+]
+
+BAD_CONSOLE_IDS = ["../c1", "c1/../c2", "c1?x=1", "..", "c1%2f", "c 1"]
+
+
+def _all_kwargs(method: str, **extra):
+    kwargs = {"console_id": "c1", "path": "v1/thing", **extra}
+    if method != "get":
+        kwargs["confirm"] = True
+    return kwargs
+
+
+@pytest.mark.parametrize(("tool", "app", "method"), ALL_TOOLS, ids=ALL_IDS)
+class TestConnectorPathAllowlist:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", BAD_PATHS)
+    async def test_bad_path_rejected_before_any_request(
+        self, mock_settings, tool, app, method, path
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            with pytest.raises(ValidationError, match="path"):
+                await tool(settings=mock_settings, **_all_kwargs(method, path=path))
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("console_id", BAD_CONSOLE_IDS)
+    async def test_bad_console_id_rejected_before_any_request(
+        self, mock_settings, tool, app, method, console_id
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            with pytest.raises(ValidationError, match="console_id"):
+                await tool(settings=mock_settings, **_all_kwargs(method, console_id=console_id))
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_real_console_id_and_path_accepted(self, mock_settings, tool, app, method):
+        console_id = "70A7419783ED0000000006B2B3270000000006E60D1C0000000062148EC3:1093004219"
+        path = "/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/"
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client({"ok": True})
+            await tool(
+                settings=mock_settings, **_all_kwargs(method, console_id=console_id, path=path)
+            )
+        call = getattr(mock_cls.return_value, method)
+        assert call.await_args.args[0] == (
+            f"connector/consoles/{console_id}/proxy/{app}/"
+            "proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/"
+        )

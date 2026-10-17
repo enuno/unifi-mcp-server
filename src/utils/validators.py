@@ -154,12 +154,126 @@ def validate_device_id(device_id: str) -> str:
         raise ValidationError("Device ID cannot be empty")
 
     lowered = device_id.lower()
-    if not (_OBJECT_ID_RE.match(lowered) or _UUID_RE.match(lowered)):
+    if not (_OBJECT_ID_RE.fullmatch(lowered) or _UUID_RE.fullmatch(lowered)):
         raise ValidationError(
             f"Invalid device ID format: {device_id} (expected 24-hex ObjectId or UUID)"
         )
 
     return lowered
+
+
+def validate_object_id(value: str, field: str = "ID") -> str:
+    """Validate a controller object ID before it is used in a request path.
+
+    Accepts the same two ID spaces as :func:`validate_device_id`: 24-character
+    hex MongoDB ObjectIds and UUIDs. Anything else, including ``/``, ``..`` and
+    query characters, is rejected so the ID cannot retarget the request.
+
+    Args:
+        value: Object identifier supplied by the caller
+        field: Name of the argument, used in error messages
+
+    Returns:
+        The validated, lowercased ID
+
+    Raises:
+        ValidationError: If the ID matches neither format
+    """
+    if not value or not isinstance(value, str):
+        raise ValidationError(f"{field} cannot be empty")
+
+    lowered = value.lower()
+    if not (_OBJECT_ID_RE.fullmatch(lowered) or _UUID_RE.fullmatch(lowered)):
+        raise ValidationError(
+            f"Invalid {field} format: {value!r} (expected 24-hex ObjectId or UUID)"
+        )
+
+    return lowered
+
+
+_PATH_SEGMENT_RE = re.compile(r"[A-Za-z0-9._~:-]{1,256}")
+
+
+def validate_path_segment(value: str, field: str = "ID") -> str:
+    """Validate a free-form identifier that becomes one path segment.
+
+    For identifiers that are not ObjectIds or UUIDs, such as user-defined Protect
+    alarm webhook IDs or Site Manager console IDs. Surrounding whitespace is
+    stripped. Only RFC 3986 unreserved characters and ``:`` are allowed, and a
+    value made only of dots is refused, so the ID stays a single plain segment.
+
+    Args:
+        value: Identifier supplied by the caller
+        field: Name of the argument, used in error messages
+
+    Returns:
+        The stripped identifier
+
+    Raises:
+        ValidationError: If the identifier is empty, is ``.``/``..``-like, or has
+            characters outside ``[A-Za-z0-9._~:-]``
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationError(f"{field} cannot be empty")
+
+    stripped = value.strip()
+    if not _PATH_SEGMENT_RE.fullmatch(stripped) or not stripped.strip("."):
+        raise ValidationError(
+            f"Invalid {field}: {value!r} "
+            "(allowed: letters, digits, '.', '_', '~', ':', '-'; not '.' or '..')"
+        )
+
+    return stripped
+
+
+_PROXY_PATH_MAX_LEN = 2048
+
+
+def validate_proxy_path(path: str) -> str:
+    """Validate a sub-path forwarded through a proxy passthrough tool.
+
+    The path is appended to a fixed proxy prefix, for example
+    ``connector/consoles/{console_id}/proxy/network/``. HTTP clients resolve
+    ``.`` and ``..`` segments, so ``../../../v1/hosts`` would escape the prefix
+    and reach any endpoint the token can, and ``?``, ``#`` and ``%`` would let a
+    caller smuggle a query, a fragment or an encoded traversal into the URL.
+
+    Leading slashes are stripped. Every segment must match
+    ``[A-Za-z0-9._~:-]`` and must not be ``.`` or ``..``. Empty segments
+    (``a//b``) are refused, apart from a single trailing slash. Query
+    parameters belong in the tool's ``params`` argument.
+
+    Args:
+        path: Sub-path supplied by the caller
+
+    Returns:
+        The path without leading slashes
+
+    Raises:
+        ValidationError: If the path is empty, too long, or has a segment that
+            is not allowed
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValidationError("path must not be empty")
+
+    normalised = path.lstrip("/")
+    if not normalised:
+        raise ValidationError("path must not be empty")
+    if len(normalised) > _PROXY_PATH_MAX_LEN:
+        raise ValidationError(f"path is longer than {_PROXY_PATH_MAX_LEN} characters")
+
+    segments = normalised.split("/")
+    if segments[-1] == "":
+        segments = segments[:-1]
+    for segment in segments:
+        if segment in (".", "..") or not _PATH_SEGMENT_RE.fullmatch(segment):
+            raise ValidationError(
+                f"Invalid path: {path!r}. Each segment may use only letters, digits, "
+                "'.', '_', '~', ':' and '-', and may not be empty, '.' or '..'. "
+                "Pass query parameters in params, not in the path."
+            )
+
+    return normalised
 
 
 def coerce_bool(value: bool | str | None) -> bool:

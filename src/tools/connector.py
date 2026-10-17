@@ -20,16 +20,19 @@ from typing import Any
 
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
-from ..utils import ValidationError, get_logger, validate_confirmation
+from ..utils import get_logger, validate_confirmation, validate_path_segment, validate_proxy_path
 
 
 def _validate_connector_params(console_id: str, path: str) -> str:
-    """Validate console_id and path, return normalised path (no leading slash)."""
-    if not console_id or not console_id.strip():
-        raise ValidationError("console_id must not be empty")
-    if not path or not path.strip():
-        raise ValidationError("path must not be empty")
-    return path.lstrip("/")
+    """Validate console_id and path, return normalised path (no leading slash).
+
+    Both are interpolated into
+    ``connector/consoles/{console_id}/proxy/<app>/{path}``, so neither may
+    carry ``/``, ``..``, or query characters that would retarget the request
+    outside the proxy prefix.
+    """
+    validate_path_segment(console_id, "console_id")
+    return validate_proxy_path(path)
 
 
 # ---------------------------------------------------------------------------
@@ -59,7 +62,7 @@ async def connector_network_get(
         Raw response from the proxied Network API endpoint
 
     Raises:
-        ValidationError: If console_id or path is empty
+        ValidationError: If console_id or path is empty or not allowed
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:
@@ -96,7 +99,7 @@ async def connector_network_post(
         Raw response or dry-run preview
 
     Raises:
-        ValidationError: If console_id/path is empty or confirm not provided
+        ValidationError: If console_id/path is empty or not allowed, or confirm not provided
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:
@@ -251,7 +254,7 @@ async def connector_protect_get(
         Raw response from the proxied Protect API endpoint
 
     Raises:
-        ValidationError: If console_id or path is empty
+        ValidationError: If console_id or path is empty or not allowed
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:

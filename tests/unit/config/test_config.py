@@ -1,5 +1,6 @@
 """Unit tests for src/config/config.py Settings class."""
 
+import certifi
 import pytest
 
 from src.config.config import APIType, Settings, TransportMode
@@ -544,3 +545,66 @@ class TestDocumentedSettings:
             self._env_assignments() - self._aliases() - self.OUTSIDE_SETTINGS - self.THIRD_PARTY
         )
         assert sorted(unknown) == []
+
+
+class TestLocalTLSSettings:
+    """UNIFI_LOCAL_VERIFY_SSL, UNIFI_LOCAL_CA_FILE and the startup warning."""
+
+    @pytest.fixture
+    def local_env(self, monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "local")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+        return monkeypatch
+
+    def test_verification_is_on_by_default(self, local_env):
+        settings = Settings()
+        assert settings.local_verify_ssl is True
+        assert settings.verify_ssl is True
+        assert settings.tls_warnings() == []
+
+    def test_ca_file_becomes_the_verify_value(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_CA_FILE", certifi.where())
+        assert Settings().verify_ssl == certifi.where()
+
+    def test_blank_ca_file_is_unset(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_CA_FILE", "")
+        settings = Settings()
+        assert settings.local_ca_file is None
+        assert settings.verify_ssl is True
+
+    def test_missing_ca_file_fails_at_startup(self, local_env, tmp_path):
+        local_env.setenv("UNIFI_LOCAL_CA_FILE", str(tmp_path / "missing.pem"))
+        with pytest.raises(ValueError, match="UNIFI_LOCAL_CA_FILE"):
+            Settings()
+
+    def test_ca_file_without_a_certificate_fails_at_startup(self, local_env, tmp_path):
+        bogus = tmp_path / "bogus.pem"
+        bogus.write_text("not a certificate\n")
+        local_env.setenv("UNIFI_LOCAL_CA_FILE", str(bogus))
+        with pytest.raises(ValueError, match="UNIFI_LOCAL_CA_FILE"):
+            Settings()
+
+    def test_verification_off_warns(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
+        settings = Settings()
+        assert settings.verify_ssl is False
+        warnings = settings.tls_warnings()
+        assert len(warnings) == 1
+        assert "verification is OFF" in warnings[0]
+        assert "https://192.168.2.1:443" in warnings[0]
+
+    def test_verification_off_ignores_the_ca_file_and_says_so(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
+        local_env.setenv("UNIFI_LOCAL_CA_FILE", certifi.where())
+        settings = Settings()
+        assert settings.verify_ssl is False
+        assert any("ignored" in w for w in settings.tls_warnings())
+
+    def test_cloud_always_verifies_and_never_warns(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        monkeypatch.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
+        settings = Settings()
+        assert settings.verify_ssl is True
+        assert settings.tls_warnings() == []

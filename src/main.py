@@ -660,6 +660,11 @@ if (
         ", ".join(sorted(_PROFILE_MODULES)),
     )
 
+# Verification off accepts any certificate, and sends the API key to whoever
+# presents it. Nothing else reports it, so warn at startup.
+for _tls_warning in settings.tls_warnings():
+    logger.warning(_tls_warning)
+
 if settings.read_only:
     logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 

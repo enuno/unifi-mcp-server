@@ -32,6 +32,7 @@ import httpx
 from ..config import Settings
 from ..utils.exceptions import NetworkError
 from ..utils.logger import get_logger
+from .tls import httpx_verify
 
 logger = get_logger(__name__)
 
@@ -258,7 +259,7 @@ class ClientPool:
                 client=httpx.AsyncClient(
                     headers=settings.get_headers(),
                     timeout=settings.request_timeout,
-                    verify=settings.verify_ssl,
+                    verify=httpx_verify(settings.verify_ssl),
                     follow_redirects=False,
                     transport=self._transport,
                 ),

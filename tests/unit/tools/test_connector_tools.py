@@ -457,3 +457,63 @@ class TestConnectorWriteTools:
         kwargs["path"] = "  "
         with pytest.raises(ValidationError, match="path must not be empty"):
             await tool(settings=mock_settings, **kwargs)
+
+
+# =============================================================================
+# Array replies through the MCP protocol (issue #222)
+# =============================================================================
+
+
+class TestArrayReplies:
+    """A proxied endpoint answering with a JSON array must reach the caller.
+
+    The tools used to be annotated ``-> dict[str, Any]``, so FastMCP built an
+    object output schema and rejected ``[]`` with "structured_content must be
+    a dict". Many ``proxy/network/v2/api/...`` endpoints answer with arrays.
+    """
+
+    @pytest.fixture
+    def site_manager_settings(self, monkeypatch: pytest.MonkeyPatch):
+        from src.config.config import Settings
+
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_SITE_MANAGER_ENABLED", "true")
+        return Settings()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reply", [[], [{"_id": "route1"}], {"data": []}])
+    async def test_get_reply_shapes(self, site_manager_settings, reply):
+        from fastmcp import Client, FastMCP
+
+        import src.tools.connector as connector
+        from src.tool_registry import register_module_tools
+
+        mcp = FastMCP("test")
+        register_module_tools(
+            mcp, connector, site_manager_settings, include=["connector_network_get"]
+        )
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client()
+            mock_cls.return_value.get = AsyncMock(return_value=reply)
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "connector_network_get",
+                    {"console_id": "c1", "path": "v2/api/site/default/trafficroutes"},
+                )
+
+        assert not result.is_error
+        assert result.data == reply
+
+    @pytest.mark.asyncio
+    async def test_mutating_tools_accept_array_replies(self, mock_settings):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client()
+            mock_cls.return_value.post = AsyncMock(return_value=[{"_id": "r1"}])
+            result = await connector_network_post(
+                console_id="c1",
+                path="v2/api/site/default/trafficroutes",
+                settings=mock_settings,
+                body={"enabled": True},
+                confirm=True,
+            )
+        assert result == [{"_id": "r1"}]

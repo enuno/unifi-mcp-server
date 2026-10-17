@@ -60,10 +60,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --locked --python 3.10 --extra dev
 
       - name: Run Safety check
         run: |
@@ -142,7 +139,7 @@ jobs:
           fi
 
       - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@e76dff8a7e57d6df0c60ad8cbf5d5cba505a8fc9 # v3.99.2
         if: github.event_name == 'pull_request'
         with:
           path: ./
@@ -168,10 +165,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --locked --python 3.10 --extra dev
 
       - name: Run Bandit
         run: |
@@ -207,7 +201,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -222,7 +216,7 @@ jobs:
           sarif_file: 'trivy-results.sarif'
 
       - name: Run Trivy JSON report
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -259,7 +253,7 @@ jobs:
         continue-on-error: true
 
       - name: Run Trivy on Docker image
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success()
         with:
           image-ref: 'unifi-mcp-server:scan'
@@ -271,7 +265,7 @@ jobs:
       # The same check as the release workflow's blocking gate, printed as a
       # table, so a pull request shows what would stop the next release.
       - name: Show Trivy findings the release gate blocks on
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         if: success()
         with:
           image-ref: 'unifi-mcp-server:scan'

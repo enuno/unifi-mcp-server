@@ -9,6 +9,10 @@ from ..utils import APIError, AuthenticationError, NetworkError, ResourceNotFoun
 
 logger = get_logger(__name__)
 
+#: A decoded JSON reply: most Site Manager endpoints answer with an object, but
+#: endpoints reached through the Cloud Connector proxy can answer with an array.
+JSONBody = dict[str, Any] | list[Any]
+
 
 class SiteManagerClient:
     """Client for UniFi Site Manager API (api.ui.com/v1/)."""
@@ -74,7 +78,7 @@ class SiteManagerClient:
             self.logger.error(f"Site Manager authentication failed: {e}")
             raise AuthenticationError(f"Failed to authenticate with Site Manager API: {e}") from e
 
-    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> JSONBody:
         """Make a GET request to Site Manager API.
 
         Args:
@@ -82,7 +86,8 @@ class SiteManagerClient:
             params: Query parameters
 
         Returns:
-            Response data as dictionary
+            The decoded JSON reply: an object, or an array for endpoints that
+            answer with one (many Cloud Connector proxy paths do)
 
         Raises:
             APIError: If API returns an error
@@ -98,7 +103,7 @@ class SiteManagerClient:
             response = await self.client.get(endpoint, params=params)
             response.raise_for_status()
 
-            return cast(dict[str, Any], response.json())
+            return cast(JSONBody, response.json())
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 401:
@@ -121,7 +126,7 @@ class SiteManagerClient:
         method: str,
         endpoint: str,
         json_data: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> JSONBody:
         """Make a mutating (POST/PUT/PATCH/DELETE) request to Site Manager API.
 
         Args:
@@ -130,7 +135,8 @@ class SiteManagerClient:
             json_data: Optional request body
 
         Returns:
-            Response data as dictionary
+            The decoded JSON reply: an object, or an array for endpoints that
+            answer with one (many Cloud Connector proxy paths do)
 
         Raises:
             APIError: If API returns an error
@@ -149,7 +155,7 @@ class SiteManagerClient:
             response.raise_for_status()
 
             if response.content:
-                return cast(dict[str, Any], response.json())
+                return cast(JSONBody, response.json())
             return {}
 
         except httpx.HTTPStatusError as e:
@@ -168,21 +174,41 @@ class SiteManagerClient:
             self.logger.error(f"Unexpected error in Site Manager API request: {e}")
             raise APIError(f"Unexpected error: {e}") from e
 
-    async def post(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def post(self, endpoint: str, json_data: dict[str, Any] | None = None) -> JSONBody:
         """Make a POST request to Site Manager API."""
         return await self._mutate("post", endpoint, json_data)
 
-    async def put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> JSONBody:
         """Make a PUT request to Site Manager API."""
         return await self._mutate("put", endpoint, json_data)
 
-    async def patch(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def patch(self, endpoint: str, json_data: dict[str, Any] | None = None) -> JSONBody:
         """Make a PATCH request to Site Manager API."""
         return await self._mutate("patch", endpoint, json_data)
 
-    async def delete(self, endpoint: str) -> dict[str, Any]:
+    async def delete(self, endpoint: str) -> JSONBody:
         """Make a DELETE request to Site Manager API."""
         return await self._mutate("delete", endpoint)
+
+    async def _get_object(
+        self, endpoint: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """GET an endpoint documented to answer with a JSON object.
+
+        The typed wrappers below promise a dict; this checks the promise
+        instead of casting, so an array reply surfaces as an ``APIError``
+        naming the endpoint rather than an ``AttributeError`` in a caller.
+
+        Raises:
+            APIError: If the reply is not a JSON object
+        """
+        data = await self.get(endpoint, params=params)
+        if not isinstance(data, dict):
+            raise APIError(
+                f"Site Manager API returned a JSON {type(data).__name__} for "
+                f"{endpoint}; expected an object"
+            )
+        return data
 
     async def list_sites(
         self, limit: int | None = None, offset: int | None = None
@@ -197,7 +223,9 @@ class SiteManagerClient:
             Response with sites list
         """
         params = {"limit": limit, "offset": offset}
-        return await self.get("sites", params={k: v for k, v in params.items() if v is not None})
+        return await self._get_object(
+            "sites", params={k: v for k, v in params.items() if v is not None}
+        )
 
     async def get_site_health(self, site_id: str | None = None) -> dict[str, Any]:
         """Get health metrics for a site or all sites.
@@ -212,7 +240,7 @@ class SiteManagerClient:
         if site_id:
             endpoint = f"sites/{site_id}/health"
 
-        return await self.get(endpoint)
+        return await self._get_object(endpoint)
 
     async def get_internet_health(self, site_id: str | None = None) -> dict[str, Any]:
         """Get internet health metrics.
@@ -227,7 +255,7 @@ class SiteManagerClient:
         if site_id:
             endpoint = f"sites/{site_id}/internet/health"
 
-        return await self.get(endpoint)
+        return await self._get_object(endpoint)
 
     async def list_vantage_points(self) -> dict[str, Any]:
         """List all Vantage Points.
@@ -235,7 +263,7 @@ class SiteManagerClient:
         Returns:
             Response with Vantage Points list
         """
-        return await self.get("vantage-points")
+        return await self._get_object("vantage-points")
 
     # ISP Metrics endpoints (added 2026-02-16)
     async def get_isp_metrics(self, site_id: str) -> dict[str, Any]:
@@ -247,7 +275,7 @@ class SiteManagerClient:
         Returns:
             ISP metrics data
         """
-        return await self.get(f"sites/{site_id}/isp/metrics")
+        return await self._get_object(f"sites/{site_id}/isp/metrics")
 
     async def query_isp_metrics(
         self,
@@ -270,7 +298,7 @@ class SiteManagerClient:
             "start_time": start_time,
             "end_time": end_time,
         }
-        return await self.get(
+        return await self._get_object(
             "isp/metrics", params={k: v for k, v in params.items() if v is not None}
         )
 
@@ -281,7 +309,7 @@ class SiteManagerClient:
         Returns:
             Response with SD-WAN configurations list
         """
-        return await self.get("sdwan/configs")
+        return await self._get_object("sdwan/configs")
 
     async def get_sdwan_config(self, config_id: str) -> dict[str, Any]:
         """Get SD-WAN configuration by ID.
@@ -292,7 +320,7 @@ class SiteManagerClient:
         Returns:
             SD-WAN configuration data
         """
-        return await self.get(f"sdwan/configs/{config_id}")
+        return await self._get_object(f"sdwan/configs/{config_id}")
 
     async def get_sdwan_config_status(self, config_id: str) -> dict[str, Any]:
         """Get SD-WAN configuration deployment status.
@@ -303,7 +331,7 @@ class SiteManagerClient:
         Returns:
             SD-WAN configuration status data
         """
-        return await self.get(f"sdwan/configs/{config_id}/status")
+        return await self._get_object(f"sdwan/configs/{config_id}/status")
 
     # Host Management endpoints (added 2026-02-16)
     async def list_hosts(
@@ -319,7 +347,9 @@ class SiteManagerClient:
             Response with hosts list
         """
         params = {"limit": limit, "offset": offset}
-        return await self.get("hosts", params={k: v for k, v in params.items() if v is not None})
+        return await self._get_object(
+            "hosts", params={k: v for k, v in params.items() if v is not None}
+        )
 
     async def get_host(self, host_id: str) -> dict[str, Any]:
         """Get host details by ID.
@@ -330,7 +360,7 @@ class SiteManagerClient:
         Returns:
             Host details
         """
-        return await self.get(f"hosts/{host_id}")
+        return await self._get_object(f"hosts/{host_id}")
 
     # Version Control endpoint (added 2026-02-16)
     async def get_version_control(self) -> dict[str, Any]:
@@ -339,4 +369,4 @@ class SiteManagerClient:
         Returns:
             Version control data
         """
-        return await self.get("version")
+        return await self._get_object("version")

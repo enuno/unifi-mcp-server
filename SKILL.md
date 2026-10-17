@@ -112,8 +112,8 @@ Traffic flow analytics · DPI · RADIUS · Guest portal · Hotspot packages
 | `UNIFI_API_KEY` | API key from UniFi controller or unifi.ui.com | required |
 | `UNIFI_API_TYPE` | `local`, `cloud-v1`, or `cloud-ea` | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` | Gateway IP (local mode only) | — |
-| `UNIFI_SITE` | Default site ID | `default` |
-| `UNIFI_VERIFY_SSL` | Verify TLS certificates | `true` |
+| `UNIFI_DEFAULT_SITE` | Default site ID | `default` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate (local mode) | `true` |
 
 ## API Mode Feature Matrix
 

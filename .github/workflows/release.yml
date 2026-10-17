@@ -150,7 +150,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trivy vulnerability scan — BLOCKS on HIGH/CRITICAL
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-target
           format: table
@@ -193,7 +193,7 @@ jobs:
           cache-from: type=gha
 
       - name: Trivy vulnerability scan of the fleet image — BLOCKS on HIGH/CRITICAL
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan-target-fleet
           format: table

@@ -58,3 +58,39 @@ def test_docker_compose_forwards_names_settings_actually_reads():
         "reads them under that name (validation_alias mismatch) or they "
         "aren't in KNOWN_NON_SETTINGS_PASSTHROUGHS - see issue #161"
     )
+
+
+def _env_file_values(path: Path) -> dict[str, str]:
+    values = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            name, _, value = line.partition("=")
+            values[name.strip()] = value.strip()
+    return values
+
+
+def test_docker_compose_defaults_to_read_only_viewer():
+    """The stock deployment is read-only with a viewer stdio caller.
+
+    The server's own defaults are read-write with a fleet-admin stdio
+    caller; compose lowers both unless the operator escalates in ``.env``.
+    """
+    compose_path = Path(__file__).parents[3] / "docker-compose.yml"
+    env = yaml.safe_load(compose_path.read_text())["services"]["unifi-mcp"]["environment"]
+    assert env["UNIFI_READ_ONLY"] == "${UNIFI_READ_ONLY:-true}"
+    assert env["UNIFI_STDIO_ROLE"] == "${UNIFI_STDIO_ROLE:-viewer}"
+    assert {"UNIFI_READ_ONLY", "UNIFI_STDIO_ROLE"} <= _settings_aliases()
+
+
+def test_docker_env_example_ships_safe_defaults(monkeypatch):
+    example = _env_file_values(Path(__file__).parents[3] / ".env.docker.example")
+    assert example["UNIFI_READ_ONLY"] == "true"
+    assert example["UNIFI_STDIO_ROLE"] == "viewer"
+
+    monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+    monkeypatch.setenv("UNIFI_READ_ONLY", example["UNIFI_READ_ONLY"])
+    monkeypatch.setenv("UNIFI_STDIO_ROLE", example["UNIFI_STDIO_ROLE"])
+    settings = Settings(_env_file=None)
+    assert settings.read_only is True
+    assert settings.stdio_role == "viewer"

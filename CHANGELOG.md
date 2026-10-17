@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The stock Docker deployment starts read-only.** `docker-compose.yml` and `.env.docker.example` now set `UNIFI_READ_ONLY=true` and `UNIFI_STDIO_ROLE=viewer`, so a copied example registers no mutating tools and the stdio caller can only run read-tier tools, which also keeps the fleet-admin token and audit tools out of reach. Before, compose did not forward either setting, so the container always ran read-write with a `fleet-admin` stdio caller. The server's own defaults are unchanged. To allow changes, set `UNIFI_READ_ONLY=false` and raise `UNIFI_STDIO_ROLE` (`operator` for writes, `admin` for destructive changes, `fleet-admin` for token and audit tools); the steps are in `.env.docker.example`.
+
 ### Fixed
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.

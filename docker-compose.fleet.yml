@@ -54,6 +54,8 @@ services:
       UNIFI_LOCAL_VERIFY_SSL: ${UNIFI_LOCAL_VERIFY_SSL:-true}
       UNIFI_AUDIT_LOG_PATH: /app/logs/audit.log
       UNIFI_AUDIT_CHAIN_KEY: ${UNIFI_AUDIT_CHAIN_KEY:-}
+      # Also audit read calls (no response payloads); see SECURITY.md.
+      UNIFI_AUDIT_READS: ${UNIFI_AUDIT_READS:-false}
       # SIEM export (SECURITY.md); blank leaves it off.
       UNIFI_AUDIT_SIEM_TARGETS: ${UNIFI_AUDIT_SIEM_TARGETS:-}
       UNIFI_AUDIT_SIEM_WEBHOOK_SECRET: ${UNIFI_AUDIT_SIEM_WEBHOOK_SECRET:-}

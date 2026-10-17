@@ -113,9 +113,10 @@ Configure the MCP server using environment variables:
 | `UNIFI_DRY_RUN` | Change-safe mode: every tool with a `dry_run` parameter runs as a preview, and mutating tools without one are not registered | No | `false` |
 | `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
-| `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
+| `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call (and a read, with `UNIFI_AUDIT_READS`) when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
+| `UNIFI_AUDIT_READS` | Also audit read tool calls: `attempt` and outcome records with the principal, tool, arguments and result, never the response payload | No | `false` |
 | `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
-| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md) | No | unset |
+| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md). Requires `UNIFI_AUDIT_CHAIN_KEY` | No | unset |
 | `UNIFI_AUDIT_SIEM_WEBHOOK_SECRET` | HMAC-SHA256 key signing webhook deliveries; required for `https://` targets | With a webhook | unset |
 | `UNIFI_AUDIT_SIEM_OTLP_HEADERS` | Extra headers for OTLP targets, `key=value,key=value` | No | unset |
 | `UNIFI_AUDIT_SIEM_CA_FILE` | CA bundle used to verify SIEM targets | No | system roots |

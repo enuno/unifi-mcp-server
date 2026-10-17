@@ -21,6 +21,8 @@ unifi_mcp_least_privilege: true
 
 unifi_mcp_audit_retention_days: ""
 unifi_mcp_audit_log_rotate_mb: ""
+# Also audit read calls: principal, tool, arguments, outcome; never the response.
+unifi_mcp_audit_reads: false
 # When the retention job runs on the first mcp host (cron syntax, local time).
 unifi_mcp_retention_minute: "17"
 unifi_mcp_retention_hour: "3"

@@ -7,9 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Opt-in audit of read calls (`UNIFI_AUDIT_READS`).** The tool wrapper only audited mutating calls and refusals, so a read-only deployment wrote no record of normal tool calls and could not see inventory being pulled with a leaked bearer. With `UNIFI_AUDIT_READS=true`, every read gets the same `attempt` and outcome records as a write: principal, tool, tier, controller, credential-redacted arguments and result. The tool's response is never recorded. The records go through the existing redaction, encryption, hash chain, Postgres sink and SIEM export, and `UNIFI_AUDIT_FAIL_CLOSED` refuses a read whose `attempt` record cannot be written. A read naming an unknown controller is recorded as `denied`. Off by default.
+
+### Changed
+
+- **SIEM export requires `UNIFI_AUDIT_CHAIN_KEY` (breaking for unkeyed SIEM setups).** With `UNIFI_AUDIT_SIEM_TARGETS` set and no chain key, the server now refuses to start. Without the key the chain is plain SHA-256, which anyone who edits the records can recompute, so neither the exported copy nor its anchors proved anything. Set a chain key, different from `UNIFI_AUDIT_LOG_KEY`, before upgrading.
+
 ### Fixed
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.
+- **Credentials in controller error text are redacted in audit records.** Arguments were credential-redacted, but the `error` field stored controller and HTTP error text as received, and those errors quote what they were sent: a rejected WLAN payload with its `x_passphrase`, a request URL with `?apikey=`, a header. `sanitize_error_text` now replaces credential-named values, `Bearer` tokens and URL user info with `***` before the record is stored (and before encryption), leaving identifiers such as the MAC in `api.err.MacUsed` readable. SECURITY.md also sets out how the MCP audit log differs from the A2A audit file and the application log.
 - **Port forwarding rejects malformed addresses and ports** ([#217](https://github.com/enuno/unifi-mcp-server/issues/217)). `validate_ip_address` checked each octet with `int()`, which also accepts whitespace, a `+` sign, `_` separators, leading zeros and non-ASCII digits, and then returned the input unchanged, so `create_port_forward` and `update_port_forward` sent values such as `" 192.168.1.10"` or `"010.0.0.1"` to the controller. It now parses with `ipaddress` and returns the canonical form, and rejects non-string input. A new `validate_ip_or_cidr` checks the whole `src` value, including its prefix length (`/99` and `/abc` were never checked), and clears host bits. `validate_port` no longer accepts `True` as port 1.
 
 ## [0.6.1] - 2026-10-14

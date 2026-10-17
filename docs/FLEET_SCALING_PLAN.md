@@ -168,7 +168,7 @@ A token can be **narrowed, never widened**, beyond its role: `allow_modules` / `
 - denied call: RBAC refusals and rejected write targets (§3.1), with result `denied`
 - admin/config event: token create/revoke/role change, controller registry changes, credential and key rotation, audit queries and exports, and server start with its effective safety configuration (`read_only`, `dry_run`, profile, registry source)
 
-Reads are not audited.
+Reads are not audited, unless `UNIFI_AUDIT_READS=true` (added later, AC-531): then each read gets the same `attempt` and outcome records as a mutating call, with its arguments but never its result, and `UNIFI_AUDIT_FAIL_CLOSED` covers it.
 
 **Record (schema v2):**
 
@@ -191,7 +191,7 @@ Reads are not audited.
 
 - `JsonlSink`: today's file, still the default without a database. It gets size/date rotation, and the chain continues across files.
 - `PostgresSink`: the append-only `audit_log` table (§3.2). It's primary whenever `DATABASE_URL` is set.
-- SIEM exporters: syslog (RFC 5424 over TLS), OTLP logs and an HMAC-signed HTTPS webhook. They're asynchronous and best-effort, with an on-disk retry buffer, so a slow SIEM never blocks a tool call. They receive the stored (encrypted-payload) form of each record.
+- SIEM exporters: syslog (RFC 5424 over TLS), OTLP logs and an HMAC-signed HTTPS webhook. They're asynchronous and best-effort, with an on-disk retry buffer, so a slow SIEM never blocks a tool call. They receive the stored (encrypted-payload) form of each record. Configuring a target requires `UNIFI_AUDIT_CHAIN_KEY` (AC-531).
 
 **Tamper evidence.** Each record's `hash` is an HMAC-SHA256, keyed by `UNIFI_AUDIT_CHAIN_KEY` (separate from the payload encryption key), over the canonical JSON of the stored record plus `prev_hash`. Each replica keeps its own chain (`chain_id` = instance id), so writes don't serialize across replicas. Because hashes cover the stored ciphertext, verification doesn't need the payload key. Chain heads are regularly written to `audit_chain_heads` and sent to the SIEM as anchors, so truncating a chain or rewriting it wholesale is detectable from outside the server. Verification uses `verify_audit_chain` (MCP tool) and `unifi-mcp audit verify` (CLI).
 

@@ -598,6 +598,51 @@ class TestAuditCredentialRedaction:
         assert record["parameters"]["servers"][0]["host"] == "10.0.0.1"
 
 
+class TestAuditErrorRedaction:
+    """Controller error text quoting a credential is redacted before the write (AC-531)."""
+
+    CONTROLLER_ERROR = (
+        'api.err.InvalidPayload for aa:bb:cc:dd:ee:ff: {"name": "Guest", '
+        '"x_passphrase": "MeinWLANPasswort"}'  # pragma: allowlist secret
+    )
+
+    def test_log_operation_error(self, tmp_path):
+        log_path = tmp_path / "audit.log"
+        AuditLogger(log_file=log_path).log_operation(
+            "update_wlan", {"site_id": "default"}, "failed", error=self.CONTROLLER_ERROR
+        )
+
+        record = json.loads(log_path.read_text().strip())
+        assert "MeinWLANPasswort" not in log_path.read_text()
+        assert '"x_passphrase": "***"' in record["error"]
+        assert "aa:bb:cc:dd:ee:ff" in record["error"]
+
+    def test_schema_v2_event_error(self, tmp_path):
+        log_path = tmp_path / "audit.log"
+        AuditLogger(log_file=log_path).log_event(
+            "tool_call", "update_wlan", "error", error=self.CONTROLLER_ERROR
+        )
+
+        record = json.loads(log_path.read_text().strip())
+        assert "MeinWLANPasswort" not in log_path.read_text()
+        assert record["error"].startswith("api.err.InvalidPayload for aa:bb:cc:dd:ee:ff")
+
+    def test_redaction_runs_before_encryption(self, tmp_path):
+        from cryptography.fernet import Fernet, MultiFernet
+
+        from src.utils.audit_encryption import decrypt_field
+
+        cipher = MultiFernet([Fernet(Fernet.generate_key())])
+        log_path = tmp_path / "audit.log"
+        AuditLogger(log_file=log_path, encryption=cipher).log_event(
+            "tool_call", "update_wlan", "error", error=self.CONTROLLER_ERROR
+        )
+
+        record = json.loads(log_path.read_text().strip())
+        assert record["error_encrypted"] is True
+        assert "MeinWLANPasswort" not in decrypt_field(cipher, record["error"])
+
+
 class TestAuditLogFilePermissions:
     """The audit log holds operation parameters and must not be world-readable."""
 

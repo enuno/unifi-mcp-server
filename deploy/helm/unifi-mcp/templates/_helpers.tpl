@@ -77,6 +77,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
   "UNIFI_METRICS_ENABLED" (toString .Values.server.metrics)
   "UNIFI_AUDIT_LOG_PATH" "/app/logs/audit.log"
   "UNIFI_AUDIT_LOG_ROTATE_MB" (toString .Values.audit.rotateMb)
+  "UNIFI_AUDIT_READS" (toString .Values.audit.reads)
   "UNIFI_AUDIT_RETENTION_DAYS" (toString .Values.audit.retentionDays)
   "UNIFI_AUDIT_ARCHIVE_DIR" (ternary "/app/archive" "" .Values.fleet.enabled)
   "UNIFI_AUDIT_SIEM_TARGETS" .Values.audit.siemTargets

@@ -7,6 +7,7 @@ from src.utils.sanitize import (
     _redact_value,
     is_production,
     sanitize_dict,
+    sanitize_error_text,
     sanitize_for_logging,
     sanitize_list,
     sanitize_log_message,
@@ -292,3 +293,62 @@ class TestSanitizeCredentials:
         from src.utils.sanitize import sanitize_credentials
 
         assert sanitize_credentials("not-a-dict") == "not-a-dict"
+
+
+class TestSanitizeErrorText:
+    """Controller and HTTP error strings lose credentials, keep identifiers (AC-531)."""
+
+    def test_identifiers_survive(self):
+        text = "api.err.MacUsed for aa:bb:cc:dd:ee:ff on site default (192.168.1.20)"
+        assert sanitize_error_text(text) == text
+
+    def test_controller_echo_of_a_wlan_payload(self):
+        text = (
+            'api.err.InvalidPayload: {"name": "Guest", '
+            '"x_passphrase": "hunter22", "security": "wpapsk"}'  # pragma: allowlist secret
+        )
+        result = sanitize_error_text(text)
+        assert "hunter22" not in result
+        assert '"x_passphrase": "***"' in result
+        assert '"name": "Guest"' in result
+
+    def test_python_repr_of_a_radius_profile(self):
+        text = (
+            "Failed to create RADIUS profile {'name': 'corp', "
+            "'x_secret': 'r4dius', 'auth_servers': [{'ip': '10.0.0.5'}]}"  # pragma: allowlist secret
+        )
+        result = sanitize_error_text(text)
+        assert "r4dius" not in result
+        assert "'x_secret': '***'" in result
+        assert "10.0.0.5" in result
+
+    def test_api_key_in_a_request_url(self):
+        text = (
+            "Client error '401 Unauthorized' for url "
+            "'https://10.0.0.1/proxy/network/integration/v1/sites?apikey=abc123&limit=5'"
+        )
+        result = sanitize_error_text(text)
+        assert "abc123" not in result
+        assert "apikey=***&limit=5" in result
+
+    def test_header_and_bearer(self):
+        assert sanitize_error_text("X-API-KEY: abc123 rejected") == "X-API-KEY: *** rejected"
+        assert (
+            sanitize_error_text("Authorization: Bearer eyJhbGciOi.abc-def")
+            == "Authorization: Bearer ***"
+        )
+
+    def test_url_userinfo(self):
+        text = "connect to https://admin:pa55@10.0.0.1:8443/api failed"  # pragma: allowlist secret
+        result = sanitize_error_text(text)
+        assert result == "connect to https://***@10.0.0.1:8443/api failed"
+
+    def test_ipsec_psk_key_value(self):
+        result = sanitize_error_text("x_psk=presharedvalue, site_id=default")
+        assert result == "x_psk=***, site_id=default"
+
+    def test_word_without_a_value_is_kept(self):
+        assert sanitize_error_text("Invalid token") == "Invalid token"
+
+    def test_non_string_is_returned_unchanged(self):
+        assert sanitize_error_text(None) is None  # type: ignore[arg-type]

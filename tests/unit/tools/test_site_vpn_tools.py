@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.tools.site_vpn import get_site_to_site_vpn, list_site_to_site_vpns, update_site_to_site_vpn
-from src.utils import ResourceNotFoundError
+from src.utils import ResourceNotFoundError, ValidationError
 
 
 @pytest.fixture
@@ -92,15 +92,50 @@ class TestUpdateSiteToSiteVpn:
         assert result["dry_run"] is True
         mock_client.put.assert_not_called()
 
-    async def test_requires_confirm(self, mock_settings):
+    @pytest.mark.parametrize("confirm", [False, "false", "False", "0", "no", ""])
+    async def test_requires_confirm(self, mock_settings, confirm):
+        """confirm must be truthy after coercion: the string "false" is refused."""
+        vpn = make_vpn()
+        mock_client = create_mock_client(vpn)
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client) as client_cls:
+            with pytest.raises(ValidationError):
+                await update_site_to_site_vpn(
+                    "default", "vpn-1", mock_settings, name="New Name", confirm=confirm
+                )
+        client_cls.assert_not_called()
+        mock_client.put.assert_not_called()
+
+    async def test_string_true_confirm_updates(self, mock_settings):
         vpn = make_vpn()
         mock_client = create_mock_client(vpn)
         with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
             result = await update_site_to_site_vpn(
-                "default", "vpn-1", mock_settings, name="New Name", confirm=False
+                "default", "vpn-1", mock_settings, name="New Name", confirm="true"
             )
-        assert "error" in result
+        assert result["success"] is True
+        mock_client.put.assert_called_once()
+
+    async def test_string_false_dry_run_still_needs_confirm(self, mock_settings):
+        """dry_run="false" is not a preview, so it does not bypass the gate."""
+        vpn = make_vpn()
+        mock_client = create_mock_client(vpn)
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
+            with pytest.raises(ValidationError):
+                await update_site_to_site_vpn(
+                    "default", "vpn-1", mock_settings, name="New Name", dry_run="false"
+                )
         mock_client.put.assert_not_called()
+
+    async def test_string_false_dry_run_with_confirm_updates(self, mock_settings):
+        """dry_run="false" with confirm is a real write, not a preview."""
+        vpn = make_vpn()
+        mock_client = create_mock_client(vpn)
+        with patch("src.tools.site_vpn.UniFiClient", return_value=mock_client):
+            result = await update_site_to_site_vpn(
+                "default", "vpn-1", mock_settings, name="New Name", confirm=True, dry_run="false"
+            )
+        assert result["success"] is True
+        mock_client.put.assert_called_once()
 
     async def test_updates_with_confirm(self, mock_settings):
         vpn = make_vpn()

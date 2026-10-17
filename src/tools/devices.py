@@ -18,8 +18,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def get_device_details(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed information for a specific device.
 
@@ -163,6 +165,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         raise ResourceNotFoundError("device", device_id)
 
 
+@read_tool
 async def get_device_statistics(site_id: str, device_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve real-time statistics for a device.
 
@@ -266,6 +269,7 @@ def _device_matches_type(device: dict[str, Any], device_type: str) -> bool:
     )
 
 
+@read_tool
 async def list_devices_by_type(
     site_id: str,
     device_type: str,
@@ -317,6 +321,7 @@ async def list_devices_by_type(
         return devices
 
 
+@read_tool
 async def search_devices(
     site_id: str,
     query: str,
@@ -381,6 +386,7 @@ async def search_devices(
         return devices
 
 
+@read_tool
 async def list_pending_devices(
     site_id: str,
     settings: Settings,
@@ -425,6 +431,7 @@ async def list_pending_devices(
         return devices
 
 
+@write_tool
 async def adopt_device(
     site_id: str,
     mac: str,
@@ -486,6 +493,7 @@ async def adopt_device(
         return {"success": True, "mac": mac, "result": data}
 
 
+@write_tool
 async def execute_port_action(
     site_id: str,
     device_id: str,

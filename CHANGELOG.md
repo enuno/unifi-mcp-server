@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Every tool declares read or write.** Read-only mode used to classify a tool as mutating from its signature (a `confirm` or `dry_run` parameter) plus a hand-kept list of nine Protect tools, so a new write tool with neither parameter would have been registered under `UNIFI_READ_ONLY=true`. Each tool now carries `@read_tool` or `@write_tool` from `src/utils/tool_kind.py`, and `register_module_tools` refuses to start on a tool with no declaration or on a `@read_tool` that takes `confirm` or `dry_run`. A function with no declaration counts as mutating everywhere, so a missing declaration can only hide a tool. `tests/unit/test_tool_declarations.py` walks the call graph of every read tool and fails if one reaches a `post`, `put`, `patch` or `delete`, a state-changing client method, or a `@write_tool`; sixteen read tools that query with POST are exempt from the `post` check only. `MUTATING_TOOLS_WITHOUT_GATE` is removed: every tool it listed has since gained its gates. The declarations match the old classification exactly, so no tool's tier or read-only behaviour changes.
+
 ### Fixed
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.

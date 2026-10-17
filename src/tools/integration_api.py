@@ -24,12 +24,14 @@ from ..models import (
     IntegrationWifiBroadcast,
 )
 from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
+from ..utils.tool_kind import read_tool
 
 # ---------------------------------------------------------------------------
 # Sites
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_sites(
     settings: Settings,
     limit: int | None = None,
@@ -79,6 +81,7 @@ async def list_integration_sites(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_devices(
     site_id: str,
     settings: Settings,
@@ -126,6 +129,7 @@ async def list_integration_devices(
     }
 
 
+@read_tool
 async def get_integration_device(
     site_id: str,
     device_id: str,
@@ -162,6 +166,7 @@ async def get_integration_device(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_clients(
     site_id: str,
     settings: Settings,
@@ -209,6 +214,7 @@ async def list_integration_clients(
     }
 
 
+@read_tool
 async def get_integration_client(
     site_id: str,
     client_id: str,
@@ -245,6 +251,7 @@ async def get_integration_client(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_networks(
     site_id: str,
     settings: Settings,
@@ -297,6 +304,7 @@ async def list_integration_networks(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_wifi_broadcasts(
     site_id: str,
     settings: Settings,
@@ -348,6 +356,7 @@ async def list_integration_wifi_broadcasts(
     }
 
 
+@read_tool
 async def get_integration_wifi_broadcast(
     site_id: str,
     broadcast_id: str,
@@ -386,6 +395,7 @@ async def get_integration_wifi_broadcast(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_dns_policies(
     site_id: str,
     settings: Settings,
@@ -437,6 +447,7 @@ async def list_integration_dns_policies(
     }
 
 
+@read_tool
 async def get_integration_dns_policy(
     site_id: str,
     policy_id: str,
@@ -473,6 +484,7 @@ async def get_integration_dns_policy(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_wans(
     site_id: str,
     settings: Settings,
@@ -523,6 +535,7 @@ async def list_integration_wans(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_vpn_servers(
     site_id: str,
     settings: Settings,
@@ -577,6 +590,7 @@ async def list_integration_vpn_servers(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_integration_device_tags(
     site_id: str,
     settings: Settings,
@@ -629,6 +643,7 @@ async def list_integration_device_tags(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def list_dpi_application_categories(
     settings: Settings,
     limit: int | None = None,

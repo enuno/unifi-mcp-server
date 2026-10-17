@@ -13,6 +13,7 @@ from src.fleet import ControllerProfile
 from src.fleet.router import FleetRouter
 from src.tool_registry import _make_tool_wrapper
 from src.tools.wifi import delete_wlan
+from src.utils import tool_kind
 from src.utils.audit import AuditUnavailableError, get_audit_logger
 from src.utils.audit_verify import verify_file
 from src.utils.exceptions import ValidationError
@@ -47,11 +48,13 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+@tool_kind.read_tool
 async def read_tool(site_id: str, settings: Any = None) -> dict:
     """A read: never audited."""
     return {}
 
 
+@tool_kind.write_tool
 async def write_tool(
     site_id: str, passphrase: str = "", confirm: bool = False, settings: Any = None
 ) -> dict:
@@ -59,6 +62,7 @@ async def write_tool(
     return {"ok": True}
 
 
+@tool_kind.write_tool
 async def failing_tool(site_id: str, confirm: bool = False, settings: Any = None) -> dict:
     """A mutating tool that fails."""
     raise RuntimeError("controller said no")
@@ -179,6 +183,7 @@ class TestDeniedAndFailClosed:
     async def test_refused_write_target_is_recorded_as_denied(self, settings, router, log_path):
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 
@@ -207,6 +212,7 @@ class TestDeniedAndFailClosed:
         monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(blocked))
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 

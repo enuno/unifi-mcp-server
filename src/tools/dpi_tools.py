@@ -6,10 +6,12 @@ from ..api.client import UniFiClient
 from ..config import Settings
 from ..models.dpi import Country, DPIApplication, DPICategory
 from ..utils import get_logger
+from ..utils.tool_kind import read_tool
 
 logger = get_logger(__name__)
 
 
+@read_tool
 async def list_dpi_categories(settings: Settings) -> list[dict]:
     """List all DPI categories.
 
@@ -33,6 +35,7 @@ async def list_dpi_categories(settings: Settings) -> list[dict]:
         return [DPICategory(**category).model_dump(exclude_none=True) for category in data]
 
 
+@read_tool
 async def list_dpi_applications(
     settings: Settings,
     limit: int | None = None,
@@ -73,6 +76,7 @@ async def list_dpi_applications(
         return [DPIApplication(**app).model_dump(exclude_none=True) for app in data]
 
 
+@read_tool
 async def list_countries(settings: Settings) -> list[dict]:
     """List all countries for configuration and localization.
 

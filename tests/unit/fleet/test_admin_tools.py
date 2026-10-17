@@ -19,6 +19,7 @@ from src.fleet.postgres_registry import PostgresRegistry  # noqa: E402
 from src.fleet.router import FleetRouter  # noqa: E402
 from src.fleet.tools import register_fleet_tools  # noqa: E402
 from src.tool_registry import TOOL_TIERS, _make_tool_wrapper  # noqa: E402
+from src.utils import tool_kind  # noqa: E402
 
 NEW_KEY = "branch-key-0123456789abcdef"  # pragma: allowlist secret
 
@@ -44,6 +45,7 @@ async def registry(settings: Settings, migrated_engine: Any) -> AsyncIterator[Po
     await registry.stop()
 
 
+@tool_kind.write_tool
 async def where(site_id: str, confirm: bool = False, settings: Any = None) -> dict:
     """A mutating tool reporting which controller host it reached."""
     return {"host": settings.local_host}

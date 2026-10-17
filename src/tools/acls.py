@@ -12,6 +12,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -54,6 +55,7 @@ def _warn_deprecated(operation: str, deprecated: dict[str, Any]) -> None:
         )
 
 
+@read_tool
 async def list_acl_rules(
     site_id: str,
     settings: Settings,
@@ -98,6 +100,7 @@ async def list_acl_rules(
         return [ACLRule(**rule).model_dump() for rule in data]
 
 
+@read_tool
 async def get_acl_rule(site_id: str, acl_rule_id: str, settings: Settings) -> dict:
     """Get details for a specific ACL rule.
 
@@ -125,6 +128,7 @@ async def get_acl_rule(site_id: str, acl_rule_id: str, settings: Settings) -> di
         return ACLRule(**data).model_dump()
 
 
+@write_tool
 async def create_acl_rule(
     site_id: str,
     name: str,
@@ -242,6 +246,7 @@ async def create_acl_rule(
         return ACLRule(**data).model_dump()
 
 
+@write_tool
 async def update_acl_rule(
     site_id: str,
     acl_rule_id: str,
@@ -366,6 +371,7 @@ async def update_acl_rule(
         return ACLRule(**data).model_dump()
 
 
+@write_tool
 async def delete_acl_rule(
     site_id: str,
     acl_rule_id: str,

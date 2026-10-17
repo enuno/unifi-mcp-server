@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models.protect_nvr import ProtectNVR
 from ..utils import ValidationError, get_logger, sanitize_log_message
+from ..utils.tool_kind import read_tool
 
 
 def _validate_nvr_id(nvr_id: str) -> str:
@@ -17,6 +18,7 @@ def _validate_nvr_id(nvr_id: str) -> str:
     return nvr_id
 
 
+@read_tool
 async def list_protect_nvrs(settings: Settings) -> dict[str, Any]:
     """List UniFi Protect NVRs."""
     logger = get_logger(__name__, settings.log_level)
@@ -39,6 +41,7 @@ async def list_protect_nvrs(settings: Settings) -> dict[str, Any]:
     }
 
 
+@read_tool
 async def get_protect_nvr(nvr_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect NVR."""
     logger = get_logger(__name__, settings.log_level)

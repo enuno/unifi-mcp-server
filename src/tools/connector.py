@@ -21,6 +21,7 @@ from typing import Any
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
 from ..utils import ValidationError, get_logger, validate_confirmation
+from ..utils.tool_kind import read_tool, write_tool
 
 
 def _validate_connector_params(console_id: str, path: str) -> str:
@@ -37,6 +38,7 @@ def _validate_connector_params(console_id: str, path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def connector_network_get(
     console_id: str,
     path: str,
@@ -74,6 +76,7 @@ async def connector_network_get(
         return await client.get(endpoint, params=params)
 
 
+@write_tool
 async def connector_network_post(
     console_id: str,
     path: str,
@@ -115,6 +118,7 @@ async def connector_network_post(
         return await client.post(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_put(
     console_id: str,
     path: str,
@@ -152,6 +156,7 @@ async def connector_network_put(
         return await client.put(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_patch(
     console_id: str,
     path: str,
@@ -189,6 +194,7 @@ async def connector_network_patch(
         return await client.patch(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_delete(
     console_id: str,
     path: str,
@@ -229,6 +235,7 @@ async def connector_network_delete(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def connector_protect_get(
     console_id: str,
     path: str,
@@ -266,6 +273,7 @@ async def connector_protect_get(
         return await client.get(endpoint, params=params)
 
 
+@write_tool
 async def connector_protect_post(
     console_id: str,
     path: str,
@@ -303,6 +311,7 @@ async def connector_protect_post(
         return await client.post(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_put(
     console_id: str,
     path: str,
@@ -340,6 +349,7 @@ async def connector_protect_put(
         return await client.put(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_patch(
     console_id: str,
     path: str,
@@ -377,6 +387,7 @@ async def connector_protect_patch(
         return await client.patch(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_delete(
     console_id: str,
     path: str,

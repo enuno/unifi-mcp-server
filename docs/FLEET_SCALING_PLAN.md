@@ -133,8 +133,8 @@ A new entry point `python -m src.worker` (same image, different command):
 | Tier | Which tools | Source |
 |---|---|---|
 | `read` | Everything `is_mutating_tool()` says is not mutating | Registry (exists today) |
-| `write` | Mutating tools | `is_mutating_tool()`: `confirm`/`dry_run` parameters or `MUTATING_TOOLS_WITHOUT_GATE` |
-| `destructive` | Mutating tools that delete, restore, re-image or lock out: `delete_*`, `remove_*`, `restore_backup`, `upgrade_device`, `block_client` and similar | A new explicit `DESTRUCTIVE_TOOLS` list next to `MUTATING_TOOLS_WITHOUT_GATE` |
+| `write` | Mutating tools | `is_mutating_tool()`: the tool's `@write_tool` declaration (`src/utils/tool_kind.py`) |
+| `destructive` | Mutating tools that delete, restore, re-image or lock out: `delete_*`, `remove_*`, `restore_backup`, `upgrade_device`, `block_client` and similar | A new explicit `DESTRUCTIVE_TOOLS` list |
 | `fleet-admin` | Controller registry, token, and audit management tools | Declared by the fleet/admin modules |
 
 A snapshot test pins the whole tool → tier map, so any change in classification shows up in review. A second test flags any mutating tool whose name suggests deletion or reset but which isn't in `DESTRUCTIVE_TOOLS`, unless it's explicitly exempted. The A2A `_required_permission` name-prefix logic is replaced by a lookup in the same map.

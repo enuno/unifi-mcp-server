@@ -12,8 +12,10 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed site information.
 
@@ -57,6 +59,7 @@ async def get_site_details(site_id: str, settings: Settings) -> dict[str, Any]:
         raise ResourceNotFoundError("site", site_id)
 
 
+@read_tool
 async def list_sites(
     settings: Settings, limit: int | None = None, offset: int | None = None
 ) -> list[dict[str, Any]]:
@@ -127,6 +130,7 @@ async def list_sites(
         raise
 
 
+@read_tool
 async def get_site_statistics(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve site-wide statistics.
 

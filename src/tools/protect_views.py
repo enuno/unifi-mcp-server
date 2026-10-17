@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectLiveView, ProtectMetaInfo, ProtectViewer
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -37,6 +38,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def get_protect_meta_info(settings: Settings) -> dict[str, Any]:
     """Get Protect application metadata."""
     logger = get_logger(__name__, settings.log_level)
@@ -50,6 +52,7 @@ async def get_protect_meta_info(settings: Settings) -> dict[str, Any]:
     return meta.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_viewers(
     settings: Settings,
     limit: int | None = None,
@@ -78,6 +81,7 @@ async def list_protect_viewers(
     }
 
 
+@read_tool
 async def get_protect_viewer(viewer_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single Protect viewer."""
     logger = get_logger(__name__, settings.log_level)
@@ -92,6 +96,7 @@ async def get_protect_viewer(viewer_id: str, settings: Settings) -> dict[str, An
     return viewer.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_viewer(
     viewer_id: str,
     settings: Settings,
@@ -143,6 +148,7 @@ async def update_protect_viewer(
     return viewer.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_live_views(
     settings: Settings,
     limit: int | None = None,
@@ -173,6 +179,7 @@ async def list_protect_live_views(
     }
 
 
+@read_tool
 async def get_protect_live_view(live_view_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single Protect live view."""
     logger = get_logger(__name__, settings.log_level)
@@ -189,6 +196,7 @@ async def get_protect_live_view(live_view_id: str, settings: Settings) -> dict[s
     return live_view.model_dump(by_alias=True)
 
 
+@write_tool
 async def create_protect_live_view(
     live_view: dict[str, Any],
     settings: Settings,
@@ -224,6 +232,7 @@ async def create_protect_live_view(
     return created.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_live_view(
     live_view_id: str,
     settings: Settings,

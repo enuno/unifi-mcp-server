@@ -13,8 +13,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import write_tool
 
 
+@write_tool
 async def block_client(
     site_id: str,
     client_mac: str,
@@ -104,6 +106,7 @@ async def block_client(
         raise
 
 
+@write_tool
 async def unblock_client(
     site_id: str,
     client_mac: str,
@@ -183,6 +186,7 @@ async def unblock_client(
         raise
 
 
+@write_tool
 async def reconnect_client(
     site_id: str,
     client_mac: str,
@@ -280,6 +284,7 @@ async def reconnect_client(
         raise
 
 
+@write_tool
 async def authorize_guest(
     site_id: str,
     client_id: str,
@@ -408,6 +413,7 @@ async def authorize_guest(
         raise
 
 
+@write_tool
 async def limit_bandwidth(
     site_id: str,
     client_mac: str,

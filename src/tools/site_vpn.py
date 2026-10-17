@@ -5,7 +5,13 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.vpn import SiteToSiteVPN
-from ..utils import ResourceNotFoundError, get_logger, sanitize_log_message, validate_site_id
+from ..utils import (
+    ResourceNotFoundError,
+    get_logger,
+    sanitize_log_message,
+    validate_object_id,
+    validate_site_id,
+)
 
 
 async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[str, Any]]:
@@ -55,6 +61,7 @@ async def update_site_to_site_vpn(
 ) -> dict[str, Any]:
     """Update a site-to-site VPN configuration (requires confirm=True)."""
     site_id = validate_site_id(site_id)
+    vpn_id = validate_object_id(vpn_id, "vpn_id")
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:

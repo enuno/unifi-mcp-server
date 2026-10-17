@@ -7,7 +7,7 @@ from typing import Any
 from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectAlarmWebhookResult, ProtectEventMessage
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_path_segment
 from ..utils.validators import coerce_bool, validate_confirmation
 
 # Defined once in protect_devices, which registers it as an MCP tool. Importing it
@@ -122,9 +122,7 @@ async def send_protect_alarm_webhook(
     """
     validate_confirmation(confirm, "send a Protect alarm webhook", dry_run)
     logger = get_logger(__name__, settings.log_level)
-    webhook_id = webhook_id.strip()
-    if not webhook_id:
-        raise ValidationError("webhook_id is required")
+    webhook_id = validate_path_segment(webhook_id, "webhook_id")
 
     if coerce_bool(dry_run):
         return {

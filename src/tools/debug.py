@@ -19,6 +19,34 @@ from ..utils import ValidationError, coerce_bool, get_logger, validate_confirmat
 _METHODS = ("GET", "DELETE")
 
 
+def _require_controller_path(endpoint: str) -> None:
+    """Refuse anything but a path relative to the controller's base URL.
+
+    ``UniFiClient`` sends an endpoint that does not start with ``/`` as a
+    complete URL, with its ``X-API-KEY`` default header attached. An absolute
+    or scheme-relative endpoint would hand the controller credential to
+    another host, so only a single-slash root-relative path is accepted.
+
+    Args:
+        endpoint: Endpoint the caller asked for
+
+    Raises:
+        ValidationError: If the endpoint is empty or is not a controller path
+    """
+    if not endpoint or not endpoint.strip():
+        raise ValidationError("endpoint must not be empty")
+    if (
+        not endpoint.startswith("/")
+        or endpoint.startswith("//")
+        or "\\" in endpoint
+        or any(ch.isspace() or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in endpoint)
+    ):
+        raise ValidationError(
+            "endpoint must be a controller-relative path starting with a single '/' "
+            "(e.g. /proxy/network/api/s/default/stat/device); URLs are not accepted"
+        )
+
+
 async def debug_api_request(
     endpoint: str,
     settings: Settings,
@@ -32,7 +60,9 @@ async def debug_api_request(
     in read-only mode. Needs the ``destructive`` tier for every method.
 
     Args:
-        endpoint: API endpoint path (e.g., /proxy/network/api/s/default/rest/networkconf)
+        endpoint: Controller-relative API path starting with ``/`` (e.g.,
+            /proxy/network/api/s/default/rest/networkconf). Absolute and
+            scheme-relative URLs are refused.
         settings: Application settings
         method: HTTP method, ``GET`` or ``DELETE``
         confirm: Must be true to send a ``DELETE`` (required unless dry_run)
@@ -50,8 +80,7 @@ async def debug_api_request(
         raise ValidationError(
             f"Method {method} is not supported by debug_api_request; use GET or DELETE"
         )
-    if not endpoint or not endpoint.strip():
-        raise ValidationError("endpoint must not be empty")
+    _require_controller_path(endpoint)
     if verb == "DELETE":
         validate_confirmation(confirm, "debug_api_request DELETE", dry_run)
 

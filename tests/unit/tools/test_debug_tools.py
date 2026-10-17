@@ -115,3 +115,31 @@ async def test_unsupported_method_is_refused(
 async def test_empty_endpoint_is_refused(mock_settings: MagicMock, client: Any) -> None:
     with pytest.raises(ValidationError, match="endpoint"):
         await debug_api_request("  ", mock_settings)
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://attacker.example/capture",
+        "http://attacker.example/capture",
+        "//attacker.example/capture",
+        "attacker.example/capture",
+        "proxy/network/api/s/default/stat/device",
+        "/\\attacker.example/capture",
+        "\\\\attacker.example\\capture",
+        "/proxy/network/api\r\nX-Injected: 1",
+        " /proxy/network/api/s/default/stat/device",
+    ],
+)
+@pytest.mark.parametrize("method", ["GET", "DELETE"])
+async def test_non_controller_endpoint_never_opens_a_client(
+    mock_settings: MagicMock, endpoint: str, method: str
+) -> None:
+    with patch("src.tools.debug.UniFiClient") as client_class:
+        with pytest.raises(ValidationError, match="controller-relative"):
+            await debug_api_request(endpoint, mock_settings, method=method, confirm=True)
+
+        with pytest.raises(ValidationError, match="controller-relative"):
+            await debug_api_request(endpoint, mock_settings, method=method, dry_run=True)
+
+        client_class.assert_not_called()

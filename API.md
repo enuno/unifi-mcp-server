@@ -482,7 +482,7 @@ Send a raw GET or DELETE to any controller endpoint. Registered only when `DEBUG
 
 **Parameters:**
 
-- `endpoint` (string, required): API path, e.g. `/proxy/network/api/s/default/stat/device`
+- `endpoint` (string, required): controller-relative API path starting with a single `/`, e.g. `/proxy/network/api/s/default/stat/device`. Absolute (`https://...`) and scheme-relative (`//host/...`) URLs are refused, so the controller's API key is never sent to another host
 - `method` (string, optional): `GET` (default) or `DELETE`; anything else is refused
 - `confirm` (boolean, optional): must be `true` for a `DELETE` unless `dry_run` is set
 - `dry_run` (boolean, optional): return the request instead of sending it

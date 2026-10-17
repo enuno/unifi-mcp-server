@@ -137,6 +137,7 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
 
             audit_store.install(settings, fleet_registry.store.engine)
             await fleet_registry.start()
+            await fleet_router.warn_insecure_controllers()
         health_listener = start_health_listener(settings, client_pool)
         try:
             await audit_server_start()
@@ -661,7 +662,8 @@ if (
     )
 
 # Verification off accepts any certificate, and sends the API key to whoever
-# presents it. Nothing else reports it, so warn at startup.
+# presents it. Nothing else reports it, so warn at startup. Fleet controllers
+# with their own TLS settings are warned about by the router.
 for _tls_warning in settings.tls_warnings():
     logger.warning(_tls_warning)
 

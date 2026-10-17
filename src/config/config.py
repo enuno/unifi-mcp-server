@@ -707,20 +707,25 @@ class Settings(BaseSettings):
             return False
         return self.local_ca_file or True
 
-    def tls_warnings(self) -> list[str]:
-        """Return the warnings to log at startup about the local controller's TLS settings.
+    def tls_warnings(self, controller: str | None = None) -> list[str]:
+        """Return the warnings to log about the local controller's TLS settings.
 
         Turning verification off is sometimes the only way to reach a
         self-signed console, but it also accepts any certificate a host on the
         path presents, and the API key goes to that host.
+
+        Args:
+            controller: Fleet controller name to put in the message, when these
+                settings belong to a registered controller rather than UNIFI_*
 
         Returns:
             Warning messages, empty when verification is on or the API is cloud
         """
         if self.api_type != APIType.LOCAL or self.local_verify_ssl:
             return []
+        target = f"controller '{controller}'" if controller else "the local controller"
         warnings = [
-            f"TLS certificate verification is OFF for the local controller ({self.base_url}): "
+            f"TLS certificate verification is OFF for {target} ({self.base_url}): "
             "any certificate is accepted, and the API key is sent to whichever server "
             "answers. Set UNIFI_LOCAL_CA_FILE to the console's CA certificate and "
             "UNIFI_LOCAL_VERIFY_SSL=true instead."

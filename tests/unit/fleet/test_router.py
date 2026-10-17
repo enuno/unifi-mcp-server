@@ -203,6 +203,66 @@ class TestSettingsDerivation:
         assert resolution.settings.dry_run is True
 
 
+class TestTLSWarnings:
+    """A registry profile can turn verification off for one controller (AC-523)."""
+
+    @staticmethod
+    def _insecure(name: str = "lab") -> ControllerProfile:
+        return ControllerProfile(
+            name=name,
+            api_type=APIType.LOCAL,
+            api_key=f"{name}-key",  # pragma: allowlist secret
+            local_host="10.9.9.1",
+            local_verify_ssl=False,
+        )
+
+    async def test_insecure_profile_warns_with_its_name(self, base, caplog):
+        router = FleetRouter(base, StaticRegistry(self._insecure(), default="lab"))
+
+        with caplog.at_level("WARNING", logger="src.fleet.router"):
+            await router.warn_insecure_controllers()
+
+        assert "verification is OFF for controller 'lab' (https://10.9.9.1:443)" in caplog.text
+
+    async def test_warns_under_a_cloud_base(self, monkeypatch, caplog):
+        monkeypatch.setenv("UNIFI_API_KEY", "base-key")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        cloud = Settings()
+        assert cloud.tls_warnings() == []  # main's startup check sees nothing
+        router = FleetRouter(cloud, StaticRegistry(self._insecure(), default="lab"))
+
+        with caplog.at_level("WARNING", logger="src.fleet.router"):
+            await router.resolve("lab", mutating=False)
+
+        assert "controller 'lab'" in caplog.text
+
+    async def test_warns_once_per_configuration(self, base, caplog):
+        registry = StaticRegistry(self._insecure(), default="lab")
+        router = FleetRouter(base, registry)
+
+        with caplog.at_level("WARNING", logger="src.fleet.router"):
+            await router.warn_insecure_controllers()
+            await router.resolve("lab", mutating=False)
+            await router.resolve("lab", mutating=False)
+            assert caplog.text.count("controller 'lab'") == 1
+
+            # The same controller moved to another host is a new configuration.
+            moved = self._insecure().model_copy(update={"local_host": "10.9.9.2"})
+            registry._profiles["lab"] = moved
+            await router.resolve("lab", mutating=False)
+
+        assert caplog.text.count("controller 'lab'") == 2
+        assert "https://10.9.9.2:443" in caplog.text
+
+    async def test_verifying_profiles_stay_quiet(self, base, two_controllers, caplog):
+        router = FleetRouter(base, two_controllers)
+
+        with caplog.at_level("WARNING", logger="src.fleet.router"):
+            await router.warn_insecure_controllers()
+
+        assert "verification is OFF" not in caplog.text
+
+
 class TestSessionIsolation:
     async def test_interleaved_sessions_never_see_each_others_controller(
         self, base, two_controllers

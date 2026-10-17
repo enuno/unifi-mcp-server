@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Turning off TLS verification for the local controller now logs a warning at startup**, and says so when `UNIFI_LOCAL_CA_FILE` is set alongside it and therefore ignored. Nothing reported it before.
+- **Turning off TLS verification for the local controller now logs a warning at startup**, and says so when `UNIFI_LOCAL_CA_FILE` is set alongside it and therefore ignored. In fleet mode a registered controller whose own `local_verify_ssl` is off gets the same warning, naming the controller, once the registry loads (and again whenever its connection settings change). Nothing reported it before.
 - **README gave the wrong default for `UNIFI_LOCAL_VERIFY_SSL`.** It listed `false`; the default is `true` (`src/config/config.py`), as `API.md` already said.
 
 - **Release announcements post again.** The release workflow's announcement job called a REST endpoint for creating discussions that does not exist (`POST /repos/{owner}/{repo}/discussions`, 404), so the v0.6.1 run ended red after the release itself was published. It now uses the GraphQL `createDiscussion` mutation, skips with a warning when Discussions are off or there is no "Announcements" category, and does not post twice on a re-run. The announcement body also shows its changelog (a quoted heredoc printed `$CHANGELOG` literally), drops a Docker example with settings the server does not read (`UNIFI_HOST`, `UNIFI_USERNAME`, `UNIFI_PASSWORD`) and a `pip install ==<version>` line for a package this workflow does not publish to PyPI, and links to README sections that exist.

@@ -1,4 +1,4 @@
-"""Runtime paths of src/main.py: resource handlers, the debug tool, the
+"""Runtime paths of src/main.py: resource handlers, debug tool registration, the
 lifespan, the start-up audit record, and main()'s transport branches.
 
 ``src.main`` builds its server at import time from the environment, so each
@@ -268,18 +268,26 @@ class TestImportTimeBranches:
         assert len(mod._TOOL_MODULES) == len(mod._CLOUD_TOOL_MODULES) + len(mod._LOCAL_TOOL_MODULES)
 
     @pytest.mark.asyncio
-    async def test_debug_tool(self) -> None:
+    async def test_debug_tool_absent_without_debug(self) -> None:
+        mod = _reload_main()
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" not in names
+
+    @pytest.mark.asyncio
+    async def test_debug_tool_registered_destructive_under_debug(self) -> None:
+        from src.tool_registry import TOOL_TIERS
+
         mod = _reload_main(DEBUG="true")
-        client = AsyncMock()
-        client.__aenter__.return_value = client
-        client.get.return_value = {"ok": 1}
-        client.delete.return_value = {"deleted": 1}
-        debug = _fn(mod.debug_api_request)
-        with patch("src.api.UniFiClient", return_value=client):
-            assert await debug("/x") == {"ok": 1}
-            assert await debug("/x", method="delete") == {"deleted": 1}
-            result = await debug("/x", method="POST")
-        assert "not implemented" in result["error"]
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" in names
+        assert TOOL_TIERS["debug_api_request"] == "destructive"
+
+    @pytest.mark.asyncio
+    async def test_read_only_removes_debug_tool_even_under_debug(self) -> None:
+        mod = _reload_main(DEBUG="true", UNIFI_READ_ONLY="true")
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" not in names
+        assert not hasattr(mod, "debug_api_request")
 
 
 class TestToolModuleSets:

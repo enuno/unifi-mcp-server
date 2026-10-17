@@ -39,6 +39,7 @@ from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import connector as connector_tools
 from .tools import content_filtering as content_filtering_tools
+from .tools import debug as debug_tools
 from .tools import device_control as device_control_tools
 from .tools import device_migration as device_migration_tools
 from .tools import devices as devices_tools
@@ -754,30 +755,17 @@ async def health_check() -> dict[str, str]:
     }
 
 
-# Conditional debug tool
+# Debug passthrough: arbitrary GET or DELETE to any controller endpoint. Only
+# under DEBUG, and through register_module_tools so read-only mode removes it,
+# dry-run mode previews it, and the destructive tier and confirm apply.
 if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
-
-    @mcp.tool()
-    async def debug_api_request(endpoint: str, method: str = "GET") -> dict:
-        """Debug tool to query arbitrary UniFi API endpoints.
-
-        Args:
-            endpoint: API endpoint path (e.g., /proxy/network/api/s/default/rest/networkconf)
-            method: HTTP method (GET, POST, PUT, DELETE)
-
-        Returns:
-            Raw JSON response from the API
-        """
-        from .api import UniFiClient
-
-        async with UniFiClient(settings) as client:
-            await client.authenticate()
-            if method.upper() == "GET":
-                return await client.get(endpoint)
-            elif method.upper() == "DELETE":
-                return await client.delete(endpoint)
-            else:
-                return {"error": f"Method {method} requires json_data parameter (not implemented)"}
+    if register_module_tools(
+        mcp, debug_tools, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+    ):
+        logger.warning(
+            "DEBUG is set - debug_api_request is registered (arbitrary GET/DELETE, "
+            "destructive tier). Unset DEBUG in production"
+        )
 
 
 # ---------------------------------------------------------------------------

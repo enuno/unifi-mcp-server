@@ -151,6 +151,7 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
 | `MCP_STATELESS_HTTP` | Run the HTTP transports without MCP sessions so any replica can answer any request (ignored for stdio and SSE). `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs per-client sticky routing across replicas, keyed on something stable from `initialize` onward (see `MULTI_CONTROLLER.md`) | No | `false` |
 | `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
+| `DEBUG` | Register `debug_api_request`, an arbitrary GET or DELETE to any controller endpoint (destructive tier; never registered under `UNIFI_READ_ONLY`). Leave unset in production | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 | `LOG_API_REQUESTS` | Log each controller API request | No | `true` |
 | `UNIFI_CACHE_TTL` | Accepted but not used: read-cache lifetimes are fixed per resource type (sites, networks and WLANs 5 min, devices 1 min, clients 30 s) | No | `300` |
@@ -471,6 +472,27 @@ result = await mcp.call_tool("health_check", {})
   "version": "0.2.5",
   "api_type": "cloud"
 }
+```
+
+### Debug Passthrough
+
+#### `debug_api_request`
+
+Send a raw GET or DELETE to any controller endpoint. Registered only when `DEBUG` is `true`, `1` or `yes`, and never under `UNIFI_READ_ONLY`. Every call needs the `destructive` tier (`admin` or `fleet-admin`); `UNIFI_DRY_RUN` forces a preview.
+
+**Parameters:**
+
+- `endpoint` (string, required): controller-relative API path starting with a single `/`, e.g. `/proxy/network/api/s/default/stat/device`. Absolute (`https://...`) and scheme-relative (`//host/...`) URLs are refused, so the controller's API key is never sent to another host
+- `method` (string, optional): `GET` (default) or `DELETE`; anything else is refused
+- `confirm` (boolean, optional): must be `true` for a `DELETE` unless `dry_run` is set
+- `dry_run` (boolean, optional): return the request instead of sending it
+
+**Returns:** The raw JSON response, or `{"dry_run": true, "operation": "debug_api_request", "method": ..., "endpoint": ...}`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("debug_api_request", {"endpoint": "/proxy/network/api/s/default/stat/device"})
 ```
 
 ### Controller Selection

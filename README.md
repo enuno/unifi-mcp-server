@@ -139,6 +139,7 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable the cloud tools (Site Manager, Mobility, InnerSpace, Carrier) | `false` |
 | `UNIFI_PROFILE` | Register only one group of tools ([profiles](#tool-profiles-and-safety-controls)) | all |
 | `UNIFI_READ_ONLY` / `UNIFI_DRY_RUN` | Read-only or preview-only server | `false` |
+| `DEBUG` | Registers `debug_api_request` (raw GET/DELETE, destructive tier, removed by read-only). Leave unset in production | unset |
 | `MCP_SERVER_TRANSPORT` | `stdio`, `streamable_http`, `http` or `sse` | `stdio` |
 | `MCP_AUTH_TOKEN` | Bearer token, required on network transports | — |
 | `REDIS_URL` | Optional response cache | — |
@@ -223,6 +224,7 @@ Counts include the four fleet tools every profile gets. An unknown profile logs 
 
 - Every mutating tool requires `confirm=True`, and `dry_run=True` returns the change it would make without making it.
 - `UNIFI_READ_ONLY=true` leaves mutating tools out of the tool list entirely. `UNIFI_DRY_RUN=true` forces every mutating call into preview mode.
+- `DEBUG=true` adds `debug_api_request`, a raw GET or DELETE to any controller endpoint. It is a destructive-tier tool, a DELETE needs `confirm=True`, and read-only mode removes it. Leave `DEBUG` unset in production.
 - With tokens, each tool has a risk tier (`read`, `write`, `destructive`) and each role a set of tiers: `viewer` reads, `operator` writes, and `admin` can also run destructive tools, including deletes, restores, restarts, client blocking and firewall policy changes. See [API.md](API.md#access-control).
 - Mutations are written to a hash-chained JSON-lines audit log (Postgres in fleet mode), with optional field encryption and SIEM export. See [SECURITY.md](SECURITY.md).
 - Inputs are validated with Pydantic, and credentials are redacted from logs.

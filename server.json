@@ -17,46 +17,53 @@
       },
       "environmentVariables": [
         {
-          "description": "UniFi Controller hostname or IP address",
-          "isRequired": true,
-          "format": "string",
-          "isSecret": false,
-          "name": "UNIFI_HOST"
-        },
-        {
-          "description": "UniFi Controller username",
-          "isRequired": true,
-          "format": "string",
-          "isSecret": false,
-          "name": "UNIFI_USERNAME"
-        },
-        {
-          "description": "UniFi Controller password",
+          "description": "UniFi API key (Site Manager: Settings > Control Plane > Integrations > Create API Key)",
           "isRequired": true,
           "format": "string",
           "isSecret": true,
-          "name": "UNIFI_PASSWORD"
+          "name": "UNIFI_API_KEY"
         },
         {
-          "description": "UniFi Controller port (default: 443)",
-          "isRequired": false,
-          "format": "number",
-          "isSecret": false,
-          "name": "UNIFI_PORT"
-        },
-        {
-          "description": "Verify SSL certificate (default: true)",
-          "isRequired": false,
-          "format": "boolean",
-          "isSecret": false,
-          "name": "UNIFI_VERIFY_SSL"
-        },
-        {
-          "description": "UniFi site name (default: default)",
+          "description": "API mode: local (direct to the console), cloud-v1 or cloud-ea (default: cloud-ea)",
           "isRequired": false,
           "format": "string",
           "isSecret": false,
-          "name": "UNIFI_SITE"
+          "name": "UNIFI_API_TYPE"
+        },
+        {
+          "description": "Console hostname or IP address (local mode only)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "UNIFI_LOCAL_HOST"
+        },
+        {
+          "description": "Console port (local mode, default: 443)",
+          "isRequired": false,
+          "format": "number",
+          "isSecret": false,
+          "name": "UNIFI_LOCAL_PORT"
+        },
+        {
+          "description": "Verify the console's TLS certificate (local mode, default: true)",
+          "isRequired": false,
+          "format": "boolean",
+          "isSecret": false,
+          "name": "UNIFI_LOCAL_VERIFY_SSL"
+        },
+        {
+          "description": "Default site ID (default: default)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false,
+          "name": "UNIFI_DEFAULT_SITE"
+        },
+        {
+          "description": "Register only non-mutating tools (default: false)",
+          "isRequired": false,
+          "format": "boolean",
+          "isSecret": false,
+          "name": "UNIFI_READ_ONLY"
         }
       ]
     }

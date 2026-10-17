@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -359,3 +360,35 @@ class TestToolModuleSets:
 def teardown_module() -> None:
     # Leave a default (local, stdio) src.main behind for later test modules.
     _reload_main()
+
+
+class TestRelativeAuditPathWarning:
+    @staticmethod
+    def _settings(**fields: object) -> MagicMock:
+        defaults = {"audit_log_enabled": True, "database_url": None, "audit_log_file": None}
+        return MagicMock(**{**defaults, **fields})
+
+    @pytest.mark.parametrize("path", [None, "audit.log", "logs/audit.log"])
+    def test_relative_path_warns_with_resolved_location(
+        self, main_mod: ModuleType, caplog: pytest.LogCaptureFixture, path: str | None
+    ) -> None:
+        with caplog.at_level("WARNING"):
+            main_mod.warn_relative_audit_path(self._settings(audit_log_file=path))
+        expected = Path(path or "audit.log").absolute()
+        assert f"writing to {expected}" in caplog.text
+        assert "UNIFI_AUDIT_LOG_PATH" in caplog.text
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"audit_log_file": "/var/log/unifi-mcp/audit.log"},
+            {"audit_log_enabled": False},
+            {"database_url": "postgresql://registry"},
+        ],
+    )
+    def test_no_warning(
+        self, main_mod: ModuleType, caplog: pytest.LogCaptureFixture, fields: dict
+    ) -> None:
+        with caplog.at_level("WARNING"):
+            main_mod.warn_relative_audit_path(self._settings(**fields))
+        assert "UNIFI_AUDIT_LOG_PATH" not in caplog.text

@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 try:
@@ -962,11 +963,36 @@ async def audit_server_start() -> None:
     )
 
 
+def warn_relative_audit_path(current_settings: Settings) -> None:
+    """Warn when the audit log file depends on the working directory.
+
+    ``UNIFI_AUDIT_LOG_PATH`` defaults to ``audit.log``, and a relative path
+    resolves against the process working directory, which an MCP client
+    picks when it launches a stdio server. The audit trail then lands
+    wherever the client happened to start, or splits across directories.
+    Say where it is going and how to pin it. Not raised when the fleet
+    registry is configured: records then go to Postgres, not the file.
+
+    Args:
+        current_settings: Loaded application settings
+    """
+    if not current_settings.audit_log_enabled or current_settings.database_url:
+        return
+    path = Path(current_settings.audit_log_file or "audit.log")
+    if not path.is_absolute():
+        logger.warning(
+            f"Audit log path '{path}' is relative to the working directory; "
+            f"writing to {path.absolute()}. Set UNIFI_AUDIT_LOG_PATH to an "
+            "absolute path"
+        )
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")
+    warn_relative_audit_path(settings)
     if _active_profile:
         logger.info(f"Profile: {_active_profile} ({len(_TOOL_MODULES)} module(s) active)")
 

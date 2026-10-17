@@ -27,6 +27,42 @@ class TransportMode(str, Enum):
     STREAMABLE_HTTP = "streamable_http"  # Modern HTTP transport
 
 
+#: Roles an MCP_AUTH_TOKEN entry may carry as a ``<role>:`` prefix.
+AUTH_TOKEN_ROLES = ("viewer", "operator", "admin", "fleet-admin")
+
+
+def _parse_auth_token_entries(raw: str | None) -> dict[str, str]:
+    """Split MCP_AUTH_TOKEN into a token-to-role mapping.
+
+    Args:
+        raw: Comma-separated entries, each ``<token>`` or ``<role>:<token>``
+
+    Returns:
+        Mapping of bearer token to role; a bare token is ``fleet-admin``
+
+    Raises:
+        ValueError: If an entry is ``<role>:`` with no token, or one token is
+            listed with two different roles
+    """
+    roles: dict[str, str] = {}
+    for entry in (raw or "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        prefix, sep, rest = entry.partition(":")
+        if sep and prefix.strip() in AUTH_TOKEN_ROLES:
+            role, token = prefix.strip(), rest.strip()
+            if not token:
+                raise ValueError(f"MCP_AUTH_TOKEN entry '{role}:' has no token")
+        else:
+            role, token = "fleet-admin", entry
+        if roles.get(token, role) != role:
+            # Never echo the token itself.
+            raise ValueError("MCP_AUTH_TOKEN lists the same token with two different roles")
+        roles[token] = role
+    return roles
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 
@@ -523,8 +559,9 @@ class Settings(BaseSettings):
         description=(
             "Bearer token(s) required to call the MCP server over a network "
             "transport (http/sse/streamable_http). Comma-separated to allow "
-            "several. When unset, only the stdio transport may start. Ignored "
-            "for stdio."
+            "several. An entry may carry a role as <role>:<token> (viewer, "
+            "operator, admin or fleet-admin); a bare token is fleet-admin. When "
+            "unset, only the stdio transport may start. Ignored for stdio."
         ),
         validation_alias="MCP_AUTH_TOKEN",
     )
@@ -611,14 +648,32 @@ class Settings(BaseSettings):
         """Return the configured MCP bearer tokens as a list.
 
         Splits ``MCP_AUTH_TOKEN`` on commas and drops blanks so several
-        tokens can be issued from one variable. Empty when unset.
+        tokens can be issued from one variable, and strips any ``<role>:``
+        prefix (see :attr:`mcp_auth_token_roles`). Empty when unset.
 
         Returns:
             List of non-empty bearer tokens (possibly empty)
         """
-        if not self.mcp_auth_token:
-            return []
-        return [t.strip() for t in self.mcp_auth_token.split(",") if t.strip()]
+        return list(self.mcp_auth_token_roles)
+
+    @property
+    def mcp_auth_token_roles(self) -> dict[str, str]:
+        """Return each configured MCP bearer token with its role.
+
+        An ``MCP_AUTH_TOKEN`` entry is either a bare token, which is a
+        break-glass ``fleet-admin``, or ``<role>:<token>`` where the role is
+        ``viewer``, ``operator``, ``admin`` or ``fleet-admin``. Only those
+        four prefixes are read as roles, so any other token containing a
+        colon is used whole.
+
+        Returns:
+            Mapping of bearer token to role, in configuration order
+
+        Raises:
+            ValueError: If an entry is ``<role>:`` with no token, or one token
+                is listed with two different roles
+        """
+        return _parse_auth_token_entries(self.mcp_auth_token)
 
     @field_validator("server_transport", mode="before")
     @classmethod

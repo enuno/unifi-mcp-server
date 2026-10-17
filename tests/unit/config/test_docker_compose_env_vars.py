@@ -9,8 +9,13 @@ port, site, rate limit, timeout, cloud host), and would have been caught
 immediately by asserting the forwarded names against the model.
 """
 
+import subprocess
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+import pytest
 import yaml
 
 from src.config.config import Settings
@@ -22,7 +27,6 @@ from src.config.config import Settings
 # that were meant to reach Settings.
 KNOWN_NON_SETTINGS_PASSTHROUGHS = {
     "UNIFI_PROFILE",
-    "DRY_RUN",
     "UNIFI_METRICS_ENABLED",
     "UNIFI_WEBHOOK_REDIS_URL",
     "UNIFI_CONTROLLERS",
@@ -37,11 +41,15 @@ def _settings_aliases() -> set[str]:
     }
 
 
+ROOT = Path(__file__).parents[3]
+
+
+def _compose() -> dict:
+    return yaml.safe_load((ROOT / "docker-compose.yml").read_text())
+
+
 def _compose_env_names() -> set[str]:
-    compose_path = Path(__file__).parents[3] / "docker-compose.yml"
-    compose = yaml.safe_load(compose_path.read_text())
-    env = compose["services"]["unifi-mcp"]["environment"]
-    return set(env.keys())
+    return set(_compose()["services"]["unifi-mcp"]["environment"].keys())
 
 
 def test_docker_compose_forwards_names_settings_actually_reads():
@@ -58,3 +66,100 @@ def test_docker_compose_forwards_names_settings_actually_reads():
         "reads them under that name (validation_alias mismatch) or they "
         "aren't in KNOWN_NON_SETTINGS_PASSTHROUGHS - see issue #161"
     )
+
+
+@pytest.mark.parametrize("name", ["UNIFI_READ_ONLY", "UNIFI_DRY_RUN"])
+def test_docker_compose_forwards_safety_switches(name):
+    """The stock compose file can run read-only or preview-only.
+
+    With an explicit ``environment:`` block and no ``env_file``, a variable
+    the block does not name never reaches the container, so setting it in
+    ``.env`` did nothing.
+    """
+    env = _compose()["services"]["unifi-mcp"]["environment"]
+    assert env.get(name) == f"${{{name}:-false}}"
+    assert name in _settings_aliases()
+
+
+def _healthcheck_script() -> str:
+    test = _compose()["services"]["unifi-mcp"]["healthcheck"]["test"]
+    assert test[:3] == ["CMD", "python", "-c"]
+    return test[3]
+
+
+def _run_healthcheck(monkeypatch: pytest.MonkeyPatch, **env: str) -> int:
+    monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    result = subprocess.run(
+        [sys.executable, "-c", _healthcheck_script()],
+        cwd=ROOT,
+        capture_output=True,
+        timeout=60,
+    )
+    return result.returncode
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def do_GET(self) -> None:  # noqa: N802 - http.server API
+        self.send_response(200 if self.path == "/healthz" else 404)
+        self.end_headers()
+
+    def log_message(self, *args) -> None:
+        pass
+
+
+@pytest.fixture
+def liveness_port():
+    server = HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def test_healthcheck_passes_over_stdio_without_http(monkeypatch):
+    """stdio serves no HTTP, so the check must not depend on a listener."""
+    assert _run_healthcheck(monkeypatch, MCP_SERVER_TRANSPORT="stdio") == 0
+
+
+@pytest.mark.parametrize("host", ["127.0.0.1", "0.0.0.0"])
+def test_healthcheck_probes_healthz_over_network_transport(monkeypatch, liveness_port, host):
+    code = _run_healthcheck(
+        monkeypatch,
+        MCP_SERVER_TRANSPORT="streamable_http",
+        MCP_SERVER_HOST=host,
+        MCP_SERVER_PORT=str(liveness_port),
+    )
+    assert code == 0
+
+
+def test_healthcheck_fails_when_nothing_listens(monkeypatch, liveness_port):
+    unused = liveness_port + 1 if liveness_port < 65535 else liveness_port - 1
+    code = _run_healthcheck(
+        monkeypatch,
+        MCP_SERVER_TRANSPORT="http",
+        MCP_SERVER_HOST="127.0.0.1",
+        MCP_SERVER_PORT=str(unused),
+    )
+    assert code != 0
+
+
+def test_healthcheck_targets_the_real_route():
+    """The route is /healthz (src/main.py); /health is a 404."""
+    script = _healthcheck_script()
+    assert "/healthz" in script
+    assert "/health'" not in script and '/health"' not in script
+
+
+def test_toolbox_telemetry_is_opt_in():
+    """No OTLP endpoint unless the operator names one.
+
+    The server's own agnost tracking is off by default (``AGNOST_ENABLED``);
+    the toolbox container used to export to api.agnost.ai unconditionally.
+    """
+    command = _compose()["services"]["mcp-toolbox"]["command"]
+    otlp = [arg for arg in command if "telemetry-otlp" in arg]
+    assert otlp == ["--telemetry-otlp=${TOOLBOX_TELEMETRY_OTLP:-}"]
+    assert not any("agnost" in arg for arg in command)

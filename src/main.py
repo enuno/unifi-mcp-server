@@ -1047,8 +1047,9 @@ def main() -> None:
         run_kwargs: dict[str, Any] = {}
         middleware: list[Middleware] = []
         if settings.mcp_auth_max_failures > 0:
-            # Outermost, so a client over its budget of 401s is answered 429
-            # before any other layer reads its request.
+            # FastMCP adds this after its own auth middleware, so it is not
+            # the outermost layer; it still sees every route's 401 and answers
+            # 429 before the token check once a client is over its budget.
             from .utils.auth_throttle import BearerFailureLimiter
 
             middleware.append(

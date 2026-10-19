@@ -190,29 +190,17 @@ class SiteManagerClient:
         """Make a DELETE request to Site Manager API."""
         return await self._mutate("delete", endpoint)
 
-    async def _get_object(
-        self, endpoint: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
+    async def _get_object(self, endpoint: str, params: dict[str, Any] | None = None) -> JSONBody:
         """GET an endpoint documented to answer with a JSON object.
 
-        The typed wrappers below promise a dict; this checks the promise
-        instead of casting, so an array reply surfaces as an ``APIError``
-        naming the endpoint rather than an ``AttributeError`` in a caller.
-
-        Raises:
-            APIError: If the reply is not a JSON object
+        Some deployments answer these endpoints (``hosts``, ``vantage-points``
+        and others) with a bare array instead. The tools in
+        ``src/tools/site_manager.py`` handle both shapes, so the reply is
+        passed through as is and typed as such, rather than rejected.
         """
-        data = await self.get(endpoint, params=params)
-        if not isinstance(data, dict):
-            raise APIError(
-                f"Site Manager API returned a JSON {type(data).__name__} for "
-                f"{endpoint}; expected an object"
-            )
-        return data
+        return await self.get(endpoint, params=params)
 
-    async def list_sites(
-        self, limit: int | None = None, offset: int | None = None
-    ) -> dict[str, Any]:
+    async def list_sites(self, limit: int | None = None, offset: int | None = None) -> JSONBody:
         """List all sites from Site Manager API.
 
         Args:
@@ -227,7 +215,7 @@ class SiteManagerClient:
             "sites", params={k: v for k, v in params.items() if v is not None}
         )
 
-    async def get_site_health(self, site_id: str | None = None) -> dict[str, Any]:
+    async def get_site_health(self, site_id: str | None = None) -> JSONBody:
         """Get health metrics for a site or all sites.
 
         Args:
@@ -242,7 +230,7 @@ class SiteManagerClient:
 
         return await self._get_object(endpoint)
 
-    async def get_internet_health(self, site_id: str | None = None) -> dict[str, Any]:
+    async def get_internet_health(self, site_id: str | None = None) -> JSONBody:
         """Get internet health metrics.
 
         Args:
@@ -257,7 +245,7 @@ class SiteManagerClient:
 
         return await self._get_object(endpoint)
 
-    async def list_vantage_points(self) -> dict[str, Any]:
+    async def list_vantage_points(self) -> JSONBody:
         """List all Vantage Points.
 
         Returns:
@@ -266,7 +254,7 @@ class SiteManagerClient:
         return await self._get_object("vantage-points")
 
     # ISP Metrics endpoints (added 2026-02-16)
-    async def get_isp_metrics(self, site_id: str) -> dict[str, Any]:
+    async def get_isp_metrics(self, site_id: str) -> JSONBody:
         """Get ISP metrics for a site.
 
         Args:
@@ -282,7 +270,7 @@ class SiteManagerClient:
         site_id: str | None = None,
         start_time: str | None = None,
         end_time: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> JSONBody:
         """Query ISP metrics with filters.
 
         Args:
@@ -303,7 +291,7 @@ class SiteManagerClient:
         )
 
     # SD-WAN endpoints (added 2026-02-16)
-    async def list_sdwan_configs(self) -> dict[str, Any]:
+    async def list_sdwan_configs(self) -> JSONBody:
         """List all SD-WAN configurations.
 
         Returns:
@@ -311,7 +299,7 @@ class SiteManagerClient:
         """
         return await self._get_object("sdwan/configs")
 
-    async def get_sdwan_config(self, config_id: str) -> dict[str, Any]:
+    async def get_sdwan_config(self, config_id: str) -> JSONBody:
         """Get SD-WAN configuration by ID.
 
         Args:
@@ -322,7 +310,7 @@ class SiteManagerClient:
         """
         return await self._get_object(f"sdwan/configs/{config_id}")
 
-    async def get_sdwan_config_status(self, config_id: str) -> dict[str, Any]:
+    async def get_sdwan_config_status(self, config_id: str) -> JSONBody:
         """Get SD-WAN configuration deployment status.
 
         Args:
@@ -334,9 +322,7 @@ class SiteManagerClient:
         return await self._get_object(f"sdwan/configs/{config_id}/status")
 
     # Host Management endpoints (added 2026-02-16)
-    async def list_hosts(
-        self, limit: int | None = None, offset: int | None = None
-    ) -> dict[str, Any]:
+    async def list_hosts(self, limit: int | None = None, offset: int | None = None) -> JSONBody:
         """List all managed hosts/consoles.
 
         Args:
@@ -351,7 +337,7 @@ class SiteManagerClient:
             "hosts", params={k: v for k, v in params.items() if v is not None}
         )
 
-    async def get_host(self, host_id: str) -> dict[str, Any]:
+    async def get_host(self, host_id: str) -> JSONBody:
         """Get host details by ID.
 
         Args:
@@ -363,7 +349,7 @@ class SiteManagerClient:
         return await self._get_object(f"hosts/{host_id}")
 
     # Version Control endpoint (added 2026-02-16)
-    async def get_version_control(self) -> dict[str, Any]:
+    async def get_version_control(self) -> JSONBody:
         """Get API version control information.
 
         Returns:

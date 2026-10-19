@@ -178,3 +178,92 @@ async def test_guards_fastmcp_bearer_endpoint() -> None:
             assert r.status_code == 401
 
         assert (await client.post("/mcp", headers=good, json=init)).status_code == 429
+
+
+# --------------------------------------------------------------------------- #
+# Parallel guesses and the webhook receiver (review of #232)
+# --------------------------------------------------------------------------- #
+
+
+class _GatedApp:
+    """ASGI app that holds every request until ``gate`` is set, then 401s."""
+
+    def __init__(self) -> None:
+        import asyncio
+
+        self.gate = asyncio.Event()
+        self.entered = 0
+
+    async def __call__(self, scope, receive, send) -> None:
+        self.entered += 1
+        await self.gate.wait()
+        await send({"type": "http.response.start", "status": 401, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+
+async def _call(limiter, path: str = "/mcp", address: str = "203.0.113.7") -> int:
+    status = 0
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        nonlocal status
+        if message["type"] == "http.response.start":
+            status = message["status"]
+
+    scope = {"type": "http", "path": path, "client": (address, 51000)}
+    await limiter(scope, receive, send)
+    return status
+
+
+@pytest.mark.asyncio
+async def test_parallel_guesses_are_bounded_by_failures_plus_slack() -> None:
+    import asyncio
+
+    inner = _GatedApp()
+    limiter = BearerFailureLimiter(inner, max_failures=3, concurrency_slack=2, clock=FakeClock())
+    tasks = [asyncio.create_task(_call(limiter)) for _ in range(20)]
+    await asyncio.sleep(0)  # let every request reach the limiter
+    # Only max_failures + slack requests may be waiting for a response.
+    assert inner.entered == 5
+    inner.gate.set()
+    statuses = await asyncio.gather(*tasks)
+    assert statuses.count(401) == 5
+    assert statuses.count(429) == 15
+    # And the five failures now lock the address out.
+    assert await _call(limiter) == 429
+
+
+@pytest.mark.asyncio
+async def test_answered_requests_release_their_slot() -> None:
+    limiter = BearerFailureLimiter(
+        _app(FakeClock()), max_failures=10, concurrency_slack=0, clock=FakeClock()
+    )
+    for _ in range(30):  # more than max_failures + slack, one at a time, all OK
+        transport = httpx.ASGITransport(app=limiter, client=("203.0.113.7", 51000))
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as client:
+            assert (await client.get("/mcp", headers=GOOD)).status_code == 200
+    assert limiter._waiting == {}
+
+
+@pytest.mark.asyncio
+async def test_slot_released_when_the_app_raises() -> None:
+    async def boom(scope, receive, send):
+        raise RuntimeError("app failed")
+
+    limiter = BearerFailureLimiter(boom, max_failures=1, concurrency_slack=0, clock=FakeClock())
+    with pytest.raises(RuntimeError):
+        await _call(limiter)
+    assert limiter._waiting == {}
+
+
+@pytest.mark.asyncio
+async def test_webhook_receiver_is_not_counted() -> None:
+    inner = _GatedApp()
+    inner.gate.set()
+    limiter = BearerFailureLimiter(inner, max_failures=1, clock=FakeClock())
+    for _ in range(5):  # a controller with the wrong webhook secret
+        assert await _call(limiter, path="/webhooks/unifi") == 401
+    # ...does not lock the address out of /mcp.
+    assert await _call(limiter, path="/mcp") == 401

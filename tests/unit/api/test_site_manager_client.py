@@ -287,9 +287,10 @@ class TestReplyShapes:
         assert await client.post("connector/consoles/c1/proxy/network/v2/x") == []
 
     @pytest.mark.asyncio
-    async def test_typed_wrapper_rejects_array_reply(self, settings: MagicMock) -> None:
+    async def test_typed_wrapper_passes_array_reply_through(self, settings: MagicMock) -> None:
+        """Some deployments answer hosts and vantage-points with a bare array;
+        the tools handle that shape, so the wrapper must not reject it."""
         _, handler = _recorder(httpx.Response(200, json=[{"id": "h1"}]))
         client = _client(settings, handler)
 
-        with pytest.raises(APIError, match="JSON list for hosts; expected an object"):
-            await client.list_hosts()
+        assert await client.list_hosts() == [{"id": "h1"}]

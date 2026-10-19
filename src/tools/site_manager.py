@@ -65,7 +65,7 @@ async def list_all_sites_aggregated(settings: Settings) -> list[dict[str, Any]]:
             response
             if isinstance(response, list)
             else response.get("data", response.get("sites", []))
-        )
+        ) or []
 
         # Enhance with aggregated stats if available
         sites: list[dict[str, Any]] = []
@@ -129,6 +129,8 @@ async def get_site_health_summary(
             data = response
 
             if site_id:
+                if isinstance(data, list):
+                    data = data[0] if data else {}
                 return SiteHealthSummary(**data).model_dump()
             else:
                 # Multiple sites - response is already a list or dict with sites
@@ -165,7 +167,7 @@ async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
             sites_response
             if isinstance(sites_response, list)
             else sites_response.get("data", sites_response.get("sites", []))
-        )
+        ) or []
 
         try:
             health_response = await client.get_site_health()
@@ -303,7 +305,7 @@ async def get_site_inventory(
                 sites_response
                 if isinstance(sites_response, list)
                 else sites_response.get("data", sites_response.get("sites", []))
-            )
+            ) or []
 
             inventories = []
             for site in sites_data:
@@ -477,7 +479,7 @@ async def search_across_sites(
             sites_response
             if isinstance(sites_response, list)
             else sites_response.get("data", sites_response.get("sites", []))
-        )
+        ) or []
 
         results: list[dict[str, Any]] = []
         query_lower = query.lower()

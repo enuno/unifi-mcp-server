@@ -30,7 +30,11 @@ class SiteManagerResource:
 
         async with SiteManagerClient(self.settings) as client:
             response = await client.list_sites()
-            sites = response.get("data", response.get("sites", []))
+            sites = (
+                response
+                if isinstance(response, list)
+                else response.get("data", response.get("sites", []))
+            ) or []
             return "\n".join(
                 [f"Site: {s.get('name', 'Unknown')} ({s.get('id', 'unknown')})" for s in sites]
             )
@@ -46,7 +50,7 @@ class SiteManagerResource:
 
         async with SiteManagerClient(self.settings) as client:
             response = await client.get_site_health()
-            health_data = response.get("data", response)
+            health_data = response if isinstance(response, list) else response.get("data", response)
             return f"Health Status: {health_data}"
 
     async def get_internet_health_status(self) -> str:
@@ -60,5 +64,5 @@ class SiteManagerResource:
 
         async with SiteManagerClient(self.settings) as client:
             response = await client.get_internet_health()
-            health_data = response.get("data", response)
+            health_data = response if isinstance(response, list) else response.get("data", response)
             return f"Internet Health: {health_data}"

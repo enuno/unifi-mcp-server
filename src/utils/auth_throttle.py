@@ -9,8 +9,17 @@ reaches ``max_failures`` within ``window_seconds``, its requests are answered
 without reaching the token check.
 
 A successful request does not clear the count, so a client cannot interleave
-valid calls to keep guessing. ``/healthz`` is never limited, so a probe behind
-the same address as a misconfigured client keeps working.
+valid calls to keep guessing. ``/healthz`` and the webhook receiver are never
+limited or counted: a probe behind the same address as a misconfigured client
+keeps working, and a controller with a wrong webhook secret neither locks out
+MCP clients nor loses its own deliveries to someone else's bad token.
+
+A failure is only known when its ``401`` starts, so each request still waiting
+for its first response holds a slot until then. An address is refused once its
+recent failures plus its waiting requests reach ``max_failures`` plus
+``concurrency_slack``: parallel guesses cannot outrun the count by more than
+the slack, and a client with no failures can still have that many requests
+waiting at once.
 
 The client address is the one uvicorn reports. Behind a reverse proxy that is
 the proxy's address unless uvicorn trusts its ``X-Forwarded-For`` (uvicorn
@@ -37,6 +46,13 @@ logger = get_logger(__name__)
 #: in the window are dropped first, then the least recently added.
 DEFAULT_MAX_CLIENTS = 10_000
 
+#: Requests per address that may wait for their first response at once, on
+#: top of ``max_failures``.
+DEFAULT_CONCURRENCY_SLACK = 64
+
+#: Paths never limited or counted.
+DEFAULT_EXEMPT_PATHS = ("/healthz", "/webhooks/unifi")
+
 
 def _too_many_requests_body() -> bytes:
     return json.dumps(
@@ -55,8 +71,9 @@ class BearerFailureLimiter:
         app: ASGIApp,
         max_failures: int = 10,
         window_seconds: float = 60.0,
-        exempt_paths: tuple[str, ...] = ("/healthz",),
+        exempt_paths: tuple[str, ...] = DEFAULT_EXEMPT_PATHS,
         max_clients: int = DEFAULT_MAX_CLIENTS,
+        concurrency_slack: int = DEFAULT_CONCURRENCY_SLACK,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         """Wrap ``app``.
@@ -68,6 +85,8 @@ class BearerFailureLimiter:
             window_seconds: Length of the sliding window
             exempt_paths: Paths that are never limited or counted
             max_clients: Most client addresses tracked at once
+            concurrency_slack: Requests per address that may wait for their
+                first response at once, beyond ``max_failures``
             clock: Monotonic time source (for tests)
         """
         self.app = app
@@ -76,7 +95,9 @@ class BearerFailureLimiter:
         self.exempt_paths = frozenset(p.rstrip("/") or "/" for p in exempt_paths)
         self.max_clients = max_clients
         self._clock = clock
+        self.concurrency_slack = max(0, concurrency_slack)
         self._failures: dict[str, deque[float]] = {}
+        self._waiting: dict[str, int] = {}
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Handle one ASGI request."""
@@ -92,16 +113,42 @@ class BearerFailureLimiter:
         address = client[0] if client else "unknown"
         now = self._clock()
         failures = self._recent_failures(address, now)
-        if failures is not None and len(failures) >= self.max_failures:
-            await self._reject(send, retry_after=failures[0] + self.window - now)
+        failed = len(failures) if failures is not None else 0
+        waiting = self._waiting.get(address, 0)
+        if failed >= self.max_failures or (
+            failed + waiting >= self.max_failures + self.concurrency_slack
+        ):
+            # Over the failure budget, or too many unanswered requests that
+            # could each still turn into a failure.
+            oldest = failures[0] if failures else now
+            await self._reject(send, retry_after=oldest + self.window - now)
             return
 
+        self._waiting[address] = waiting + 1
+        released = False
+
+        def release() -> None:
+            nonlocal released
+            if released:
+                return
+            released = True
+            left = self._waiting.get(address, 1) - 1
+            if left > 0:
+                self._waiting[address] = left
+            else:
+                self._waiting.pop(address, None)
+
         async def counting_send(message: Message) -> None:
-            if message["type"] == "http.response.start" and message["status"] == 401:
-                self._record_failure(address)
+            if message["type"] == "http.response.start":
+                if message["status"] == 401:
+                    self._record_failure(address)
+                release()
             await send(message)
 
-        await self.app(scope, receive, counting_send)
+        try:
+            await self.app(scope, receive, counting_send)
+        finally:
+            release()
 
     def _recent_failures(self, address: str, now: float) -> deque[float] | None:
         failures = self._failures.get(address)

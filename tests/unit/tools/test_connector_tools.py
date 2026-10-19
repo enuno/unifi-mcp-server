@@ -584,8 +584,8 @@ class TestArrayReplies:
     async def test_get_reply_shapes(self, site_manager_settings, reply):
         from fastmcp import Client, FastMCP
 
-        import src.tools.connector as connector
         from src.tool_registry import register_module_tools
+        from src.tools import connector
 
         mcp = FastMCP("test")
         register_module_tools(

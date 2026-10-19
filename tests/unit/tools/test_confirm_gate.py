@@ -24,7 +24,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import src.tools as tools_pkg
+from src import tools as tools_pkg
 from src.fleet.admin_tools import build_admin_tools, build_token_tools
 from src.tool_registry import _make_tool_wrapper
 from src.tools import site_vpn

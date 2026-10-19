@@ -717,7 +717,7 @@ viewers = await mcp.call_tool("list_protect_viewers", {})
 - `get_protect_event_messages(limit=None, offset=None)` compatibility alias
 - `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
 - `get_protect_device_updates(limit=None, offset=None)` compatibility alias
-- `send_protect_alarm_webhook(webhook_id, payload=None)`
+- `send_protect_alarm_webhook(webhook_id, payload=None)`: `webhook_id` is the alarm's webhook trigger ID, one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`
 
 ```python
 events = await mcp.call_tool("list_protect_events", {})
@@ -1734,6 +1734,24 @@ result = await mcp.call_tool("get_version_control", {})
 }
 ```
 
+#### Cloud Connector passthrough tools
+
+`connector_network_get`, `connector_network_post`, `connector_network_put`, `connector_network_patch`, `connector_network_delete`, and the matching `connector_protect_*` tools forward a request to `https://api.ui.com/v1/connector/consoles/{console_id}/proxy/{network,protect}/{path}`. The `get` tools are `read` tier; the others need `confirm=True`.
+
+**Parameters:** `console_id`, `path`, plus `params` (optional query parameters) on the `get` tools and `body`, **`confirm`** and **`dry_run`** on the mutating tools
+
+**Input rules** (checked before any request is made; a bad value raises `ValidationError`):
+
+- `console_id` is the host ID from `list_hosts`, for example `70A7...8EC3:1093004219`. Surrounding whitespace is stripped and the stripped value is what goes into the URL. What remains must be one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`, and cannot be only dots.
+- `path` is the sub-path under the proxy prefix, for example `api/s/default/stat/device`. Leading slashes are stripped. Every segment uses the same character set as `console_id` and cannot be empty, `.` or `..`; one trailing slash is allowed. The whole path is capped at 2048 characters. `?`, `#`, `%` and `\` are refused: on the `get` tools, pass query strings through `params`.
+
+```python
+devices = await mcp.call_tool(
+    "connector_network_get",
+    {"console_id": "70A7...8EC3:1093004219", "path": "api/s/default/stat/device"},
+)
+```
+
 ## Phase 4: Mutating Tools
 
 All Phase 4 tools modify UniFi configuration and require safety mechanisms.
@@ -2053,6 +2071,14 @@ Create a new network/VLAN.
 #### `update_network` & `delete_network`
 
 Modify or remove networks. Requires `confirm=True`.
+
+#### `update_site_to_site_vpn`
+
+Update a site-to-site VPN's `networkconf` entry. Requires `confirm=True`.
+
+**Parameters:** `site_id`, `vpn_id`, `name`, `enabled`, `ipsec_peer_ip`, `remote_vpn_subnets`, `x_ipsec_pre_shared_key`, **`confirm`**, **`dry_run`**
+
+`vpn_id` must be a 24-character hex ObjectId (or a UUID), as returned by `list_site_to_site_vpns`. It is lowercased before use, and anything else raises `ValidationError` before the controller is contacted. `get_site_to_site_vpn` filters the list client-side and does not apply this check.
 
 ### Device Control
 

@@ -39,6 +39,7 @@ Fleet tools are built inside functions, not defined at module level, so the "eve
 - Paths:
   - `SiteManagerClient` (`src/api/site_manager_client.py`) uses the base URL `https://api.ui.com/v1/` and the `X-API-KEY` header.
   - Connector calls go to `connector/consoles/{console_id}/proxy/{network|protect}/{path}`.
+  - `_validate_connector_params` (`src/tools/connector.py`) checks both inputs before a client is built, and every connector tool uses the normalized values it returns. `console_id` goes through `validate_path_segment` (`src/utils/validators.py`): surrounding whitespace is stripped, then only `[A-Za-z0-9._~:-]` is allowed, up to 256 characters, and an all-dots value is refused. `path` goes through `validate_proxy_path`: leading slashes are stripped, every segment must match the same character set and must not be empty, `.` or `..`, a single trailing slash is allowed, and the whole path is capped at 2048 characters. `?`, `#`, `%` and `\` are refused, so query strings belong in `params`. This keeps a caller, including a `viewer` on the read-tier GET tools, inside the proxy prefix.
   - InnerSpace goes through the connector proxy.
   - `settings.get_integration_path()` gives `/v1/...` for cloud-v1 and `/integration/v1/...` for cloud-ea.
 - Profiles: `UNIFI_PROFILE` has `mobility`, `innerspace` and `carrier` sets.
@@ -120,4 +121,3 @@ Routing happens in the registry wrapper (`_make_tool_wrapper()` in `src/tool_reg
 ## Known defects (not fixed)
 
 - `SiteManagerClient` hardcodes its base URL. It ignores `UNIFI_CLOUD_API_URL`, and it does not use the pool or the rate limiter.
-- The connector `path` argument is checked only for empty values and a leading slash.

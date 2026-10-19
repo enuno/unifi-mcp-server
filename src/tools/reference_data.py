@@ -6,8 +6,10 @@ from ..api import UniFiClient
 from ..config import Settings
 from ..models.reference_data import Country, DeviceTag
 from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def list_radius_profiles(
     site_id: str,
     settings: Settings,
@@ -46,6 +48,7 @@ async def list_radius_profiles(
         return paginated
 
 
+@read_tool
 async def list_device_tags(
     site_id: str,
     settings: Settings,
@@ -84,6 +87,7 @@ async def list_device_tags(
         return [DeviceTag(**tag).model_dump() for tag in paginated]
 
 
+@read_tool
 async def list_countries(
     settings: Settings,
     limit: int | None = None,

@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectAlarmWebhookResult, ProtectEventMessage
 from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_path_segment
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 # Defined once in protect_devices, which registers it as an MCP tool. Importing it
@@ -35,6 +36,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def get_protect_subscribe_devices(
     settings: Settings,
     limit: int | None = None,
@@ -44,6 +46,7 @@ async def get_protect_subscribe_devices(
     return await list_protect_device_updates(settings, limit=limit, offset=offset)
 
 
+@read_tool
 async def get_protect_device_updates(
     settings: Settings,
     limit: int | None = None,
@@ -53,6 +56,7 @@ async def get_protect_device_updates(
     return await list_protect_device_updates(settings, limit=limit, offset=offset)
 
 
+@read_tool
 async def list_protect_events(
     settings: Settings,
     limit: int | None = None,
@@ -83,6 +87,7 @@ async def list_protect_events(
     }
 
 
+@read_tool
 async def get_protect_subscribe_events(
     settings: Settings,
     limit: int | None = None,
@@ -92,6 +97,7 @@ async def get_protect_subscribe_events(
     return await list_protect_events(settings, limit=limit, offset=offset)
 
 
+@read_tool
 async def get_protect_event_messages(
     settings: Settings,
     limit: int | None = None,
@@ -101,6 +107,7 @@ async def get_protect_event_messages(
     return await list_protect_events(settings, limit=limit, offset=offset)
 
 
+@write_tool
 async def send_protect_alarm_webhook(
     webhook_id: str,
     settings: Settings,

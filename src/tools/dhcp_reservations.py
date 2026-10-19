@@ -23,6 +23,7 @@ from ..utils import (
     sanitize_log_message,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -53,6 +54,7 @@ def _unwrap(response: Any) -> list[dict[str, Any]]:
     return []
 
 
+@read_tool
 async def list_dhcp_reservations(
     site_id: str,
     settings: Settings,
@@ -106,6 +108,7 @@ async def list_dhcp_reservations(
         return reservations
 
 
+@read_tool
 async def get_dhcp_reservation(
     mac: str,
     site_id: str,
@@ -144,6 +147,7 @@ async def get_dhcp_reservation(
         raise ResourceNotFoundError("dhcp_reservation", mac)
 
 
+@write_tool
 async def create_dhcp_reservation(
     mac: str,
     fixed_ip: str,
@@ -260,6 +264,7 @@ async def create_dhcp_reservation(
         }
 
 
+@write_tool
 async def update_dhcp_reservation(
     mac: str,
     site_id: str,
@@ -376,6 +381,7 @@ async def update_dhcp_reservation(
         }
 
 
+@write_tool
 async def remove_dhcp_reservation(
     mac: str,
     site_id: str,

@@ -29,6 +29,7 @@ from src.fleet.admin_tools import build_admin_tools, build_token_tools
 from src.tool_registry import _make_tool_wrapper
 from src.tools import site_vpn
 from src.utils.exceptions import ValidationError
+from src.utils.tool_kind import write_tool
 
 #: Strings that must not count as confirmation.
 UNCONFIRMED = [False, None, "false", "False", "FALSE", "0", "no", "", "off", "nope"]
@@ -145,6 +146,7 @@ async def test_global_dry_run_mode_needs_no_confirm(settings: MagicMock) -> None
 
 
 async def test_positional_confirm_is_read(settings: MagicMock) -> None:
+    @write_tool
     async def tool(site_id: str, confirm: bool | str = False, settings: Any = None) -> dict:
         return {"confirm": confirm}
 
@@ -157,6 +159,7 @@ async def test_positional_confirm_is_read(settings: MagicMock) -> None:
 def test_sync_tool_is_gated_too(settings: MagicMock) -> None:
     calls: list[Any] = []
 
+    @write_tool
     def tool(confirm: bool | str = False, settings: Any = None) -> None:
         calls.append(confirm)
 

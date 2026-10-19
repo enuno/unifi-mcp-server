@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectAlarmHub
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -50,6 +51,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_alarm_hubs(
     settings: Settings,
     limit: int | None = None,
@@ -81,6 +83,7 @@ async def list_protect_alarm_hubs(
     }
 
 
+@read_tool
 async def get_protect_alarm_hub(alarm_hub_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect alarm hub."""
     logger = get_logger(__name__, settings.log_level)
@@ -97,6 +100,7 @@ async def get_protect_alarm_hub(alarm_hub_id: str, settings: Settings) -> dict[s
     return alarm_hub.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_alarm_hub(
     alarm_hub_id: str,
     settings: Settings,
@@ -147,6 +151,7 @@ async def update_protect_alarm_hub(
     return alarm_hub.model_dump(by_alias=True)
 
 
+@write_tool
 async def trigger_protect_alarm_hub_output(
     alarm_hub_id: str,
     output_id: str,

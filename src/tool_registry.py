@@ -31,6 +31,7 @@ from .utils.audit import AuditLogger, ToolCallRecorder, get_audit_logger
 from .utils.exceptions import ResourceNotFoundError, ValidationError
 from .utils.logger import get_logger
 from .utils.metrics import REGISTRY as METRICS
+from .utils.tool_kind import UndeclaredToolError, declared_kind
 from .utils.validators import coerce_bool
 
 #: Type of the ``fresh`` argument cached read tools gain.
@@ -50,31 +51,11 @@ ControllerArg = Annotated[
     ),
 ]
 
-#: Parameters that mark a tool as state-changing.
+#: Parameters that only a write tool may take.
 #:
-#: Every mutating tool in this codebase takes a ``confirm`` and/or ``dry_run``
-#: parameter, so the signature itself is a reliable classifier — and one that
-#: stays correct as new tools are added, unlike a hand-maintained name list.
+#: A tool declared with ``@read_tool`` that takes either is refused at
+#: registration: the declaration and the signature disagree.
 _MUTATION_MARKERS = ("confirm", "dry_run")
-
-#: Mutating tools that do not (yet) carry a ``confirm``/``dry_run`` parameter.
-#:
-#: These are listed explicitly so read-only mode does not expose them. This set
-#: is a *classification* hint only; it does not change the tools' behaviour.
-#: Entries should be removed as the corresponding tools gain proper gates.
-MUTATING_TOOLS_WITHOUT_GATE = frozenset(
-    {
-        "create_protect_live_view",
-        "run_speed_test",
-        "send_protect_alarm_webhook",
-        "update_protect_chime",
-        "update_protect_device",
-        "update_protect_light",
-        "update_protect_live_view",
-        "update_protect_sensor",
-        "update_protect_viewer",
-    }
-)
 
 
 #: Mutating tools whose name starts with one of these are always destructive,
@@ -171,23 +152,48 @@ def _request_ids() -> tuple[str | None, str | None]:
 def is_mutating_tool(fn: Any) -> bool:
     """Return whether *fn* can change controller state.
 
-    A tool counts as mutating when its signature carries one of the mutation
-    markers (``confirm``/``dry_run``), or when it is listed in
-    :data:`MUTATING_TOOLS_WITHOUT_GATE`.
+    The answer is the tool's ``@read_tool``/``@write_tool`` declaration
+    (:mod:`src.utils.tool_kind`). A function with no declaration counts as
+    mutating, so a missing declaration can only hide a tool, never expose one.
 
     Args:
         fn: The tool function to classify.
 
     Returns:
-        True if the tool can change state, False if it is read-only.
+        True unless the tool is declared read-only.
     """
-    if getattr(fn, "__name__", "") in MUTATING_TOOLS_WITHOUT_GATE:
-        return True
-    try:
-        params = inspect.signature(fn).parameters
-    except (TypeError, ValueError):  # pragma: no cover - defensive
-        return True
-    return any(marker in params for marker in _MUTATION_MARKERS)
+    return declared_kind(fn) != "read"
+
+
+def check_tool_declaration(fn: Any) -> None:
+    """Refuse a tool whose read/write declaration is missing or contradicts it.
+
+    Args:
+        fn: The tool function about to be registered.
+
+    Raises:
+        UndeclaredToolError: If *fn* has no ``@read_tool``/``@write_tool``
+            declaration, or is declared read but takes ``confirm`` or ``dry_run``.
+    """
+    name = getattr(fn, "__name__", repr(fn))
+    module = getattr(fn, "__module__", "?")
+    kind = declared_kind(fn)
+    if kind is None:
+        raise UndeclaredToolError(
+            f"Tool {module}.{name} has no read/write declaration: decorate it with "
+            "@read_tool or @write_tool from src.utils.tool_kind"
+        )
+    if kind == "read":
+        try:
+            params = inspect.signature(fn).parameters
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            return
+        markers = [m for m in _MUTATION_MARKERS if m in params]
+        if markers:
+            raise UndeclaredToolError(
+                f"Tool {module}.{name} is declared @read_tool but takes "
+                f"{', '.join(markers)}, which only write tools take"
+            )
 
 
 def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
@@ -258,6 +264,10 @@ def _make_tool_wrapper(
     Returns:
         An async callable with the ``settings`` parameter removed from its
         visible signature.
+
+    Raises:
+        UndeclaredToolError: If *fn* has no ``@read_tool``/``@write_tool``
+            declaration; see :func:`check_tool_declaration`.
     """
     sig = inspect.signature(fn)
     params = sig.parameters
@@ -282,6 +292,7 @@ def _make_tool_wrapper(
     # module-level spelling (tools are defined as ``_list_devices`` but
     # registered as ``list_devices``).
     metric_tool_name = fn.__name__.lstrip("_")
+    check_tool_declaration(fn)
     mutating = is_mutating_tool(fn)
     tier = tier or tool_tier(fn)
     module = module or fn.__module__.rsplit(".", 1)[-1]
@@ -603,6 +614,8 @@ def register_module_tools(
             continue
         if not inspect.iscoroutinefunction(obj):
             continue
+        # Every tool declares read or write; refuse to start rather than guess.
+        check_tool_declaration(obj)
         # Read-only mode: never expose state-changing tools to the client.
         # Filtering at registration means the tool is absent from the MCP tool
         # list entirely, rather than relying on a caller-supplied ``confirm``.

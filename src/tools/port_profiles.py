@@ -18,6 +18,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 # Current controllers drive tagged VLAN handling from tagged_vlan_mgmt and
 # derive the legacy `forward` field from it. "block_all" is the access-port
@@ -53,6 +54,7 @@ def _stored_value_warnings(requested: dict[str, Any], stored: dict[str, Any]) ->
     return warnings
 
 
+@read_tool
 async def list_port_profiles(
     site_id: str,
     settings: Settings,
@@ -94,6 +96,7 @@ async def list_port_profiles(
         return profiles
 
 
+@read_tool
 async def get_port_profile(
     site_id: str,
     profile_id: str,
@@ -136,6 +139,7 @@ async def get_port_profile(
         return profile.model_dump(by_alias=True, exclude_none=True)
 
 
+@write_tool
 async def create_port_profile(
     site_id: str,
     name: str,
@@ -301,6 +305,7 @@ async def create_port_profile(
         raise
 
 
+@write_tool
 async def update_port_profile(
     site_id: str,
     profile_id: str,
@@ -481,6 +486,7 @@ async def update_port_profile(
         raise
 
 
+@write_tool
 async def delete_port_profile(
     site_id: str,
     profile_id: str,
@@ -567,6 +573,7 @@ async def delete_port_profile(
         raise
 
 
+@read_tool
 async def get_device_port_overrides(
     site_id: str,
     device_id: str,
@@ -634,6 +641,7 @@ async def get_device_port_overrides(
         }
 
 
+@write_tool
 async def set_device_port_overrides(
     site_id: str,
     device_id: str,
@@ -788,6 +796,7 @@ async def set_device_port_overrides(
         raise
 
 
+@read_tool
 async def get_device_by_mac(
     site_id: str,
     mac: str,

@@ -19,6 +19,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 # Early Access API rate limit is 100 req/min; cap concurrent per-AP neighbor
 # calls so a large site can't burst past it.
@@ -122,6 +123,7 @@ def _extract_rows(response: Any) -> list[dict[str, Any]]:
     return []
 
 
+@read_tool
 async def list_ap_neighbors_v2(
     site_id: str,
     ap_mac: str,
@@ -193,6 +195,7 @@ async def list_ap_neighbors_v2(
         return neighbors
 
 
+@read_tool
 async def list_site_internal_ap_neighbors_v2(
     site_id: str,
     settings: Settings,

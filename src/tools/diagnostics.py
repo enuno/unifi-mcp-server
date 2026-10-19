@@ -18,8 +18,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def get_network_references(
     site_id: str, network_id: str, settings: Settings
 ) -> dict[str, Any]:
@@ -57,6 +59,7 @@ async def get_network_references(
         }
 
 
+@write_tool
 async def run_speed_test(
     site_id: str,
     settings: Settings,
@@ -100,6 +103,7 @@ async def run_speed_test(
         }
 
 
+@read_tool
 async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, Any]:
     """Get the current status of a running or completed speed test.
 
@@ -179,6 +183,7 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
         return speed_test.model_dump(exclude_none=True)
 
 
+@read_tool
 async def get_speed_test_history(
     site_id: str, settings: Settings, hours: int = 168
 ) -> list[dict[str, Any]]:
@@ -282,6 +287,7 @@ async def _spectrum_scan_targets(
     ]
 
 
+@read_tool
 async def get_spectrum_scan(
     site_id: str, settings: Settings, ap_mac: str | None = None
 ) -> dict[str, Any]:
@@ -327,6 +333,7 @@ async def get_spectrum_scan(
         return {"site_id": site_id, "aps": aps}
 
 
+@read_tool
 async def list_spectrum_interference(
     site_id: str, settings: Settings, ap_mac: str | None = None
 ) -> list[dict[str, Any]]:
@@ -409,6 +416,7 @@ _DEFAULT_REPORT_ATTRS: dict[str, list[str]] = {
 }
 
 
+@read_tool
 async def get_historical_stats(
     site_id: str,
     settings: Settings,
@@ -489,6 +497,7 @@ async def get_historical_stats(
         return samples
 
 
+@write_tool
 async def start_spectrum_scan(
     site_id: str,
     settings: Settings,

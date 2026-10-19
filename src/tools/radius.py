@@ -14,6 +14,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,7 @@ logger = get_logger(__name__)
 # =============================================================================
 
 
+@read_tool
 async def list_radius_profiles(
     site_id: str,
     settings: Settings,
@@ -49,6 +51,7 @@ async def list_radius_profiles(
         return [RADIUSProfile(**profile).model_dump() for profile in data]
 
 
+@read_tool
 async def get_radius_profile(
     site_id: str,
     profile_id: str,
@@ -79,6 +82,7 @@ async def get_radius_profile(
         return RADIUSProfile(**data).model_dump()
 
 
+@write_tool
 async def create_radius_profile(
     site_id: str,
     name: str,
@@ -181,6 +185,7 @@ async def create_radius_profile(
         return RADIUSProfile(**data).model_dump()
 
 
+@write_tool
 async def update_radius_profile(
     site_id: str,
     profile_id: str,
@@ -299,6 +304,7 @@ async def update_radius_profile(
         return RADIUSProfile(**data).model_dump()
 
 
+@write_tool
 async def delete_radius_profile(
     site_id: str,
     profile_id: str,
@@ -353,6 +359,7 @@ async def delete_radius_profile(
 # =============================================================================
 
 
+@read_tool
 async def list_radius_accounts(
     site_id: str,
     settings: Settings,
@@ -384,6 +391,7 @@ async def list_radius_accounts(
         return [RADIUSAccount(**account).model_dump() for account in data]
 
 
+@write_tool
 async def create_radius_account(
     site_id: str,
     username: str,
@@ -480,6 +488,7 @@ async def create_radius_account(
         return RADIUSAccount(**data).model_dump()
 
 
+@read_tool
 async def get_radius_account(
     site_id: str,
     account_id: str,
@@ -516,6 +525,7 @@ async def get_radius_account(
         return RADIUSAccount(**data).model_dump()
 
 
+@write_tool
 async def update_radius_account(
     site_id: str,
     account_id: str,
@@ -613,6 +623,7 @@ async def update_radius_account(
         return RADIUSAccount(**data).model_dump()
 
 
+@write_tool
 async def delete_radius_account(
     site_id: str,
     account_id: str,
@@ -730,6 +741,7 @@ def _scrub_secrets(section: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in section.items() if not k.startswith("x_")}
 
 
+@read_tool
 async def get_guest_portal_config(
     site_id: str,
     settings: Settings,
@@ -777,6 +789,7 @@ _HOTSPOT_METHOD_FLAGS = {
 }
 
 
+@write_tool
 async def configure_guest_portal(
     site_id: str,
     settings: Settings,
@@ -963,6 +976,7 @@ async def configure_guest_portal(
 # =============================================================================
 
 
+@read_tool
 async def list_hotspot_packages(
     site_id: str,
     settings: Settings,
@@ -989,6 +1003,7 @@ async def list_hotspot_packages(
         return [dict(package) for package in data]
 
 
+@write_tool
 async def create_hotspot_package(
     site_id: str,
     name: str,
@@ -1076,6 +1091,7 @@ async def create_hotspot_package(
         return dict(data)
 
 
+@read_tool
 async def get_hotspot_package(
     site_id: str,
     package_id: str,
@@ -1111,6 +1127,7 @@ async def get_hotspot_package(
         return dict(data)
 
 
+@write_tool
 async def update_hotspot_package(
     site_id: str,
     package_id: str,
@@ -1200,6 +1217,7 @@ async def update_hotspot_package(
         return dict(data)
 
 
+@write_tool
 async def delete_hotspot_package(
     site_id: str,
     package_id: str,

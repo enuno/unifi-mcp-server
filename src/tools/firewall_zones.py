@@ -14,6 +14,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -69,6 +70,7 @@ def _ensure_local_api(settings: Settings) -> None:
         )
 
 
+@read_tool
 async def list_firewall_zones(
     site_id: str,
     settings: Settings,
@@ -101,6 +103,7 @@ async def list_firewall_zones(
         return cast(list[dict[str, Any]], data)
 
 
+@write_tool
 async def create_firewall_zone(
     site_id: str,
     name: str,
@@ -186,6 +189,7 @@ async def create_firewall_zone(
         return cast(dict[str, Any], data)
 
 
+@write_tool
 async def update_firewall_zone(
     site_id: str,
     firewall_zone_id: str,
@@ -292,6 +296,7 @@ async def update_firewall_zone(
         return cast(dict[str, Any], data)
 
 
+@write_tool
 async def assign_network_to_zone(
     site_id: str,
     zone_id: str,
@@ -416,6 +421,7 @@ async def assign_network_to_zone(
         ).model_dump()
 
 
+@read_tool
 async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List all networks in a zone.
 
@@ -479,6 +485,7 @@ async def get_zone_networks(site_id: str, zone_id: str, settings: Settings) -> l
         return networks
 
 
+@write_tool
 async def delete_firewall_zone(
     site_id: str,
     zone_id: str,
@@ -534,6 +541,7 @@ async def delete_firewall_zone(
         return {"status": "success", "zone_id": zone_id, "action": "deleted"}
 
 
+@write_tool
 async def unassign_network_from_zone(
     site_id: str,
     zone_id: str,

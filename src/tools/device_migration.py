@@ -34,6 +34,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import write_tool
 
 _OBJECT_ID_RE = re.compile(r"^[a-f0-9]{24}$")
 _SITES_ENDPOINT = "/proxy/network/api/self/sites"
@@ -207,6 +208,7 @@ async def _send(
         raise
 
 
+@write_tool
 async def move_device_to_site(
     site_id: str,
     device_id: str,
@@ -264,6 +266,7 @@ async def move_device_to_site(
     )
 
 
+@write_tool
 async def migrate_device(
     site_id: str,
     device_id: str,
@@ -323,6 +326,7 @@ async def migrate_device(
     )
 
 
+@write_tool
 async def cancel_device_migration(
     site_id: str,
     device_id: str,

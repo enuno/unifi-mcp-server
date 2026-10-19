@@ -15,6 +15,7 @@ from src.fleet import ControllerProfile
 from src.fleet.router import FleetRouter
 from src.fleet.tools import register_fleet_tools
 from src.tool_registry import _make_tool_wrapper
+from src.utils import tool_kind
 
 from .test_router import StaticRegistry
 
@@ -81,21 +82,25 @@ def _records(settings: Settings) -> list[dict[str, Any]]:
 calls: list[str] = []
 
 
+@tool_kind.read_tool
 async def read_tool(site_id: str, settings: Any = None) -> str:
     calls.append("read")
     return "read"
 
 
+@tool_kind.write_tool
 async def write_tool(site_id: str, confirm: bool = False, settings: Any = None) -> str:
     calls.append("write")
     return "write"
 
 
+@tool_kind.write_tool
 async def delete_thing(site_id: str, confirm: bool = False, settings: Any = None) -> str:
     calls.append("destructive")
     return "destructive"
 
 
+@tool_kind.write_tool
 async def admin_tool(confirm: bool = False, settings: Any = None) -> str:
     calls.append("fleet-admin")
     return "fleet-admin"

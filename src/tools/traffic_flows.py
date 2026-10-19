@@ -53,6 +53,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -208,6 +209,7 @@ async def _get_filtered_flows(
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def get_traffic_flows(
     site_id: str,
     settings: Settings,
@@ -290,6 +292,7 @@ async def get_traffic_flows(
     return results
 
 
+@read_tool
 async def get_flow_statistics(
     site_id: str,
     settings: Settings,
@@ -351,6 +354,7 @@ async def get_flow_statistics(
     return stats.model_dump()
 
 
+@read_tool
 async def get_traffic_flow_details(
     site_id: str,
     flow_id: str,
@@ -376,6 +380,7 @@ async def get_traffic_flow_details(
         raise ResourceNotFoundError("traffic_flow", flow_id)
 
 
+@read_tool
 async def get_top_flows(
     site_id: str,
     settings: Settings,
@@ -404,6 +409,7 @@ async def get_top_flows(
     return [flow.model_dump(by_alias=True) for flow in sorted_flows]
 
 
+@read_tool
 async def get_flow_risks(
     site_id: str,
     settings: Settings,
@@ -424,6 +430,7 @@ async def get_flow_risks(
     return [flow.model_dump(by_alias=True) for flow in matching]
 
 
+@read_tool
 async def filter_traffic_flows(
     site_id: str,
     settings: Settings,
@@ -455,6 +462,7 @@ async def filter_traffic_flows(
     return await get_traffic_flows(site_id, settings, limit=limit, **parsed)
 
 
+@read_tool
 async def get_client_flow_aggregation(
     site_id: str,
     client_mac: str,
@@ -493,6 +501,7 @@ async def get_client_flow_aggregation(
     ).model_dump()
 
 
+@read_tool
 async def get_flow_analytics(
     site_id: str,
     settings: Settings,
@@ -516,6 +525,7 @@ async def get_flow_analytics(
     return stats
 
 
+@read_tool
 async def export_traffic_flows(
     site_id: str,
     settings: Settings,
@@ -578,6 +588,7 @@ async def export_traffic_flows(
     return buf.getvalue()
 
 
+@read_tool
 async def find_flows_for_rule_reference(
     site_id: str,
     settings: Settings,
@@ -712,6 +723,7 @@ def _flow_to_reference_match(flow: TrafficFlow) -> FlowRuleReferenceMatch:
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def get_flow_trends(
     site_id: str,
     settings: Settings,
@@ -733,6 +745,7 @@ async def get_flow_trends(
     )
 
 
+@read_tool
 async def stream_traffic_flows(
     site_id: str,
     settings: Settings,
@@ -753,6 +766,7 @@ async def stream_traffic_flows(
     )
 
 
+@read_tool
 async def get_connection_states(
     site_id: str,
     settings: Settings,
@@ -775,6 +789,7 @@ async def get_connection_states(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def block_flow_source_ip(
     site_id: str,
     flow_id: str,
@@ -805,6 +820,7 @@ async def block_flow_source_ip(
     )
 
 
+@write_tool
 async def block_flow_destination_ip(
     site_id: str,
     flow_id: str,
@@ -835,6 +851,7 @@ async def block_flow_destination_ip(
     )
 
 
+@write_tool
 async def block_flow_application(
     site_id: str,
     flow_id: str,

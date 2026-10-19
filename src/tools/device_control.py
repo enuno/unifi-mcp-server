@@ -17,6 +17,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 # Radio identifiers: UniFi uses "ng" for 2.4GHz, "na" for 5GHz, "6e" for 6GHz
 RADIO_BAND_MAP = {
@@ -65,6 +66,7 @@ VALID_CHANNELS = {
 }
 
 
+@write_tool
 async def restart_device(
     site_id: str,
     device_mac: str,
@@ -160,6 +162,7 @@ async def restart_device(
         raise
 
 
+@write_tool
 async def locate_device(
     site_id: str,
     device_mac: str,
@@ -264,6 +267,7 @@ async def locate_device(
         raise
 
 
+@write_tool
 async def upgrade_device(
     site_id: str,
     device_mac: str,
@@ -383,6 +387,7 @@ def _resolve_radio(band: str) -> str:
     return radio
 
 
+@read_tool
 async def get_ap_radio_config(
     site_id: str,
     device_id: str,
@@ -462,6 +467,7 @@ async def get_ap_radio_config(
         }
 
 
+@write_tool
 async def set_ap_radio_channel(
     site_id: str,
     device_id: str,
@@ -718,6 +724,7 @@ async def set_ap_radio_channel(
         raise
 
 
+@write_tool
 async def force_provision_device(
     site_id: str,
     device_id: str,
@@ -809,6 +816,7 @@ async def force_provision_device(
         raise
 
 
+@write_tool
 async def set_ap_min_rssi(
     site_id: str,
     device_id: str,

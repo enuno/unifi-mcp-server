@@ -184,7 +184,7 @@ class YourResponseModel(BaseModel):
 
 **Location**: `src/tools/{category}.py` (or a new module for a new feature area)
 
-Tools are plain async functions. Every public `async def` in a module that `src/main.py` lists becomes a tool; there is no `@mcp.tool()` decorator. The registry passes `settings` and hides it from the tool's public signature. Name helpers with a leading `_` so they are not registered.
+Tools are plain async functions. Every public `async def` in a module that `src/main.py` lists becomes a tool; there is no `@mcp.tool()` decorator. Each tool declares `@read_tool` or `@write_tool` (`src/utils/tool_kind.py`); registration fails without one, and `UNIFI_READ_ONLY` registers only read tools. The registry passes `settings` and hides it from the tool's public signature. Name helpers with a leading `_` so they are not registered.
 
 A read tool:
 
@@ -194,8 +194,10 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_site_id
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def list_your_resources(site_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List your resources on a site.
 
@@ -220,9 +222,11 @@ async def list_your_resources(site_id: str, settings: Settings) -> list[dict[str
 A write tool:
 
 ```python
+from ..utils.tool_kind import write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
+@write_tool
 async def update_your_resource(
     site_id: str,
     resource_id: str,
@@ -268,7 +272,7 @@ Build paths with the `Settings` helpers (`get_integration_path`, `get_protect_in
 
 **Implementation checklist:**
 
-- [ ] Public `async def` with `settings: Settings`; helpers start with `_`
+- [ ] Public `async def` with `settings: Settings`, declared `@read_tool` or `@write_tool`; helpers start with `_`
 - [ ] Google-style docstring that lists every argument (MCP clients show it)
 - [ ] Input validation with `src/utils/validators.py`
 - [ ] Write tools: `confirm` and `dry_run`, `validate_confirmation()` first, dry run returned before any request

@@ -18,8 +18,10 @@ from ..utils import (
     validate_port,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def list_port_forwards(
     site_id: str,
     settings: Settings,
@@ -61,6 +63,7 @@ async def list_port_forwards(
         return paginated
 
 
+@write_tool
 async def create_port_forward(
     site_id: str,
     name: str,
@@ -188,6 +191,7 @@ async def create_port_forward(
         raise
 
 
+@write_tool
 async def update_port_forward(
     site_id: str,
     rule_id: str,
@@ -346,6 +350,7 @@ async def update_port_forward(
         raise
 
 
+@write_tool
 async def delete_port_forward(
     site_id: str,
     rule_id: str,

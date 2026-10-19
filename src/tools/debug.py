@@ -14,6 +14,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import ValidationError, coerce_bool, get_logger, validate_confirmation
+from ..utils.tool_kind import write_tool
 
 #: HTTP methods the passthrough supports.
 _METHODS = ("GET", "DELETE")
@@ -47,6 +48,7 @@ def _require_controller_path(endpoint: str) -> None:
         )
 
 
+@write_tool
 async def debug_api_request(
     endpoint: str,
     settings: Settings,

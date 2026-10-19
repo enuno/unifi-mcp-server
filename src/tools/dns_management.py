@@ -14,6 +14,7 @@ from typing import Any
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
 from ..utils import APIError, get_logger, log_audit, sanitize_log_message, validate_site_id
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -41,6 +42,7 @@ def _unwrap(response: Any) -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def list_wan_dns(
     site_id: str,
     settings: Settings,
@@ -81,6 +83,7 @@ async def list_wan_dns(
         ]
 
 
+@write_tool
 async def update_wan_dns(
     wan_network_id: str,
     site_id: str,
@@ -172,6 +175,7 @@ async def update_wan_dns(
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def get_dns_filter_settings(
     site_id: str,
     settings: Settings,
@@ -207,6 +211,7 @@ async def get_dns_filter_settings(
         }
 
 
+@write_tool
 async def update_dns_filter(
     site_id: str,
     settings: Settings,

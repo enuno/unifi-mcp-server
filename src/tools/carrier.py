@@ -15,6 +15,7 @@ from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
 from ..models.carrier import CarrierServicePlan, CarrierSubscriber
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -55,6 +56,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
 # ── service plans ────────────────────────────────────────────────────
 
 
+@read_tool
 async def list_carrier_service_plans(settings: Settings) -> dict[str, Any]:
     """List UniFi Carrier Fabric service plans.
 
@@ -76,6 +78,7 @@ async def list_carrier_service_plans(settings: Settings) -> dict[str, Any]:
     return {"count": len(plans), "data": plans}
 
 
+@read_tool
 async def get_carrier_service_plan(plan_id: str, settings: Settings) -> dict[str, Any]:
     """Get a UniFi Carrier Fabric service plan by ID.
 
@@ -101,6 +104,7 @@ async def get_carrier_service_plan(plan_id: str, settings: Settings) -> dict[str
 # ── subscribers ──────────────────────────────────────────────────────
 
 
+@read_tool
 async def list_carrier_subscribers(
     settings: Settings,
     limit: int | None = None,
@@ -146,6 +150,7 @@ async def list_carrier_subscribers(
     }
 
 
+@write_tool
 async def create_carrier_subscriber(
     settings: Settings,
     subscriber_number: str,
@@ -216,6 +221,7 @@ async def create_carrier_subscriber(
     return subscriber.model_dump(by_alias=True)
 
 
+@read_tool
 async def get_carrier_subscriber(subscriber_id: str, settings: Settings) -> dict[str, Any]:
     """Get a UniFi Carrier Fabric subscriber by ID.
 
@@ -238,6 +244,7 @@ async def get_carrier_subscriber(subscriber_id: str, settings: Settings) -> dict
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_carrier_subscriber(
     subscriber_id: str,
     settings: Settings,
@@ -314,6 +321,7 @@ async def update_carrier_subscriber(
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def attach_carrier_subscriber_host(
     subscriber_id: str,
     settings: Settings,
@@ -358,6 +366,7 @@ async def attach_carrier_subscriber_host(
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def detach_carrier_subscriber_host(
     subscriber_id: str,
     settings: Settings,
@@ -395,6 +404,7 @@ async def detach_carrier_subscriber_host(
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def assign_carrier_subscriber_plan(
     subscriber_id: str,
     settings: Settings,
@@ -439,6 +449,7 @@ async def assign_carrier_subscriber_plan(
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def resume_carrier_subscriber(
     subscriber_id: str,
     settings: Settings,
@@ -476,6 +487,7 @@ async def resume_carrier_subscriber(
     return subscriber.model_dump(by_alias=True)
 
 
+@write_tool
 async def suspend_carrier_subscriber(
     subscriber_id: str,
     settings: Settings,

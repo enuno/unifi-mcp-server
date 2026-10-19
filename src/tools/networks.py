@@ -12,8 +12,10 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def get_network_details(site_id: str, network_id: str, settings: Settings) -> dict[str, Any]:
     """Get detailed network configuration.
 
@@ -46,6 +48,7 @@ async def get_network_details(site_id: str, network_id: str, settings: Settings)
         raise ResourceNotFoundError("network", network_id)
 
 
+@read_tool
 async def list_vlans(
     site_id: str,
     settings: Settings,
@@ -87,6 +90,7 @@ async def list_vlans(
         return networks
 
 
+@read_tool
 async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> dict[str, Any]:
     """Get subnet and DHCP information for a network.
 
@@ -136,6 +140,7 @@ async def get_subnet_info(site_id: str, network_id: str, settings: Settings) -> 
         raise ResourceNotFoundError("network", network_id)
 
 
+@read_tool
 async def get_network_statistics(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve network usage statistics for a site.
 

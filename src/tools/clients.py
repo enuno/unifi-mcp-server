@@ -15,8 +15,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def get_client_details(site_id: str, client_mac: str, settings: Settings) -> dict[str, Any]:
     """Get detailed information for a specific client.
 
@@ -61,6 +63,7 @@ async def get_client_details(site_id: str, client_mac: str, settings: Settings) 
         raise ResourceNotFoundError("client", client_mac)
 
 
+@read_tool
 async def get_client_statistics(
     site_id: str, client_mac: str, settings: Settings
 ) -> dict[str, Any]:
@@ -120,6 +123,7 @@ async def get_client_statistics(
         raise ResourceNotFoundError("client", client_mac)
 
 
+@read_tool
 async def list_active_clients(
     site_id: str,
     settings: Settings,
@@ -159,6 +163,7 @@ async def list_active_clients(
         return clients
 
 
+@read_tool
 async def search_clients(
     site_id: str,
     query: str,
@@ -231,6 +236,7 @@ async def search_clients(
         return clients
 
 
+@read_tool
 async def list_client_rf_health(
     site_id: str,
     settings: Settings,

@@ -119,6 +119,7 @@ The rules this example follows:
 
 - **Mutating means `confirm` or `dry_run` in the signature.** The registry uses those two parameter names to classify a tool as a write. A write tool must have both.
 - **Check confirmation first.** `validate_confirmation(confirm, operation, dry_run)` raises `ValidationError` unless `confirm` is true or the call is a dry run.
+  The registry wrapper refuses an unconfirmed call to any tool with a `confirm` parameter before the tool runs, and passes `confirm` and `dry_run` on as bools. Keep the check in the tool anyway: it covers direct calls, and `tests/unit/tools/test_confirm_gate.py` fails if a tool tests `confirm` with a bare `if`, where the string `"false"` is truthy.
 - **Return the dry run before you open a client.** No request may reach the controller on a dry run.
 - **Optional update fields default to `None`.** Send only the fields the caller set. Some UniFi endpoints need the whole object (read, merge, write); the network and security skills list which ones.
 - **Do not audit in the tool.** The registry wrapper audits every mutating call. It also removes write tools under `UNIFI_READ_ONLY` and forces `dry_run` under `UNIFI_DRY_RUN`.

@@ -7,8 +7,10 @@ from ..config import Settings
 from ..models.vpn import SiteToSiteVPN
 from ..utils import (
     ResourceNotFoundError,
+    coerce_bool,
     get_logger,
     sanitize_log_message,
+    validate_confirmation,
     validate_object_id,
     validate_site_id,
 )
@@ -62,6 +64,7 @@ async def update_site_to_site_vpn(
     """Update a site-to-site VPN configuration (requires confirm=True)."""
     site_id = validate_site_id(site_id)
     vpn_id = validate_object_id(vpn_id, "vpn_id")
+    validate_confirmation(confirm, "update site-to-site VPN", dry_run)
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
@@ -89,11 +92,8 @@ async def update_site_to_site_vpn(
         if x_ipsec_pre_shared_key is not None:
             updates["x_ipsec_pre_shared_key"] = x_ipsec_pre_shared_key
 
-        if dry_run:
+        if coerce_bool(dry_run):
             return {"dry_run": True, "vpn_id": vpn_id, "updates": updates}
-
-        if not confirm:
-            return {"error": "confirm=True required", "vpn_id": vpn_id, "updates": updates}
 
         # Merge and update
         payload = {**current, **updates}

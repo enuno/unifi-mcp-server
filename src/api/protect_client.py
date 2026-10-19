@@ -11,6 +11,7 @@ from ..config import Settings
 from ..utils.exceptions import APIError, AuthenticationError
 from ..utils.logger import get_logger
 from .pool import active_pool
+from .tls import httpx_verify
 
 
 class ProtectClient:
@@ -32,7 +33,7 @@ class ProtectClient:
         self.client = httpx.AsyncClient(
             headers=settings.get_headers(),
             timeout=settings.request_timeout,
-            verify=settings.verify_ssl,
+            verify=httpx_verify(settings.verify_ssl),
             follow_redirects=False,
         )
 

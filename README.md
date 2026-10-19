@@ -134,7 +134,8 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 | `UNIFI_API_KEY` | UniFi API key (required) | — |
 | `UNIFI_API_TYPE` | `local`, `cloud-ea` or `cloud-v1` | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` / `UNIFI_LOCAL_PORT` | Console address in `local` mode | — / `443` |
-| `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate | `false` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate. `false` logs a warning at startup | `true` |
+| `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) for a self-signed console, instead of turning verification off | — |
 | `UNIFI_DEFAULT_SITE` | Site used when a tool call names none | `default` |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable the cloud tools (Site Manager, Mobility, InnerSpace, Carrier) | `false` |
 | `UNIFI_PROFILE` | Register only one group of tools ([profiles](#tool-profiles-and-safety-controls)) | all |

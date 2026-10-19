@@ -23,6 +23,7 @@ from ..utils import (
     validate_backup_filename,
 )
 from .pool import AuthState, active_pool
+from .tls import httpx_verify
 
 
 class RateLimiter:
@@ -100,7 +101,7 @@ class UniFiClient:
         self.client = httpx.AsyncClient(
             headers=settings.get_headers(),
             timeout=settings.request_timeout,
-            verify=settings.verify_ssl,
+            verify=httpx_verify(settings.verify_ssl),
             follow_redirects=False,  # Prevent HTTP redirects that might downgrade protocol
         )
 

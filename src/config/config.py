@@ -3,6 +3,7 @@
 import difflib
 import logging
 import re
+import ssl
 from enum import Enum
 from typing import Any, Literal
 
@@ -149,6 +150,16 @@ class Settings(BaseSettings):
         default=True,
         description="Verify SSL certificates for local controller",
         validation_alias="UNIFI_LOCAL_VERIFY_SSL",
+    )
+
+    local_ca_file: str | None = Field(
+        default=None,
+        description=(
+            "CA bundle (PEM) to verify the local controller with, in place of the "
+            "default roots. Use it for a console with a self-signed or private-CA "
+            "certificate instead of turning verification off."
+        ),
+        validation_alias="UNIFI_LOCAL_CA_FILE",
     )
 
     # Site Configuration
@@ -615,6 +626,7 @@ class Settings(BaseSettings):
         "audit_siem_otlp_headers",
         "audit_siem_ca_file",
         "audit_siem_buffer_dir",
+        "local_ca_file",
         "audit_retention_days",
         "audit_archive_dir",
         "audit_log_rotate_mb",
@@ -743,6 +755,22 @@ class Settings(BaseSettings):
             raise ValueError("local_host is required when api_type is 'local'")
         return self
 
+    @field_validator("local_ca_file")
+    @classmethod
+    def validate_local_ca_file(cls, v: str | None) -> str | None:
+        """Fail at startup, not on the first request, if the CA bundle cannot be loaded.
+
+        Raises:
+            ValueError: If the file is missing or holds no usable certificate
+        """
+        if v is None:
+            return v
+        try:
+            ssl.create_default_context(cafile=v)
+        except (OSError, ssl.SSLError) as e:
+            raise ValueError(f"UNIFI_LOCAL_CA_FILE {v!r} could not be loaded: {e}") from e
+        return v
+
     @property
     def base_url(self) -> str:
         """Get the appropriate base URL based on API type.
@@ -758,15 +786,49 @@ class Settings(BaseSettings):
             return f"https://{self.local_host}:{self.local_port}"
 
     @property
-    def verify_ssl(self) -> bool:
+    def verify_ssl(self) -> bool | str:
         """Get SSL verification setting based on API type.
 
         Returns:
-            Whether to verify SSL certificates
+            ``True`` to verify against the default roots, ``False`` to skip
+            verification, or the path of the CA bundle to verify against
+            (local controller with ``UNIFI_LOCAL_CA_FILE`` set). Pass it
+            through :func:`src.api.tls.httpx_verify` before handing it to httpx.
         """
         if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
             return True
-        return self.local_verify_ssl
+        if not self.local_verify_ssl:
+            return False
+        return self.local_ca_file or True
+
+    def tls_warnings(self, controller: str | None = None) -> list[str]:
+        """Return the warnings to log about the local controller's TLS settings.
+
+        Turning verification off is sometimes the only way to reach a
+        self-signed console, but it also accepts any certificate a host on the
+        path presents, and the API key goes to that host.
+
+        Args:
+            controller: Fleet controller name to put in the message, when these
+                settings belong to a registered controller rather than UNIFI_*
+
+        Returns:
+            Warning messages, empty when verification is on or the API is cloud
+        """
+        if self.api_type != APIType.LOCAL or self.local_verify_ssl:
+            return []
+        target = f"controller '{controller}'" if controller else "the local controller"
+        warnings = [
+            f"TLS certificate verification is OFF for {target} ({self.base_url}): "
+            "any certificate is accepted, and the API key is sent to whichever server "
+            "answers. Set UNIFI_LOCAL_CA_FILE to the console's CA certificate and "
+            "UNIFI_LOCAL_VERIFY_SSL=true instead."
+        ]
+        if self.local_ca_file:
+            warnings.append(
+                "UNIFI_LOCAL_CA_FILE is set but ignored because UNIFI_LOCAL_VERIFY_SSL=false."
+            )
+        return warnings
 
     def get_integration_path(self, endpoint: str) -> str:
         """Get the correct integration API endpoint path based on API type.

@@ -297,6 +297,33 @@ class TestPostgresRegistry:
         assert resolution.name == "default"
         assert resolution.settings is settings
 
+    async def test_stored_controller_with_verification_off_warns_at_startup(
+        self, settings, migrated_engine, credential_key, monkeypatch, caplog
+    ):
+        # The base is cloud, so main's process-wide check has nothing to say:
+        # only the database row turns verification off (AC-523).
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        cloud = Settings()
+        assert cloud.tls_warnings() == []
+        store = FleetStore(migrated_engine, CredentialCipher.from_env())
+        await store.add_controller(
+            name="lab",
+            api_type=APIType.LOCAL,
+            api_key=HQ_KEY,
+            local_host="10.0.0.9",
+            local_verify_ssl=False,
+            make_default=True,
+        )
+        registry = PostgresRegistry.from_settings(cloud)
+        await registry.start()
+        try:
+            with caplog.at_level("WARNING", logger="src.fleet.router"):
+                await FleetRouter(cloud, registry).warn_insecure_controllers()
+        finally:
+            await registry.stop()
+
+        assert "verification is OFF for controller 'lab' (https://10.0.0.9:443)" in caplog.text
+
     async def test_outage_keeps_serving_the_last_snapshot(
         self, settings, migrated_engine, credential_key, monkeypatch
     ):

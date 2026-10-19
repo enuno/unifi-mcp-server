@@ -99,7 +99,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
 | `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
-| `UNIFI_LOCAL_VERIFY_SSL` | Verify SSL for local gateway (set `false` for self-signed certs) | No | `true` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify the local gateway's TLS certificate. Setting `false` logs a startup warning; prefer `UNIFI_LOCAL_CA_FILE` for self-signed certs | No | `true` |
+| `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) to verify the local gateway with, in place of the default roots. Checked at startup | No | - |
 | `UNIFI_CLOUD_API_URL` | UniFi Cloud API base URL | No | `https://api.ui.com` |
 | `UNIFI_DEFAULT_SITE` | Default site ID | No | `default` |
 | `UNIFI_RATE_LIMIT_REQUESTS` | Max requests per rate limit period | No | `100` |

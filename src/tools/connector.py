@@ -46,7 +46,7 @@ async def connector_network_get(
     path: str,
     settings: Settings,
     params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a GET request to the Network Application via Cloud Connector.
 
     Forwards the request to
@@ -85,7 +85,7 @@ async def connector_network_post(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a POST request to the Network Application via Cloud Connector.
 
     Args:
@@ -126,7 +126,7 @@ async def connector_network_put(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PUT request to the Network Application via Cloud Connector.
 
     Args:
@@ -163,7 +163,7 @@ async def connector_network_patch(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PATCH request to the Network Application via Cloud Connector.
 
     Args:
@@ -199,7 +199,7 @@ async def connector_network_delete(
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a DELETE request to the Network Application via Cloud Connector.
 
     Args:
@@ -238,7 +238,7 @@ async def connector_protect_get(
     path: str,
     settings: Settings,
     params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a GET request to the Protect Application via Cloud Connector.
 
     Forwards the request to
@@ -277,7 +277,7 @@ async def connector_protect_post(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a POST request to the Protect Application via Cloud Connector.
 
     Args:
@@ -314,7 +314,7 @@ async def connector_protect_put(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PUT request to the Protect Application via Cloud Connector.
 
     Args:
@@ -351,7 +351,7 @@ async def connector_protect_patch(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PATCH request to the Protect Application via Cloud Connector.
 
     Args:
@@ -387,7 +387,7 @@ async def connector_protect_delete(
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a DELETE request to the Protect Application via Cloud Connector.
 
     Args:

@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 try:
@@ -969,11 +970,36 @@ async def audit_server_start() -> None:
     )
 
 
+def warn_relative_audit_path(current_settings: Settings) -> None:
+    """Warn when the audit log file depends on the working directory.
+
+    ``UNIFI_AUDIT_LOG_PATH`` defaults to ``audit.log``, and a relative path
+    resolves against the process working directory, which an MCP client
+    picks when it launches a stdio server. The audit trail then lands
+    wherever the client happened to start, or splits across directories.
+    Say where it is going and how to pin it. Not raised when the fleet
+    registry is configured: records then go to Postgres, not the file.
+
+    Args:
+        current_settings: Loaded application settings
+    """
+    if not current_settings.audit_log_enabled or current_settings.database_url:
+        return
+    path = Path(current_settings.audit_log_file or "audit.log")
+    if not path.is_absolute():
+        logger.warning(
+            f"Audit log path '{path}' is relative to the working directory; "
+            f"writing to {path.absolute()}. Set UNIFI_AUDIT_LOG_PATH to an "
+            "absolute path"
+        )
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")
+    warn_relative_audit_path(settings)
     if _active_profile:
         logger.info(f"Profile: {_active_profile} ({len(_TOOL_MODULES)} module(s) active)")
 
@@ -1016,7 +1042,26 @@ def main() -> None:
         # translate at this one call site rather than changing the public
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
+        from starlette.middleware import Middleware
+
         run_kwargs: dict[str, Any] = {}
+        middleware: list[Middleware] = []
+        if settings.mcp_auth_max_failures > 0:
+            # Outermost, so a client over its budget of 401s is answered 429
+            # before any other layer reads its request.
+            from .utils.auth_throttle import BearerFailureLimiter
+
+            middleware.append(
+                Middleware(
+                    BearerFailureLimiter,
+                    max_failures=settings.mcp_auth_max_failures,
+                    window_seconds=settings.mcp_auth_failure_window_seconds,
+                )
+            )
+            logger.info(
+                f"Bearer failures limited to {settings.mcp_auth_max_failures} per "
+                f"{settings.mcp_auth_failure_window_seconds:g}s per client address"
+            )
         if settings.server_transport != TransportMode.SSE and settings.mcp_stateless_http:
             # No MCP sessions: any replica can answer any request, but
             # select_controller is refused (see FleetRouter.stateless). Every
@@ -1028,13 +1073,14 @@ def main() -> None:
             # Stop sessionless, non-initialize requests (health checks, probes)
             # from each leaking a registered session in the MCP SDK (issue #173).
             import fastmcp
-            from starlette.middleware import Middleware
 
             from .utils.session_guard import SessionlessRequestGuard
 
-            run_kwargs["middleware"] = [
+            middleware.append(
                 Middleware(SessionlessRequestGuard, path=fastmcp.settings.streamable_http_path)
-            ]
+            )
+        if middleware:
+            run_kwargs["middleware"] = middleware
         mcp.run(
             transport=transport,
             host=settings.server_host,

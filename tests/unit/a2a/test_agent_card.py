@@ -372,3 +372,20 @@ class TestBuildAgentCard:
         assert card.name == "UniFi MCP Server"
         assert card.metadata is not None
         assert card.metadata["toolModules"] == 0
+
+
+def test_repository_agent_card_matches_served_card() -> None:
+    """``agent-card.json`` is what ``GET /a2a/agent-card`` serves.
+
+    The file once advertised a "planned" 0.4.0 card with capabilities the
+    route never listed. Regenerate it from ``get_agent_card_handler()`` when
+    this fails (the version follows the package version, so a release bump
+    needs it too).
+    """
+    import json
+    from pathlib import Path
+
+    from src.a2a.http_handlers import get_agent_card_handler
+
+    card_file = Path(__file__).resolve().parents[3] / "agent-card.json"
+    assert json.loads(card_file.read_text()) == get_agent_card_handler()

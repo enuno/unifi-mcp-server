@@ -604,6 +604,26 @@ class Settings(BaseSettings):
         validation_alias="MCP_SERVER_PORT",
     )
 
+    mcp_auth_max_failures: int = Field(
+        default=10,
+        description=(
+            "Failed bearer-token checks (401 responses) allowed per client address "
+            "within MCP_AUTH_FAILURE_WINDOW_SECONDS on a network transport; past "
+            "that the address is answered 429 until the window clears. 0 disables "
+            "the limit. Behind a reverse proxy every client shares the proxy's "
+            "address unless uvicorn trusts its X-Forwarded-For (FORWARDED_ALLOW_IPS)."
+        ),
+        ge=0,
+        validation_alias="MCP_AUTH_MAX_FAILURES",
+    )
+
+    mcp_auth_failure_window_seconds: float = Field(
+        default=60.0,
+        description="Sliding window, in seconds, for MCP_AUTH_MAX_FAILURES",
+        gt=0,
+        validation_alias="MCP_AUTH_FAILURE_WINDOW_SECONDS",
+    )
+
     mcp_stateless_http: bool = Field(
         default=False,
         description=(

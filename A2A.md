@@ -6,12 +6,18 @@ Operator runbook for agent-to-agent capability discovery.
 
 Advertise the UniFi MCP Server in a machine-readable way so orchestration systems and peer agents can discover its capabilities, auth model, and tool surface without manual inspection.
 
-## Planned artifacts
+## What is served
 
-- `agent-card.json` at the repository root
-- `/.well-known/agent-card.json` when HTTP transport is enabled
-- capability and auth metadata
-- a stable tool-manifest reference
+On the `http`, `sse` and `streamable_http` transports the server registers these routes, each behind the same bearer token as `/mcp` (`MCP_AUTH_TOKEN`, or a fleet token):
+
+| Route | Returns |
+|---|---|
+| `GET /a2a/agent-card` | The summary card from `get_agent_card_handler()` in `src/a2a/http_handlers.py`: name, version, capabilities, auth schemes and modes, and the other `/a2a/*` URLs |
+| `POST /a2a/discover` | The full card from `build_agent_card()` in `src/a2a/agent_card.py`, built from the live tool registry, so it matches the tools this deployment registered |
+| `POST /a2a/delegate`, `POST /a2a/confirm` | Delegated tool calls and their confirmation step |
+| `GET /a2a/audit` | A2A audit records |
+
+`agent-card.json` at the repository root is a copy of the `/a2a/agent-card` response for the current release. A unit test (`tests/unit/a2a/test_agent_card.py`) fails when the two differ, so regenerate the file when the card or the package version changes. Nothing is served at `/.well-known/agent-card.json`, and stdio serves no HTTP at all.
 
 ## What the agent card should describe
 
@@ -35,30 +41,16 @@ At minimum, the manifest should include:
 
 ## Publication procedure
 
-### 1. Author the manifest
-
-1. Add or update `agent-card.json` in the repository.
-2. Keep the file concise and deterministic.
-3. Use stable field names and avoid free-form text where structured fields exist.
-
-### 2. Publish over HTTP when enabled
-
-1. Serve the manifest at `/.well-known/agent-card.json`.
-2. Ensure the response is cacheable but not stale beyond your release cadence.
-3. Confirm the endpoint returns the same content as the repository file.
-
-### 3. Verify discovery
-
-1. Fetch the manifest from the HTTP endpoint.
-2. Validate that it parses as JSON.
-3. Confirm the capability list matches the current deployment mode.
-4. Confirm the auth metadata matches the production policy.
+1. Change the card in `get_agent_card_handler()`, not in the JSON file.
+2. Regenerate the file: `python -c "import json; from src.a2a.http_handlers import get_agent_card_handler as c; print(json.dumps(c(), indent=2))" > agent-card.json`
+3. Run `pytest tests/unit/a2a/test_agent_card.py`.
+4. After a deploy, fetch `GET /a2a/agent-card` with a bearer token and confirm the version.
 
 ## Validation checklist
 
 - JSON parses without errors.
 - Capability list matches the server configuration.
-- HTTP-served manifest matches the repository source of truth.
+- `agent-card.json` matches `GET /a2a/agent-card` (the unit test checks this).
 - No secrets, tokens, or internal-only credentials appear in the file.
 
 ## Common failure modes
@@ -76,4 +68,4 @@ At minimum, the manifest should include:
 
 ## Status
 
-Phase-5 documentation.
+Implemented: the `/a2a/*` routes above ship in the server. The repository card tracks the served one.

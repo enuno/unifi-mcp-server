@@ -133,6 +133,9 @@ def write_calls(fn: Any, *, allow_post: bool = False) -> list[str]:
                 if attr in WRITE_VERBS and not (allow_post and attr == "post"):
                     found.append(f"{where}: .{attr}()")
                     continue
+                if attr == "request" and _request_writes(node, allow_post=allow_post):
+                    found.append(f"{where}: .request()")
+                    continue
                 if attr.startswith(WRITE_METHOD_PREFIXES) and _resolve(target, scope) is None:
                     found.append(f"{where}: .{attr}()")
                     continue
@@ -146,6 +149,23 @@ def write_calls(fn: Any, *, allow_post: bool = False) -> list[str]:
 
     visit(fn)
     return found
+
+
+def _request_writes(node: ast.Call, *, allow_post: bool) -> bool:
+    """Whether ``x.request(method, ...)`` is a write.
+
+    A literal method is checked against :data:`WRITE_VERBS`; a method that
+    is not a literal (a variable, an f-string) counts as a write, since the
+    check cannot tell.
+    """
+    method_arg = node.args[0] if node.args else None
+    for keyword in node.keywords:
+        if keyword.arg == "method":
+            method_arg = keyword.value
+    if not isinstance(method_arg, ast.Constant) or not isinstance(method_arg.value, str):
+        return True
+    method = method_arg.value.lower()
+    return method in WRITE_VERBS and not (allow_post and method == "post")
 
 
 def _closure(func: Any) -> dict[str, Any]:
@@ -218,6 +238,9 @@ class _Client:
     async def trigger_backup(self) -> dict:
         return {}
 
+    async def request(self, method: str, path: str, json_data: dict | None = None) -> dict:
+        return {}
+
 
 async def _apply_led(client: _Client, device_id: str, colour: str) -> dict:
     return await client.put(f"/devices/{device_id}", json_data={"led": colour})
@@ -244,6 +267,16 @@ async def _mislabelled_via_helper(device_id: str) -> dict:
 
 
 @read_tool
+async def _mislabelled_generic_request(device_id: str) -> dict:
+    return await _Client().request("PUT", f"/devices/{device_id}", json_data={"led": "off"})
+
+
+@read_tool
+async def _honest_generic_request(device_id: str) -> dict:
+    return await _Client().request("GET", f"/devices/{device_id}")
+
+
+@read_tool
 async def _mislabelled_client_method() -> dict:
     return await _Client().trigger_backup()
 
@@ -255,6 +288,7 @@ async def _mislabelled_calls_write_tool(device_id: str) -> dict:
 
 def test_check_passes_an_honest_read_tool() -> None:
     assert write_calls(_honest_read) == []
+    assert write_calls(_honest_generic_request) == []
 
 
 @pytest.mark.parametrize(
@@ -264,6 +298,7 @@ def test_check_passes_an_honest_read_tool() -> None:
         _mislabelled_via_helper,
         _mislabelled_client_method,
         _mislabelled_calls_write_tool,
+        _mislabelled_generic_request,
     ],
 )
 def test_check_fails_on_an_unmarked_mutator(tool: Any) -> None:

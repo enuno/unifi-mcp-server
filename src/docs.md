@@ -33,7 +33,7 @@ AGNOST_ENABLED=false (default) or AGNOST_ORG_ID missing
 ```
 
 - **Tool registration**: Each tool module is imported as an alias (e.g., `from .tools import radius as radius_tools`) and `register_module_tools()` wraps each public async function: it binds `settings`, adds the `controller` argument, and applies tiers, read-only and dry-run modes, audit and the read cache.
-- **DEBUG tool**: A `debug_api_request` tool is conditionally registered only when `DEBUG=true`, and its `UniFiClient` import is deferred to the function body via a local `from .api import UniFiClient`.
+- **DEBUG tool**: `debug_api_request` lives in `@/src/tools/debug.py` and is registered only when `DEBUG=true`, through `register_module_tools()` like every other tool, so it is destructive tier, audited, and never registered under `UNIFI_READ_ONLY`. It accepts only controller-relative paths starting with `/`.
 - **MCP Resources**: Resources are registered via `@mcp.resource("protocol://path")` and delegate to `@/src/resources/` handler classes instantiated at module load.
 
 ### Things to Know

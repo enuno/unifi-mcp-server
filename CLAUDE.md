@@ -72,8 +72,8 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 | `UNIFI_API_TYPE` | Tools | Notes |
 |------------------|-------|-------|
 | `local` (recommended) | 343 | Gateway at `UNIFI_LOCAL_HOST`. Network, Protect, and the Phase 6 cloud APIs |
-| `cloud-v1` | 46 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy |
-| `cloud-ea` (the code default) | 46 | Early Access cloud API, same limits |
+| `cloud-v1` | 71 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy, Mobility, InnerSpace, Carrier |
+| `cloud-ea` (the code default) | 71 | Early Access cloud API, same limits |
 
 `UNIFI_READ_ONLY` removes every write tool, and `UNIFI_DRY_RUN` forces `dry_run` on. Some features need UniFi Network 9.0+, and some documented endpoints do not exist on all firmware. Check `docs/UNIFI_API.md` before you rely on one.
 

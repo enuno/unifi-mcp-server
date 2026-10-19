@@ -3,6 +3,8 @@
 import os
 from unittest.mock import patch
 
+import pytest
+
 from src.utils.sanitize import (
     _redact_value,
     is_production,
@@ -352,3 +354,40 @@ class TestSanitizeErrorText:
 
     def test_non_string_is_returned_unchanged(self):
         assert sanitize_error_text(None) is None  # type: ignore[arg-type]
+
+
+class TestSanitizeErrorTextEdgeCases:
+    """Review follow-ups for #233: no partial leaks, fewer false positives."""
+
+    @pytest.mark.parametrize(
+        ("text", "secret"),
+        [
+            ('"x_passphrase": "a\\"b c"', "b c"),
+            ('x_passphrase=zq\\"z9 next', "z9"),
+            ("redis://:secretpw@redis:6379/0", "secretpw"),  # pragma: allowlist secret
+            ("https://user:p@ss@host/x", "ss@"),  # pragma: allowlist secret
+            ("Authorization: Bearer abc123", "abc123"),
+            ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6", "eyJhbGci"),
+            ("password2=xyz", "xyz"),
+        ],
+    )
+    def test_secret_is_fully_removed(self, text, secret):
+        assert secret not in sanitize_error_text(text)
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Token expired for user bob",
+            "Basic auth failed",
+            'Bearer realm="unifi"',
+            "keyboard: qwerty",
+            "tokenizer=fast",
+            "https://host:8443/x",
+            "api.err.MacUsed aa:bb:cc:dd:ee:ff",
+        ],
+    )
+    def test_ordinary_text_is_left_alone(self, text):
+        assert sanitize_error_text(text) == text
+
+    def test_escaped_quote_keeps_the_quotes_balanced(self):
+        assert sanitize_error_text('"x_passphrase": "a\\"b c"') == '"x_passphrase": "***"'

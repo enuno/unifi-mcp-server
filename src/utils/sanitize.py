@@ -304,21 +304,36 @@ def sanitize_credentials(data: dict[str, Any]) -> dict[str, Any]:
 
 # A credential-named key followed by ``:`` or ``=`` and its value, in free
 # text: JSON and Python reprs (``"x_passphrase": "..."``), query strings
-# (``?apikey=...``) and headers (``X-API-KEY: ...``). The key matches the way
-# :func:`sanitize_credentials` matches dict keys: by substring.
+# (``?apikey=...``) and headers (``X-API-KEY: ...``). The credential word must
+# end the key name (an optional numeric suffix aside), so ``x_ipsec_pre_shared_key``
+# and ``apikey`` match but ``keyboard`` and ``tokenizer`` do not. Quoted values
+# may contain backslash escapes (``"a\"b"``), which must not end the match early
+# and leave the rest of the secret behind.
 _CREDENTIAL_PAIR = re.compile(
     r"""(?P<lead>(?P<q>["']?)[\w.-]*(?:"""
     + "|".join(sorted(CREDENTIAL_FIELDS, key=len, reverse=True))
-    + r""")[\w.-]*(?P=q)\s*[:=]\s*)"""
-    r"""(?P<value>"[^"]*"|'[^']*'|[^\s,;&}\]"']+)""",
+    + r""")(?:[_-]?\d+)?(?P=q)\s*[:=]\s*)"""
+    r"""(?P<value>"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|(?:\\.|[^\s,;&}\]"'\\])+)""",
     re.IGNORECASE,
 )
 
-#: ``Authorization: Bearer <token>`` and similar schemes.
-_AUTH_SCHEME = re.compile(r"\b(?P<scheme>Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]+", re.IGNORECASE)
+#: The value of an ``Authorization`` header, whatever its scheme.
+_AUTH_HEADER = re.compile(
+    r"""(?P<lead>\bAuthorization["']?\s*[:=]\s*["']?(?:(?:Bearer|Basic|Token|Digest)\s+)?)"""
+    r"""(?P<value>[^\s"',;]+)""",
+    re.IGNORECASE,
+)
 
-#: Credentials in a URL: ``scheme://user:password@host``.  # pragma: allowlist secret
-_URL_USERINFO = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@", re.IGNORECASE)
+#: ``Bearer <token>`` and similar schemes outside a header. The value must look
+#: like a credential (16+ token characters), so prose such as "Token expired"
+#: or "Basic auth failed" is left alone.
+_AUTH_SCHEME = re.compile(
+    r"\b(?P<scheme>Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{16,}", re.IGNORECASE
+)
+
+#: Credentials in a URL: ``scheme://user:password@host``, including an empty  # pragma: allowlist secret
+#: user (``redis://:password@host``) and an ``@`` inside the password.  # pragma: allowlist secret
+_URL_USERINFO = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)[^/\s:@]*:[^/\s]*@", re.IGNORECASE)
 
 
 def sanitize_error_text(text: str) -> str:
@@ -345,5 +360,6 @@ def sanitize_error_text(text: str) -> str:
         return f"{match.group('lead')}{quote}***{quote}"
 
     text = _URL_USERINFO.sub(lambda m: f"{m.group('scheme')}***@", text)
+    text = _AUTH_HEADER.sub(lambda m: f"{m.group('lead')}***", text)
     text = _AUTH_SCHEME.sub(lambda m: f"{m.group('scheme')} ***", text)
     return _CREDENTIAL_PAIR.sub(pair, text)

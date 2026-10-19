@@ -1,4 +1,4 @@
-"""Runtime paths of src/main.py: resource handlers, the debug tool, the
+"""Runtime paths of src/main.py: resource handlers, debug tool registration, the
 lifespan, the start-up audit record, and main()'s transport branches.
 
 ``src.main`` builds its server at import time from the environment, so each
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from pathlib import Path
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -188,6 +189,31 @@ class TestLifespan:
                 pass  # pragma: no cover - startup fails first
         assert order == ["forwarder.start", "registry.start", "forwarder.stop"]
 
+    @pytest.mark.asyncio
+    async def test_warns_about_registry_controllers_after_loading(
+        self, main_mod: ModuleType
+    ) -> None:
+        order: list[str] = []
+        registry = MagicMock()
+        registry.start = AsyncMock(side_effect=lambda: order.append("registry.start"))
+        registry.stop = AsyncMock()
+        pytest.importorskip("sqlalchemy")
+        from src.fleet.db import audit_store
+
+        async def warn() -> None:
+            order.append("warn")
+
+        with (
+            patch.object(main_mod, "fleet_registry", registry),
+            patch.object(main_mod.fleet_router, "warn_insecure_controllers", warn),
+            patch.object(main_mod, "audit_server_start", AsyncMock()),
+            patch.object(main_mod.client_pool, "aclose", AsyncMock()),
+            patch.object(audit_store, "install"),
+        ):
+            async with main_mod._lifespan(None):
+                pass
+        assert order == ["registry.start", "warn"]
+
 
 class TestMainEntryPoint:
     def test_stdio(self, main_mod: ModuleType) -> None:
@@ -221,7 +247,11 @@ class TestMainEntryPoint:
         webhook.assert_called_once_with(mod.mcp, mod.settings)
         kwargs = run.call_args.kwargs
         assert kwargs["transport"] == "streamable-http"
-        assert [m.cls.__name__ for m in kwargs["middleware"]] == ["SessionlessRequestGuard"]
+        assert [m.cls.__name__ for m in kwargs["middleware"]] == [
+            "BearerFailureLimiter",
+            "SessionlessRequestGuard",
+        ]
+        assert kwargs["middleware"][0].kwargs == {"max_failures": 10, "window_seconds": 60.0}
 
     def test_stateless_http_is_passed_to_streamable_http(self) -> None:
         mod = _reload_main(
@@ -234,7 +264,8 @@ class TestMainEntryPoint:
 
         assert run.call_args.kwargs["stateless_http"] is True
         # The session guard would answer every sessionless call with 400.
-        assert "middleware" not in run.call_args.kwargs
+        names = [m.cls.__name__ for m in run.call_args.kwargs["middleware"]]
+        assert names == ["BearerFailureLimiter"]
 
     def test_stateful_by_default(self) -> None:
         mod = _reload_main(
@@ -255,7 +286,31 @@ class TestMainEntryPoint:
             mod.main()
 
         assert run.call_args.kwargs["transport"] == "sse"
+        names = [m.cls.__name__ for m in run.call_args.kwargs["middleware"]]
+        assert names == ["BearerFailureLimiter"]
+
+    def test_bearer_failure_limit_configurable_and_can_be_disabled(self) -> None:
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="sse",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+            MCP_AUTH_MAX_FAILURES="0",
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
         assert "middleware" not in run.call_args.kwargs
+
+        mod = _reload_main(
+            MCP_SERVER_TRANSPORT="sse",
+            MCP_AUTH_TOKEN="a-long-enough-test-token-value",  # pragma: allowlist secret
+            MCP_AUTH_MAX_FAILURES="3",
+            MCP_AUTH_FAILURE_WINDOW_SECONDS="300",
+        )
+        with patch.object(mod.mcp, "run") as run, patch.object(mod, "register_a2a_routes"):
+            mod.main()
+        assert run.call_args.kwargs["middleware"][0].kwargs == {
+            "max_failures": 3,
+            "window_seconds": 300.0,
+        }
 
 
 class TestImportTimeBranches:
@@ -268,18 +323,26 @@ class TestImportTimeBranches:
         assert len(mod._TOOL_MODULES) == len(mod._CLOUD_TOOL_MODULES) + len(mod._LOCAL_TOOL_MODULES)
 
     @pytest.mark.asyncio
-    async def test_debug_tool(self) -> None:
+    async def test_debug_tool_absent_without_debug(self) -> None:
+        mod = _reload_main()
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" not in names
+
+    @pytest.mark.asyncio
+    async def test_debug_tool_registered_destructive_under_debug(self) -> None:
+        from src.tool_registry import TOOL_TIERS
+
         mod = _reload_main(DEBUG="true")
-        client = AsyncMock()
-        client.__aenter__.return_value = client
-        client.get.return_value = {"ok": 1}
-        client.delete.return_value = {"deleted": 1}
-        debug = _fn(mod.debug_api_request)
-        with patch("src.api.UniFiClient", return_value=client):
-            assert await debug("/x") == {"ok": 1}
-            assert await debug("/x", method="delete") == {"deleted": 1}
-            result = await debug("/x", method="POST")
-        assert "not implemented" in result["error"]
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" in names
+        assert TOOL_TIERS["debug_api_request"] == "destructive"
+
+    @pytest.mark.asyncio
+    async def test_read_only_removes_debug_tool_even_under_debug(self) -> None:
+        mod = _reload_main(DEBUG="true", UNIFI_READ_ONLY="true")
+        names = {tool.name for tool in await mod.mcp.list_tools()}
+        assert "debug_api_request" not in names
+        assert not hasattr(mod, "debug_api_request")
 
 
 class TestToolModuleSets:
@@ -330,3 +393,35 @@ class TestToolModuleSets:
 def teardown_module() -> None:
     # Leave a default (local, stdio) src.main behind for later test modules.
     _reload_main()
+
+
+class TestRelativeAuditPathWarning:
+    @staticmethod
+    def _settings(**fields: object) -> MagicMock:
+        defaults = {"audit_log_enabled": True, "database_url": None, "audit_log_file": None}
+        return MagicMock(**{**defaults, **fields})
+
+    @pytest.mark.parametrize("path", [None, "audit.log", "logs/audit.log"])
+    def test_relative_path_warns_with_resolved_location(
+        self, main_mod: ModuleType, caplog: pytest.LogCaptureFixture, path: str | None
+    ) -> None:
+        with caplog.at_level("WARNING"):
+            main_mod.warn_relative_audit_path(self._settings(audit_log_file=path))
+        expected = Path(path or "audit.log").absolute()
+        assert f"writing to {expected}" in caplog.text
+        assert "UNIFI_AUDIT_LOG_PATH" in caplog.text
+
+    @pytest.mark.parametrize(
+        "fields",
+        [
+            {"audit_log_file": "/var/log/unifi-mcp/audit.log"},
+            {"audit_log_enabled": False},
+            {"database_url": "postgresql://registry"},
+        ],
+    )
+    def test_no_warning(
+        self, main_mod: ModuleType, caplog: pytest.LogCaptureFixture, fields: dict
+    ) -> None:
+        with caplog.at_level("WARNING"):
+            main_mod.warn_relative_audit_path(self._settings(**fields))
+        assert "UNIFI_AUDIT_LOG_PATH" not in caplog.text

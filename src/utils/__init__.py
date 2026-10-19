@@ -43,7 +43,10 @@ from .validators import (
     validate_ip_or_cidr,
     validate_limit_offset,
     validate_mac_address,
+    validate_object_id,
+    validate_path_segment,
     validate_port,
+    validate_proxy_path,
     validate_site_id,
 )
 
@@ -84,6 +87,9 @@ __all__ = [
     "validate_port",
     "validate_site_id",
     "validate_device_id",
+    "validate_object_id",
+    "validate_path_segment",
+    "validate_proxy_path",
     "validate_confirmation",
     "validate_backup_filename",
     "validate_limit_offset",

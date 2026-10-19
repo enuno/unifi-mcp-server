@@ -17,6 +17,7 @@ from src.fleet import ControllerProfile, EnvRegistry
 from src.fleet.router import FleetRouter, current_controller
 from src.fleet.tools import register_fleet_tools
 from src.tool_registry import _make_tool_wrapper, register_module_tools
+from src.utils import tool_kind
 from src.utils.exceptions import ResourceNotFoundError, ValidationError
 from src.utils.metrics import MetricsRegistry
 
@@ -48,11 +49,13 @@ def fleet(base: Settings) -> FleetRouter:
     return FleetRouter(base, registry)
 
 
+@tool_kind.read_tool
 async def read_tool(site_id: str, settings: Any = None) -> dict:
     """Report which controller host the call reached."""
     return {"host": settings.local_host, "controller": current_controller.get()}
 
 
+@tool_kind.write_tool
 async def write_tool(site_id: str, confirm: bool = False, settings: Any = None) -> dict:
     """A mutating tool (it carries ``confirm``)."""
     return {"host": settings.local_host}
@@ -98,6 +101,7 @@ class TestWithRouter:
     async def test_zero_config_router_passes_the_base_settings_object(self, base: Settings):
         seen: list[Any] = []
 
+        @tool_kind.read_tool
         async def spy(site_id: str, settings: Any = None) -> None:
             seen.append(settings)
 
@@ -119,6 +123,7 @@ class TestWithRouter:
     async def test_write_on_default_is_refused_before_the_tool_runs(self, base, fleet):
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 

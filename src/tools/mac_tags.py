@@ -33,6 +33,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -177,6 +178,7 @@ async def _get_tag_raw(client: UniFiClient, site_id: str, tag_id: str) -> dict[s
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def list_mac_tags(site_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List MAC tags on a site with the device MACs assigned to each.
 
@@ -202,6 +204,7 @@ async def list_mac_tags(site_id: str, settings: Settings) -> list[dict[str, Any]
         return [_to_output(tag) for tag in _unwrap(response)]
 
 
+@read_tool
 async def get_mac_tag(tag_id: str, site_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single MAC tag by ID.
 
@@ -228,6 +231,7 @@ async def get_mac_tag(tag_id: str, site_id: str, settings: Settings) -> dict[str
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def create_mac_tag(
     name: str,
     macs: list[str],
@@ -313,6 +317,7 @@ async def create_mac_tag(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def update_mac_tag(
     tag_id: str,
     site_id: str,
@@ -447,6 +452,7 @@ async def update_mac_tag(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def delete_mac_tag(
     tag_id: str,
     site_id: str,

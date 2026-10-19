@@ -8,6 +8,7 @@ import importlib.metadata
 import json
 import os
 from collections.abc import AsyncIterator, Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 try:
@@ -39,6 +40,7 @@ from .tools import client_management as client_mgmt_tools
 from .tools import clients as clients_tools
 from .tools import connector as connector_tools
 from .tools import content_filtering as content_filtering_tools
+from .tools import debug as debug_tools
 from .tools import device_control as device_control_tools
 from .tools import device_migration as device_migration_tools
 from .tools import devices as devices_tools
@@ -137,6 +139,7 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
 
             audit_store.install(settings, fleet_registry.store.engine)
             await fleet_registry.start()
+            await fleet_router.warn_insecure_controllers()
         health_listener = start_health_listener(settings, client_pool)
         try:
             await audit_server_start()
@@ -196,6 +199,8 @@ def build_auth_provider(current_settings: Settings, token_store: Any = None) -> 
     accepting ``MCP_AUTH_TOKEN`` tokens and server-issued API tokens. Otherwise
     returns a ``StaticTokenVerifier`` that accepts the bearer token(s) in
     ``MCP_AUTH_TOKEN`` when at least one is configured, otherwise ``None``.
+    Either way each ``MCP_AUTH_TOKEN`` token carries its role (``<role>:<token>``,
+    default ``fleet-admin``) as the ``static_role`` claim.
     Over stdio the provider is ignored; over a network transport ``None``
     means the server refuses to start (see
     :func:`ensure_network_transport_authenticated`).
@@ -206,19 +211,29 @@ def build_auth_provider(current_settings: Settings, token_store: Any = None) -> 
 
     Returns:
         A FastMCP auth provider, or None when no token is configured
+
+    Raises:
+        SystemExit: If ``MCP_AUTH_TOKEN`` has an entry with a role and no
+            token, or gives one token two roles
     """
-    tokens = current_settings.mcp_auth_tokens
+    try:
+        token_roles = current_settings.mcp_auth_token_roles
+    except ValueError as e:
+        raise SystemExit(f"Invalid MCP_AUTH_TOKEN: {e}") from None
     if token_store is not None:
         from .fleet.tokens import FleetTokenVerifier
 
-        return FleetTokenVerifier(tokens, token_store)
-    if not tokens:
+        return FleetTokenVerifier(token_roles, token_store)
+    if not token_roles:
         return None
 
     from fastmcp.server.auth.providers.jwt import StaticTokenVerifier
 
     return StaticTokenVerifier(
-        tokens={token: {"client_id": "mcp-client", "scopes": []} for token in tokens}
+        tokens={
+            token: {"client_id": "mcp-client", "scopes": [], "static_role": role}
+            for token, role in token_roles.items()
+        }
     )
 
 
@@ -660,6 +675,12 @@ if (
         ", ".join(sorted(_PROFILE_MODULES)),
     )
 
+# Verification off accepts any certificate, and sends the API key to whoever
+# presents it. Nothing else reports it, so warn at startup. Fleet controllers
+# with their own TLS settings are warned about by the router.
+for _tls_warning in settings.tls_warnings():
+    logger.warning(_tls_warning)
+
 if settings.read_only:
     logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 
@@ -754,30 +775,17 @@ async def health_check() -> dict[str, str]:
     }
 
 
-# Conditional debug tool
+# Debug passthrough: arbitrary GET or DELETE to any controller endpoint. Only
+# under DEBUG, and through register_module_tools so read-only mode removes it,
+# dry-run mode previews it, and the destructive tier and confirm apply.
 if os.getenv("DEBUG", "").lower() in ("true", "1", "yes"):
-
-    @mcp.tool()
-    async def debug_api_request(endpoint: str, method: str = "GET") -> dict:
-        """Debug tool to query arbitrary UniFi API endpoints.
-
-        Args:
-            endpoint: API endpoint path (e.g., /proxy/network/api/s/default/rest/networkconf)
-            method: HTTP method (GET, POST, PUT, DELETE)
-
-        Returns:
-            Raw JSON response from the API
-        """
-        from .api import UniFiClient
-
-        async with UniFiClient(settings) as client:
-            await client.authenticate()
-            if method.upper() == "GET":
-                return await client.get(endpoint)
-            elif method.upper() == "DELETE":
-                return await client.delete(endpoint)
-            else:
-                return {"error": f"Method {method} requires json_data parameter (not implemented)"}
+    if register_module_tools(
+        mcp, debug_tools, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+    ):
+        logger.warning(
+            "DEBUG is set - debug_api_request is registered (arbitrary GET/DELETE, "
+            "destructive tier). Unset DEBUG in production"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -962,11 +970,36 @@ async def audit_server_start() -> None:
     )
 
 
+def warn_relative_audit_path(current_settings: Settings) -> None:
+    """Warn when the audit log file depends on the working directory.
+
+    ``UNIFI_AUDIT_LOG_PATH`` defaults to ``audit.log``, and a relative path
+    resolves against the process working directory, which an MCP client
+    picks when it launches a stdio server. The audit trail then lands
+    wherever the client happened to start, or splits across directories.
+    Say where it is going and how to pin it. Not raised when the fleet
+    registry is configured: records then go to Postgres, not the file.
+
+    Args:
+        current_settings: Loaded application settings
+    """
+    if not current_settings.audit_log_enabled or current_settings.database_url:
+        return
+    path = Path(current_settings.audit_log_file or "audit.log")
+    if not path.is_absolute():
+        logger.warning(
+            f"Audit log path '{path}' is relative to the working directory; "
+            f"writing to {path.absolute()}. Set UNIFI_AUDIT_LOG_PATH to an "
+            "absolute path"
+        )
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
     logger.info("Starting UniFi MCP Server...")
     logger.info(f"API Type: {settings.api_type.value}")
     logger.info(f"Base URL: {settings.base_url}")
+    warn_relative_audit_path(settings)
     if _active_profile:
         logger.info(f"Profile: {_active_profile} ({len(_TOOL_MODULES)} module(s) active)")
 
@@ -1009,7 +1042,27 @@ def main() -> None:
         # translate at this one call site rather than changing the public
         # config value (issue #159).
         transport = settings.server_transport.value.replace("_", "-")
+        from starlette.middleware import Middleware
+
         run_kwargs: dict[str, Any] = {}
+        middleware: list[Middleware] = []
+        if settings.mcp_auth_max_failures > 0:
+            # FastMCP adds this after its own auth middleware, so it is not
+            # the outermost layer; it still sees every route's 401 and answers
+            # 429 before the token check once a client is over its budget.
+            from .utils.auth_throttle import BearerFailureLimiter
+
+            middleware.append(
+                Middleware(
+                    BearerFailureLimiter,
+                    max_failures=settings.mcp_auth_max_failures,
+                    window_seconds=settings.mcp_auth_failure_window_seconds,
+                )
+            )
+            logger.info(
+                f"Bearer failures limited to {settings.mcp_auth_max_failures} per "
+                f"{settings.mcp_auth_failure_window_seconds:g}s per client address"
+            )
         if settings.server_transport != TransportMode.SSE and settings.mcp_stateless_http:
             # No MCP sessions: any replica can answer any request, but
             # select_controller is refused (see FleetRouter.stateless). Every
@@ -1021,13 +1074,14 @@ def main() -> None:
             # Stop sessionless, non-initialize requests (health checks, probes)
             # from each leaking a registered session in the MCP SDK (issue #173).
             import fastmcp
-            from starlette.middleware import Middleware
 
             from .utils.session_guard import SessionlessRequestGuard
 
-            run_kwargs["middleware"] = [
+            middleware.append(
                 Middleware(SessionlessRequestGuard, path=fastmcp.settings.streamable_http_path)
-            ]
+            )
+        if middleware:
+            run_kwargs["middleware"] = middleware
         mcp.run(
             transport=transport,
             host=settings.server_host,

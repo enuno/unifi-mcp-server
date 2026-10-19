@@ -23,6 +23,7 @@ from ..models.innerspace import (
     InnerSpaceSwitch,
 )
 from ..utils import ValidationError, get_logger, sanitize_log_message
+from ..utils.tool_kind import read_tool
 
 
 def _require_cloud_api(settings: Settings) -> None:
@@ -63,6 +64,7 @@ def _proxy_endpoint(console_id: str, path: str) -> str:
     return f"connector/consoles/{console_id}/proxy/innerspace/integration/{path}"
 
 
+@read_tool
 async def list_innerspace_access_points(console_id: str, settings: Settings) -> dict[str, Any]:
     """List access points known to InnerSpace on a console.
 
@@ -92,6 +94,7 @@ async def list_innerspace_access_points(console_id: str, settings: Settings) -> 
     return {"console_id": console_id, "count": len(access_points), "data": access_points}
 
 
+@read_tool
 async def list_innerspace_floor_plans(console_id: str, settings: Settings) -> dict[str, Any]:
     """List InnerSpace floor plans on a console.
 
@@ -121,6 +124,7 @@ async def list_innerspace_floor_plans(console_id: str, settings: Settings) -> di
     return {"console_id": console_id, "count": len(floor_plans), "data": floor_plans}
 
 
+@read_tool
 async def list_innerspace_inventory(console_id: str, settings: Settings) -> dict[str, Any]:
     """List unplaced devices in InnerSpace inventory on a console.
 
@@ -150,6 +154,7 @@ async def list_innerspace_inventory(console_id: str, settings: Settings) -> dict
     return {"console_id": console_id, "count": len(inventory), "data": inventory}
 
 
+@read_tool
 async def get_innerspace_project(console_id: str, settings: Settings) -> dict[str, Any]:
     """Get the InnerSpace project data for the integration on a console.
 
@@ -172,6 +177,7 @@ async def get_innerspace_project(console_id: str, settings: Settings) -> dict[st
     return project.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_innerspace_switches(
     console_id: str, settings: Settings, site_id: str | None = None
 ) -> dict[str, Any]:
@@ -212,6 +218,7 @@ async def list_innerspace_switches(
     }
 
 
+@read_tool
 async def download_innerspace_asset(
     console_id: str, plan_id: str, filename: str, settings: Settings
 ) -> dict[str, Any]:

@@ -1,5 +1,9 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
+import difflib
+import logging
+import re
+import ssl
 from enum import Enum
 from typing import Any, Literal
 
@@ -25,6 +29,78 @@ class TransportMode(str, Enum):
     HTTP = "http"  # HTTP server for network access
     SSE = "sse"  # Server-Sent Events for MCP gateways
     STREAMABLE_HTTP = "streamable_http"  # Modern HTTP transport
+
+
+logger = logging.getLogger(__name__)
+
+#: Roles an MCP_AUTH_TOKEN entry may carry as a ``<role>:`` prefix.
+AUTH_TOKEN_ROLES = ("viewer", "operator", "admin", "fleet-admin")
+
+
+_ROLE_SHAPED_PREFIX = re.compile(r"[A-Za-z][A-Za-z_-]*")
+
+
+def _check_unknown_role_prefix(prefix: str) -> None:
+    """Refuse a near-miss role prefix; warn about any other word-like one.
+
+    An entry whose prefix is not one of :data:`AUTH_TOKEN_ROLES` is a whole
+    bare token, which is ``fleet-admin``. A mistyped role (``Viewer:``,
+    ``veiwer:``, ``fleet_admin:``) would therefore hand out full admin while
+    the operator meant to restrict it, so those stop the server. Messages
+    never repeat the prefix, which is part of the secret in that case.
+
+    Raises:
+        ValueError: If the prefix differs from a role only in case, ``_`` for
+            ``-``, or a small misspelling
+    """
+    normalized = prefix.lower().replace("_", "-")
+    if normalized in AUTH_TOKEN_ROLES or difflib.get_close_matches(
+        normalized, AUTH_TOKEN_ROLES, n=1, cutoff=0.8
+    ):
+        raise ValueError(
+            "an MCP_AUTH_TOKEN entry starts with what looks like a misspelled role; "
+            f"roles are written exactly as {', '.join(AUTH_TOKEN_ROLES)}"
+        )
+    logger.warning(
+        "An MCP_AUTH_TOKEN entry contains ':' after a word that is not a role, so the "
+        "whole entry is one fleet-admin token. Roles are written as <role>:<token> "
+        "with one of: %s",
+        ", ".join(AUTH_TOKEN_ROLES),
+    )
+
+
+def _parse_auth_token_entries(raw: str | None) -> dict[str, str]:
+    """Split MCP_AUTH_TOKEN into a token-to-role mapping.
+
+    Args:
+        raw: Comma-separated entries, each ``<token>`` or ``<role>:<token>``
+
+    Returns:
+        Mapping of bearer token to role; a bare token is ``fleet-admin``
+
+    Raises:
+        ValueError: If an entry is ``<role>:`` with no token, or one token is
+            listed with two different roles
+    """
+    roles: dict[str, str] = {}
+    for entry in (raw or "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        prefix, sep, rest = entry.partition(":")
+        if sep and prefix.strip() in AUTH_TOKEN_ROLES:
+            role, token = prefix.strip(), rest.strip()
+            if not token:
+                raise ValueError(f"MCP_AUTH_TOKEN entry '{role}:' has no token")
+        else:
+            if sep and _ROLE_SHAPED_PREFIX.fullmatch(prefix.strip()):
+                _check_unknown_role_prefix(prefix.strip())
+            role, token = "fleet-admin", entry
+        if roles.get(token, role) != role:
+            # Never echo the token itself.
+            raise ValueError("MCP_AUTH_TOKEN lists the same token with two different roles")
+        roles[token] = role
+    return roles
 
 
 class Settings(BaseSettings):
@@ -74,6 +150,16 @@ class Settings(BaseSettings):
         default=True,
         description="Verify SSL certificates for local controller",
         validation_alias="UNIFI_LOCAL_VERIFY_SSL",
+    )
+
+    local_ca_file: str | None = Field(
+        default=None,
+        description=(
+            "CA bundle (PEM) to verify the local controller with, in place of the "
+            "default roots. Use it for a console with a self-signed or private-CA "
+            "certificate instead of turning verification off."
+        ),
+        validation_alias="UNIFI_LOCAL_CA_FILE",
     )
 
     # Site Configuration
@@ -370,11 +456,23 @@ class Settings(BaseSettings):
     audit_fail_closed: bool = Field(
         default=True,
         description=(
-            "Refuse a mutating tool call when its audit record cannot be "
-            "written, so no change reaches a controller unrecorded. Set to "
+            "Refuse a mutating tool call (and, with UNIFI_AUDIT_READS, a read) "
+            "when its audit record cannot be written, so no change reaches a "
+            "controller unrecorded. Set to "
             "false only as a break-glass measure."
         ),
         validation_alias="UNIFI_AUDIT_FAIL_CLOSED",
+    )
+
+    audit_reads: bool = Field(
+        default=False,
+        description=(
+            "Also audit read tool calls: an attempt and an outcome record with the "
+            "principal, tool, arguments and result, never the response payload. Off "
+            "by default; turn it on to see what a token read, e.g. inventory pulled "
+            "with a leaked bearer. UNIFI_AUDIT_FAIL_CLOSED then applies to reads too."
+        ),
+        validation_alias="UNIFI_AUDIT_READS",
     )
 
     # SIEM export (src/utils/siem.py, docs/FLEET_SCALING_PLAN.md §3.7).
@@ -506,6 +604,26 @@ class Settings(BaseSettings):
         validation_alias="MCP_SERVER_PORT",
     )
 
+    mcp_auth_max_failures: int = Field(
+        default=10,
+        description=(
+            "Failed bearer-token checks (401 responses) allowed per client address "
+            "within MCP_AUTH_FAILURE_WINDOW_SECONDS on a network transport; past "
+            "that the address is answered 429 until the window clears. 0 disables "
+            "the limit. Behind a reverse proxy every client shares the proxy's "
+            "address unless uvicorn trusts its X-Forwarded-For (FORWARDED_ALLOW_IPS)."
+        ),
+        ge=0,
+        validation_alias="MCP_AUTH_MAX_FAILURES",
+    )
+
+    mcp_auth_failure_window_seconds: float = Field(
+        default=60.0,
+        description="Sliding window, in seconds, for MCP_AUTH_MAX_FAILURES",
+        gt=0,
+        validation_alias="MCP_AUTH_FAILURE_WINDOW_SECONDS",
+    )
+
     mcp_stateless_http: bool = Field(
         default=False,
         description=(
@@ -523,8 +641,9 @@ class Settings(BaseSettings):
         description=(
             "Bearer token(s) required to call the MCP server over a network "
             "transport (http/sse/streamable_http). Comma-separated to allow "
-            "several. When unset, only the stdio transport may start. Ignored "
-            "for stdio."
+            "several. An entry may carry a role as <role>:<token> (viewer, "
+            "operator, admin or fleet-admin); a bare token is fleet-admin. When "
+            "unset, only the stdio transport may start. Ignored for stdio."
         ),
         validation_alias="MCP_AUTH_TOKEN",
     )
@@ -539,6 +658,7 @@ class Settings(BaseSettings):
         "audit_siem_otlp_headers",
         "audit_siem_ca_file",
         "audit_siem_buffer_dir",
+        "local_ca_file",
         "audit_retention_days",
         "audit_archive_dir",
         "audit_log_rotate_mb",
@@ -611,14 +731,32 @@ class Settings(BaseSettings):
         """Return the configured MCP bearer tokens as a list.
 
         Splits ``MCP_AUTH_TOKEN`` on commas and drops blanks so several
-        tokens can be issued from one variable. Empty when unset.
+        tokens can be issued from one variable, and strips any ``<role>:``
+        prefix (see :attr:`mcp_auth_token_roles`). Empty when unset.
 
         Returns:
             List of non-empty bearer tokens (possibly empty)
         """
-        if not self.mcp_auth_token:
-            return []
-        return [t.strip() for t in self.mcp_auth_token.split(",") if t.strip()]
+        return list(self.mcp_auth_token_roles)
+
+    @property
+    def mcp_auth_token_roles(self) -> dict[str, str]:
+        """Return each configured MCP bearer token with its role.
+
+        An ``MCP_AUTH_TOKEN`` entry is either a bare token, which is a
+        break-glass ``fleet-admin``, or ``<role>:<token>`` where the role is
+        ``viewer``, ``operator``, ``admin`` or ``fleet-admin``. Only those
+        four prefixes are read as roles, so any other token containing a
+        colon is used whole.
+
+        Returns:
+            Mapping of bearer token to role, in configuration order
+
+        Raises:
+            ValueError: If an entry is ``<role>:`` with no token, or one token
+                is listed with two different roles
+        """
+        return _parse_auth_token_entries(self.mcp_auth_token)
 
     @field_validator("server_transport", mode="before")
     @classmethod
@@ -649,6 +787,22 @@ class Settings(BaseSettings):
             raise ValueError("local_host is required when api_type is 'local'")
         return self
 
+    @field_validator("local_ca_file")
+    @classmethod
+    def validate_local_ca_file(cls, v: str | None) -> str | None:
+        """Fail at startup, not on the first request, if the CA bundle cannot be loaded.
+
+        Raises:
+            ValueError: If the file is missing or holds no usable certificate
+        """
+        if v is None:
+            return v
+        try:
+            ssl.create_default_context(cafile=v)
+        except (OSError, ssl.SSLError) as e:
+            raise ValueError(f"UNIFI_LOCAL_CA_FILE {v!r} could not be loaded: {e}") from e
+        return v
+
     @property
     def base_url(self) -> str:
         """Get the appropriate base URL based on API type.
@@ -664,15 +818,49 @@ class Settings(BaseSettings):
             return f"https://{self.local_host}:{self.local_port}"
 
     @property
-    def verify_ssl(self) -> bool:
+    def verify_ssl(self) -> bool | str:
         """Get SSL verification setting based on API type.
 
         Returns:
-            Whether to verify SSL certificates
+            ``True`` to verify against the default roots, ``False`` to skip
+            verification, or the path of the CA bundle to verify against
+            (local controller with ``UNIFI_LOCAL_CA_FILE`` set). Pass it
+            through :func:`src.api.tls.httpx_verify` before handing it to httpx.
         """
         if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
             return True
-        return self.local_verify_ssl
+        if not self.local_verify_ssl:
+            return False
+        return self.local_ca_file or True
+
+    def tls_warnings(self, controller: str | None = None) -> list[str]:
+        """Return the warnings to log about the local controller's TLS settings.
+
+        Turning verification off is sometimes the only way to reach a
+        self-signed console, but it also accepts any certificate a host on the
+        path presents, and the API key goes to that host.
+
+        Args:
+            controller: Fleet controller name to put in the message, when these
+                settings belong to a registered controller rather than UNIFI_*
+
+        Returns:
+            Warning messages, empty when verification is on or the API is cloud
+        """
+        if self.api_type != APIType.LOCAL or self.local_verify_ssl:
+            return []
+        target = f"controller '{controller}'" if controller else "the local controller"
+        warnings = [
+            f"TLS certificate verification is OFF for {target} ({self.base_url}): "
+            "any certificate is accepted, and the API key is sent to whichever server "
+            "answers. Set UNIFI_LOCAL_CA_FILE to the console's CA certificate and "
+            "UNIFI_LOCAL_VERIFY_SSL=true instead."
+        ]
+        if self.local_ca_file:
+            warnings.append(
+                "UNIFI_LOCAL_CA_FILE is set but ignored because UNIFI_LOCAL_VERIFY_SSL=false."
+            )
+        return warnings
 
     def get_integration_path(self, endpoint: str) -> str:
         """Get the correct integration API endpoint path based on API type.

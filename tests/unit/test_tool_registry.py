@@ -20,8 +20,9 @@ if importlib.util.find_spec("fastmcp") is None:
     fastmcp_stub.FastMCP = FastMCP
     sys.modules["fastmcp"] = fastmcp_stub
 
-from src.tool_registry import MUTATING_TOOLS_WITHOUT_GATE, is_mutating_tool, register_module_tools
+from src.tool_registry import check_tool_declaration, is_mutating_tool, register_module_tools
 from src.tools import dpi_tools, reference_data
+from src.utils.tool_kind import UndeclaredToolError, read_tool, write_tool
 
 
 class FakeMCP:
@@ -112,16 +113,19 @@ def test_register_module_tools_tracks_names_on_mcp_instance(settings: MagicMock)
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def _read_tool(site_id: str, settings: Any = None) -> dict[str, Any]:
     """Stand-in for a non-mutating tool."""
     return {}
 
 
+@write_tool
 async def _confirm_tool(site_id: str, confirm: bool | str = False, settings: Any = None) -> dict:
     """Stand-in for a tool gated by ``confirm``."""
     return {}
 
 
+@write_tool
 async def _dry_run_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
     """Stand-in for a tool gated by ``dry_run``."""
     return {}
@@ -142,25 +146,96 @@ def _iter_tool_modules() -> list[ModuleType]:
     return modules
 
 
-def test_is_mutating_tool_detects_gate_parameters() -> None:
-    """A ``confirm`` or ``dry_run`` parameter marks a tool as mutating."""
+def test_is_mutating_tool_follows_the_declaration() -> None:
+    """``@write_tool`` marks a tool as mutating and ``@read_tool`` does not."""
     assert is_mutating_tool(_confirm_tool) is True
     assert is_mutating_tool(_dry_run_tool) is True
-
-
-def test_is_mutating_tool_allows_read_tools() -> None:
-    """A tool without gate parameters is treated as read-only."""
     assert is_mutating_tool(_read_tool) is False
 
 
-def test_is_mutating_tool_detects_ungated_mutators() -> None:
-    """Mutating tools without gate parameters are caught by the explicit list."""
-    assert MUTATING_TOOLS_WITHOUT_GATE, "the explicit list must not be empty"
+def test_is_mutating_tool_treats_an_undeclared_tool_as_mutating() -> None:
+    """No declaration can only hide a tool from read-only mode, never expose it."""
 
-    for name in MUTATING_TOOLS_WITHOUT_GATE:
-        fn = MagicMock()
-        fn.__name__ = name
-        assert is_mutating_tool(fn) is True, name
+    async def bare(site_id: str) -> dict[str, Any]:
+        return {}
+
+    assert is_mutating_tool(bare) is True
+    assert is_mutating_tool(MagicMock()) is True
+
+
+def test_registration_refuses_an_undeclared_tool(
+    settings: MagicMock, read_only_settings: MagicMock
+) -> None:
+    """A tool with no read/write declaration fails registration in every mode.
+
+    This is the case the signature heuristic could not catch: a write tool
+    with neither ``confirm`` nor ``dry_run`` would have been registered under
+    ``UNIFI_READ_ONLY=true``.
+    """
+
+    async def set_led_colour(device_id: str, colour: str, settings: Any = None) -> dict:
+        return {}
+
+    module = _make_module("fake_tools_undeclared", [set_led_colour])
+
+    for mode_settings in (settings, read_only_settings):
+        mcp: Any = FakeMCP()
+        with pytest.raises(UndeclaredToolError, match="set_led_colour"):
+            register_module_tools(mcp, module, mode_settings)
+        assert mcp.registered == []
+
+
+def test_registration_refuses_a_read_tool_that_takes_a_gate(settings: MagicMock) -> None:
+    """A tool declared read that takes ``confirm`` or ``dry_run`` contradicts itself."""
+
+    @read_tool
+    async def update_thing(thing_id: str, confirm: bool | str = False) -> dict:
+        return {}
+
+    with pytest.raises(UndeclaredToolError, match="confirm"):
+        check_tool_declaration(update_thing)
+
+    mcp: Any = FakeMCP()
+    with pytest.raises(UndeclaredToolError):
+        register_module_tools(
+            mcp, _make_module("fake_tools_contradiction", [update_thing]), settings
+        )
+
+
+def test_a_tool_cannot_be_declared_both_read_and_write() -> None:
+    """Stacking both decorators is an error, not last-one-wins."""
+    with pytest.raises(UndeclaredToolError, match="both"):
+
+        @read_tool
+        @write_tool
+        async def ambiguous() -> None:
+            return None
+
+
+def test_registration_accepts_an_ungated_write_tool_and_read_only_drops_it(
+    read_only_settings: MagicMock,
+) -> None:
+    """A declared write tool is withheld in read-only mode even with no gate parameter."""
+
+    @write_tool
+    async def set_led_colour(device_id: str, settings: Any = None) -> dict:
+        return {}
+
+    module = _make_module("fake_tools_ungated_write", [_read_tool, set_led_colour])
+    mcp: Any = FakeMCP()
+
+    assert register_module_tools(mcp, module, read_only_settings) == ["read_tool"]
+
+
+def test_every_tool_in_every_module_is_declared() -> None:
+    """Every public tool carries ``@read_tool`` or ``@write_tool``."""
+    import inspect as _inspect
+
+    for module in _iter_tool_modules():
+        for name, obj in _inspect.getmembers(module, _inspect.iscoroutinefunction):
+            if name.startswith("_") or obj.__module__ != module.__name__:
+                continue
+            check_tool_declaration(obj)
 
 
 def test_read_only_mode_skips_mutating_tools(read_only_settings: MagicMock) -> None:
@@ -196,9 +271,9 @@ def test_read_only_mode_exposes_no_mutating_tool_across_all_modules(
 ) -> None:
     """Regression guard: no module may leak a mutating tool in read-only mode.
 
-    This is the check that catches a newly added write tool which forgets its
-    ``confirm``/``dry_run`` gate — the class of bug that the explicit
-    :data:`MUTATING_TOOLS_WITHOUT_GATE` list exists for.
+    Checks the registry against the declarations: a ``@write_tool`` must never
+    reach the tool list in read-only mode. Whether each declaration is *true* is
+    ``tests/unit/test_tool_declarations.py``.
     """
     import inspect as _inspect
 
@@ -233,7 +308,7 @@ def test_every_mutating_tool_declares_dry_run() -> None:
     ungated = [
         f"{module.__name__}.{name}"
         for module in _iter_tool_modules()
-        for name, obj in _inspect.getmembers(module, _inspect.isfunction)
+        for name, obj in _inspect.getmembers(module, _inspect.iscoroutinefunction)
         if obj.__module__ == module.__name__
         and not name.startswith("_")
         and is_mutating_tool(obj)
@@ -292,6 +367,7 @@ async def test_dry_run_mode_forces_dry_run_on_gated_tools(dry_run_settings: Magi
     """A gated tool must preview even when the caller explicitly passes dry_run=False."""
     seen: list[Any] = []
 
+    @write_tool
     async def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
         seen.append(dry_run)
         return {"dry_run": dry_run}
@@ -309,6 +385,7 @@ async def test_default_mode_respects_caller_dry_run(settings: MagicMock) -> None
     """With the global mode off, a caller-supplied dry_run passes through unchanged."""
     seen: list[Any] = []
 
+    @write_tool
     async def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
         seen.append(dry_run)
         return {"dry_run": dry_run}
@@ -336,6 +413,7 @@ async def test_string_dry_run_is_coerced_before_the_tool_sees_it(
     """
     seen: list[Any] = []
 
+    @write_tool
     async def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
         seen.append(dry_run)
         return {}
@@ -350,6 +428,7 @@ async def test_string_dry_run_is_coerced_before_the_tool_sees_it(
 def test_sync_wrapper_coerces_string_dry_run(settings: MagicMock) -> None:
     seen: list[Any] = []
 
+    @write_tool
     def _spy_tool(site_id: str, dry_run: bool | str = False, settings: Any = None) -> dict:
         seen.append(dry_run)
         return {}
@@ -379,6 +458,7 @@ def fresh_metrics(monkeypatch: pytest.MonkeyPatch) -> Any:
 async def test_metrics_disabled_records_nothing(settings: MagicMock, fresh_metrics: Any) -> None:
     """metrics_enabled=False keeps the wrapper off the metrics path entirely."""
 
+    @read_tool
     async def _spy_tool(site_id: str, settings: Any = None) -> dict:
         return {}
 
@@ -395,9 +475,11 @@ async def test_metrics_records_success_and_error(
 ) -> None:
     """Successful calls count as success; exceptions count as error and re-raise."""
 
+    @read_tool
     async def _ok_tool(site_id: str, settings: Any = None) -> dict:
         return {}
 
+    @read_tool
     async def _fail_tool(site_id: str, settings: Any = None) -> dict:
         raise ValueError("boom")
 

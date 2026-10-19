@@ -36,6 +36,7 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 logger = get_logger(__name__)
 
@@ -45,6 +46,7 @@ logger = get_logger(__name__)
 # ============================================================================
 
 
+@read_tool
 async def list_traffic_routes(
     site_id: str,
     settings: Settings,
@@ -154,6 +156,7 @@ async def _find_wan_network(
     return wans[0]
 
 
+@read_tool
 async def get_smart_queue_status(
     site_id: str,
     settings: Settings,
@@ -189,6 +192,7 @@ async def get_smart_queue_status(
         }
 
 
+@write_tool
 async def configure_smart_queue(
     site_id: str,
     settings: Settings,

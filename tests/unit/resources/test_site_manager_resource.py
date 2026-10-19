@@ -83,3 +83,28 @@ class TestEnabled:
             result = await SiteManagerResource(enabled_settings).get_internet_health_status()
 
         assert result == "Internet Health: {'status': 'ok'}"
+
+
+class TestArrayReplies:
+    """The client passes a bare-array reply through; the resources accept it."""
+
+    @pytest.mark.asyncio
+    async def test_get_all_sites_from_bare_list(self, enabled_settings):
+        client = _client(list_sites=[{"name": "HQ", "id": "s1"}])
+        with _patch(client):
+            result = await SiteManagerResource(enabled_settings).get_all_sites()
+        assert result == "Site: HQ (s1)"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method", "client_method"),
+        [
+            ("get_health_metrics", "get_site_health"),
+            ("get_internet_health_status", "get_internet_health"),
+        ],
+    )
+    async def test_health_from_bare_list(self, enabled_settings, method, client_method):
+        client = _client(**{client_method: [{"status": "ok"}]})
+        with _patch(client):
+            result = await getattr(SiteManagerResource(enabled_settings), method)()
+        assert "[{'status': 'ok'}]" in result

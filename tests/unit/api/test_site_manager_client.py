@@ -267,3 +267,30 @@ class TestEndpoints:
 
         assert seen[0].url.path == path
         assert dict(seen[0].url.params) == params
+
+
+class TestReplyShapes:
+    """Array replies are returned as arrays, not cast to dict (issue #222)."""
+
+    @pytest.mark.asyncio
+    async def test_get_returns_array_reply(self, settings: MagicMock) -> None:
+        _, handler = _recorder(httpx.Response(200, json=[{"_id": "r1"}]))
+        client = _client(settings, handler)
+
+        assert await client.get("connector/consoles/c1/proxy/network/v2/x") == [{"_id": "r1"}]
+
+    @pytest.mark.asyncio
+    async def test_mutate_returns_array_reply(self, settings: MagicMock) -> None:
+        _, handler = _recorder(httpx.Response(200, json=[]))
+        client = _client(settings, handler)
+
+        assert await client.post("connector/consoles/c1/proxy/network/v2/x") == []
+
+    @pytest.mark.asyncio
+    async def test_typed_wrapper_passes_array_reply_through(self, settings: MagicMock) -> None:
+        """Some deployments answer hosts and vantage-points with a bare array;
+        the tools handle that shape, so the wrapper must not reject it."""
+        _, handler = _recorder(httpx.Response(200, json=[{"id": "h1"}]))
+        client = _client(settings, handler)
+
+        assert await client.list_hosts() == [{"id": "h1"}]

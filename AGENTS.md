@@ -72,11 +72,12 @@ Naming: modules and functions use snake_case, classes use PascalCase, and test f
 
 ## Writing a Tool
 
-Tools are plain async functions. `register_module_tools()` in `src/tool_registry.py` registers every public `async def` in a module that `src/main.py` lists. There is no decorator. A leading `_` keeps a helper out of the tool list.
+Tools are plain async functions. `register_module_tools()` in `src/tool_registry.py` registers every public `async def` in a module that `src/main.py` lists. Each one carries `@read_tool` or `@write_tool` from `src/utils/tool_kind.py`, which declares whether it can change controller state; registration fails on a tool with neither. A leading `_` keeps a helper out of the tool list.
 
 A write tool, shortened from `src/tools/protect_relays.py`:
 
 ```python
+@write_tool
 async def update_protect_relay(
     relay_id: str,
     settings: Settings,
@@ -117,8 +118,10 @@ async def update_protect_relay(
 
 The rules this example follows:
 
-- **Mutating means `confirm` or `dry_run` in the signature.** The registry uses those two parameter names to classify a tool as a write. A write tool must have both.
+- **Declare it.** `@write_tool` marks a tool that can change state, `@read_tool` one that cannot. `UNIFI_READ_ONLY` registers only `@read_tool` tools, and registration refuses a tool with no declaration, or a `@read_tool` that takes `confirm` or `dry_run`. `tests/unit/test_tool_declarations.py` walks every read tool's calls and fails if one reaches a `post`, `put`, `patch` or `delete`.
+- **A write tool takes both `confirm` and `dry_run`.** `UNIFI_DRY_RUN` drops a write tool with no `dry_run`.
 - **Check confirmation first.** `validate_confirmation(confirm, operation, dry_run)` raises `ValidationError` unless `confirm` is true or the call is a dry run.
+  The registry wrapper refuses an unconfirmed call to any tool with a `confirm` parameter before the tool runs, and passes `confirm` and `dry_run` on as bools. Keep the check in the tool anyway: it covers direct calls, and `tests/unit/tools/test_confirm_gate.py` fails if a tool tests `confirm` with a bare `if`, where the string `"false"` is truthy.
 - **Return the dry run before you open a client.** No request may reach the controller on a dry run.
 - **Optional update fields default to `None`.** Send only the fields the caller set. Some UniFi endpoints need the whole object (read, merge, write); the network and security skills list which ones.
 - **Do not audit in the tool.** The registry wrapper audits every mutating call. It also removes write tools under `UNIFI_READ_ONLY` and forces `dry_run` under `UNIFI_DRY_RUN`.

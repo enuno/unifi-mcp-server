@@ -42,7 +42,8 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 
 - **Registration.** There is no `@mcp.tool()` decorator. `register_module_tools()` in `src/tool_registry.py` registers every public `async def` in a module that `src/main.py` lists. A leading `_` keeps a function private. The wrapper hides the `settings` argument and adds a keyword-only `controller` argument.
 - **Modes and profiles.** `_CLOUD_TOOL_MODULES` and `_LOCAL_TOOL_MODULES` in `src/main.py` decide which modules load for `UNIFI_API_TYPE`, and `UNIFI_PROFILE` narrows the set. A new module must be added to the right list and to the matching profile.
-- **Write tools.** A tool counts as mutating when its signature has `confirm` or `dry_run`. Use `confirm: bool | str = False, dry_run: bool | str = False`, and call `validate_confirmation(confirm, "<operation>", dry_run)` (`src/utils/validators.py`) before any request. On a dry run, return the planned payload without calling the API.
+- **Read or write.** Every tool carries `@read_tool` or `@write_tool` (`src/utils/tool_kind.py`). Registration fails on a tool with neither, and `UNIFI_READ_ONLY` registers only `@read_tool` tools. `tests/unit/test_tool_declarations.py` fails if a `@read_tool` reaches a controller write.
+- **Write tools.** Declare them `@write_tool`. Use `confirm: bool | str = False, dry_run: bool | str = False`, and call `validate_confirmation(confirm, "<operation>", dry_run)` (`src/utils/validators.py`) before any request. On a dry run, return the planned payload without calling the API.
 - **Risk tiers.** `tool_tier()` gives each tool `read`, `write` or `destructive`. Names that start with `delete_`, `remove_` or `bulk_delete_`, and names in `DESTRUCTIVE_TOOLS`, are destructive. Roles map to tiers in `src/access.py`.
 - **When you add or rename a tool**, regenerate the tier snapshot: `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py`. A mutating tool whose name has a risky word ("disable", "block", "reset" and others) must be in `DESTRUCTIVE_TOOLS` or in `RISKY_NAME_EXEMPTIONS` with a reason.
 - **Audit.** The registry wrapper audits every mutating call. Do not add a second audit path to a new tool.
@@ -71,8 +72,8 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 | `UNIFI_API_TYPE` | Tools | Notes |
 |------------------|-------|-------|
 | `local` (recommended) | 343 | Gateway at `UNIFI_LOCAL_HOST`. Network, Protect, and the Phase 6 cloud APIs |
-| `cloud-v1` | 46 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy |
-| `cloud-ea` (the code default) | 46 | Early Access cloud API, same limits |
+| `cloud-v1` | 71 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy, Mobility, InnerSpace, Carrier |
+| `cloud-ea` (the code default) | 71 | Early Access cloud API, same limits |
 
 `UNIFI_READ_ONLY` removes every write tool, and `UNIFI_DRY_RUN` forces `dry_run` on. Some features need UniFi Network 9.0+, and some documented endpoints do not exist on all firmware. Check `docs/UNIFI_API.md` before you rely on one.
 

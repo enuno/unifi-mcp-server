@@ -1,25 +1,36 @@
 {
   "name": "unifi-mcp-server",
-  "description": "MCP server for managing UniFi Network, Protect, and Site Manager APIs",
-  "version": "0.4.0-planned",
+  "description": "MCP server for managing UniFi Network, Protect, Site Manager, and A2A delegation",
+  "version": "0.6.1",
   "protocol": "MCP/1.0",
   "capabilities": [
     "network-management",
-    "protect",
     "multi-site",
     "audit-log",
-    "dry-run",
-    "rbac",
-    "metrics",
-    "webhooks"
+    "safety-controls",
+    "multi-auth"
   ],
   "authentication": {
-    "schemes": ["bearer", "api-key"],
-    "scopes": ["read", "write", "destructive", "admin"]
+    "schemes": [
+      "bearer",
+      "api-key"
+    ],
+    "modes": [
+      "local",
+      "cloud-v1",
+      "cloud-ea"
+    ],
+    "scopes": [
+      "read",
+      "write",
+      "destructive",
+      "admin"
+    ]
   },
-  "tools_manifest_url": "/mcp/tools",
+  "tools_manifest_url": "/a2a/discover",
+  "delegate_url": "/a2a/delegate",
+  "audit_url": "/a2a/audit",
   "contact": {
     "url": "https://github.com/enuno/unifi-mcp-server"
-  },
-  "status": "planned"
+  }
 }

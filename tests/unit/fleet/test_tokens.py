@@ -24,6 +24,7 @@ from src.fleet.postgres_registry import PostgresRegistry  # noqa: E402
 from src.fleet.router import FleetRouter  # noqa: E402
 from src.fleet.tokens import FleetTokenVerifier, TokenStore, hash_token  # noqa: E402
 from src.tool_registry import _make_tool_wrapper  # noqa: E402
+from src.utils import tool_kind
 from src.utils.exceptions import ResourceNotFoundError, ValidationError  # noqa: E402
 
 ENV_TOKEN = "env-break-glass-token-0123456789"  # pragma: allowlist secret
@@ -104,7 +105,15 @@ class TestVerifier:
     async def test_env_tokens_are_break_glass(self, store):
         access = await FleetTokenVerifier([ENV_TOKEN], store).verify_token(ENV_TOKEN)
 
-        assert access is not None and access.claims == {}
+        assert access is not None and access.claims == {"static_role": "fleet-admin"}
+
+    async def test_env_tokens_carry_their_role(self, store):
+        verifier = FleetTokenVerifier({ENV_TOKEN: "viewer"}, store)
+
+        access = await verifier.verify_token(ENV_TOKEN)
+
+        assert access is not None and access.claims == {"static_role": "viewer"}
+        assert "token_id" not in access.claims
 
     async def test_issued_token_carries_claims(self, store):
         token, _ = await store.create(name="ops", role="operator", created_by="t")
@@ -165,11 +174,13 @@ async def registry(settings: Settings, migrated_engine: Any) -> AsyncIterator[Po
     await registry.stop()
 
 
+@tool_kind.write_tool
 async def reboot_ap(site_id: str, confirm: bool = False, settings: Any = None) -> str:
     """A write-tier tool."""
     return f"rebooted via {settings.local_host}"
 
 
+@tool_kind.read_tool
 async def wlan_list(site_id: str, settings: Any = None) -> str:
     """A read-tier tool."""
     return "wlans"

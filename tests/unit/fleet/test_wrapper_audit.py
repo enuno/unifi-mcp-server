@@ -13,6 +13,7 @@ from src.fleet import ControllerProfile
 from src.fleet.router import FleetRouter
 from src.tool_registry import _make_tool_wrapper
 from src.tools.wifi import delete_wlan
+from src.utils import tool_kind
 from src.utils.audit import AuditUnavailableError, get_audit_logger
 from src.utils.audit_verify import verify_file
 from src.utils.exceptions import ValidationError
@@ -47,11 +48,13 @@ def _records(path: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
+@tool_kind.read_tool
 async def read_tool(site_id: str, settings: Any = None) -> dict:
-    """A read: never audited."""
+    """A read: audited only with UNIFI_AUDIT_READS."""
     return {}
 
 
+@tool_kind.write_tool
 async def write_tool(
     site_id: str, passphrase: str = "", confirm: bool = False, settings: Any = None
 ) -> dict:
@@ -59,6 +62,7 @@ async def write_tool(
     return {"ok": True}
 
 
+@tool_kind.write_tool
 async def failing_tool(site_id: str, confirm: bool = False, settings: Any = None) -> dict:
     """A mutating tool that fails."""
     raise RuntimeError("controller said no")
@@ -179,6 +183,7 @@ class TestDeniedAndFailClosed:
     async def test_refused_write_target_is_recorded_as_denied(self, settings, router, log_path):
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 
@@ -200,6 +205,25 @@ class TestDeniedAndFailClosed:
         (denied,) = _records(log_path)
         assert denied["controller"] == "nope"
 
+    @pytest.mark.parametrize("confirm", [False, "false"])
+    async def test_unconfirmed_write_is_denied_before_the_tool_runs(
+        self, settings, log_path, confirm
+    ):
+        calls: list[str] = []
+
+        @tool_kind.write_tool
+        async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
+            calls.append(site_id)
+
+        with pytest.raises(ValidationError, match="requires confirmation"):
+            await _make_tool_wrapper(guarded, settings)("default", confirm=confirm)
+
+        (denied,) = _records(log_path)
+        assert denied["event_type"] == "denied"
+        assert denied["result"] == "denied"
+        assert denied["controller"] == "default"
+        assert calls == []
+
     async def test_unwritable_audit_log_blocks_writes(self, monkeypatch, tmp_path):
         blocked = tmp_path / "is-a-directory"
         blocked.mkdir()
@@ -207,6 +231,7 @@ class TestDeniedAndFailClosed:
         monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(blocked))
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 
@@ -232,3 +257,105 @@ class TestDeniedAndFailClosed:
         result = await _make_tool_wrapper(write_tool, Settings())("default", confirm=True)
 
         assert result == {"ok": True}
+
+
+class TestAuditReads:
+    """UNIFI_AUDIT_READS: reads get attempt and outcome records, never their results (AC-531)."""
+
+    INVENTORY = {"clients": [{"mac": "aa:bb:cc:dd:ee:01", "hostname": "nas-unique-host"}]}
+
+    @pytest.fixture
+    def settings(self, monkeypatch: pytest.MonkeyPatch, settings: Settings) -> Settings:
+        monkeypatch.setenv("UNIFI_AUDIT_READS", "true")
+        return Settings()
+
+    async def test_off_by_default(self, monkeypatch, log_path):
+        monkeypatch.setenv("UNIFI_API_KEY", "k")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(log_path))
+
+        assert Settings().audit_reads is False
+
+    async def test_read_records_principal_tool_arguments_and_outcome(
+        self, settings, log_path, monkeypatch
+    ):
+        token = AccessToken(token="t0ken", client_id="mcp-client", scopes=[])  # noqa: S106
+        monkeypatch.setattr("src.access.get_access_token", lambda: token)
+        inventory = self.INVENTORY
+
+        @tool_kind.read_tool
+        async def list_clients(site_id: str, limit: int = 50, settings: Any = None) -> dict:
+            return inventory
+
+        result = await _make_tool_wrapper(list_clients, settings)("default", limit=500)
+
+        assert result == inventory
+        attempt, outcome = _records(log_path)
+        assert (attempt["result"], outcome["result"]) == ("attempt", "success")
+        assert attempt["call_id"] == outcome["call_id"]
+        for record in (attempt, outcome):
+            assert record["event_type"] == "tool_call"
+            assert record["tool"] == "list_clients"
+            assert record["tier"] == "read"
+            assert record["principal"]["id"].startswith("env:")
+            assert record["parameters"] == {"site_id": "default", "limit": 500}
+        text = log_path.read_text()
+        assert "nas-unique-host" not in text
+        assert "aa:bb:cc:dd:ee:01" not in text
+        assert "t0ken" not in text
+        assert verify_file(log_path, None).ok
+
+    async def test_read_error_is_recorded_with_credentials_redacted(self, settings, log_path):
+        @tool_kind.read_tool
+        async def get_wlan(site_id: str, settings: Any = None) -> dict:
+            raise RuntimeError(
+                "Client error '401 Unauthorized' for url "
+                "'https://192.168.2.1/proxy/network/api/s/default/rest/wlanconf"
+                "?apikey=leaked-api-key'"  # pragma: allowlist secret
+            )
+
+        with pytest.raises(RuntimeError):
+            await _make_tool_wrapper(get_wlan, settings)("default")
+
+        _, outcome = _records(log_path)
+        assert outcome["result"] == "error"
+        assert "apikey=***" in outcome["error"]
+        assert "leaked-api-key" not in log_path.read_text()
+
+    async def test_unknown_controller_on_a_read_is_denied(self, settings, log_path):
+        with pytest.raises(Exception, match="not found"):
+            await _make_tool_wrapper(read_tool, settings)("default", controller="nope")
+
+        (denied,) = _records(log_path)
+        assert denied["event_type"] == "denied"
+        assert denied["controller"] == "nope"
+
+    async def test_writes_still_yield_one_record_pair(self, settings, log_path):
+        await _make_tool_wrapper(write_tool, settings)("default", confirm=True)
+
+        assert [r["result"] for r in _records(log_path)] == ["attempt", "success"]
+
+    async def test_unwritable_audit_log_blocks_reads(self, monkeypatch, tmp_path):
+        blocked = tmp_path / "is-a-directory"
+        blocked.mkdir()
+        monkeypatch.setenv("UNIFI_API_KEY", "k")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(blocked))
+        monkeypatch.setenv("UNIFI_AUDIT_READS", "true")
+        calls: list[str] = []
+
+        @tool_kind.read_tool
+        async def guarded(site_id: str, settings: Any = None) -> None:
+            calls.append(site_id)
+
+        with pytest.raises(AuditUnavailableError):
+            await _make_tool_wrapper(guarded, Settings())("default")
+        assert calls == []
+
+    async def test_fail_open_lets_reads_through(self, monkeypatch, tmp_path):
+        blocked = tmp_path / "is-a-directory"
+        blocked.mkdir()
+        monkeypatch.setenv("UNIFI_API_KEY", "k")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_AUDIT_LOG_PATH", str(blocked))
+        monkeypatch.setenv("UNIFI_AUDIT_READS", "true")
+        monkeypatch.setenv("UNIFI_AUDIT_FAIL_CLOSED", "false")
+
+        assert await _make_tool_wrapper(read_tool, Settings())("default") == {}

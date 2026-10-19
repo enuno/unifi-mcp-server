@@ -104,3 +104,31 @@ def test_list_protect_device_updates_is_defined_once():
 
     assert protect_events.list_protect_device_updates is protect_devices.list_protect_device_updates
     assert protect_events.list_protect_device_updates.__module__ == protect_devices.__name__
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "webhook_id",
+    ["../../cameras", "hook/../x", "hook?x=1", "hook#x", "..", "%2e%2e", "hook id"],
+)
+async def test_send_protect_alarm_webhook_rejects_unsafe_id(mock_settings, mock_client, webhook_id):
+    send_protect_alarm_webhook = _tool("send_protect_alarm_webhook")
+
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client) as mock_cls:
+        with pytest.raises(ValidationError, match="webhook_id"):
+            await send_protect_alarm_webhook(webhook_id, mock_settings, confirm=True)
+
+    mock_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_send_protect_alarm_webhook_strips_whitespace(mock_settings, mock_client):
+    mock_client.post = AsyncMock(return_value={"ok": True})
+    send_protect_alarm_webhook = _tool("send_protect_alarm_webhook")
+
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
+        await send_protect_alarm_webhook("  front-door.v2  ", mock_settings, confirm=True)
+
+    mock_client.post.assert_awaited_once_with(
+        "/integration/v1/alarm-manager/webhook/front-door.v2", json_data={}
+    )

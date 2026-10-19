@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectArmProfile, ProtectArmSchedule
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 _ALLOWED_ACTIVATION_DELAYS = (0, 60000, 300000, 600000)
@@ -54,6 +55,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_arm_profiles(
     settings: Settings,
     limit: int | None = None,
@@ -85,6 +87,7 @@ async def list_protect_arm_profiles(
     }
 
 
+@read_tool
 async def get_protect_arm_profile(arm_profile_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect arm profile.
 
@@ -107,6 +110,7 @@ async def get_protect_arm_profile(arm_profile_id: str, settings: Settings) -> di
     return profile.model_dump(by_alias=True)
 
 
+@write_tool
 async def create_protect_arm_profile(
     settings: Settings,
     name: str,
@@ -162,6 +166,7 @@ async def create_protect_arm_profile(
     return profile.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_arm_profile(
     arm_profile_id: str,
     settings: Settings,
@@ -231,6 +236,7 @@ async def update_protect_arm_profile(
     return profile.model_dump(by_alias=True)
 
 
+@write_tool
 async def delete_protect_arm_profile(
     arm_profile_id: str,
     settings: Settings,
@@ -264,6 +270,7 @@ async def delete_protect_arm_profile(
     return {"success": True, "arm_profile_id": arm_profile_id}
 
 
+@write_tool
 async def set_current_protect_arm_profile(
     settings: Settings,
     arm_profile_id: str,
@@ -303,6 +310,7 @@ async def set_current_protect_arm_profile(
     return {"success": True, "arm_profile_id": arm_profile_id, "response": _extract_item(response)}
 
 
+@write_tool
 async def enable_protect_alarm(
     settings: Settings,
     confirm: bool | str = False,
@@ -332,6 +340,7 @@ async def enable_protect_alarm(
     return {"success": True, "response": _extract_item(response)}
 
 
+@write_tool
 async def disable_protect_alarm(
     settings: Settings,
     confirm: bool | str = False,

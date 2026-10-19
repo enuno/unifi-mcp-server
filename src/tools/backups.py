@@ -16,6 +16,7 @@ from ..utils import (
     validate_confirmation,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
 def _resolve_backup_dest(output_path: str, settings: Settings) -> Path:
@@ -73,6 +74,7 @@ def _write_backup_file(dest: Path, content: bytes) -> None:
         os.close(fd)
 
 
+@write_tool
 async def trigger_backup(
     site_id: str,
     backup_type: str,
@@ -222,6 +224,7 @@ async def trigger_backup(
         raise
 
 
+@read_tool
 async def list_backups(
     site_id: str,
     settings: Settings,
@@ -287,6 +290,7 @@ async def list_backups(
         return backups
 
 
+@read_tool
 async def get_backup_details(
     site_id: str,
     backup_filename: str,
@@ -325,6 +329,7 @@ async def get_backup_details(
     raise ResourceNotFoundError("backup", backup_filename)
 
 
+@read_tool
 async def download_backup(
     site_id: str,
     backup_filename: str,
@@ -428,6 +433,7 @@ async def download_backup(
         raise
 
 
+@write_tool
 async def delete_backup(
     site_id: str,
     backup_filename: str,
@@ -531,6 +537,7 @@ async def delete_backup(
         raise
 
 
+@write_tool
 async def restore_backup(
     site_id: str,
     backup_filename: str,
@@ -687,6 +694,7 @@ async def restore_backup(
         raise
 
 
+@read_tool
 async def validate_backup(
     site_id: str,
     backup_filename: str,
@@ -784,6 +792,7 @@ async def validate_backup(
         }
 
 
+@read_tool
 async def get_backup_status(
     site_id: str,
     operation_id: str,
@@ -870,6 +879,7 @@ async def get_backup_status(
         raise
 
 
+@read_tool
 async def get_restore_status(
     operation_id: str,
     settings: Settings,
@@ -972,6 +982,7 @@ async def get_restore_status(
         }
 
 
+@write_tool
 async def schedule_backups(
     site_id: str,
     backup_type: str,
@@ -1194,6 +1205,7 @@ async def schedule_backups(
         raise
 
 
+@read_tool
 async def get_backup_schedule(
     site_id: str,
     settings: Settings,

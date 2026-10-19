@@ -20,16 +20,21 @@ from typing import Any
 
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
-from ..utils import ValidationError, get_logger, validate_confirmation
+from ..utils import get_logger, validate_confirmation, validate_path_segment, validate_proxy_path
+from ..utils.tool_kind import read_tool, write_tool
 
 
-def _validate_connector_params(console_id: str, path: str) -> str:
-    """Validate console_id and path, return normalised path (no leading slash)."""
-    if not console_id or not console_id.strip():
-        raise ValidationError("console_id must not be empty")
-    if not path or not path.strip():
-        raise ValidationError("path must not be empty")
-    return path.lstrip("/")
+def _validate_connector_params(console_id: str, path: str) -> tuple[str, str]:
+    """Validate console_id and path, return both normalised.
+
+    Both are interpolated into
+    ``connector/consoles/{console_id}/proxy/<app>/{path}``, so neither may
+    carry ``/``, ``..``, or query characters that would retarget the request
+    outside the proxy prefix. Callers must use the returned values, not the
+    raw arguments: the console ID comes back stripped and the path without
+    its leading slash.
+    """
+    return validate_path_segment(console_id, "console_id"), validate_proxy_path(path)
 
 
 # ---------------------------------------------------------------------------
@@ -37,12 +42,13 @@ def _validate_connector_params(console_id: str, path: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def connector_network_get(
     console_id: str,
     path: str,
     settings: Settings,
     params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a GET request to the Network Application via Cloud Connector.
 
     Forwards the request to
@@ -59,13 +65,13 @@ async def connector_network_get(
         Raw response from the proxied Network API endpoint
 
     Raises:
-        ValidationError: If console_id or path is empty
+        ValidationError: If console_id or path is empty or not allowed
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
@@ -74,6 +80,7 @@ async def connector_network_get(
         return await client.get(endpoint, params=params)
 
 
+@write_tool
 async def connector_network_post(
     console_id: str,
     path: str,
@@ -81,7 +88,7 @@ async def connector_network_post(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a POST request to the Network Application via Cloud Connector.
 
     Args:
@@ -96,14 +103,14 @@ async def connector_network_post(
         Raw response or dry-run preview
 
     Raises:
-        ValidationError: If console_id/path is empty or confirm not provided
+        ValidationError: If console_id/path is empty or not allowed, or confirm not provided
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_post", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -115,6 +122,7 @@ async def connector_network_post(
         return await client.post(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_put(
     console_id: str,
     path: str,
@@ -122,7 +130,7 @@ async def connector_network_put(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PUT request to the Network Application via Cloud Connector.
 
     Args:
@@ -140,7 +148,7 @@ async def connector_network_put(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_put", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -152,6 +160,7 @@ async def connector_network_put(
         return await client.put(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_patch(
     console_id: str,
     path: str,
@@ -159,7 +168,7 @@ async def connector_network_patch(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PATCH request to the Network Application via Cloud Connector.
 
     Args:
@@ -177,7 +186,7 @@ async def connector_network_patch(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_patch", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -189,13 +198,14 @@ async def connector_network_patch(
         return await client.patch(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_network_delete(
     console_id: str,
     path: str,
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a DELETE request to the Network Application via Cloud Connector.
 
     Args:
@@ -212,7 +222,7 @@ async def connector_network_delete(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_network_delete", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/network/{path}"
 
@@ -229,12 +239,13 @@ async def connector_network_delete(
 # ---------------------------------------------------------------------------
 
 
+@read_tool
 async def connector_protect_get(
     console_id: str,
     path: str,
     settings: Settings,
     params: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a GET request to the Protect Application via Cloud Connector.
 
     Forwards the request to
@@ -251,13 +262,13 @@ async def connector_protect_get(
         Raw response from the proxied Protect API endpoint
 
     Raises:
-        ValidationError: If console_id or path is empty
+        ValidationError: If console_id or path is empty or not allowed
         ValueError: If Site Manager API is not enabled
     """
     if not settings.site_manager_enabled:
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
 
     async with SiteManagerClient(settings) as client:
@@ -266,6 +277,7 @@ async def connector_protect_get(
         return await client.get(endpoint, params=params)
 
 
+@write_tool
 async def connector_protect_post(
     console_id: str,
     path: str,
@@ -273,7 +285,7 @@ async def connector_protect_post(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a POST request to the Protect Application via Cloud Connector.
 
     Args:
@@ -291,7 +303,7 @@ async def connector_protect_post(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_post", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -303,6 +315,7 @@ async def connector_protect_post(
         return await client.post(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_put(
     console_id: str,
     path: str,
@@ -310,7 +323,7 @@ async def connector_protect_put(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PUT request to the Protect Application via Cloud Connector.
 
     Args:
@@ -328,7 +341,7 @@ async def connector_protect_put(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_put", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -340,6 +353,7 @@ async def connector_protect_put(
         return await client.put(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_patch(
     console_id: str,
     path: str,
@@ -347,7 +361,7 @@ async def connector_protect_patch(
     body: dict[str, Any] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a PATCH request to the Protect Application via Cloud Connector.
 
     Args:
@@ -365,7 +379,7 @@ async def connector_protect_patch(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_patch", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 
@@ -377,13 +391,14 @@ async def connector_protect_patch(
         return await client.patch(endpoint, json_data=body)
 
 
+@write_tool
 async def connector_protect_delete(
     console_id: str,
     path: str,
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
-) -> dict[str, Any]:
+) -> dict[str, Any] | list[Any]:
     """Proxy a DELETE request to the Protect Application via Cloud Connector.
 
     Args:
@@ -400,7 +415,7 @@ async def connector_protect_delete(
         raise ValueError("Site Manager API is not enabled. Set UNIFI_SITE_MANAGER_ENABLED=true")
 
     validate_confirmation(confirm, "connector_protect_delete", dry_run)
-    path = _validate_connector_params(console_id, path)
+    console_id, path = _validate_connector_params(console_id, path)
     logger = get_logger(__name__, settings.log_level)
     endpoint = f"connector/consoles/{console_id}/proxy/protect/{path}"
 

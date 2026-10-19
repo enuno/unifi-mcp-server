@@ -22,6 +22,7 @@ from src.fleet.fleet_tools import register_fleet_read_tools
 from src.fleet.registry import ControllerProfile
 from src.fleet.router import FleetRouter
 from src.tool_registry import TOOL_TIERS, _make_tool_wrapper, tool_tier
+from src.utils import tool_kind
 from src.utils.exceptions import ResourceNotFoundError
 
 KEY = "k"  # pragma: allowlist secret
@@ -60,6 +61,7 @@ def _failing(host: str) -> bool:
     return int(host.split(".")[2]) % 20 == 7
 
 
+@tool_kind.read_tool
 async def get_thing(site_id: str = "default", settings: Any = None) -> dict[str, Any]:
     host = settings.local_host
     if host == "10.0.1.1":
@@ -69,10 +71,12 @@ async def get_thing(site_id: str = "default", settings: Any = None) -> dict[str,
     return {"host": host, "site": site_id}
 
 
+@tool_kind.read_tool
 async def list_things(settings: Any = None) -> list[str]:
     return [settings.local_host]
 
 
+@tool_kind.write_tool
 async def set_thing(value: str, confirm: bool = False, settings: Any = None) -> str:
     raise AssertionError("a write tool must never be fanned out")  # pragma: no cover
 

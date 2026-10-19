@@ -25,6 +25,7 @@ from ..utils import (
     sanitize_log_message,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -38,6 +39,7 @@ def _ensure_local_api(settings: Settings) -> None:
         )
 
 
+@read_tool
 async def list_content_filters(
     site_id: str,
     settings: Settings,
@@ -72,6 +74,7 @@ async def list_content_filters(
         return [_normalize(item) for item in items if isinstance(item, dict)]
 
 
+@read_tool
 async def list_content_filter_categories(
     site_id: str,
     settings: Settings,
@@ -104,6 +107,7 @@ async def list_content_filter_categories(
         return []
 
 
+@write_tool
 async def update_content_filter(
     filter_id: str,
     site_id: str,
@@ -231,6 +235,7 @@ async def update_content_filter(
         return _normalize(data)
 
 
+@write_tool
 async def delete_content_filter(
     filter_id: str,
     site_id: str,

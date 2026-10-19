@@ -22,6 +22,7 @@ from src.fleet.db.schema import make_engine  # noqa: E402
 from src.fleet.postgres_registry import PostgresRegistry  # noqa: E402
 from src.fleet.router import FleetRouter  # noqa: E402
 from src.tool_registry import _make_tool_wrapper  # noqa: E402
+from src.utils import tool_kind
 from src.utils.audit import AuditLogger, AuditUnavailableError, get_audit_logger  # noqa: E402
 from src.utils.audit_verify import verify_records  # noqa: E402
 
@@ -58,11 +59,13 @@ async def _rows(engine: Any) -> list[dict[str, Any]]:
         return [json.loads(r.record) for r in result]
 
 
+@tool_kind.write_tool
 async def change_vlan(site_id: str, confirm: bool = False, settings: Any = None) -> str:
     """A write-tier tool."""
     return "changed"
 
 
+@tool_kind.read_tool
 async def show_vlans(site_id: str, settings: Any = None) -> str:
     """A read-tier tool."""
     return "vlans"
@@ -198,6 +201,7 @@ class TestThroughTheWrapper:
         audit.sink = PostgresAuditSink(make_engine("postgresql://nobody@127.0.0.1:1/none"))
         calls: list[str] = []
 
+        @tool_kind.write_tool
         async def guarded(site_id: str, confirm: bool = False, settings: Any = None) -> None:
             calls.append(site_id)
 

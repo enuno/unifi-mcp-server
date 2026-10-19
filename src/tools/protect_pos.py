@@ -10,6 +10,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectPosTransactionResult
 from ..utils import ValidationError, get_logger, sanitize_log_message
+from ..utils.tool_kind import write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 _POS_TRANSACTION_TYPES = ("sale", "refund")
@@ -76,6 +77,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@write_tool
 async def ingest_pos_transaction(
     camera_id: str,
     settings: Settings,

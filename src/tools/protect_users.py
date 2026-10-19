@@ -8,6 +8,7 @@ from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectUlpUser, ProtectUser
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool
 
 
 def _validate_user_id(user_id: str, label: str = "user_id") -> str:
@@ -36,6 +37,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_users(
     settings: Settings,
     limit: int | None = None,
@@ -67,6 +69,7 @@ async def list_protect_users(
     }
 
 
+@read_tool
 async def get_protect_user(user_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect user."""
     logger = get_logger(__name__, settings.log_level)
@@ -81,6 +84,7 @@ async def get_protect_user(user_id: str, settings: Settings) -> dict[str, Any]:
     return user.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_ulp_users(
     settings: Settings,
     limit: int | None = None,
@@ -112,6 +116,7 @@ async def list_protect_ulp_users(
     }
 
 
+@read_tool
 async def get_protect_ulp_user(ulp_user_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Identity (ULP) user."""
     logger = get_logger(__name__, settings.log_level)

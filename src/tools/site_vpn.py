@@ -5,9 +5,19 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..models.vpn import SiteToSiteVPN
-from ..utils import ResourceNotFoundError, get_logger, sanitize_log_message, validate_site_id
+from ..utils import (
+    ResourceNotFoundError,
+    coerce_bool,
+    get_logger,
+    sanitize_log_message,
+    validate_confirmation,
+    validate_object_id,
+    validate_site_id,
+)
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[str, Any]]:
     """List all site-to-site VPN configurations."""
     site_id = validate_site_id(site_id)
@@ -22,6 +32,7 @@ async def list_site_to_site_vpns(site_id: str, settings: Settings) -> list[dict[
         return [SiteToSiteVPN(**v).model_dump() for v in vpns]
 
 
+@read_tool
 async def get_site_to_site_vpn(site_id: str, vpn_id: str, settings: Settings) -> dict[str, Any]:
     """Get details for a specific site-to-site VPN."""
     site_id = validate_site_id(site_id)
@@ -40,6 +51,7 @@ async def get_site_to_site_vpn(site_id: str, vpn_id: str, settings: Settings) ->
         raise ResourceNotFoundError("vpn", vpn_id)
 
 
+@write_tool
 async def update_site_to_site_vpn(
     site_id: str,
     vpn_id: str,
@@ -55,6 +67,8 @@ async def update_site_to_site_vpn(
 ) -> dict[str, Any]:
     """Update a site-to-site VPN configuration (requires confirm=True)."""
     site_id = validate_site_id(site_id)
+    vpn_id = validate_object_id(vpn_id, "vpn_id")
+    validate_confirmation(confirm, "update site-to-site VPN", dry_run)
     logger = get_logger(__name__, settings.log_level)
 
     async with UniFiClient(settings) as client:
@@ -82,11 +96,8 @@ async def update_site_to_site_vpn(
         if x_ipsec_pre_shared_key is not None:
             updates["x_ipsec_pre_shared_key"] = x_ipsec_pre_shared_key
 
-        if dry_run:
+        if coerce_bool(dry_run):
             return {"dry_run": True, "vpn_id": vpn_id, "updates": updates}
-
-        if not confirm:
-            return {"error": "confirm=True required", "vpn_id": vpn_id, "updates": updates}
 
         # Merge and update
         payload = {**current, **updates}

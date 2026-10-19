@@ -3,10 +3,12 @@
 from ..api.client import UniFiClient
 from ..config import Settings
 from ..utils import get_logger
+from ..utils.tool_kind import read_tool
 
 logger = get_logger(__name__)
 
 
+@read_tool
 async def get_application_info(settings: Settings) -> dict:
     """Get UniFi Network application information.
 

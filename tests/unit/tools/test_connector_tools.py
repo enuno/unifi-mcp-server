@@ -457,3 +457,162 @@ class TestConnectorWriteTools:
         kwargs["path"] = "  "
         with pytest.raises(ValidationError, match="path must not be empty"):
             await tool(settings=mock_settings, **kwargs)
+
+
+# =============================================================================
+# Path and console_id allowlist (all ten passthroughs)
+# =============================================================================
+
+ALL_TOOLS = [
+    (connector_network_get, "network", "get"),
+    (connector_protect_get, "protect", "get"),
+] + [(t[0], t[1], t[2]) for t in WRITE_TOOLS]
+ALL_IDS = [t[0].__name__ for t in ALL_TOOLS]
+
+BAD_PATHS = [
+    "../../../v1/hosts",
+    "api/s/default/../../../../v1/hosts",
+    "api/./s/default",
+    "api/s/default/stat/device?mac=00:11:22:33:44:55",
+    "api/s/default/stat/device#frag",
+    "api/%2e%2e/v1/hosts",
+    "api//s/default",
+    "api\\s\\default",
+    "api/s/default stat",
+    "api/s/default\n/stat",
+    "a" * 2049,
+]
+
+BAD_CONSOLE_IDS = ["../c1", "c1/../c2", "c1?x=1", "..", "c1%2f", "c 1"]
+
+
+def _all_kwargs(method: str, **extra):
+    kwargs = {"console_id": "c1", "path": "v1/thing", **extra}
+    if method != "get":
+        kwargs["confirm"] = True
+    return kwargs
+
+
+@pytest.mark.parametrize(("tool", "app", "method"), ALL_TOOLS, ids=ALL_IDS)
+class TestConnectorPathAllowlist:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", BAD_PATHS)
+    async def test_bad_path_rejected_before_any_request(
+        self, mock_settings, tool, app, method, path
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            with pytest.raises(ValidationError, match="path"):
+                await tool(settings=mock_settings, **_all_kwargs(method, path=path))
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("console_id", BAD_CONSOLE_IDS)
+    async def test_bad_console_id_rejected_before_any_request(
+        self, mock_settings, tool, app, method, console_id
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            with pytest.raises(ValidationError, match="console_id"):
+                await tool(settings=mock_settings, **_all_kwargs(method, console_id=console_id))
+        mock_cls.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_real_console_id_and_path_accepted(self, mock_settings, tool, app, method):
+        console_id = "70A7419783ED0000000006B2B3270000000006E60D1C0000000062148EC3:1093004219"
+        path = "/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/"
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client({"ok": True})
+            await tool(
+                settings=mock_settings, **_all_kwargs(method, console_id=console_id, path=path)
+            )
+        call = getattr(mock_cls.return_value, method)
+        assert call.await_args.args[0] == (
+            f"connector/consoles/{console_id}/proxy/{app}/"
+            "proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/"
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("console_id", ["c1\n", " c1 ", "\tc1\r\n"])
+    async def test_surrounding_whitespace_stripped_in_endpoint(
+        self, mock_settings, tool, app, method, console_id
+    ):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client({"ok": True})
+            await tool(settings=mock_settings, **_all_kwargs(method, console_id=console_id))
+        call = getattr(mock_cls.return_value, method)
+        assert call.await_args.args[0] == f"connector/consoles/c1/proxy/{app}/v1/thing"
+
+
+@pytest.mark.parametrize(
+    ("tool", "app", "method", "dry_key", "sends_body"), WRITE_TOOLS, ids=WRITE_IDS
+)
+@pytest.mark.asyncio
+async def test_dry_run_preview_uses_stripped_console_id(
+    mock_settings, tool, app, method, dry_key, sends_body
+):
+    with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+        result = await tool(
+            settings=mock_settings,
+            **_write_kwargs(sends_body, console_id="c1\n", dry_run=True),
+        )
+    mock_cls.assert_not_called()
+    assert result[dry_key] == f"connector/consoles/c1/proxy/{app}/v1/thing"
+
+
+# =============================================================================
+# Array replies through the MCP protocol (issue #222)
+# =============================================================================
+
+
+class TestArrayReplies:
+    """A proxied endpoint answering with a JSON array must reach the caller.
+
+    The tools used to be annotated ``-> dict[str, Any]``, so FastMCP built an
+    object output schema and rejected ``[]`` with "structured_content must be
+    a dict". Many ``proxy/network/v2/api/...`` endpoints answer with arrays.
+    """
+
+    @pytest.fixture
+    def site_manager_settings(self, monkeypatch: pytest.MonkeyPatch):
+        from src.config.config import Settings
+
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")  # pragma: allowlist secret
+        monkeypatch.setenv("UNIFI_SITE_MANAGER_ENABLED", "true")
+        return Settings()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("reply", [[], [{"_id": "route1"}], {"data": []}])
+    async def test_get_reply_shapes(self, site_manager_settings, reply):
+        from fastmcp import Client, FastMCP
+
+        from src.tool_registry import register_module_tools
+        from src.tools import connector
+
+        mcp = FastMCP("test")
+        register_module_tools(
+            mcp, connector, site_manager_settings, include=["connector_network_get"]
+        )
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client()
+            mock_cls.return_value.get = AsyncMock(return_value=reply)
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "connector_network_get",
+                    {"console_id": "c1", "path": "v2/api/site/default/trafficroutes"},
+                )
+
+        assert not result.is_error
+        assert result.data == reply
+
+    @pytest.mark.asyncio
+    async def test_mutating_tools_accept_array_replies(self, mock_settings):
+        with patch("src.tools.connector.SiteManagerClient") as mock_cls:
+            mock_cls.return_value = make_mock_client()
+            mock_cls.return_value.post = AsyncMock(return_value=[{"_id": "r1"}])
+            result = await connector_network_post(
+                console_id="c1",
+                path="v2/api/site/default/trafficroutes",
+                settings=mock_settings,
+                body={"enabled": True},
+                confirm=True,
+            )
+        assert result == [{"_id": "r1"}]

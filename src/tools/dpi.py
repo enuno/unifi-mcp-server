@@ -14,8 +14,10 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def get_dpi_statistics(
     site_id: str,
     settings: Settings,
@@ -89,6 +91,7 @@ async def get_dpi_statistics(
         return result
 
 
+@read_tool
 async def list_top_applications(
     site_id: str,
     settings: Settings,
@@ -121,6 +124,7 @@ async def list_top_applications(
     return top_apps
 
 
+@read_tool
 async def get_client_dpi(
     site_id: str,
     client_mac: str,
@@ -221,6 +225,7 @@ async def get_client_dpi(
         }
 
 
+@write_tool
 async def update_dpi_settings(
     site_id: str,
     settings: Settings,

@@ -11,7 +11,9 @@ each call and checks it before any controller is contacted:
 Server-issued API tokens carry a role and filters. ``MCP_AUTH_TOKEN`` tokens
 and stdio are break-glass callers with the ``fleet-admin`` role, so they keep
 everything they could do before enforcement existed; ``UNIFI_STDIO_ROLE`` can
-lower stdio.
+lower stdio, and an ``MCP_AUTH_TOKEN`` entry written ``<role>:<token>`` gets
+that role instead, so a single host without the fleet registry can still hand
+out a ``viewer`` or ``operator`` token.
 """
 
 import fnmatch
@@ -55,8 +57,8 @@ class Principal:
             (never the token itself)
         name: Human-readable name
         role: Grants tiers (:data:`ROLE_TIERS`)
-        break_glass: True for stdio and ``MCP_AUTH_TOKEN`` callers, which are
-            flagged as such in audit records
+        break_glass: True for stdio and ``fleet-admin`` ``MCP_AUTH_TOKEN``
+            callers, which are flagged as such in audit records
         allow_modules: If set, only tool modules matching one of these
             ``fnmatch`` patterns
         deny_modules: Tool modules matching one of these patterns are refused
@@ -125,8 +127,9 @@ def request_principal(local_role: Role = "fleet-admin") -> Principal:
 
     Returns:
         An issued token's principal (from the claims its verifier attached),
-        a break-glass ``fleet-admin`` for an ``MCP_AUTH_TOKEN`` token, or the
-        local principal
+        an ``MCP_AUTH_TOKEN`` token's principal with the role from its entry
+        (break-glass when that is ``fleet-admin``, the default), or the local
+        principal
     """
     access_token = get_access_token()
     if access_token is None:
@@ -142,9 +145,13 @@ def request_principal(local_role: Role = "fleet-admin") -> Principal:
             deny_modules=tuple(claims.get("deny_modules") or ()),
             controller_labels=dict(claims.get("controller_labels") or {}),
         )
+    role = claims.get("static_role", "fleet-admin")
+    if role not in ROLES:
+        # Only build_auth_provider sets this claim; anything else fails closed.
+        raise PermissionDeniedError(f"Unknown role for MCP_AUTH_TOKEN token: {role!r}")
     return Principal(
         id=f"env:{token_fingerprint(access_token.token)}",
         name=access_token.client_id,
-        role="fleet-admin",
-        break_glass=True,
+        role=role,
+        break_glass=role == "fleet-admin",
     )

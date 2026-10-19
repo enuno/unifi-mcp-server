@@ -99,7 +99,8 @@ Configure the MCP server using environment variables:
 | `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
 | `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
-| `UNIFI_LOCAL_VERIFY_SSL` | Verify SSL for local gateway (set `false` for self-signed certs) | No | `true` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify the local gateway's TLS certificate. Setting `false` logs a startup warning; prefer `UNIFI_LOCAL_CA_FILE` for self-signed certs | No | `true` |
+| `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) to verify the local gateway with, in place of the default roots. Checked at startup | No | - |
 | `UNIFI_CLOUD_API_URL` | UniFi Cloud API base URL | No | `https://api.ui.com` |
 | `UNIFI_DEFAULT_SITE` | Default site ID | No | `default` |
 | `UNIFI_RATE_LIMIT_REQUESTS` | Max requests per rate limit period | No | `100` |
@@ -113,9 +114,10 @@ Configure the MCP server using environment variables:
 | `UNIFI_DRY_RUN` | Change-safe mode: every tool with a `dry_run` parameter runs as a preview, and mutating tools without one are not registered | No | `false` |
 | `UNIFI_AUDIT_LOG_ENABLED` | Write an audit record for mutating operations | No | `true` |
 | `UNIFI_AUDIT_LOG_PATH` | Append-only audit log path. Relative paths resolve against the process working directory, which is not predictable under stdio transport — prefer an absolute path. The file is created mode 0600 | No | `audit.log` |
-| `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
+| `UNIFI_AUDIT_FAIL_CLOSED` | Refuse a mutating tool call (and a read, with `UNIFI_AUDIT_READS`) when its audit record cannot be written. Set `false` only as break-glass | No | `true` |
+| `UNIFI_AUDIT_READS` | Also audit read tool calls: `attempt` and outcome records with the principal, tool, arguments and result, never the response payload | No | `false` |
 | `UNIFI_AUDIT_CHAIN_KEY` | HMAC key for the audit hash chain; without it the chain uses plain SHA-256, which detects edits but can be recomputed by anyone who can write the file | No | unset |
-| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md) | No | unset |
+| `UNIFI_AUDIT_SIEM_TARGETS` | Comma-separated SIEM destinations for stored audit records: `syslog+tls://host:6514`, `https://host/path` (signed webhook), `otlp+https://collector:4318` (see SECURITY.md). Requires `UNIFI_AUDIT_CHAIN_KEY` | No | unset |
 | `UNIFI_AUDIT_SIEM_WEBHOOK_SECRET` | HMAC-SHA256 key signing webhook deliveries; required for `https://` targets | With a webhook | unset |
 | `UNIFI_AUDIT_SIEM_OTLP_HEADERS` | Extra headers for OTLP targets, `key=value,key=value` | No | unset |
 | `UNIFI_AUDIT_SIEM_CA_FILE` | CA bundle used to verify SIEM targets | No | system roots |
@@ -149,8 +151,11 @@ Configure the MCP server using environment variables:
 | `MCP_SERVER_TRANSPORT` | Transport: `stdio`, `http`, `sse`, `streamable_http` | No | `stdio` |
 | `MCP_SERVER_HOST` | Server bind address for `http`/`sse`/`streamable_http` | No | `127.0.0.1` |
 | `MCP_SERVER_PORT` | Server port (http/sse transports) | No | `3000` |
+| `MCP_AUTH_MAX_FAILURES` | Failed bearer-token checks (`401`) allowed per client address within `MCP_AUTH_FAILURE_WINDOW_SECONDS` on a network transport. Past that the address gets `429` with `Retry-After` on every route except `/healthz` until the window clears. `0` disables it. Behind a reverse proxy every client shares the proxy's address unless uvicorn trusts its `X-Forwarded-For` (`FORWARDED_ALLOW_IPS`) | No | `10` |
+| `MCP_AUTH_FAILURE_WINDOW_SECONDS` | Sliding window for `MCP_AUTH_MAX_FAILURES` | No | `60` |
 | `MCP_STATELESS_HTTP` | Run the HTTP transports without MCP sessions so any replica can answer any request (ignored for stdio and SSE). `select_controller` is then refused: pass `controller=<name>` per call. The default (stateful) mode needs per-client sticky routing across replicas, keyed on something stable from `initialize` onward (see `MULTI_CONTROLLER.md`) | No | `false` |
-| `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
+| `MCP_AUTH_TOKEN` | Bearer token required to call the server over a network transport; comma-separate for several. Write an entry as `<role>:<token>` (`viewer`, `operator`, `admin`, `fleet-admin`) to give it a role; a bare token is `fleet-admin`. A misspelled or wrong-case role (`Viewer:`, `veiwer:`) stops the server instead of becoming a `fleet-admin` token. `http`/`sse`/`streamable_http` refuse to start without it. Ignored for `stdio` | No | unset |
+| `DEBUG` | Register `debug_api_request`, an arbitrary GET or DELETE to any controller endpoint (destructive tier; never registered under `UNIFI_READ_ONLY`). Leave unset in production | No | unset |
 | `LOG_LEVEL` | Logging level: `DEBUG`, `INFO`, `WARNING`, `ERROR` | No | `INFO` |
 | `LOG_API_REQUESTS` | Log each controller API request | No | `true` |
 | `UNIFI_CACHE_TTL` | Accepted but not used: read-cache lifetimes are fixed per resource type (sites, networks and WLANs 5 min, devices 1 min, clients 30 s) | No | `300` |
@@ -473,6 +478,27 @@ result = await mcp.call_tool("health_check", {})
 }
 ```
 
+### Debug Passthrough
+
+#### `debug_api_request`
+
+Send a raw GET or DELETE to any controller endpoint. Registered only when `DEBUG` is `true`, `1` or `yes`, and never under `UNIFI_READ_ONLY`. Every call needs the `destructive` tier (`admin` or `fleet-admin`); `UNIFI_DRY_RUN` forces a preview.
+
+**Parameters:**
+
+- `endpoint` (string, required): controller-relative API path starting with a single `/`, e.g. `/proxy/network/api/s/default/stat/device`. Absolute (`https://...`) and scheme-relative (`//host/...`) URLs are refused, so the controller's API key is never sent to another host
+- `method` (string, optional): `GET` (default) or `DELETE`; anything else is refused
+- `confirm` (boolean, optional): must be `true` for a `DELETE` unless `dry_run` is set
+- `dry_run` (boolean, optional): return the request instead of sending it
+
+**Returns:** The raw JSON response, or `{"dry_run": true, "operation": "debug_api_request", "method": ..., "endpoint": ...}`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("debug_api_request", {"endpoint": "/proxy/network/api/s/default/stat/device"})
+```
+
 ### Controller Selection
 
 Every controller-bound tool accepts an optional `controller` argument naming the controller to run against. Without it, a call goes to the controller chosen with `select_controller` in the current MCP session, then to the server's default. A **mutating** tool may not fall back to the server default when more than one controller is registered: it needs `controller=` or a `select_controller` in the same session. Until the controller registry ships (see `docs/FLEET_SCALING_PLAN.md`), the server has one controller, `default`, built from the `UNIFI_*` settings. MCP resources (`sites://` and friends) always use the default controller.
@@ -525,7 +551,7 @@ Re-encrypt every stored API key under the newest `UNIFI_FLEET_CREDENTIAL_KEY` ke
 
 #### Access control
 
-Every tool has a risk tier: `read`, `write`, `destructive` or `fleet-admin`. A caller's role grants tiers: `viewer` (read), `operator` (+ write), `admin` (+ destructive), `fleet-admin` (+ registry, token and audit tools). Destructive tools include deletes, restores, restarts, client blocking and firewall policy changes (`create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone`, `unassign_network_from_zone`), so an `operator` cannot change which traffic the firewall allows. A token can be narrowed further by `allow_modules`/`deny_modules` (patterns over tool module names, e.g. `protect_*`) and `controller_labels` (a controller must carry all of them). A refused call fails with `Permission denied: <tool> needs the '<tier>' tier` and is recorded as a `denied` audit event. `MCP_AUTH_TOKEN` tokens and stdio are break-glass `fleet-admin` callers (stdio's role is set by `UNIFI_STDIO_ROLE`).
+Every tool has a risk tier: `read`, `write`, `destructive` or `fleet-admin`. A caller's role grants tiers: `viewer` (read), `operator` (+ write), `admin` (+ destructive), `fleet-admin` (+ registry, token and audit tools). Destructive tools include deletes, restores, restarts, client blocking and firewall policy changes (`create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone`, `unassign_network_from_zone`), so an `operator` cannot change which traffic the firewall allows. A token can be narrowed further by `allow_modules`/`deny_modules` (patterns over tool module names, e.g. `protect_*`) and `controller_labels` (a controller must carry all of them). A refused call fails with `Permission denied: <tool> needs the '<tier>' tier` and is recorded as a `denied` audit event. `MCP_AUTH_TOKEN` tokens and stdio are break-glass `fleet-admin` callers (stdio's role is set by `UNIFI_STDIO_ROLE`). An `MCP_AUTH_TOKEN` entry written `<role>:<token>`, for example `viewer:<token>`, gets that role instead, with or without the fleet registry, so a single host can issue a read-only token. Static tokens take no module or controller filters; use issued tokens for those.
 
 #### `create_api_token`
 
@@ -695,7 +721,7 @@ viewers = await mcp.call_tool("list_protect_viewers", {})
 - `get_protect_event_messages(limit=None, offset=None)` compatibility alias
 - `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
 - `get_protect_device_updates(limit=None, offset=None)` compatibility alias
-- `send_protect_alarm_webhook(webhook_id, payload=None)`
+- `send_protect_alarm_webhook(webhook_id, payload=None)`: `webhook_id` is the alarm's webhook trigger ID, one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`
 
 ```python
 events = await mcp.call_tool("list_protect_events", {})
@@ -1712,6 +1738,24 @@ result = await mcp.call_tool("get_version_control", {})
 }
 ```
 
+#### Cloud Connector passthrough tools
+
+`connector_network_get`, `connector_network_post`, `connector_network_put`, `connector_network_patch`, `connector_network_delete`, and the matching `connector_protect_*` tools forward a request to `https://api.ui.com/v1/connector/consoles/{console_id}/proxy/{network,protect}/{path}`. The `get` tools are `read` tier; the others need `confirm=True`.
+
+**Parameters:** `console_id`, `path`, plus `params` (optional query parameters) on the `get` tools and `body`, **`confirm`** and **`dry_run`** on the mutating tools
+
+**Input rules** (checked before any request is made; a bad value raises `ValidationError`):
+
+- `console_id` is the host ID from `list_hosts`, for example `70A7...8EC3:1093004219`. Surrounding whitespace is stripped and the stripped value is what goes into the URL. What remains must be one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`, and cannot be only dots.
+- `path` is the sub-path under the proxy prefix, for example `api/s/default/stat/device`. Leading slashes are stripped. Every segment uses the same character set as `console_id` and cannot be empty, `.` or `..`; one trailing slash is allowed. The whole path is capped at 2048 characters. `?`, `#`, `%` and `\` are refused: on the `get` tools, pass query strings through `params`.
+
+```python
+devices = await mcp.call_tool(
+    "connector_network_get",
+    {"console_id": "70A7...8EC3:1093004219", "path": "api/s/default/stat/device"},
+)
+```
+
 ## Phase 4: Mutating Tools
 
 All Phase 4 tools modify UniFi configuration and require safety mechanisms.
@@ -2031,6 +2075,14 @@ Create a new network/VLAN.
 #### `update_network` & `delete_network`
 
 Modify or remove networks. Requires `confirm=True`.
+
+#### `update_site_to_site_vpn`
+
+Update a site-to-site VPN's `networkconf` entry. Requires `confirm=True`.
+
+**Parameters:** `site_id`, `vpn_id`, `name`, `enabled`, `ipsec_peer_ip`, `remote_vpn_subnets`, `x_ipsec_pre_shared_key`, **`confirm`**, **`dry_run`**
+
+`vpn_id` must be a 24-character hex ObjectId (or a UUID), as returned by `list_site_to_site_vpns`. It is lowercased before use, and anything else raises `ValidationError` before the controller is contacted. `get_site_to_site_vpn` filters the list client-side and does not apply this check.
 
 ### Device Control
 

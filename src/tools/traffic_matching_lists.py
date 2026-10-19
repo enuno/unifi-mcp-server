@@ -15,8 +15,10 @@ from ..utils import (
     validate_limit_offset,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 
 
+@read_tool
 async def list_traffic_matching_lists(
     site_id: str,
     settings: Settings,
@@ -59,6 +61,7 @@ async def list_traffic_matching_lists(
         return [TrafficMatchingList(**lst).model_dump() for lst in paginated]
 
 
+@read_tool
 async def get_traffic_matching_list(
     site_id: str,
     list_id: str,
@@ -101,6 +104,7 @@ async def get_traffic_matching_list(
         return TrafficMatchingList(**list_data).model_dump()
 
 
+@write_tool
 async def create_traffic_matching_list(
     site_id: str,
     list_type: str,
@@ -205,6 +209,7 @@ async def create_traffic_matching_list(
         raise
 
 
+@write_tool
 async def update_traffic_matching_list(
     site_id: str,
     list_id: str,
@@ -337,6 +342,7 @@ async def update_traffic_matching_list(
         raise
 
 
+@write_tool
 async def delete_traffic_matching_list(
     site_id: str,
     list_id: str,

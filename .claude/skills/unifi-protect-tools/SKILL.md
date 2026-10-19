@@ -103,4 +103,3 @@ Do not write audit code; the registry wrapper audits every mutating call. A tool
 ## Known defects (not fixed)
 
 - `list_protect_device_updates` is defined once, in `src/tools/protect_devices.py`. `src/tools/protect_events.py` imports it for its two compatibility wrappers; `register_module_tools` skips imported functions, so it registers once. `TestToolModuleSets` in `tests/unit/test_main_runtime.py` fails if a tool name is defined in two modules.
-- `MUTATING_TOOLS_WITHOUT_GATE` in `src/tool_registry.py` still lists Protect tools that now have gates. It is harmless.

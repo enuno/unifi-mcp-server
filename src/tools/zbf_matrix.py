@@ -26,11 +26,13 @@ from ..api.client import UniFiClient  # noqa: F401
 from ..config import Settings
 from ..models.zbf_matrix import ApplicationBlockRule, ZonePolicy, ZonePolicyMatrix  # noqa: F401
 from ..utils import audit_action, get_logger, validate_confirmation  # noqa: F401, validate_site_id
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import validate_site_id
 
 logger = get_logger(__name__)
 
 
+@read_tool
 async def get_zbf_matrix(site_id: str, settings: Settings) -> dict[str, Any]:
     """Retrieve zone-to-zone policy matrix.
 
@@ -67,6 +69,7 @@ async def get_zbf_matrix(site_id: str, settings: Settings) -> dict[str, Any]:
     )
 
 
+@read_tool
 async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> list[dict[str, Any]]:
     """Get policies for a specific zone.
 
@@ -102,6 +105,7 @@ async def get_zone_policies(site_id: str, zone_id: str, settings: Settings) -> l
     )
 
 
+@write_tool
 async def update_zbf_policy(
     site_id: str,
     source_zone_id: str,
@@ -156,6 +160,7 @@ async def update_zbf_policy(
     )
 
 
+@write_tool
 async def block_application_by_zone(
     site_id: str,
     zone_id: str,
@@ -209,6 +214,7 @@ async def block_application_by_zone(
     )
 
 
+@read_tool
 async def list_blocked_applications(
     site_id: str, zone_id: str | None = None, settings: Settings | None = None
 ) -> list[dict[str, Any]]:
@@ -246,6 +252,7 @@ async def list_blocked_applications(
     )
 
 
+@read_tool
 async def get_zone_matrix_policy(
     site_id: str,
     source_zone_id: str,
@@ -288,6 +295,7 @@ async def get_zone_matrix_policy(
     )
 
 
+@write_tool
 async def delete_zbf_policy(
     site_id: str,
     source_zone_id: str,

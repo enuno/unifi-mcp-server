@@ -7,12 +7,14 @@ from fastmcp.server.auth import AccessToken
 
 from src.access import (
     LOCAL_PRINCIPAL,
+    PermissionDeniedError,
     Principal,
     current_principal,
     request_principal,
     token_fingerprint,
 )
 from src.tool_registry import _make_tool_wrapper
+from src.utils import tool_kind
 
 TOKEN = "s3cret-bearer-token-value"  # pragma: allowlist secret
 
@@ -54,6 +56,7 @@ async def test_wrapper_binds_principal_for_the_call_only(monkeypatch: pytest.Mon
     monkeypatch.setattr("src.access.get_access_token", _access_token)
     seen: list[Any] = []
 
+    @tool_kind.read_tool
     async def spy(site_id: str, settings: Any = None) -> None:
         seen.append(current_principal.get())
 
@@ -137,3 +140,66 @@ def test_issued_token_claims_become_the_principal(monkeypatch: pytest.MonkeyPatc
 def test_local_role_can_be_lowered():
     assert request_principal("viewer").role == "viewer"
     assert request_principal("viewer").break_glass is True
+
+
+@pytest.mark.parametrize("role", ["viewer", "operator", "admin"])
+def test_static_token_role_becomes_the_principal(monkeypatch: pytest.MonkeyPatch, role):
+    monkeypatch.setattr(
+        "src.access.get_access_token",
+        lambda: AccessToken(
+            token=TOKEN, client_id="mcp-client", scopes=[], claims={"static_role": role}
+        ),
+    )
+
+    principal = request_principal()
+
+    assert principal.id == f"env:{token_fingerprint(TOKEN)}"
+    assert principal.role == role
+    assert principal.break_glass is False
+
+
+def test_static_fleet_admin_token_stays_break_glass(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "src.access.get_access_token",
+        lambda: AccessToken(
+            token=TOKEN, client_id="mcp-client", scopes=[], claims={"static_role": "fleet-admin"}
+        ),
+    )
+
+    principal = request_principal()
+
+    assert principal.role == "fleet-admin"
+    assert principal.break_glass is True
+
+
+def test_static_token_with_unknown_role_is_refused(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "src.access.get_access_token",
+        lambda: AccessToken(
+            token=TOKEN, client_id="mcp-client", scopes=[], claims={"static_role": "root"}
+        ),
+    )
+
+    with pytest.raises(PermissionDeniedError, match="Unknown role"):
+        request_principal()
+
+
+async def test_static_viewer_token_cannot_write(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        "src.access.get_access_token",
+        lambda: AccessToken(
+            token=TOKEN, client_id="mcp-client", scopes=[], claims={"static_role": "viewer"}
+        ),
+    )
+    calls: list[str] = []
+
+    @tool_kind.write_tool
+    async def change_something(site_id: str, settings: Any = None) -> None:
+        calls.append(site_id)
+
+    settings = type("S", (), {"dry_run": False, "metrics_enabled": False})()
+    wrapper = _make_tool_wrapper(change_something, settings, tier="write")
+
+    with pytest.raises(PermissionDeniedError, match="needs the 'write' tier"):
+        await wrapper("default")
+    assert calls == []

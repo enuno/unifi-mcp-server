@@ -20,6 +20,7 @@ from ..tool_registry import TOOL_TIERS, _make_tool_wrapper
 from ..utils.audit import get_audit_logger
 from ..utils.audit_verify import ChainKeyMissingError
 from ..utils.exceptions import ValidationError
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 from .db import audit_store
 from .postgres_registry import PostgresRegistry
@@ -53,6 +54,7 @@ def _optional_bool(value: bool | str | None) -> bool | None:
 def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
     """Return the registry management tools bound to ``registry``."""
 
+    @write_tool
     async def register_controller(
         name: str,
         api_type: str,
@@ -131,6 +133,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
         await registry.changed()
         return {"registered": summary}
 
+    @write_tool
     async def update_controller(
         name: str,
         local_host: str | None = None,
@@ -200,6 +203,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
         await registry.changed()
         return {"updated": summary}
 
+    @write_tool
     async def register_cloud_account(
         name: str,
         api_key: str,
@@ -238,6 +242,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
         )
         return {"registered": summary}
 
+    @write_tool
     async def rotate_fleet_credentials(
         confirm: bool | str = False,
         dry_run: bool | str = False,
@@ -274,6 +279,7 @@ def build_admin_tools(registry: PostgresRegistry) -> list[Any]:
 def build_token_tools(tokens: TokenStore) -> list[Any]:
     """Return the API token management tools bound to ``tokens``."""
 
+    @write_tool
     async def create_api_token(
         name: str,
         role: str,
@@ -324,6 +330,7 @@ def build_token_tools(tokens: TokenStore) -> list[Any]:
             "metadata": info.__dict__,
         }
 
+    @read_tool
     async def list_api_tokens(settings: Settings | None = None) -> dict[str, Any]:
         """List issued API tokens: names, roles, filters and dates, never token values.
 
@@ -335,6 +342,7 @@ def build_token_tools(tokens: TokenStore) -> list[Any]:
         """
         return {"tokens": [info.__dict__ for info in await tokens.list()]}
 
+    @write_tool
     async def revoke_api_token(
         name: str,
         confirm: bool | str = False,
@@ -357,6 +365,7 @@ def build_token_tools(tokens: TokenStore) -> list[Any]:
             return {"dry_run": True, "would_revoke": name}
         return {"revoked": (await tokens.revoke(name)).__dict__}
 
+    @write_tool
     async def update_api_token_role(
         name: str,
         role: str,
@@ -397,6 +406,7 @@ def build_audit_tools(registry: PostgresRegistry, config: Settings) -> list[Any]
     """Return the audit store query tools."""
     engine = registry.store.engine
 
+    @read_tool
     async def search_audit_log(
         since: str | None = None,
         until: str | None = None,
@@ -443,6 +453,7 @@ def build_audit_tools(registry: PostgresRegistry, config: Settings) -> list[Any]
         records = [audit._decrypt_entry(json.loads(text)) for _, text in rows]
         return {"records": records, "next_cursor": next_cursor}
 
+    @read_tool
     async def verify_audit_chain(settings: Settings | None = None) -> dict[str, Any]:
         """Check the audit trail's hash chains for edited, missing or reordered records.
 
@@ -467,6 +478,7 @@ def build_audit_tools(registry: PostgresRegistry, config: Settings) -> list[Any]
             "chain_heads": await audit_store.chain_heads(engine),
         }
 
+    @read_tool
     async def export_audit_log(
         since: str | None = None,
         until: str | None = None,

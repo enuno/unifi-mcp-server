@@ -32,6 +32,7 @@ from ..utils import (
     sanitize_log_message,
     validate_site_id,
 )
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool
 
 logger = get_logger(__name__)
@@ -85,6 +86,7 @@ def _first_or_raise(response: Any, group_id: str) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
+@read_tool
 async def list_firewall_groups(
     site_id: str,
     settings: Settings,
@@ -128,6 +130,7 @@ async def list_firewall_groups(
         return [FirewallGroup(**g).model_dump(by_alias=False) for g in items]
 
 
+@read_tool
 async def get_firewall_group(
     group_id: str,
     site_id: str,
@@ -159,6 +162,7 @@ async def get_firewall_group(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def create_firewall_group(
     name: str,
     group_type: str,
@@ -227,6 +231,7 @@ async def create_firewall_group(
         return FirewallGroup(**data).model_dump(by_alias=False)
 
 
+@write_tool
 async def create_port_group(
     name: str,
     ports: list[str],
@@ -252,6 +257,7 @@ async def create_port_group(
     )
 
 
+@write_tool
 async def create_address_group(
     name: str,
     addresses: list[str],
@@ -278,6 +284,7 @@ async def create_address_group(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def update_firewall_group(
     group_id: str,
     site_id: str,
@@ -360,6 +367,7 @@ async def update_firewall_group(
 # --------------------------------------------------------------------------- #
 
 
+@write_tool
 async def delete_firewall_group(
     group_id: str,
     site_id: str,

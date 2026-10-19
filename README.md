@@ -134,13 +134,15 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 | `UNIFI_API_KEY` | UniFi API key (required) | — |
 | `UNIFI_API_TYPE` | `local`, `cloud-ea` or `cloud-v1` | `cloud-ea` |
 | `UNIFI_LOCAL_HOST` / `UNIFI_LOCAL_PORT` | Console address in `local` mode | — / `443` |
-| `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate | `false` |
+| `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate. `false` logs a warning at startup | `true` |
+| `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) for a self-signed console, instead of turning verification off | — |
 | `UNIFI_DEFAULT_SITE` | Site used when a tool call names none | `default` |
 | `UNIFI_SITE_MANAGER_ENABLED` | Enable the cloud tools (Site Manager, Mobility, InnerSpace, Carrier) | `false` |
 | `UNIFI_PROFILE` | Register only one group of tools ([profiles](#tool-profiles-and-safety-controls)) | all |
 | `UNIFI_READ_ONLY` / `UNIFI_DRY_RUN` | Read-only or preview-only server | `false` |
+| `DEBUG` | Registers `debug_api_request` (raw GET/DELETE, destructive tier, removed by read-only). Leave unset in production | unset |
 | `MCP_SERVER_TRANSPORT` | `stdio`, `streamable_http`, `http` or `sse` | `stdio` |
-| `MCP_AUTH_TOKEN` | Bearer token, required on network transports | — |
+| `MCP_AUTH_TOKEN` | Bearer token, required on network transports; `viewer:<token>` (or `operator:`, `admin:`) limits a token's role | — |
 | `REDIS_URL` | Optional response cache | — |
 | `WEBHOOK_SECRET` | HMAC secret for incoming UniFi webhooks | — |
 | `DATABASE_URL` | Turns on fleet mode (Postgres) | — |
@@ -223,6 +225,7 @@ Counts include the four fleet tools every profile gets. An unknown profile logs 
 
 - Every mutating tool requires `confirm=True`, and `dry_run=True` returns the change it would make without making it.
 - `UNIFI_READ_ONLY=true` leaves mutating tools out of the tool list entirely. `UNIFI_DRY_RUN=true` forces every mutating call into preview mode.
+- `DEBUG=true` adds `debug_api_request`, a raw GET or DELETE to any controller endpoint. It is a destructive-tier tool, a DELETE needs `confirm=True`, and read-only mode removes it. Leave `DEBUG` unset in production.
 - With tokens, each tool has a risk tier (`read`, `write`, `destructive`) and each role a set of tiers: `viewer` reads, `operator` writes, and `admin` can also run destructive tools, including deletes, restores, restarts, client blocking and firewall policy changes. See [API.md](API.md#access-control).
 - Mutations are written to a hash-chained JSON-lines audit log (Postgres in fleet mode), with optional field encryption and SIEM export. See [SECURITY.md](SECURITY.md).
 - Inputs are validated with Pydantic, and credentials are redacted from logs.
@@ -259,7 +262,7 @@ services:
       - "127.0.0.1:3000:3000"
 ```
 
-The repository's [docker-compose.yml](docker-compose.yml) adds Redis and the MCP Toolbox dashboard ([MCP_TOOLBOX.md](MCP_TOOLBOX.md)); copy `.env.docker.example` to `.env` and run `make compose-up`.
+The repository's [docker-compose.yml](docker-compose.yml) adds Redis and the MCP Toolbox dashboard ([MCP_TOOLBOX.md](MCP_TOOLBOX.md)); copy `.env.docker.example` to `.env` and run `make compose-up`. That example starts read-only (`UNIFI_READ_ONLY=true`) with a `viewer` stdio caller (`UNIFI_STDIO_ROLE=viewer`); to allow changes, set `UNIFI_READ_ONLY=false` and raise `UNIFI_STDIO_ROLE` to `operator`, or `admin` for destructive changes.
 
 - **Ansible:** [deploy/ansible/](deploy/ansible/README.md) deploys the server alone, a single-host fleet (server, worker, Redis, Postgres), or replicas behind nginx on several hosts. To have an AI agent run the deployment, start from a prompt in [docs/deploy-prompts/](docs/deploy-prompts/README.md).
 - **Kubernetes:** [deploy/helm/unifi-mcp/](deploy/helm/unifi-mcp/README.md) is a Helm chart for the server alone or in fleet mode with workers, taking every credential from an existing Secret.
@@ -349,7 +352,7 @@ Contributions from people and AI coding agents are welcome. See [CONTRIBUTING.md
 2. Write tests first, keep new code at 80% coverage or better, and run `make ci`.
 3. Use conventional commit messages (`feat: ...`, `fix: ...`) and open a pull request.
 
-Issues with `[Bug]` in the title get an automated first analysis ([details](CONTRIBUTING.md#automated-workflows)).
+Issues with `[Bug]` in the title opened by a maintainer or collaborator get an automated first analysis; other reports are triaged by hand ([details](CONTRIBUTING.md#automated-workflows)).
 
 ## Security
 

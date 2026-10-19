@@ -10,11 +10,12 @@
       - groups.get('postgres', []) | length == 0 or vault_postgres_password | default('') | length > 0
       - groups.get('redis', []) | length == 0 or vault_redis_password | default('') | length > 0
       - unifi_mcp_audit_retention_days | string | length == 0 or vault_audit_chain_key | default('') | length > 0
+      - unifi_mcp_siem_targets | length == 0 or vault_audit_chain_key | default('') | length > 0
     fail_msg: >-
       Set vault_unifi_api_key, vault_mcp_auth_token (32+ characters), and with
       Postgres vault_postgres_password, vault_fleet_credential_key and
       vault_runtime_db_password, with Redis vault_redis_password
-      (vault.yml.example), vault_audit_chain_key for audit retention, and
+      (vault.yml.example), vault_audit_chain_key for audit retention or SIEM export, and
       unifi_mcp_local_host for the local API.
     quiet: true
 

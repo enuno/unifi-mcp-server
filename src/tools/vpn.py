@@ -6,8 +6,10 @@ from ..api import UniFiClient
 from ..config import Settings
 from ..models.vpn import VPNServer, VPNTunnel
 from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_site_id
+from ..utils.tool_kind import read_tool
 
 
+@read_tool
 async def list_vpn_tunnels(
     site_id: str,
     settings: Settings,
@@ -46,6 +48,7 @@ async def list_vpn_tunnels(
         return [VPNTunnel(**tunnel).model_dump() for tunnel in paginated]
 
 
+@read_tool
 async def list_vpn_servers(
     site_id: str,
     settings: Settings,

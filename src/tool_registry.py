@@ -31,6 +31,7 @@ from .utils.audit import AuditLogger, ToolCallRecorder, get_audit_logger
 from .utils.exceptions import ResourceNotFoundError, ValidationError
 from .utils.logger import get_logger
 from .utils.metrics import REGISTRY as METRICS
+from .utils.tool_kind import UndeclaredToolError, declared_kind
 from .utils.validators import coerce_bool
 
 #: Type of the ``fresh`` argument cached read tools gain.
@@ -50,31 +51,11 @@ ControllerArg = Annotated[
     ),
 ]
 
-#: Parameters that mark a tool as state-changing.
+#: Parameters that only a write tool may take.
 #:
-#: Every mutating tool in this codebase takes a ``confirm`` and/or ``dry_run``
-#: parameter, so the signature itself is a reliable classifier — and one that
-#: stays correct as new tools are added, unlike a hand-maintained name list.
+#: A tool declared with ``@read_tool`` that takes either is refused at
+#: registration: the declaration and the signature disagree.
 _MUTATION_MARKERS = ("confirm", "dry_run")
-
-#: Mutating tools that do not (yet) carry a ``confirm``/``dry_run`` parameter.
-#:
-#: These are listed explicitly so read-only mode does not expose them. This set
-#: is a *classification* hint only; it does not change the tools' behaviour.
-#: Entries should be removed as the corresponding tools gain proper gates.
-MUTATING_TOOLS_WITHOUT_GATE = frozenset(
-    {
-        "create_protect_live_view",
-        "run_speed_test",
-        "send_protect_alarm_webhook",
-        "update_protect_chime",
-        "update_protect_device",
-        "update_protect_light",
-        "update_protect_live_view",
-        "update_protect_sensor",
-        "update_protect_viewer",
-    }
-)
 
 
 #: Mutating tools whose name starts with one of these are always destructive,
@@ -94,6 +75,7 @@ DESTRUCTIVE_TOOLS = frozenset(
         "connector_protect_patch",
         "connector_protect_post",
         "connector_protect_put",
+        "debug_api_request",
         # Restore, re-image, or hand a device to another controller.
         "migrate_device",
         "restore_backup",
@@ -170,23 +152,48 @@ def _request_ids() -> tuple[str | None, str | None]:
 def is_mutating_tool(fn: Any) -> bool:
     """Return whether *fn* can change controller state.
 
-    A tool counts as mutating when its signature carries one of the mutation
-    markers (``confirm``/``dry_run``), or when it is listed in
-    :data:`MUTATING_TOOLS_WITHOUT_GATE`.
+    The answer is the tool's ``@read_tool``/``@write_tool`` declaration
+    (:mod:`src.utils.tool_kind`). A function with no declaration counts as
+    mutating, so a missing declaration can only hide a tool, never expose one.
 
     Args:
         fn: The tool function to classify.
 
     Returns:
-        True if the tool can change state, False if it is read-only.
+        True unless the tool is declared read-only.
     """
-    if getattr(fn, "__name__", "") in MUTATING_TOOLS_WITHOUT_GATE:
-        return True
-    try:
-        params = inspect.signature(fn).parameters
-    except (TypeError, ValueError):  # pragma: no cover - defensive
-        return True
-    return any(marker in params for marker in _MUTATION_MARKERS)
+    return declared_kind(fn) != "read"
+
+
+def check_tool_declaration(fn: Any) -> None:
+    """Refuse a tool whose read/write declaration is missing or contradicts it.
+
+    Args:
+        fn: The tool function about to be registered.
+
+    Raises:
+        UndeclaredToolError: If *fn* has no ``@read_tool``/``@write_tool``
+            declaration, or is declared read but takes ``confirm`` or ``dry_run``.
+    """
+    name = getattr(fn, "__name__", repr(fn))
+    module = getattr(fn, "__module__", "?")
+    kind = declared_kind(fn)
+    if kind is None:
+        raise UndeclaredToolError(
+            f"Tool {module}.{name} has no read/write declaration: decorate it with "
+            "@read_tool or @write_tool from src.utils.tool_kind"
+        )
+    if kind == "read":
+        try:
+            params = inspect.signature(fn).parameters
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            return
+        markers = [m for m in _MUTATION_MARKERS if m in params]
+        if markers:
+            raise UndeclaredToolError(
+                f"Tool {module}.{name} is declared @read_tool but takes "
+                f"{', '.join(markers)}, which only write tools take"
+            )
 
 
 def _get_registered_tool_names(mcp: FastMCP) -> set[str]:
@@ -257,6 +264,10 @@ def _make_tool_wrapper(
     Returns:
         An async callable with the ``settings`` parameter removed from its
         visible signature.
+
+    Raises:
+        UndeclaredToolError: If *fn* has no ``@read_tool``/``@write_tool``
+            declaration; see :func:`check_tool_declaration`.
     """
     sig = inspect.signature(fn)
     params = sig.parameters
@@ -272,10 +283,16 @@ def _make_tool_wrapper(
     # filtered at registration), so forcing here is always safe.
     force_dry_run = "dry_run" in params
 
+    # Every tool that takes ``confirm`` is refused here unless the caller
+    # confirmed or asked for a preview, so a handler that forgets the check, or
+    # tests the raw string with a bare ``if``, cannot write unconfirmed.
+    requires_confirm = "confirm" in params
+
     # Metric labels must match the public MCP tool name, not the private
     # module-level spelling (tools are defined as ``_list_devices`` but
     # registered as ``list_devices``).
     metric_tool_name = fn.__name__.lstrip("_")
+    check_tool_declaration(fn)
     mutating = is_mutating_tool(fn)
     tier = tier or tool_tier(fn)
     module = module or fn.__module__.rsplit(".", 1)[-1]
@@ -286,6 +303,10 @@ def _make_tool_wrapper(
 
         family = cache_family(module, metric_tool_name)
         ttl = CacheConfig.get_ttl(family) if family else 0
+    # UNIFI_AUDIT_READS: give read calls the same attempt and outcome records.
+    # The outcome never carries the tool's result, so no response payload
+    # (client lists, device inventory) reaches the audit store.
+    audit_reads = getattr(settings, "audit_reads", False) is True
     role_setting = getattr(settings, "stdio_role", None)
     local_role = cast(Role, role_setting if role_setting in ROLES else "fleet-admin")
 
@@ -298,12 +319,14 @@ def _make_tool_wrapper(
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             _coerce_dry_run(kwargs)
+            _coerce_confirm(kwargs)
             requested = kwargs.pop("controller", None)
             fresh = coerce_bool(kwargs.pop("fresh", False)) if family is not None else False
             principal = request_principal(local_role)
             audit = _audit_logger_for(settings)
-            # Reads are not audited unless refused; every mutating call is (plan §3.7).
-            audited = audit is not None and (mutating or always_audit)
+            # Every mutating call is audited (plan §3.7); reads only when refused,
+            # unless UNIFI_AUDIT_READS is on.
+            audited = audit is not None and (mutating or always_audit or audit_reads)
             context: dict[str, Any] = {}
             if audit is not None:
                 session_id, request_id = _request_ids()
@@ -353,7 +376,7 @@ def _make_tool_wrapper(
                     controller, call_settings = resolution.name, resolution.settings
                     labels = dict(resolution.labels)
             except (ResourceNotFoundError, ValidationError) as e:
-                if mutating:
+                if mutating or audited:
                     await record_denied(e, requested)
                 raise
 
@@ -366,6 +389,11 @@ def _make_tool_wrapper(
 
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
+            if requires_confirm:
+                unconfirmed = _confirmation_refusal(metric_tool_name, public_sig, args, kwargs)
+                if unconfirmed is not None:
+                    await record_denied(unconfirmed, controller)
+                    raise unconfirmed
             cache_key = None
             if family is not None and controller is not None:
                 cache_arguments = dict(public_sig.bind_partial(*args, **kwargs).arguments)
@@ -444,8 +472,13 @@ def _make_tool_wrapper(
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             _coerce_dry_run(kwargs)
+            _coerce_confirm(kwargs)
             if force_dry_run and getattr(settings, "dry_run", False):
                 kwargs["dry_run"] = True
+            if requires_confirm:
+                refusal = _confirmation_refusal(metric_tool_name, public_sig, args, kwargs)
+                if refusal is not None:
+                    raise refusal
             kwargs["settings"] = settings
             if not getattr(settings, "metrics_enabled", False):
                 return fn(*args, **kwargs)
@@ -475,6 +508,38 @@ def _coerce_dry_run(kwargs: dict[str, Any]) -> None:
             kwargs["dry_run"] = value.strip().lower() not in ("false", "0", "no", "")
         else:
             kwargs["dry_run"] = coerce_bool(value)
+
+
+def _coerce_confirm(kwargs: dict[str, Any]) -> None:
+    """Normalise a caller-supplied ``confirm`` to a bool in place.
+
+    Only ``"true"``, ``"1"`` and ``"yes"`` confirm; any other string, including
+    ``"false"``, does not. Handlers then see a real bool, so a bare
+    ``if not confirm`` reads the caller's intent rather than string truthiness.
+    """
+    if "confirm" in kwargs:
+        kwargs["confirm"] = coerce_bool(kwargs["confirm"])
+
+
+def _confirmation_refusal(
+    name: str, sig: inspect.Signature, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> ValidationError | None:
+    """Return the error refusing an unconfirmed call, or None if it may proceed.
+
+    A call proceeds when ``confirm`` is true or ``dry_run`` is true (a preview
+    changes nothing). Both are read after coercion, so ``"false"`` counts as
+    false. If the arguments do not bind, only the keyword arguments are read,
+    so a malformed call is still refused rather than waved through.
+    """
+    try:
+        arguments: dict[str, Any] = dict(sig.bind_partial(*args, **kwargs).arguments)
+    except TypeError:
+        arguments = kwargs
+    if coerce_bool(arguments.get("dry_run", False)) or coerce_bool(arguments.get("confirm", False)):
+        return None
+    return ValidationError(
+        f"Operation '{name}' requires confirmation. Set confirm=true to proceed."
+    )
 
 
 def _with_controller_param(sig: inspect.Signature) -> inspect.Signature:
@@ -549,6 +614,8 @@ def register_module_tools(
             continue
         if not inspect.iscoroutinefunction(obj):
             continue
+        # Every tool declares read or write; refuse to start rather than guess.
+        check_tool_declaration(obj)
         # Read-only mode: never expose state-changing tools to the client.
         # Filtering at registration means the tool is absent from the MCP tool
         # list entirely, rather than relying on a caller-supplied ``confirm``.

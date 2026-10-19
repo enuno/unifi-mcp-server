@@ -11,7 +11,10 @@ from src.utils.validators import (
     validate_ip_or_cidr,
     validate_limit_offset,
     validate_mac_address,
+    validate_object_id,
+    validate_path_segment,
     validate_port,
+    validate_proxy_path,
     validate_site_id,
 )
 
@@ -501,3 +504,98 @@ class TestValidatePortStrict:
     def test_rejects_non_integers(self, value):
         with pytest.raises(ValidationError, match="Invalid port number"):
             validate_port(value)  # type: ignore[arg-type]
+
+
+class TestValidateObjectId:
+    def test_object_id_lowercased(self):
+        assert (
+            validate_object_id("5F1A2B3C4D5E6F7A8B9C0D1E", "vpn_id") == "5f1a2b3c4d5e6f7a8b9c0d1e"
+        )
+
+    def test_uuid_accepted(self):
+        uuid = "88f7af54-98f8-306a-a1c7-c9349722b1f6"
+        assert validate_object_id(uuid) == uuid
+
+    @pytest.mark.parametrize(
+        "value",
+        ["", None, 12, "vpn-1", "5f1a2b3c4d5e6f7a8b9c0d1e/..", "../5f1a2b3c4d5e6f7a8b9c0d1e"],
+    )
+    def test_rejected_with_field_name(self, value):
+        with pytest.raises(ValidationError, match="vpn_id"):
+            validate_object_id(value, "vpn_id")
+
+    @pytest.mark.parametrize(
+        "value", ["5f1a2b3c4d5e6f7a8b9c0d1e\n", "88f7af54-98f8-306a-a1c7-c9349722b1f6\n"]
+    )
+    def test_trailing_newline_rejected(self, value):
+        with pytest.raises(ValidationError):
+            validate_object_id(value, "vpn_id")
+        with pytest.raises(ValidationError):
+            validate_device_id(value)
+
+
+class TestValidatePathSegment:
+    @pytest.mark.parametrize("value", ["webhook-1", "front.door_v2", "a~b", "abc:123", "...a"])
+    def test_accepted(self, value):
+        assert validate_path_segment(value) == value
+
+    def test_whitespace_stripped(self):
+        assert validate_path_segment("  hook  ", "webhook_id") == "hook"
+
+    @pytest.mark.parametrize(
+        "value",
+        ["", "   ", None, ".", "..", "...", "a/b", "a\\b", "a?b", "a#b", "%2e", "a b", "x" * 257],
+    )
+    def test_rejected_with_field_name(self, value):
+        with pytest.raises(ValidationError, match="webhook_id"):
+            validate_path_segment(value, "webhook_id")
+
+
+class TestValidateProxyPath:
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("api/s/default/stat/device", "api/s/default/stat/device"),
+            ("/api/s/default/stat/device", "api/s/default/stat/device"),
+            ("//v1/cameras", "v1/cameras"),
+            ("v1/cameras/", "v1/cameras/"),
+            ("v2/api/site/default/trafficrules", "v2/api/site/default/trafficrules"),
+            (
+                "api/s/default/rest/user/5f1a2b3c4d5e6f7a8b9c0d1e",
+                "api/s/default/rest/user/5f1a2b3c4d5e6f7a8b9c0d1e",
+            ),
+            ("v1/files/backup.unf", "v1/files/backup.unf"),
+        ],
+    )
+    def test_accepted(self, path, expected):
+        assert validate_proxy_path(path) == expected
+
+    @pytest.mark.parametrize("path", ["", "  ", "/", "///", None])
+    def test_empty_rejected(self, path):
+        with pytest.raises(ValidationError, match="path must not be empty"):
+            validate_proxy_path(path)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "..",
+            "../v1/hosts",
+            "api/../../v1/hosts",
+            "api/./s",
+            "api/s/..",
+            "api//s",
+            "api/s?x=1",
+            "api/s#x",
+            "api/%2e%2e/x",
+            "api\\..\\x",
+            "api/s x",
+            "api/s\t",
+        ],
+    )
+    def test_traversal_and_query_rejected(self, path):
+        with pytest.raises(ValidationError, match="Invalid path"):
+            validate_proxy_path(path)
+
+    def test_too_long_rejected(self):
+        with pytest.raises(ValidationError, match="longer than"):
+            validate_proxy_path("a/" * 1100)

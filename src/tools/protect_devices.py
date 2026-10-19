@@ -14,6 +14,7 @@ from ..models import (
     ProtectSensor,
 )
 from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
 
@@ -43,6 +44,7 @@ def _extract_item(response: Any) -> dict[str, Any]:
     return {}
 
 
+@read_tool
 async def list_protect_devices(
     settings: Settings,
     limit: int | None = None,
@@ -73,6 +75,7 @@ async def list_protect_devices(
     }
 
 
+@read_tool
 async def list_protect_device_updates(
     settings: Settings,
     limit: int | None = None,
@@ -104,6 +107,7 @@ async def list_protect_device_updates(
     }
 
 
+@read_tool
 async def get_protect_device(device_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect device."""
     logger = get_logger(__name__, settings.log_level)
@@ -118,6 +122,7 @@ async def get_protect_device(device_id: str, settings: Settings) -> dict[str, An
     return device.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_device(
     device_id: str,
     settings: Settings,
@@ -185,6 +190,7 @@ async def update_protect_device(
     return device.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_lights(
     settings: Settings,
     limit: int | None = None,
@@ -213,6 +219,7 @@ async def list_protect_lights(
     }
 
 
+@read_tool
 async def get_protect_light(light_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect light."""
     logger = get_logger(__name__, settings.log_level)
@@ -227,6 +234,7 @@ async def get_protect_light(light_id: str, settings: Settings) -> dict[str, Any]
     return light.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_light(
     light_id: str,
     settings: Settings,
@@ -286,6 +294,7 @@ async def update_protect_light(
     return light.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_sensors(
     settings: Settings,
     limit: int | None = None,
@@ -314,6 +323,7 @@ async def list_protect_sensors(
     }
 
 
+@read_tool
 async def get_protect_sensor(sensor_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect sensor."""
     logger = get_logger(__name__, settings.log_level)
@@ -328,6 +338,7 @@ async def get_protect_sensor(sensor_id: str, settings: Settings) -> dict[str, An
     return sensor.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_sensor(
     sensor_id: str,
     settings: Settings,
@@ -395,6 +406,7 @@ async def update_protect_sensor(
     return sensor.model_dump(by_alias=True)
 
 
+@read_tool
 async def list_protect_chimes(
     settings: Settings,
     limit: int | None = None,
@@ -423,6 +435,7 @@ async def list_protect_chimes(
     }
 
 
+@read_tool
 async def get_protect_chime(chime_id: str, settings: Settings) -> dict[str, Any]:
     """Get a single UniFi Protect chime."""
     logger = get_logger(__name__, settings.log_level)
@@ -437,6 +450,7 @@ async def get_protect_chime(chime_id: str, settings: Settings) -> dict[str, Any]
     return chime.model_dump(by_alias=True)
 
 
+@write_tool
 async def update_protect_chime(
     chime_id: str,
     settings: Settings,

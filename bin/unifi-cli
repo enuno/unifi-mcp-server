@@ -4,15 +4,16 @@
 # Example: unifi-cli list-clients --site default
 #
 # Required env vars:
-#   UNIFI_API_KEY      API key (from controller Settings > API Keys)
-#   UNIFI_API_TYPE     local | cloud-v1 | cloud-ea  (default: cloud-v1)
-#   UNIFI_LOCAL_HOST   Gateway IP (local mode only)
+#   UNIFI_API_KEY           API key (Settings > Control Plane > Integrations)
+#   UNIFI_API_TYPE          local | cloud-v1 | cloud-ea  (default: cloud-ea)
+#   UNIFI_LOCAL_HOST        Gateway IP (local mode only)
 #
 # Optional env vars:
-#   UNIFI_SITE         Default site ID (default: default)
-#   UNIFI_VERIFY_SSL   Verify TLS certificates (default: true)
-#   UNIFI_TIMEOUT      Request timeout in seconds (default: 30)
-#   UNIFI_PROFILE      Load only a tool subset: network | devices | security | system | minimal
+#   UNIFI_DEFAULT_SITE      Default site ID (default: default)
+#   UNIFI_LOCAL_VERIFY_SSL  Verify the console's TLS certificate (default: true)
+#   UNIFI_REQUEST_TIMEOUT   Request timeout in seconds (default: 30)
+#   UNIFI_PROFILE           Load only a tool subset: network | devices | security | system |
+#                           minimal | protect | mobility | innerspace | carrier
 
 set -e
 

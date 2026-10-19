@@ -376,7 +376,7 @@ CMD ["python", "src/main.py"]
 - **Container Security:** Docker images scanned with Trivy
 - **Input Validation:** All user inputs validated with Pydantic models
 - **Audit Log Encryption:** Optional Fernet at-rest encryption of audit payload fields (`UNIFI_AUDIT_LOG_KEY`), with non-destructive key rotation
-- **Wrapper-Level Audit:** Every mutating tool call is recorded by the tool wrapper (an `attempt` record before the controller is contacted, then the outcome), along with denied calls and server start, naming the caller and target controller. If the attempt record cannot be written, the call is refused (`UNIFI_AUDIT_FAIL_CLOSED`, default on)
+- **Wrapper-Level Audit:** Every mutating tool call is recorded by the tool wrapper (an `attempt` record before the controller is contacted, then the outcome), along with denied calls and server start, naming the caller and target controller. If the attempt record cannot be written, the call is refused (`UNIFI_AUDIT_FAIL_CLOSED`, default on). With `UNIFI_AUDIT_READS=true`, read calls get the same two records (principal, tool, arguments, outcome; never the response), so a read-only deployment can see what a token read
 - **Encrypted Controller Credentials:** With the Postgres fleet registry, controller and cloud-account API keys are Fernet-encrypted with `UNIFI_FLEET_CREDENTIAL_KEY` before they reach the database; the key never does. The server refuses to start without it, a key that cannot decrypt a credential skips that controller instead of failing the fleet, and `rotate_fleet_credentials` re-encrypts under a new key
 - **Role-Based Access Control:** With the fleet registry, callers use server-issued API tokens (only SHA-256 hashes stored, 90-day default lifetime) with a role (`viewer`, `operator`, `admin`, `fleet-admin`) that grants tool risk tiers, optionally narrowed by tool-module patterns and controller labels. Enforcement happens in the tool wrapper before any controller is contacted, and every refusal is audited. Revocation takes effect within 30 seconds; a database error refuses the token. `MCP_AUTH_TOKEN` and stdio remain break-glass `fleet-admin` callers, flagged in audit records. With or without the registry, an `MCP_AUTH_TOKEN` entry written `<role>:<token>` (for example `viewer:<token>`) gets that role and the same tier enforcement
 - **Append-Only Postgres Audit Store:** With DATABASE_URL, audit records go to `audit_log`, where a trigger refuses UPDATE, DELETE and TRUNCATE for every role, and each server's hash chain is kept with its head in `audit_chain_heads`. `verify_audit_chain` and `search_audit_log` are `fleet-admin` tools, and every query is audited
@@ -413,11 +413,45 @@ CMD ["python", "src/main.py"]
    ```
 
 3. **Audit Logging:**
-   - All mutating operations logged to `audit.log`
-   - Includes timestamp, operation, parameters, result, user (if available)
-   - Separate log for security audit trail
-   - Format: JSON lines for easy parsing
-   - File created mode 0600 (owner-readable only)
+   - Every mutating call, every refused call and server start are recorded by
+     the tool wrapper in `UNIFI_AUDIT_LOG_PATH` (default `audit.log`), or in
+     Postgres with the fleet registry
+   - Each record names the principal, tool, tier, controller, site, the
+     credential-redacted arguments and the outcome
+   - Format: JSON lines, hash-chained; file created mode 0600 (owner-readable only)
+   - Reads are not recorded unless refused. Set `UNIFI_AUDIT_READS=true` to
+     record them too: an `attempt` and an outcome record per read, with the
+     arguments but never the response, so client lists and device inventory
+     stay out of the audit store. Without it, a read-only deployment writes
+     no record of what a token read, and a leaked bearer can pull the whole
+     inventory unseen. `UNIFI_AUDIT_FAIL_CLOSED` then applies to reads as
+     well. Expect two records per read; size rotation and retention for it
+   - Controller and HTTP error text is redacted before it is stored:
+     credential-named values (`"x_passphrase": "..."`, `?apikey=...`,
+     `X-API-KEY: ...`), `Bearer` tokens and `user:password@` in URLs become
+     `***`. Identifiers such as the MAC in `api.err.MacUsed` stay readable,
+     as they do in `parameters`. The match is by key name, so a secret the
+     controller quotes without its key name is not caught; set
+     `UNIFI_AUDIT_LOG_KEY` as well if error text can carry one
+
+   **Three different records.** The server writes three things that can look
+   like an audit trail. Only the first is one:
+
+   | | MCP audit log | A2A audit facility | Application log |
+   |---|---|---|---|
+   | Source | Tool wrapper (`src/utils/audit.py`) | `/a2a/delegate` handler (`src/a2a/audit.py`) | Python `logging`, `LOG_LEVEL` |
+   | Where | `UNIFI_AUDIT_LOG_PATH`, or Postgres `audit_log` with `DATABASE_URL` | `logs/a2a-audit.jsonl` plus an in-memory list | stdout/stderr |
+   | Covers | Mutating, refused and (with `UNIFI_AUDIT_READS`) read MCP tool calls; admin and system events | A2A delegations only; MCP tool calls never appear here | Whatever the code logs |
+   | Redaction | Credentials redacted in arguments and error text; payload encryption with `UNIFI_AUDIT_LOG_KEY` | None: parameters and the tool **result** are written as received | Not guaranteed |
+   | Tamper evidence | Hash chain (HMAC with `UNIFI_AUDIT_CHAIN_KEY`), append-only table, `audit_verify` | None | None |
+   | SIEM export | Yes, `UNIFI_AUDIT_SIEM_TARGETS` | No | Only through your log shipper |
+   | Fail closed | Yes, `UNIFI_AUDIT_FAIL_CLOSED` | No, a failed write is logged and the call goes ahead | No |
+
+   Use the MCP audit log as evidence of who did what. The A2A file holds tool
+   results and is not redacted, so protect it like the controller data it
+   contains, or keep `/a2a/*` unexposed. The application log is for
+   operating the server and carries a one-line `AUDIT:` summary per record,
+   which is no substitute for the record itself.
 
 4. **Audit Log Encryption (issue #22):**
 
@@ -508,7 +542,10 @@ CMD ["python", "src/main.py"]
 
    **SIEM export and anchors:** set `UNIFI_AUDIT_SIEM_TARGETS` to copy every
    stored record (the encrypted-payload form, exactly as written) to one or
-   more destinations:
+   more destinations. Targets require `UNIFI_AUDIT_CHAIN_KEY`, and the server
+   refuses to start without it: an unkeyed SHA-256 chain can be recomputed by
+   whoever edits the records, so the copy and the anchors the SIEM keeps
+   would prove nothing.
 
    | Target | Format |
    |---|---|

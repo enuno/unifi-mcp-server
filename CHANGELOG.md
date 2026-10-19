@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **The MCP Toolbox container sends no telemetry by default.** `docker-compose.yml` pointed the toolbox's OTLP exporter at `https://api.agnost.ai/v1/otel/${AGNOST_ORG_ID}` unconditionally, even with `AGNOST_ENABLED=false` and an empty org ID, while the server's own agnost tracking is opt-in. The endpoint now comes from `TOOLBOX_TELEMETRY_OTLP`, and toolbox exports nothing when it is unset. To keep sending to agnost.ai, set it to that URL with your org ID.
+- **The stock Docker deployment starts read-only.** `docker-compose.yml` and `.env.docker.example` now set `UNIFI_READ_ONLY=true` and `UNIFI_STDIO_ROLE=viewer`, so a copied example registers no mutating tools and none of the fleet token or audit tools. The `viewer` role is a second, independent guard: if read-only is later turned off, the stdio caller can still only run read-tier tools until its role is raised too. Before, compose did not forward either setting, so the container always ran read-write with a `fleet-admin` stdio caller. The server's own defaults are unchanged. To allow changes, set `UNIFI_READ_ONLY=false` and raise `UNIFI_STDIO_ROLE` (`operator` for writes, `admin` for destructive changes, `fleet-admin` for token and audit tools); the steps are in `.env.docker.example`.
 
 ### Fixed
 

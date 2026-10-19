@@ -42,10 +42,14 @@ services:
       UNIFI_MAX_RETRIES: ${UNIFI_MAX_RETRIES:-3}
       UNIFI_PROFILE: ${UNIFI_PROFILE:-network}
 
-      # Safety: UNIFI_READ_ONLY leaves mutating tools out of the tool list;
-      # UNIFI_DRY_RUN forces every mutating call into a preview.
-      UNIFI_READ_ONLY: ${UNIFI_READ_ONLY:-false}
+      # Safe by default: no mutating tools are registered, and the stdio
+      # caller can only read. To allow changes, set UNIFI_READ_ONLY=false and
+      # raise UNIFI_STDIO_ROLE (operator for writes, admin for destructive
+      # changes, fleet-admin for the token and audit tools). UNIFI_DRY_RUN
+      # forces every mutating call into a preview.
+      UNIFI_READ_ONLY: ${UNIFI_READ_ONLY:-true}
       UNIFI_DRY_RUN: ${UNIFI_DRY_RUN:-false}
+      UNIFI_STDIO_ROLE: ${UNIFI_STDIO_ROLE:-viewer}
 
       UNIFI_AUDIT_LOG_PATH: ${UNIFI_AUDIT_LOG_PATH:-/app/audit.log}
       # Rotation renames the file, which a file bind mount (./audit.log below)

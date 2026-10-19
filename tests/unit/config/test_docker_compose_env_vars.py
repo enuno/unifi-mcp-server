@@ -68,8 +68,10 @@ def test_docker_compose_forwards_names_settings_actually_reads():
     )
 
 
-@pytest.mark.parametrize("name", ["UNIFI_READ_ONLY", "UNIFI_DRY_RUN"])
-def test_docker_compose_forwards_safety_switches(name):
+@pytest.mark.parametrize(
+    ("name", "default"), [("UNIFI_READ_ONLY", "true"), ("UNIFI_DRY_RUN", "false")]
+)
+def test_docker_compose_forwards_safety_switches(name, default):
     """The stock compose file can run read-only or preview-only.
 
     With an explicit ``environment:`` block and no ``env_file``, a variable
@@ -77,7 +79,7 @@ def test_docker_compose_forwards_safety_switches(name):
     ``.env`` did nothing.
     """
     env = _compose()["services"]["unifi-mcp"]["environment"]
-    assert env.get(name) == f"${{{name}:-false}}"
+    assert env.get(name) == f"${{{name}:-{default}}}"
     assert name in _settings_aliases()
 
 
@@ -163,3 +165,38 @@ def test_toolbox_telemetry_is_opt_in():
     otlp = [arg for arg in command if "telemetry-otlp" in arg]
     assert otlp == ["--telemetry-otlp=${TOOLBOX_TELEMETRY_OTLP:-}"]
     assert not any("agnost" in arg for arg in command)
+
+
+def _env_file_values(path: Path) -> dict[str, str]:
+    values = {}
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            name, _, value = line.partition("=")
+            values[name.strip()] = value.strip()
+    return values
+
+
+def test_docker_compose_defaults_to_read_only_viewer():
+    """The stock deployment is read-only with a viewer stdio caller.
+
+    The server's own defaults are read-write with a fleet-admin stdio
+    caller; compose lowers both unless the operator escalates in ``.env``.
+    """
+    env = _compose()["services"]["unifi-mcp"]["environment"]
+    assert env["UNIFI_READ_ONLY"] == "${UNIFI_READ_ONLY:-true}"
+    assert env["UNIFI_STDIO_ROLE"] == "${UNIFI_STDIO_ROLE:-viewer}"
+    assert {"UNIFI_READ_ONLY", "UNIFI_STDIO_ROLE"} <= _settings_aliases()
+
+
+def test_docker_env_example_ships_safe_defaults(monkeypatch):
+    example = _env_file_values(ROOT / ".env.docker.example")
+    assert example["UNIFI_READ_ONLY"] == "true"
+    assert example["UNIFI_STDIO_ROLE"] == "viewer"
+
+    monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+    monkeypatch.setenv("UNIFI_READ_ONLY", example["UNIFI_READ_ONLY"])
+    monkeypatch.setenv("UNIFI_STDIO_ROLE", example["UNIFI_STDIO_ROLE"])
+    settings = Settings(_env_file=None)
+    assert settings.read_only is True
+    assert settings.stdio_role == "viewer"

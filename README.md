@@ -349,7 +349,7 @@ Contributions from people and AI coding agents are welcome. See [CONTRIBUTING.md
 2. Write tests first, keep new code at 80% coverage or better, and run `make ci`.
 3. Use conventional commit messages (`feat: ...`, `fix: ...`) and open a pull request.
 
-Issues with `[Bug]` in the title get an automated first analysis ([details](CONTRIBUTING.md#automated-workflows)).
+Issues with `[Bug]` in the title opened by a maintainer or collaborator get an automated first analysis; other reports are triaged by hand ([details](CONTRIBUTING.md#automated-workflows)).
 
 ## Security
 

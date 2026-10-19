@@ -102,6 +102,40 @@ def test_build_auth_provider_refuses_bad_token_entries(raw, message) -> None:
     assert "s3cr3t" not in str(err.value)
 
 
+@pytest.mark.parametrize(
+    "prefix", ["Viewer", "ADMIN", "fleet_admin", "veiwer", "operater", "admn", "fleetadmin"]
+)
+def test_build_auth_provider_refuses_misspelled_role_prefix(prefix) -> None:
+    """A mistyped role must not silently become a fleet-admin token."""
+    main = _reload_main()
+    with pytest.raises(SystemExit, match="misspelled role") as err:
+        main.build_auth_provider(_settings(MCP_AUTH_TOKEN=f"{prefix}:s3cr3t"))
+    assert "s3cr3t" not in str(err.value)
+    assert prefix not in str(err.value)
+
+
+def test_unknown_word_prefix_warns_but_stays_one_token(caplog) -> None:
+    with caplog.at_level("WARNING", logger="src.config.config"):
+        settings = _settings(MCP_AUTH_TOKEN="readonly:s3cr3t")
+        assert settings.mcp_auth_token_roles == {"readonly:s3cr3t": "fleet-admin"}
+    assert "not a role" in caplog.text
+    assert "s3cr3t" not in caplog.text and "readonly" not in caplog.text
+
+
+def test_token_without_word_prefix_does_not_warn(caplog) -> None:
+    with caplog.at_level("WARNING", logger="src.config.config"):
+        settings = _settings(MCP_AUTH_TOKEN="0f3a:9b2c,plain")
+        assert settings.mcp_auth_token_roles == {"0f3a:9b2c": "fleet-admin", "plain": "fleet-admin"}
+    assert "not a role" not in caplog.text
+
+
+def test_auth_token_roles_match_access_roles() -> None:
+    from src.access import ROLES
+    from src.config.config import AUTH_TOKEN_ROLES
+
+    assert tuple(AUTH_TOKEN_ROLES) == tuple(ROLES)
+
+
 def test_auth_token_repeated_with_one_role_is_accepted() -> None:
     settings = _settings(MCP_AUTH_TOKEN="viewer:tok,viewer:tok")
     assert settings.mcp_auth_token_roles == {"tok": "viewer"}

@@ -1,5 +1,8 @@
 """Configuration management for UniFi MCP Server using Pydantic Settings."""
 
+import difflib
+import logging
+import re
 from enum import Enum
 from typing import Any, Literal
 
@@ -27,8 +30,42 @@ class TransportMode(str, Enum):
     STREAMABLE_HTTP = "streamable_http"  # Modern HTTP transport
 
 
+logger = logging.getLogger(__name__)
+
 #: Roles an MCP_AUTH_TOKEN entry may carry as a ``<role>:`` prefix.
 AUTH_TOKEN_ROLES = ("viewer", "operator", "admin", "fleet-admin")
+
+
+_ROLE_SHAPED_PREFIX = re.compile(r"[A-Za-z][A-Za-z_-]*")
+
+
+def _check_unknown_role_prefix(prefix: str) -> None:
+    """Refuse a near-miss role prefix; warn about any other word-like one.
+
+    An entry whose prefix is not one of :data:`AUTH_TOKEN_ROLES` is a whole
+    bare token, which is ``fleet-admin``. A mistyped role (``Viewer:``,
+    ``veiwer:``, ``fleet_admin:``) would therefore hand out full admin while
+    the operator meant to restrict it, so those stop the server. Messages
+    never repeat the prefix, which is part of the secret in that case.
+
+    Raises:
+        ValueError: If the prefix differs from a role only in case, ``_`` for
+            ``-``, or a small misspelling
+    """
+    normalized = prefix.lower().replace("_", "-")
+    if normalized in AUTH_TOKEN_ROLES or difflib.get_close_matches(
+        normalized, AUTH_TOKEN_ROLES, n=1, cutoff=0.8
+    ):
+        raise ValueError(
+            "an MCP_AUTH_TOKEN entry starts with what looks like a misspelled role; "
+            f"roles are written exactly as {', '.join(AUTH_TOKEN_ROLES)}"
+        )
+    logger.warning(
+        "An MCP_AUTH_TOKEN entry contains ':' after a word that is not a role, so the "
+        "whole entry is one fleet-admin token. Roles are written as <role>:<token> "
+        "with one of: %s",
+        ", ".join(AUTH_TOKEN_ROLES),
+    )
 
 
 def _parse_auth_token_entries(raw: str | None) -> dict[str, str]:
@@ -55,6 +92,8 @@ def _parse_auth_token_entries(raw: str | None) -> dict[str, str]:
             if not token:
                 raise ValueError(f"MCP_AUTH_TOKEN entry '{role}:' has no token")
         else:
+            if sep and _ROLE_SHAPED_PREFIX.fullmatch(prefix.strip()):
+                _check_unknown_role_prefix(prefix.strip())
             role, token = "fleet-admin", entry
         if roles.get(token, role) != role:
             # Never echo the token itself.

@@ -104,7 +104,15 @@ class TestVerifier:
     async def test_env_tokens_are_break_glass(self, store):
         access = await FleetTokenVerifier([ENV_TOKEN], store).verify_token(ENV_TOKEN)
 
-        assert access is not None and access.claims == {}
+        assert access is not None and access.claims == {"static_role": "fleet-admin"}
+
+    async def test_env_tokens_carry_their_role(self, store):
+        verifier = FleetTokenVerifier({ENV_TOKEN: "viewer"}, store)
+
+        access = await verifier.verify_token(ENV_TOKEN)
+
+        assert access is not None and access.claims == {"static_role": "viewer"}
+        assert "token_id" not in access.claims
 
     async def test_issued_token_carries_claims(self, store):
         token, _ = await store.create(name="ops", role="operator", created_by="t")

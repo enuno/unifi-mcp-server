@@ -223,19 +223,22 @@ class FleetTokenVerifier(TokenVerifier):
 
     def __init__(
         self,
-        env_tokens: Iterable[str],
+        env_tokens: Iterable[str] | Mapping[str, str],
         store: TokenStore,
         cache_seconds: float = CACHE_SECONDS,
     ) -> None:
         """Create the verifier.
 
         Args:
-            env_tokens: Break-glass tokens from MCP_AUTH_TOKEN
+            env_tokens: Tokens from MCP_AUTH_TOKEN, mapped to their role; a
+                plain iterable makes every token ``fleet-admin``
             store: Where issued tokens are looked up
             cache_seconds: How long a lookup result is reused
         """
         super().__init__()
-        self._env_tokens = [t.encode("utf-8") for t in env_tokens]
+        if not isinstance(env_tokens, Mapping):
+            env_tokens = dict.fromkeys(env_tokens, "fleet-admin")
+        self._env_tokens = [(t.encode("utf-8"), role) for t, role in env_tokens.items()]
         self._store = store
         self._cache_seconds = cache_seconds
         self._cache: dict[str, tuple[float, dict[str, Any] | None]] = {}
@@ -243,8 +246,11 @@ class FleetTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
         """Return an access token with claims, or None to refuse the request."""
         candidate = token.encode("utf-8")
-        if any(hmac.compare_digest(candidate, env) for env in self._env_tokens):
-            return AccessToken(token=token, client_id="mcp-client", scopes=[])
+        for env, role in self._env_tokens:
+            if hmac.compare_digest(candidate, env):
+                return AccessToken(
+                    token=token, client_id="mcp-client", scopes=[], claims={"static_role": role}
+                )
         if not token.startswith(TOKEN_PREFIX):
             return None
 

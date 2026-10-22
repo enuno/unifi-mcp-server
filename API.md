@@ -867,6 +867,56 @@ result = await mcp.call_tool("search_devices", {
 })
 ```
 
+#### `list_pending_devices`
+
+List devices on a site that are waiting to be adopted.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `limit` (integer, optional): Maximum number of devices to return
+- `offset` (integer, optional): Number of devices to skip
+
+**Returns:**
+Array of device objects in the legacy shape (`mac`, `ip`, integer `state`),
+one per device the controller reports with `adopted: false`. The Integration
+v1 API has no pending-devices route, so this reads the legacy `stat/device`
+endpoint and filters it.
+
+The controller assigns a device its `_id` when it adopts it, so **a pending
+device has `id: null`**. Key a pending device by its `mac`, which is the
+identifier `adopt_device` takes. Do not pass `id` to any device tool for a
+pending record.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_pending_devices", {
+    "site_id": "default"
+})
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": null,
+    "name": null,
+    "model": "U7PG2",
+    "type": "uap",
+    "mac": "74:83:c2:aa:bb:cc",
+    "ip": "192.168.2.57",
+    "state": 1,
+    "adopted": false,
+    "version": "6.6.77.15402"
+  }
+]
+```
+
+Fields the controller does not report for an unadopted device come back as
+`null`; the response above omits the remaining optional fields for brevity.
+
 ### Client Management Tools
 
 #### `get_client_details`

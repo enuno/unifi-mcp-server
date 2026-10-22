@@ -566,6 +566,35 @@ class TestListPendingDevices:
             assert called_url == "/ea/sites/site-1/stat/device"
 
     @pytest.mark.asyncio
+    async def test_list_pending_device_without_id(self, mock_settings):
+        """An unadopted device has no controller ``_id`` yet; it is keyed by MAC.
+
+        Seen on a UDM Pro running Network 5.1.33: with one device pending
+        adoption, the tool failed with ``1 validation error for Device: _id
+        Field required``.
+        """
+        pending = {
+            "mac": "74:83:c2:aa:bb:cc",
+            "model": "U7PG2",
+            "type": "uap",
+            "ip": "192.168.2.57",
+            "state": 1,
+            "adopted": False,
+            "version": "6.6.77.15402",
+        }
+        mock_response = {"data": [pending, {**make_device("adopted-1"), "adopted": True}]}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(mock_response)
+
+            result = await list_pending_devices("site-1", mock_settings)
+
+        assert len(result) == 1
+        assert result[0]["mac"] == "74:83:c2:aa:bb:cc"
+        assert result[0]["id"] is None
+        assert result[0]["adopted"] is False
+
+    @pytest.mark.asyncio
     async def test_list_pending_devices_all_adopted(self, mock_settings):
         """A site with every device adopted has nothing pending."""
         mock_response = {"data": [{**make_device(), "adopted": True}]}

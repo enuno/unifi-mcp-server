@@ -9,6 +9,8 @@ This repository ships two sets of skills in `skills/`, one folder per skill:
 
 The root `SKILL.md` is a one-file overview of the whole server (setup, API modes, capability domains, example prompts).
 
+A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify serves it from there. It helps an agent maintain, validate and publish this site's documentation.
+
 ---
 
 ## Operator skills (using the server)
@@ -32,6 +34,8 @@ The root `SKILL.md` is a one-file overview of the whole server (setup, API modes
 | `skills/unifi-cloud-fleet-tools/` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, and the fleet stack |
 
 The developer skills are also kept in `.claude/skills/` (Claude Code loads them automatically in this repository) and `.agents/skills/` (Codex and other agents). `skills/` is the source of truth: `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that the developer skills cite only paths and names that exist.
+
+The `mintlify-docs` skill follows the same pattern with a different source of truth: `.mintlify/skills/mintlify-docs/SKILL.md` is the original, and `.claude/skills/mintlify-docs/` and `.agents/skills/mintlify-docs/` hold copies of it. The same test keeps those copies in sync.
 
 ---
 

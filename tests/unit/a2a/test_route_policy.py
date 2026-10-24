@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -40,7 +40,7 @@ class TestDataclasses:
         assert result.policy is None
 
     def test_confirmation_token_starts_unconfirmed(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         token = ConfirmationToken("t", "delete_site", "hash", "why", now, now)
 
         assert token.confirmed is False
@@ -239,7 +239,7 @@ class TestCheckRateLimit:
         local_settings.rate_limit_period = 60
         policy = RoutePolicy("tool://*", ("POST",), "read", "none", 1)
         controller = SafetyController(local_settings, policies=[policy])
-        stale = datetime.now(tz=timezone.utc).timestamp() - 3600
+        stale = datetime.now(tz=UTC).timestamp() - 3600
         controller._request_windows[("agent-a", "list_sites")].append(stale)
 
         assert controller.check_rate_limit("agent-a", "list_sites") is True

@@ -5,7 +5,7 @@ from __future__ import annotations
 import gzip
 import json
 import stat
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,7 +26,7 @@ from src.fleet.db.retention import RetentionRefusedError, purge_expired  # noqa:
 
 CHAIN_KEY = b"retention-chain-key"  # pragma: allowlist secret
 A, B = "a" * 32, "b" * 32
-NOW = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 11, 12, 0, tzinfo=UTC)
 
 
 async def _fill(engine: Any, chain_id: str, ages_days: list[float]) -> PostgresAuditSink:

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,7 +20,7 @@ from src.a2a import http_handlers as h
 from src.a2a.audit import AuditLog
 from src.a2a.route_policy import ConfirmationWorkflow, SafetyResult
 
-NOW = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
 
 
 def _state(
@@ -176,7 +176,7 @@ class TestDelegate:
 
         assert result["status"] == "confirmation_required"
         assert result["reason"] == "destructive action requires confirmation"
-        assert datetime.fromisoformat(result["expires_at"]) > datetime.now(tz=timezone.utc)
+        assert datetime.fromisoformat(result["expires_at"]) > datetime.now(tz=UTC)
         assert result["confirmation_token"] in state.confirmation_workflow._tokens
         state.tool_executor.assert_not_called()
         state.audit_logger.log_invocation.assert_not_called()

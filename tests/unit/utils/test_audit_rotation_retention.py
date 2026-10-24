@@ -6,7 +6,7 @@ import gzip
 import json
 import os
 import stat
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,7 @@ verify_cli = audit_verify.main
 retention_cli = audit_retention.main
 
 KEY = b"rotation-chain-key"  # pragma: allowlist secret
-NOW = datetime.now(timezone.utc)
+NOW = datetime.now(UTC)
 OLD = NOW - timedelta(days=400)
 
 
@@ -131,7 +131,7 @@ class TestRotation:
         class Frozen(datetime):
             @classmethod
             def now(cls, tz: Any = None) -> datetime:
-                return datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+                return datetime(2026, 10, 11, 12, 0, tzinfo=UTC)
 
         monkeypatch.setattr(audit_module, "datetime", Frozen)
         log = tmp_path / "audit.log"

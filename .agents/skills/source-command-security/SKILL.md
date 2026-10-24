@@ -14,7 +14,7 @@ Run comprehensive security scans on the project.
 Execute the following security checks:
 
 1. Bandit security linter: `bandit -r src/ -ll`
-2. Safety dependency vulnerability check: `safety check`
+2. Safety dependency vulnerability check: `pip-audit`
 3. Check for secrets in code: `detect-secrets scan --baseline .secrets.baseline`
 4. Review .env.example to ensure no credentials are exposed
 

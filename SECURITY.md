@@ -292,7 +292,7 @@ Our CI/CD pipeline includes automated security scanning:
 
 ```bash
 # Check for known vulnerabilities in dependencies
-safety check
+pip-audit
 
 # Security linting with Bandit
 bandit -r src/
@@ -308,7 +308,7 @@ trivy image unifi-mcp-server:latest
 pip install -e ".[dev]"
 
 # Run security checks
-safety check
+pip-audit
 bandit -r src/ -f json -o bandit-report.json
 
 # Check for outdated packages with vulnerabilities
@@ -339,7 +339,7 @@ See `AI_GIT_PRACTICES.md` and `AGENTS.md` for additional AI security guidelines.
 **Example Secure Dockerfile:**
 
 ```dockerfile
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 # Create non-root user
 RUN useradd -m -u 1000 mcpuser

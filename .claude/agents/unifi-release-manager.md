@@ -152,7 +152,7 @@ Run comprehensive checks:
 
 1. Full test suite: `pytest --cov=src -v`
 2. All linters: `black --check`, `ruff check`, `mypy`
-3. Security scan: `bandit`, `safety check`
+3. Security scan: `bandit`, `pip-audit`
 4. Build Docker image
 5. Start MCP server (smoke test)
 

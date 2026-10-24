@@ -15,7 +15,7 @@ deletes audit records.
 """
 
 from dataclasses import asdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +117,7 @@ async def purge_expired(
     """
     if retention_days < 1:
         raise ValueError("retention_days must be at least 1")
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
+    cutoff = (now or datetime.now(UTC)) - timedelta(days=retention_days)
     result = RetentionResult(cutoff=cutoff, dry_run=dry_run)
 
     report = await verify(engine, key)

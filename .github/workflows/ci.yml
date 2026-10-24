@@ -28,7 +28,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install uv
         run: |
@@ -38,7 +38,7 @@ jobs:
       # From uv.lock, so CI tests the versions a release ships with; --locked
       # also fails if pyproject.toml changed without re-running `uv lock`.
       - name: Install dependencies
-        run: uv sync --locked --python 3.10 --extra dev --extra fleet
+        run: uv sync --locked --python 3.12 --extra dev --extra fleet
 
       - name: Check code formatting with Black
         run: |
@@ -66,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ['3.11', '3.12']
 
     steps:
       - name: Checkout code
@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        if: matrix.python-version == '3.10'
+        if: matrix.python-version == '3.11'
         with:
           file: ./coverage.xml
           flags: unittests
@@ -111,7 +111,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install uv
         run: |
@@ -121,7 +121,7 @@ jobs:
       # From uv.lock, so CI tests the versions a release ships with; --locked
       # also fails if pyproject.toml changed without re-running `uv lock`.
       - name: Install dependencies
-        run: uv sync --locked --python 3.10 --extra dev --extra fleet
+        run: uv sync --locked --python 3.12 --extra dev --extra fleet
 
       - name: Run Bandit security linter
         run: |
@@ -145,7 +145,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install interrogate
         run: pip install interrogate
@@ -197,7 +197,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Run pre-commit
         uses: pre-commit/action@v3.0.1

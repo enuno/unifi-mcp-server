@@ -239,7 +239,7 @@ def _self_signed(directory: Path) -> tuple[Path, Path]:
 
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -384,7 +384,7 @@ class TestOtlp:
             "resource"
         ]["attributes"]
         assert first["timeUnixNano"] == str(
-            int(dt.datetime(2026, 10, 11, 12, 0, 0, 123000, dt.timezone.utc).timestamp() * 1e9)
+            int(dt.datetime(2026, 10, 11, 12, 0, 0, 123000, dt.UTC).timestamp() * 1e9)
         )
         assert (first["severityNumber"], first["severityText"]) == (9, "INFO")
         assert (logs[1]["severityNumber"], logs[1]["severityText"]) == (13, "WARN")

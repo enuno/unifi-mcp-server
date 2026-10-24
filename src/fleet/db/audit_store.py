@@ -10,7 +10,7 @@ import asyncio
 import contextlib
 import json
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -291,7 +291,7 @@ def _column_problems(entry: Any) -> list[str]:
             recorded = None
         if recorded is not None:
             if recorded.tzinfo is None:
-                recorded = recorded.replace(tzinfo=timezone.utc)
+                recorded = recorded.replace(tzinfo=UTC)
             if abs((entry.ts - recorded).total_seconds()) > _TS_TOLERANCE_SECONDS:
                 problems.append(f"{where}: column ts is far from the record's timestamp")
     return problems

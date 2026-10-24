@@ -28,7 +28,7 @@ This project adheres to a code of conduct that promotes a welcoming and inclusiv
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - `uv` for Python package and virtual environment management
 - Git for version control
 - Docker (optional, for containerized deployment)

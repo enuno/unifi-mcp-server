@@ -1,10 +1,11 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-10-10
+**Document Version:** 2026-10-24
 **Source Plan:** `~/INTEGRATION/Unifi-Evolution.md`
 **Repository Baseline:** 343 MCP tools registered in local mode across 60 tool modules; 3,152 unit tests passing; 93% line coverage
 **API Spec Baseline** (audited 2026-09-26): UniFi Network **v10.6.106**, UniFi Protect **v7.3.68**, Site Manager v1.0.0; newly published: Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
-**Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started; API-spec alignment wave in progress)
+**Release Target Baseline** (audited 2026-10-22, §2.4): UniFi Network **v11.0.83** (requires UniFi OS **6.0.10+**) and UniFi OS **6** — compatible per released documentation, with two platform-level breaks and four items still pending live-controller verification
+**Current Phase:** Phase 4 (Phases 0–3 complete; Phase 5 partially started; API-spec alignment wave in progress) · Phase 8 planned (Network 11 / UniFi OS 6 compatibility, §4 Phase 8)
 
 ---
 
@@ -16,6 +17,7 @@ The roadmap preserves the current Network and Site Manager baseline while adding
 
 - native Protect API coverage — v6-era surface complete; **v7.3.68 expansion outstanding** (39 new operations, §2.3)
 - API-spec alignment: codebase and docs pinned to current official specs (Network v10.6.106, Protect v7.3.68) with a repeatable diff/audit workflow
+- UniFi Network 11 / UniFi OS 6 compatibility — **planned, not yet started** (Phase 8, §4): compatible per released documentation, with two platform-level breaks (USG gateways, the standalone Network Application Server) and four items that still need a live-controller test before "full support" can be claimed
 - Access API expansion — **blocked** (no official spec published as of 2026-09-26)
 - multi-controller / multi-site orchestration
 - dry-run / change-safe execution
@@ -118,6 +120,7 @@ Describe how to execute the plan without losing sight of the current production 
 - Multi-controller orchestration: fleet Phases 0–5 shipped; discovering the consoles behind a cloud account is deferred until per-console routing exists (`docs/FLEET_SCALING_PLAN.md` Phase 4b).
 - The Redis webhook event bus is not yet implemented (runbook only). The webhook receiver is served at `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set.
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
+- **UniFi Network 11 / UniFi OS 6 support is not yet claimed.** Per the 2026-10-22 audit (§2.4) the server is compatible with Network 11.0.83 per released documentation, but two platform-level deployment targets are removed (USG gateways, the standalone Network Application Server) and four items still need a live-controller test before full support can be claimed. Phase 8 (§4) carries the work; the honest current claim is "compatible per released documentation, with four items pending live verification".
 
 ### 2.3 API specification baseline (audited 2026-09-26)
 
@@ -129,6 +132,53 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 - **Protect shipped a major version (v6.2.83 → v7.3.68)**: 74 operations across 55 paths, of which **39 operations are absent from the docs and implementation**. New surface: arm profiles with alarm enable/disable (7 ops), sirens (6), speakers (4), fobs (3), relays (4), bridges (3), link stations (3), alarm hubs (4), Protect users (2), UniFi Identity/ULP users (2), POS transaction ingestion (1).
 - **Three entirely new APIs are now published** and unknown to the codebase: **Mobility v1.0.0** (8 ops: device configuration, workspaces, devices, clients), **InnerSpace v1.3.23** (6 ops via Cloud Connector proxy for indoor-location/analytics), **Carrier Fabric v1.0.0** (11 ops: subscribers, service state, service plans).
 - **Scraper tooling**: `scripts/update-api-docs.js` pins were bumped to Network v10.6.106 / Protect v7.3.68 (Site Manager v1.0.0 unchanged). The puppeteer-based scrapers (`scrape-api-docs.js` authenticates to the UniFi portal; `update-api-docs.js` appends "new endpoint" sections) are legacy — the direct-download `openapi.json` artifacts above are the modern path and should replace them (Phase 4 item).
+
+### 2.4 UniFi Network 11 / UniFi OS 6 compatibility baseline (audited 2026-10-22)
+
+Source: `~/inbox/unifi-network-11-compatibility-audit.pdf` — "UniFi Network 11 Compatibility Audit", 2026-10-22, covering this repository at commit `b4f4f1dd89f23ea6d9229e6f94cf1ae494556405` (2026-10-19) against UniFi Network **11.0.83** (requires UniFi OS **6.0.10+**) and UniFi OS **6**.
+
+The audited commit is an ancestor of the current `main`, and `git diff b4f4f1d..HEAD -- src/` is empty: no server code has changed since the audit, so every per-call verdict below still describes the code as it stands. The audit's own repository snapshot is partially stale in ways that do not affect its verdicts — see "Audit caveats" at the end of this section.
+
+**Verdict: compatible, with two platform-level breaks and four items that must be verified on a live Network 11 controller.**
+
+| Status | Count | Meaning |
+|---|---:|---|
+| Works | 55 | No change found in the released documentation. |
+| Changed | 4 | Still usable; behaviour or data changed as noted. |
+| Breaks | 2 | Documented removal affecting this call or target. |
+| Needs live controller test | 4 | Cannot be confirmed from released documentation — explicitly not a confirmed break. |
+| Call groups inventoried | 65 | Across the legacy site API, Integration API v1, the local v2 API and the Cloud APIs. |
+
+**The breaks are deployment-target removals, not endpoint breaks.** No documented endpoint removal or rename affects the server's REST surface, and authentication is untouched: the server authenticates with a static `X-API-KEY` header (`src/config/config.py`, `Settings.get_headers`) and never performs a username/password session login, so UniFi OS 6.0.7's configurable "Remember Me" duration does not apply.
+
+| Break | Affected in this repo | Nature |
+|---|---|---|
+| USG gateway support removed (10.6 is the last USG release) | Every device, client and stat call for a USG-gated site | The site has no Network 11 target at all. Surfaced as fleet-health state in Phase 8 (§4 Phase 8, Fix 6). |
+| Standalone Network Application Server removed | `local` mode against a classic server | Replacement is UniFi OS Server, which keeps the `/proxy/network/...` paths the server already uses. A deployment action, not a code change. |
+
+**The four "needs live controller test" items.** That status is not a confirmed break — it means the point cannot be settled from released material. These are the real risks, and none of them is an endpoint break:
+
+| # | Item | Surface in this repo |
+|---|---|---|
+| 1 | Legacy firewall rules (`rest/firewallrule`) after the forced Zone-Based Firewall migration — every site is auto-migrated and legacy rules become zone policies | `src/tools/firewall.py` |
+| 2 | Legacy firewall groups (`rest/firewallgroup`), same migration exposure | `src/tools/firewall_groups.py`, against the v2 policy tools in `src/tools/firewall_policies.py` |
+| 3 | Site-UID stability across the upgrade (a single unverified community report, 2026-10-13 — not in any Ubiquiti material) | `src/api/client.py` (`resolve_site_id`, `_site_id_cache`, `_site_uuid_to_name` / `_site_name_to_uuid`), `src/api/pool.py` (`AuthState`), fleet site records in `src/fleet/db/models.py` and `src/worker/jobs.py` |
+| 4 | v2 `traffic-flows` continuity — Live Flows is built on the new telemetry engine and the endpoint's continuity is undocumented | `src/tools/traffic_flows.py` (50-flow cap, `POST /proxy/network/v2/api/site/{site}/traffic-flows`) |
+
+**The four "Changed" items.** The endpoints are unchanged; the behaviour or the data is not. The statistics engine change (PostgreSQL migration, history cleared and accruing fresh) still needs a live capture to confirm the payload shapes, so it is verified in the same pass as the four items above.
+
+| Item | Change | Surface in this repo |
+|---|---|---|
+| `stat/sitedpi`, `stat/stadpi` | DPI history is cleared on upgrade; the endpoint is unchanged, the payload shape is to be verified live | `src/tools/dpi.py` |
+| `stat/report/*` | Historical series return empty post-upgrade until new data accrues | `src/tools/diagnostics.py` (`get_historical_stats`) |
+| `traffic-matching-lists` | External (URL-sourced) lists added upstream; the URL-source property is not modelled in the server | `src/tools/traffic_matching_lists.py`, `src/models/traffic_matching_list.py` |
+| Statistics semantics overall | Same endpoints, new engine: empty history after an upgrade is expected, not a failure signal | The stats tools' output and docs |
+
+**Everything else is documented as unchanged.** Devices, clients, networks, WLANs, port forwards, port profiles, RADIUS, hotspot packages, tags, dynamic DNS, events, alarms and backups keep their paths and payloads. Where a Network 11 novelty reaches an existing tool, it reaches it as new content through an old pipe: the new client-connection alarm flows through `stat/alarm` (`src/tools/events.py`), subnet-overlap entries flow through the system log, and new WAN-type and VPN-cipher values arrive as pass-through payload values in `rest/networkconf` (`src/tools/network_config.py`) and the VPN resources. The Integration API v1 surface holds across the board.
+
+**New capability the server does not model.** External (URL-sourced) Network Lists, WiFi WAN configuration, Live Flows parity (no streaming, no terminate), Matter and Thread visibility, packet capture on AP radios, UPS self-test and 2U Pro power cycle, SD-WAN policies (Site Manager 5.10.2+), Time Machine topology history, and the console-level backup system UniFi OS 6 adds alongside the network-app backups. Each is scoped in §3.3 and in Phase 8.
+
+**Audit caveats.** The audit is documentation-based by design: "Works" means no change was found in the released documentation, not that a live controller was exercised. Its inventory figures describe a smaller surface than this repository actually has — it reports "v0.2.4, 74 MCP tools, 1,325 tests" and "10 open pull requests, no open issues", while the audited commit `b4f4f1d` carries version `0.6.1`, the project publishes 343 tools in local mode from 60 modules (349 tool declarations across 61 modules in `src/tools/`), the suite holds 3,369 test functions, and the repository now has 11 open pull requests and 2 open issues. Read the audit as a Network-surface audit, not a whole-server inventory; the 65 call groups it covers are a subset of the 349 tool declarations. It also flags that merging the Python 3.14 base-image bump (PR #235) before the live-controller test work is worth sequencing, so the tests run on the current runtime — that PR is still open.
 
 ---
 
@@ -160,6 +210,28 @@ Findings from the Network v10.6.106 / Protect v7.3.68 audit:
 | P8 | AI skills / runbooks | Medium | Give agents reusable operational knowledge |
 | P9 | Developer workflow standardization | Medium | Make local dev, build, and release consistent |
 | P10 | Spec-drift guardrail | High | Pin spec snapshots per release, keep scraper pins current, re-audit quarterly against `developer.ui.com` |
+
+### 3.3 Network 11 and UniFi OS 6 gaps (from the 2026-10-22 audit)
+
+Derived from §2.4. These are the items the audit could not close from released documentation, plus the capability the server does not model yet. Priority follows the audit's own ordering: P0 affects every upgraded fleet, P1 affects data correctness, P2 affects operability, P3 is feature work.
+
+N1–N4 correspond to the audit's own Fixes 1–4. Note that the two cuts differ slightly: the audit counts its "needs live controller test" rows as the two legacy firewall endpoints separately, plus site resolution and traffic-flows, while it files the statistics engine under "Changed" because the endpoints are unchanged. Both cuts are carried here — N1 covers both firewall endpoints, and N3 is a "Changed" item that still needs a live capture to confirm its payload shapes.
+
+| ID | Gap | Priority | Outcome | Audit status |
+|---|---|---:|---|---|
+| N1 | Legacy firewall behaviour after the forced Zone-Based Firewall migration | P0 | Verify `rest/firewallrule` / `rest/firewallgroup` read and write on a migrated site; steer users to the v2 policy tools in tool descriptions and the README if the legacy path errors, no-ops or lands somewhere unexpected | Needs live test |
+| N2 | Site-UID stability across the upgrade | P0 | Compare `GET /integration/v1/sites` UUIDs before and after the upgrade against `UniFiClient.resolve_site_id`, the `_site_id_cache`, `_site_uuid_to_name` / `_site_name_to_uuid` maps and the fleet registry's site records; add cache invalidation and re-resolution on version change if UIDs do move | Needs live test (unverified community report) |
+| N3 | Statistics tools against the new statistics engine | P1 | Confirm the payload shapes of `stat/report/*`, `stat/sitedpi` and `stat/stadpi` on 11.0.83 and fix parsers if fields drifted; surface the "history was reset by the upgrade" caveat in the stats tool output and the docs so empty history is not misread as an outage | Changed |
+| N4 | v2 `traffic-flows` continuity | P1 | Confirm the endpoint still returns flow records on 11.0.83 and re-check the documented 50-flow drop behaviour against a 10.6 capture | Needs live test |
+| N5 | External (URL-sourced) Network Lists | P2 | Model the URL-source property on the Integration API `traffic-matching-lists` payloads (`src/tools/traffic_matching_lists.py`, `src/models/traffic_matching_list.py`) once the field name is confirmed on a live controller or in the in-app Integrations documentation | Changed |
+| N6 | Non-upgradable fleet members are invisible until a call fails | P2 | Mark USG-gated sites and hosts still on the classic Network Application Server as "cannot run Network 11 — stays on 10.6 / migrate to UniFi OS Server" in fleet health output and the README compatibility notes, instead of surfacing per-call errors | Breaks (platform) |
+| N7 | Live Flows parity | P3 | Discovery on a live 11.0.83 controller: confirm `traffic-flows` continuity, look for a streaming or terminate endpoint (a browser dev-tools capture of the Live Flows UI is the practical route), then add `get_live_flows` and, only if an endpoint exists, `terminate_flow`. Keep the existing block-source / destination-IP rule creation as the fallback enforcement action | Partial (no public API) |
+| N8 | WiFi WAN (WiFi Uplink / WISP) configuration | P3 | Discovery on Wi-Fi 7 hardware (UDR7, UDR-5G-Max, Express 7, UCG-Industrial): extend the WAN tools with the uplink fields and read the uplink link state. Upstream Wi-Fi credentials are secrets and must follow the existing secret-handling patterns — never logged or echoed | Partial (reads only) |
+| N9 | Matter and Thread visibility | P3 | Run the Small discovery spike first (the version-local Integrations API documentation under Settings, plus a capture of the Topology / Matter UI's network calls). If a surface exists, add a Matter resource family and merge Thread nodes into `src/tools/topology.py`; if not, record it as a documented Gap and re-check each release. Matter pairing codes are credentials | Gap (no documented API) |
+| N10 | Console-level backups (UniFi OS 6) | P3 | The OS adds a separate console-level backup system — schedules, multiple destinations — alongside the network-app backups `src/tools/backups.py` already covers. Model it only if the surface is discoverable | Partial (not exposed) |
+| N11 | SD-WAN policies (Site Manager 5.10.2+) | P3 | The Site Manager client covers hosts, sites and devices; `src/tools/site_manager.py` exposes SD-WAN *configs* but not Network 11 SD-WAN *policies*. Scope only after the policy surface is identified | Gap |
+
+Items the audit explicitly leaves alone, recorded here so they are not re-litigated: the new client-connection alarm flows through `stat/alarm` with no new code (though a dedicated filter would be a convenience); bulk client editing remains per-client; Channel Plan's country selector does not change the `countries` reference data the server already reads; IPIP WAN and the OpenVPN AES-192/128-CBC options pass through as payload values; packet capture on AP radios, UPS self-test and UPS 2U Pro power cycle have no modelled surface; and Time Machine topology history has no documented data source.
 
 ---
 
@@ -354,9 +426,84 @@ Prompts an operator can hand to an AI coding agent (Claude Code or similar) to s
 #### Exit criteria
 
 - Each of the three prompts, followed by an agent in a clean environment, produces a working deployment that passes its own verification steps
-- Playbook and chart deploy the same settings as the compose files (a test compares the environment variables each one sets)
+- The playbook and chart deploy the same settings as the compose files (a test compares the environment variables each one sets)
 - No secret value is ever committed, templated from a default or printed in a log
 - The fleet verification (`make verify-fleet-scale`) passes against a clustered deployment
+
+---
+
+### Phase 8: UniFi Network 11 and UniFi OS 6 compatibility (new — planned)
+
+**Goal:** turn the 2026-10-22 compatibility audit (§2.4) into a supportable position: settle the four items the audit could not resolve from documentation on a live Network 11 controller, model the capability that is safe to model from documentation alone, and make the two platform-level breaks visible before an operator hits them mid-migration.
+
+This phase is deliberately split. The **verification** work (N1–N4) needs hardware and cannot be closed in this repository. The **code and documentation** work (N3's caveat, N5, N6, and the discovery steps for N7–N9) can land before that hardware exists, and should — a caveat that says "an empty statistics history right after the upgrade is the expected consequence of the engine change, not an outage" is worth shipping even if the payload shapes are still unconfirmed.
+
+> **Naming note:** the audit refers to `UniFiClient._site_names_by_uuid` / `_site_uuids_by_name`. The attributes in this repository are `_site_uuid_to_name` and `_site_name_to_uuid` (`src/api/client.py:79-81`), alongside `_site_id_cache` (line 77). Use the repository's names.
+
+#### Deliverables
+
+- `docs/NETWORK_11_COMPATIBILITY.md` — a compatibility matrix for the published docs: Network 11.0.83 / UniFi OS 6 per surface, the two platform breaks, the four live-test items with their current status, and the "compatible per released documentation, with four items pending live verification" claim wording. Not a claim of full support until the checklist in §4 Phase 8, "Live-controller test checklist" has been run
+- N6 — fleet health output and README compatibility notes marking USG-gated sites and classic-Network-Application-Server hosts as unable to run Network 11, in place of per-call errors
+- N3 — the statistics-reset caveat in the stats tool output (`src/tools/dpi.py`, `src/tools/diagnostics.py`) and in the docs
+- N5 — the URL-source property on the External Network List payloads (`src/models/traffic_matching_list.py`, `src/tools/traffic_matching_lists.py`), after the field name is confirmed
+- N1 — a redirect in the legacy firewall tool descriptions and the README toward the v2 policy tools (`src/tools/firewall_policies.py`), plus a deprecation note if the legacy path is confirmed broken on a migrated site
+- N2 — cache invalidation and site re-resolution on a detected version change (`src/api/client.py`, `src/api/pool.py`), if and only if the live test confirms UIDs move
+- A live-controller test report, filed under `.analysis-reports/`, recording the observed responses for each of the five checklist steps
+
+#### Scope
+
+**In scope**
+
+- The four surfaces the audit inventoried: legacy site API, Integration API v1, local v2 API, Cloud APIs
+- The two platform-level deployment breaks and how the server surfaces them
+- The four needs-live-test items and the four changed-data items (§2.4), as verification tasks plus the code and docs that make their failure modes legible
+- The Network 11 feature set listed in §3.3, at the level of discovery and modelling that the available evidence supports
+
+**Out of scope**
+
+- UniFi Protect. It is a separate application, unaffected by the changes audited here
+- Anything requiring a Ubiquiti-published API that does not exist. Where no surface is documented, the outcome is a documented Gap, not a speculative client
+- The deployment migration itself. Moving a classic server to UniFi OS Server is an operator action; the server's job is to say the current target cannot be upgraded, and the replacement keeps the `/proxy/network/...` paths already in use
+- The `rest/networkconf` and VPN pass-through values (IPIP WAN type, OpenVPN AES-192/128-CBC). They arrive as payload values and need no model change
+
+#### The seven fixes, in the audit's order
+
+**Fix 1 (P0) — legacy firewall after the forced ZBF migration.** Exercise `create_firewall_rule` / `update_firewall_rule` / `delete_firewall_rule` (`src/tools/firewall.py`, `rest/firewallrule`) and the `rest/firewallgroup` rule mutation (`src/tools/firewall_groups.py`) on a migrated site. These writes are safety-sensitive: if they error, no-op, or land somewhere unexpected, steer users to the v2 policy tools (`src/tools/firewall_policies.py`) in the tool descriptions and the README, and consider deprecating the legacy tools. Note that `list_firewall_rules` already falls back to the v2 `firewall-policies` endpoint when the legacy list comes back empty in local mode — that fallback exists for the older ZBF-era controllers and says nothing about write behaviour on a migrated one.
+
+**Fix 2 (P0) — site-ID stability across the upgrade.** Record `GET /integration/v1/sites` UUIDs and site names before the upgrade and again after, and diff them against the server's caches (`_site_id_cache`, `_site_uuid_to_name`, `_site_name_to_uuid` in `src/api/client.py`) and the fleet registry's site records (`sites.site_uuid` in `src/fleet/db/models.py`, synced by `src/worker/jobs.py`). If UIDs do change, add cache invalidation and re-resolution on a detected version change so tools never target a stale UUID. Treat the claim as unverified until the diff is observed: it rests on a single community report.
+
+**Fix 3 (P1) — stats tools against the new statistics engine.** Confirm the payload shapes of `stat/report/*`, `stat/sitedpi` and `stat/stadpi` on 11.0.83 and fix the parsers if fields drifted. Independently of the outcome, surface the "history was reset by the Network 11 upgrade" caveat in the stats tool output and the docs. The endpoints themselves are unchanged, so an empty history immediately after an upgrade is the expected consequence of the engine change — not evidence of an outage or a broken tool.
+
+**Fix 4 (P1) — v2 traffic-flows continuity.** Poll `POST /proxy/network/v2/api/site/{site}/traffic-flows` for five minutes on a busy gateway and compare the record shape and drop behaviour against a 10.6 capture. The module already documents the 50-flow cap and the non-functional server-side filters (`src/tools/traffic_flows.py`); re-check whether either changed.
+
+**Fix 5 (P2) — External Network Lists.** Network 11 lets Network Lists pull entries from an external URL. Add the URL-source property to the Integration API `traffic-matching-lists` payloads after confirming the field name on a live controller or in the version-local Integrations documentation. Do not guess the field name: an unconfirmed key silently produces a list that is not URL-sourced.
+
+**Fix 6 (P2) — flag the fleets that cannot upgrade.** In fleet health output and the README compatibility notes, mark sites gated by a USG and hosts still running the classic Network Application Server as "cannot run Network 11 — stays on 10.6 / migrate to UniFi OS Server". The fleet worker already records the Network version per controller (`capabilities.network_version`, `src/worker/jobs.py`), and the device inventory carries the model (`src/fleet/db/models.py`), so both signals are available to the health snapshot. This is the fix that converts a silent platform break into a visible one.
+
+**Fix 7 (P3) — feature work.** WiFi WAN configuration, Live Flows parity, and Matter / Thread visibility. Each is scoped in full in §3.3 (N7, N8, N9). All three start with discovery on live hardware, and each is blocked on it. For Matter and Thread, run the Small discovery spike before committing to the Large work.
+
+#### Live-controller test checklist
+
+The checklist the audit specifies for whoever runs Fixes 1–4. Until all five steps are run and recorded, the supportable claim is "compatible per released documentation, with four items pending live verification" — not "fully supports Network 11". That distinction is the point of the audit's status vocabulary, and it should survive into the published docs.
+
+1. Record `GET /integration/v1/info` (`applicationVersion`) and all site UUIDs before the upgrade; repeat after; diff.
+2. On a migrated site: read a legacy firewall rule, create a throwaway rule, delete it — record the exact responses from `rest/firewallrule` and `rest/firewallgroup`.
+3. Pull `stat/report/hourly/site`, `stat/sitedpi` and `stat/stadpi` post-upgrade; compare the field sets against a 10.6 capture.
+4. Poll the v2 `traffic-flows` endpoint for five minutes on a busy gateway; compare the record shape and the drop behaviour against 10.6.
+5. While doing step 4, capture the Live Flows UI's network calls — the terminate action especially — for the N7 discovery work.
+
+Step 5 is the only route to the Live Flows terminate endpoint: Ubiquiti documents no public API for it, and the UI's own calls are the practical evidence. A browser dev-tools capture of the Live Flows UI is the instrument.
+
+**Sequencing note:** merge the Python 3.14 base-image bump (PR #235) before the live-controller test work, so the tests run on the current runtime.
+
+#### Exit criteria
+
+- The five-step checklist has been run on a live Network 11 controller and the observed responses are recorded in `.analysis-reports/`
+- Each of N1–N4 carries a status of verified, changed or broken, and the published compatibility matrix states it — including a verified-broken outcome
+- The two platform breaks are visible in fleet health and the README before an operator encounters them
+- The statistics-reset caveat ships in the stats tool output regardless of the payload-shape outcome
+- Every Network 11 feature gap is either modelled with a documented surface or recorded as a Gap with a re-check trigger, and none is claimed as working
+- The compatibility claim wording matches the verification state
 
 ---
 
@@ -369,7 +516,7 @@ Prompts an operator can hand to an AI coding agent (Claude Code or similar) to s
 | v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
 | v0.2.5 | Earlier release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v0.7.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; a converge-and-idempotence test for the playbook |
+| v0.7.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; a converge-and-idempotence test for the playbook; **Phase 8 (Network 11 / UniFi OS 6 compatibility)**, whose code and documentation half (N3 caveat, N5, N6, discovery for N7–N9) can ship ahead of the live-controller verification, and whose verification half (N1–N4) needs a Network 11 controller |
 
 ---
 
@@ -399,6 +546,7 @@ New documents introduced by the roadmap:
 - `WEBHOOK_SETUP.md`
 - `A2A.md`
 - `agent-card.json`
+- `docs/NETWORK_11_COMPATIBILITY.md` (Phase 8)
 
 ---
 
@@ -415,9 +563,16 @@ New documents introduced by the roadmap:
 | API/documentation drift returns | Medium | Medium | Phase gates require docs and implementation sync; spec snapshots pinned per release (P10) |
 | Spec snapshots rot (pins drift again, as v10.1.68 did) | Medium | Medium | Quarterly re-audit against `developer.ui.com` index; keep `openapi.json` artifacts in-repo; legacy scrapers replaced with direct-download path |
 | Latent Integration API write defects (audit 2026-09-26: adopt, port-action, client-action paths) | Resolved 2026-09-27 | High | Hardware probes confirmed all three (spec endpoints live, legacy routes 404); fixes shipped with spec-verified mocked tests — see `.analysis-reports/api-spec-audit-2026-09-26.md` addendum |
+| Legacy firewall writes land wrongly or no-op after the forced ZBF migration (Network 11) | Medium — undocumented, affects every upgraded fleet | High | Live-controller test before claiming support (Phase 8, Fix 1); steer to the v2 policy tools in the tool descriptions and README; treat a silent no-op as a write failure, never a success |
+| Site UIDs change on upgrade, leaving cached UUIDs and fleet site records stale (Network 11) | Low — a single unverified community report | High | Compare site UUIDs before and after an upgrade (Phase 8, Fix 2); add cache invalidation and re-resolution on a detected version change; keep fleet site records keyed on something stable if UIDs are confirmed to move |
+| Empty statistics history after a Network 11 upgrade is misread as an outage or a broken tool | High if unsurfaced | Medium | Ship the statistics-reset caveat in the stats tool output and the docs (Phase 8, N3) independent of the payload-shape outcome |
+| A tool claims to support a Network 11 feature with no documented API behind it | Medium | Medium | Model only what a live controller or the version-local Integrations documentation shows; record everything else as a documented Gap with a re-check trigger |
+| The 2026-10-22 audit's repository snapshot is read as a current inventory | Medium | Low | The audit's counts (74 tools, 1,325 tests, 10 open PRs) describe a smaller surface than this repository; §2.4 records the discrepancy and every carried-forward claim is re-derived from the tree at `main` |
 
 ---
 
 ## 8. Maintenance rule
 
 The development plan is not complete until documentation and implementation tell the same story. When a new capability is added, update the spec, roadmap, endpoint docs, and test strategy in the same change set.
+
+The same rule applies to release support: a compatibility claim is only as good as the evidence behind it. The Network 11 position in §2.4 and §3.3 must be re-checked against each UniFi Network release — Ubiquiti publishes no Integration API changelog, so a release that changes the surface shows up as a live-controller observation, not as a notification. Each gap recorded in §3.3 carries either a status or a re-check trigger, and none may be promoted to "supported" without the evidence named in the Phase 8 exit criteria.

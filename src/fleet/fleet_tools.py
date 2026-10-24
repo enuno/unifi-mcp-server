@@ -22,7 +22,7 @@ import asyncio
 import re
 import time
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastmcp import FastMCP
@@ -140,7 +140,7 @@ def build_snapshot_tools(
         if health is not None and health not in ("ok", "degraded", "down", "unknown"):
             raise ValidationError("health must be one of: ok, degraded, down, unknown")
         names = await _in_scope(registry, _caller(settings or config), None, labels)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         entries = [_status_view(s, now) for s in await snapshots.fleet_status(names)]
         counts: dict[str, int] = {}
         for entry in entries:
@@ -167,7 +167,7 @@ def build_snapshot_tools(
         """
         caller = _caller(settings or config)
         names = await _in_scope(registry, caller, controllers, labels)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sites = await snapshots.fleet_sites(names)
         return {
             "sites": [
@@ -233,7 +233,7 @@ def build_snapshot_tools(
         for d in devices:
             key = d.device.model or "unknown"
             by_model[key] = by_model.get(key, 0) + 1
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         page = devices[offset : offset + limit]
         return {
             "devices": [
@@ -335,7 +335,7 @@ def build_fanout_tool(mcp: FastMCP, registry: ControllerRegistry, config: Settin
             async with semaphore:
                 try:
                     data = await run_one(target, arguments, name, timeout)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     results[name] = {"ok": False, "error": f"timed out after {timeout:g}s"}
                 except Exception as e:
                     message = str(e) or type(e).__name__

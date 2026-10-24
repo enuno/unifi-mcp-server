@@ -143,7 +143,7 @@ def _self_signed(directory: Path) -> tuple[Path, Path]:
 
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
-    now = dt.datetime.now(dt.timezone.utc)
+    now = dt.datetime.now(dt.UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
@@ -518,7 +518,7 @@ async def check_failover(report: Report, stack: Stack, redis_url: str, size: int
     share = [c for c, h in (await lease_holders(redis_url)).items() if h.startswith(victim_prefix)]
     victim.kill()
     killed_at = time.monotonic()
-    killed_wall = dt.datetime.now(dt.timezone.utc)
+    killed_wall = dt.datetime.now(dt.UTC)
 
     async def taken_over() -> bool:
         current = await lease_holders(redis_url)

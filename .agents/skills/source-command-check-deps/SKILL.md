@@ -14,7 +14,7 @@ Check project dependencies for updates and vulnerabilities.
 Execute the following checks:
 
 1. List outdated packages: `uv pip list --outdated`
-2. Check for security vulnerabilities: `safety check`
+2. Check for security vulnerabilities: `pip-audit`
 3. Review pyproject.toml dependencies
 4. Check for deprecated package warnings
 

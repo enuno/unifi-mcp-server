@@ -1,7 +1,7 @@
 """Helper utility functions for UniFi MCP Server."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -20,7 +20,7 @@ def get_iso_timestamp() -> str:
     Returns:
         ISO formatted timestamp string
     """
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def format_uptime(uptime_seconds: int) -> str:

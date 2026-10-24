@@ -59,7 +59,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
           cache: 'pip'
 
       - name: Install uv
@@ -71,7 +71,7 @@ jobs:
       # (black, ruff, pytest) it was developed with: an unpinned install once
       # pulled a newer black that rejected an already-tagged commit.
       - name: Install dependencies
-        run: uv sync --locked --python 3.10 --extra dev --extra fleet
+        run: uv sync --locked --python 3.12 --extra dev --extra fleet
 
       - name: Run tests
         run: |

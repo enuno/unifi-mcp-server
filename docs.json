@@ -276,7 +276,11 @@
     }
   ],
   "seo": {
-    "indexing": "navigable"
+    "indexing": "navigable",
+    "metatags": {
+      "canonical": "https://docs.hashgrid.net/",
+      "og:image": "https://docs.hashgrid.net/images/social-preview.png"
+    }
   },
   "integrations": {
     "ga4": {

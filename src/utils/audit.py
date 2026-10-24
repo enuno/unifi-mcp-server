@@ -20,7 +20,7 @@ import threading
 import time
 import uuid
 from contextvars import ContextVar
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -466,7 +466,7 @@ class AuditLogger:
         record in the rotated one. A failed rename only logs: the record is
         written, and the next write tries again.
         """
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
         target = self.log_file.with_name(f"{self.log_file.name}.{stamp}")
         n = 0
         while target.exists():

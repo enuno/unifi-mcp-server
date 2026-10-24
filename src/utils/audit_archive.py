@@ -13,7 +13,7 @@ import os
 import uuid
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -122,7 +122,7 @@ def write_archive(
                     "sha256": digest,
                     "records": count,
                     "cutoff": cutoff.isoformat(),
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(UTC).isoformat(),
                     "chains": [asdict(c) for c in chains],
                 },
                 out,

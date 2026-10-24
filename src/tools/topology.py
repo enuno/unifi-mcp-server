@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 from src.api.client import UniFiClient
@@ -385,7 +385,7 @@ async def get_network_topology(
         # Build network diagram
         diagram = NetworkDiagram(
             site_id=actual_site_id,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             nodes=nodes,
             connections=connections,
             total_devices=total_devices,

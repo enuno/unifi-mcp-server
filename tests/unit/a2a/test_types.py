@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 
@@ -61,7 +61,7 @@ class TestA2AJSONEncoder:
         assert json.dumps(AuthenticationMode.BOTH, cls=A2AJSONEncoder) == '"both"'
 
     def test_encodes_datetimes_and_dates_as_iso_strings(self) -> None:
-        moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        moment = datetime(2026, 1, 1, tzinfo=UTC)
 
         assert json.dumps(moment, cls=A2AJSONEncoder) == f'"{moment.isoformat()}"'
         assert json.dumps(date(2026, 1, 1), cls=A2AJSONEncoder) == '"2026-01-01"'

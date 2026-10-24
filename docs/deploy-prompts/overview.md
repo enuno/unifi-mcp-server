@@ -3,13 +3,13 @@
 Each file here is a prompt to paste into an AI coding agent (Claude Code, for
 example) running on the machine you deploy from. The agent asks you for what
 it cannot know, runs the Ansible playbook in
-[deploy/ansible/](../../deploy/ansible/README.md), and checks the result.
+[deploy/ansible/](/deploy/ansible/overview), and checks the result.
 
 | Prompt | Deploys |
 | --- | --- |
-| [mcp-only.md](mcp-only.md) | The MCP server alone on one host |
-| [single-server-fleet.md](single-server-fleet.md) | The server, a worker, Redis and Postgres on one host |
-| [cluster.md](cluster.md) | Replicas on several hosts behind nginx, with shared Redis and Postgres |
+| [mcp-only.md](/docs/deploy-prompts/mcp-only) | The MCP server alone on one host |
+| [single-server-fleet.md](/docs/deploy-prompts/single-server-fleet) | The server, a worker, Redis and Postgres on one host |
+| [cluster.md](/docs/deploy-prompts/cluster) | Replicas on several hosts behind nginx, with shared Redis and Postgres |
 
 Every prompt tells the agent to:
 

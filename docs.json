@@ -1,0 +1,278 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "UniFi MCP Server",
+  "description": "AI-native control of UniFi networks, Protect cameras, and the UniFi cloud APIs through the Model Context Protocol.",
+  "colors": {
+    "primary": "#0559C9",
+    "light": "#4D9DFF",
+    "dark": "#0559C9"
+  },
+  "logo": {
+    "light": "/assets/unifi-mcp-server-logo.png",
+    "dark": "/assets/unifi-mcp-server-logo.png",
+    "href": "/"
+  },
+  "favicon": "/assets/unifi-mcp-server-logo.png",
+  "icons": {
+    "library": "fontawesome"
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "navigation": {
+    "global": {
+      "anchors": [
+        {
+          "anchor": "GitHub",
+          "type": "github",
+          "href": "https://github.com/enuno/unifi-mcp-server"
+        },
+        {
+          "anchor": "PyPI",
+          "icon": "cube",
+          "href": "https://pypi.org/project/unifi-mcp-server/"
+        }
+      ]
+    },
+    "tabs": [
+      {
+        "tab": "Guides",
+        "icon": "book-open",
+        "groups": [
+          {
+            "group": "Getting started",
+            "icon": "play",
+            "root": "index",
+            "pages": [
+              "index",
+              "docs/SKILLS",
+              "commands"
+            ]
+          },
+          {
+            "group": "Operating UniFi",
+            "icon": "server",
+            "pages": [
+              "NETWORK_PLAYBOOK",
+              "METRICS",
+              "docs/DISASTER_RECOVERY"
+            ]
+          },
+          {
+            "group": "Deployment",
+            "icon": "rocket",
+            "pages": [
+              "HARBOR_SETUP",
+              "deploy/ansible/overview",
+              "deploy/helm/unifi-mcp/overview",
+              "MULTI_CONTROLLER",
+              "docs/FLEET_SCALING_PLAN",
+              "docs/deploy-prompts/overview",
+              "docs/deploy-prompts/mcp-only",
+              "docs/deploy-prompts/single-server-fleet",
+              "docs/deploy-prompts/cluster"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "icon": "square-terminal",
+        "groups": [
+          {
+            "group": "Tools",
+            "icon": "wrench",
+            "pages": [
+              "API",
+              "docs/UNIFI_API",
+              "MCP_TOOLBOX"
+            ]
+          },
+          {
+            "group": "Interfaces",
+            "icon": "plug",
+            "pages": [
+              "A2A",
+              "WEBHOOK_SETUP"
+            ]
+          },
+          {
+            "group": "Specifications",
+            "icon": "file-lines",
+            "pages": [
+              "SPEC",
+              "TEST_STRATEGY",
+              "SECURITY",
+              "ROADMAP"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Contributing",
+        "icon": "code",
+        "groups": [
+          {
+            "group": "AI coding",
+            "icon": "robot",
+            "pages": [
+              "docs/AI-Coding/AI_CODING_ASSISTANT",
+              "docs/AI-Coding/AI_GIT_PRACTICES",
+              "docs/AI-Coding/CICD_PIPELINES",
+              "docs/AI-Coding/CODE_DEVELOPMENT_PLAN",
+              "docs/AI-Coding/CONTRIBUTION_BEST_PRACTICES"
+            ]
+          },
+          {
+            "group": "Release",
+            "icon": "tag",
+            "pages": [
+              "docs/RELEASE_PROCESS"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/enuno/unifi-mcp-server"
+      },
+      {
+        "label": "PyPI",
+        "href": "https://pypi.org/project/unifi-mcp-server/"
+      },
+      {
+        "label": "Changelog",
+        "href": "https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md"
+      }
+    ]
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/enuno/unifi-mcp-server"
+    },
+    "links": [
+      {
+        "header": "Documentation",
+        "items": [
+          {
+            "label": "Getting started",
+            "href": "/"
+          },
+          {
+            "label": "Agent skills",
+            "href": "/docs/SKILLS"
+          },
+          {
+            "label": "API reference",
+            "href": "/API"
+          },
+          {
+            "label": "Network playbook",
+            "href": "/NETWORK_PLAYBOOK"
+          }
+        ]
+      },
+      {
+        "header": "Project",
+        "items": [
+          {
+            "label": "GitHub",
+            "href": "https://github.com/enuno/unifi-mcp-server"
+          },
+          {
+            "label": "PyPI",
+            "href": "https://pypi.org/project/unifi-mcp-server/"
+          },
+          {
+            "label": "Roadmap",
+            "href": "/ROADMAP"
+          },
+          {
+            "label": "Security policy",
+            "href": "/SECURITY"
+          }
+        ]
+      },
+      {
+        "header": "Community",
+        "items": [
+          {
+            "label": "Changelog",
+            "href": "https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md"
+          },
+          {
+            "label": "Contributing",
+            "href": "https://github.com/enuno/unifi-mcp-server/blob/main/CONTRIBUTING.md"
+          },
+          {
+            "label": "Issues",
+            "href": "https://github.com/enuno/unifi-mcp-server/issues"
+          },
+          {
+            "label": "License",
+            "href": "https://github.com/enuno/unifi-mcp-server/blob/main/LICENSE"
+          }
+        ]
+      }
+    ]
+  },
+  "redirects": [
+    {
+      "source": "/README",
+      "destination": "https://github.com/enuno/unifi-mcp-server/blob/main/README.md"
+    },
+    {
+      "source": "/CHANGELOG",
+      "destination": "https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md"
+    },
+    {
+      "source": "/CONTRIBUTING",
+      "destination": "https://github.com/enuno/unifi-mcp-server/blob/main/CONTRIBUTING.md"
+    },
+    {
+      "source": "/LICENSE",
+      "destination": "https://github.com/enuno/unifi-mcp-server/blob/main/LICENSE"
+    },
+    {
+      "source": "/network-playbook",
+      "destination": "/NETWORK_PLAYBOOK"
+    },
+    {
+      "source": "/multi-controller",
+      "destination": "/MULTI_CONTROLLER"
+    },
+    {
+      "source": "/harbor-setup",
+      "destination": "/HARBOR_SETUP"
+    },
+    {
+      "source": "/mcp-toolbox",
+      "destination": "/MCP_TOOLBOX"
+    },
+    {
+      "source": "/webhook-setup",
+      "destination": "/WEBHOOK_SETUP"
+    },
+    {
+      "source": "/api",
+      "destination": "/API"
+    },
+    {
+      "source": "/a2a",
+      "destination": "/A2A"
+    },
+    {
+      "source": "/metrics",
+      "destination": "/METRICS"
+    },
+    {
+      "source": "/skills",
+      "destination": "/docs/SKILLS"
+    }
+  ]
+}

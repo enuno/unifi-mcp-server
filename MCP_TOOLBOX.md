@@ -578,15 +578,15 @@ docker inspect --format='{{json .State.Health}}' mcp-toolbox | jq
 
 ### Resources
 
-- **Agnost.ai Documentation**: <https://docs.agnost.ai>
-- **MCP Toolbox GitHub**: <https://github.com/googleapis/genai-toolbox>
-- **UniFi MCP Server**: <https://github.com/enuno/unifi-mcp-server>
+- **Agnost.ai Documentation**: [docs.agnost.ai](https://docs.agnost.ai)
+- **MCP Toolbox GitHub**: [googleapis/genai-toolbox](https://github.com/googleapis/genai-toolbox)
+- **UniFi MCP Server**: [enuno/unifi-mcp-server](https://github.com/enuno/unifi-mcp-server)
 
 ### Getting Help
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/enuno/unifi-mcp-server/issues)
 - **GitHub Discussions**: [Ask questions and share ideas](https://github.com/enuno/unifi-mcp-server/discussions)
-- **Agnost Support**: <support@agnost.ai>
+- **Agnost Support**: [support@agnost.ai](mailto:support@agnost.ai)
 
 ---
 
@@ -596,7 +596,7 @@ docker inspect --format='{{json .State.Health}}' mcp-toolbox | jq
 A: No, agnost.ai and MCP Toolbox are completely optional. The UniFi MCP server works without them.
 
 **Q: Is MCP Toolbox free?**
-A: Check agnost.ai pricing at <https://agnost.ai/pricing>
+A: Check agnost.ai pricing at [agnost.ai/pricing](https://agnost.ai/pricing)
 
 **Q: Can I run Toolbox without Docker?**
 A: Yes, but Docker is recommended. See agnost.ai documentation for alternative deployment methods.

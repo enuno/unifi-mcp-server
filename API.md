@@ -352,7 +352,7 @@ AGNOST_DISABLE_OUTPUT=true
 
 #### Viewing Analytics
 
-Once configured, visit your agnost.ai dashboard at <https://app.agnost.ai> to view:
+Once configured, visit your agnost.ai dashboard at [app.agnost.ai](https://app.agnost.ai) to view:
 
 - **Real-time Performance Metrics**: Tool execution times and latency
 - **Usage Trends**: Most frequently used tools and resources
@@ -3890,7 +3890,7 @@ Planned features for future releases:
 
 For issues, questions, or contributions:
 
-- **GitHub Issues:** <https://github.com/elvis/unifi-mcp-server/issues>
+- **GitHub Issues:** [enuno/unifi-mcp-server/issues](https://github.com/enuno/unifi-mcp-server/issues)
 - **Documentation:** See `README.md` and `CONTRIBUTING.md`
 - **Security Issues:** See `SECURITY.md`
 

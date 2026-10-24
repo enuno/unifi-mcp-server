@@ -1,0 +1,155 @@
+---
+title: "UniFi MCP Server"
+description: "AI-native control of UniFi networks, Protect cameras, and the UniFi cloud APIs through the Model Context Protocol."
+icon: "shield-halved"
+---
+
+The UniFi MCP Server exposes UniFi Network, UniFi Protect, and the UniFi cloud
+APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so an
+AI agent can read and change UniFi infrastructure through one standard
+interface. It runs against a single controller or, in fleet mode, many.
+
+<Note>
+  Current release: **0.6.1**. 343 tools in local mode, from 60 modules.
+</Note>
+
+## Quick start
+
+<CodeGroup>
+
+```bash npm
+# Install and run
+uvx unifi-mcp-server --help
+
+# Configure the credentials once
+export UNIFI_API_KEY=your-api-key
+export UNIFI_API_TYPE=local
+export UNIFI_LOCAL_HOST=192.168.2.1
+
+# Call a tool directly, without loading every tool into context
+unifi-cli list-clients --site default
+```
+
+```json MCP client
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "uvx",
+      "args": ["unifi-mcp-server"],
+      "env": {
+        "UNIFI_API_KEY": "your-api-key",
+        "UNIFI_API_TYPE": "local",
+        "UNIFI_LOCAL_HOST": "192.168.2.1"
+      }
+    }
+  }
+}
+```
+
+</CodeGroup>
+
+### Scoped profiles
+
+Start the server with only the tools you need, to keep the tool list small:
+
+```bash
+UNIFI_PROFILE=network unifi-mcp-server    # clients, VLANs, WiFi, DHCP, DNS
+UNIFI_PROFILE=devices unifi-mcp-server    # device management and control
+UNIFI_PROFILE=security unifi-mcp-server   # firewall, VPN, ACLs, content filtering
+UNIFI_PROFILE=system unifi-mcp-server     # backups, QoS, traffic flows, sites
+UNIFI_PROFILE=protect unifi-mcp-server    # cameras, NVRs, sensors, alarms
+```
+
+## API modes
+
+Set `UNIFI_API_TYPE` to choose how the server reaches UniFi.
+
+| Mode | What it reaches | Use it for |
+| --- | --- | --- |
+| `local` (recommended) | Your UniFi console or gateway on the LAN (`UNIFI_LOCAL_HOST`) | Everything: device and client control, configuration, firewall, Protect |
+| `cloud-v1` | UniFi's cloud API | Sites and aggregate statistics; no per-device control or configuration |
+| `cloud-ea` | UniFi's Early Access cloud API | Sites and aggregate statistics; no per-device control or configuration |
+
+Zone-based firewall, traffic flows, ACLs, device and client management, and
+Protect all require `local` mode.
+
+## Capability domains
+
+<CardGroup cols={2}>
+
+<Card title="Network operations" icon="network-wired" href="/NETWORK_PLAYBOOK">
+Clients, VLANs, WiFi SSIDs, DHCP reservations, DNS, WAN, and guest vouchers.
+</Card>
+
+<Card title="Device management" icon="microchip">
+Inventory, adoption, restarts, firmware upgrades, radio settings, port profiles,
+switching and stacks, topology export, and diagnostics.
+</Card>
+
+<Card title="Security" icon="lock">
+Firewall rules and groups, zone-based firewall, ACL rules, traffic matching
+lists, port forwarding, VPN and site-to-site VPN, and content filtering.
+</Card>
+
+<Card title="Protect" icon="video">
+Cameras, NVRs, views, events, sensors, lights, chimes, sirens, relays,
+speakers, and alarm hubs.
+</Card>
+
+<Card title="System and monitoring" icon="chart-line">
+Sites, backups, QoS and traffic routes, traffic flow analytics, DPI, RADIUS,
+guest portal, and SD-WAN.
+</Card>
+
+<Card title="Fleet mode" icon="server">
+Many controllers behind one server, with a controller registry, server-issued
+tokens with roles, a shared read cache, replicas, and background workers.
+</Card>
+
+</CardGroup>
+
+## Safety controls
+
+Every mutating tool requires `confirm=True` and supports `dry_run=True`. The
+server also offers read-only and dry-run modes, role-based access over risk
+tiers, and a hash-chained audit log. See [Tool profiles and safety
+controls](/SPEC) and the [security policy](/SECURITY).
+
+## Agent skills
+
+This site publishes agent skills for the server's capability domains. Agents
+discover them automatically, or install them with the skills CLI:
+
+```bash
+npx skills add https://your-docs-domain.com
+```
+
+Skills are also exposed as MCP resources through the site's search MCP server,
+so a connected agent can read them without installing anything.
+
+<Card title="Agent skills guide" icon="robot" href="/docs/SKILLS">
+How the skills are structured, how to install them, and which capability domain
+each one covers.
+</Card>
+
+## Documentation map
+
+<CardGroup cols={2}>
+
+<Card title="API reference" icon="square-terminal" href="/API">
+The full tool catalogue, with parameters and response shapes.
+</Card>
+
+<Card title="Network playbook" icon="book" href="/NETWORK_PLAYBOOK">
+Task-oriented recipes for day-to-day network operations.
+</Card>
+
+<Card title="Deployment" icon="rocket" href="/HARBOR_SETUP">
+Install and run the server on your own hosts.
+</Card>
+
+<Card title="Fleet mode" icon="server" href="/MULTI_CONTROLLER">
+Run against many controllers with shared state and role-scoped tokens.
+</Card>
+
+</CardGroup>

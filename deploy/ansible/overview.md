@@ -4,7 +4,7 @@ This playbook installs Docker and runs the UniFi MCP server as containers,
 from one host up to a small cluster. It deploys the same services as
 `docker-compose.fleet.yml`, adds nginx for several hosts, and sets up the
 least-privilege database role and the audit retention job that
-[SECURITY.md](../../SECURITY.md) describes.
+[security policy](/SECURITY) describes.
 
 | Layout | Inventory | What runs |
 | --- | --- | --- |
@@ -14,7 +14,7 @@ least-privilege database role and the audit retention job that
 
 Every layout serves Streamable HTTP with a bearer token (`MCP_AUTH_TOKEN`).
 To have an AI agent run all of this for you, start from a prompt in
-[docs/deploy-prompts/](../../docs/deploy-prompts/README.md).
+[docs/deploy-prompts/](/docs/deploy-prompts/overview).
 
 ## Requirements
 
@@ -101,7 +101,7 @@ past the new count are removed.
 ## Settings
 
 The role defaults are in `roles/unifi_mcp/defaults/main.yml`. Any other server
-setting from [API.md](../../API.md) goes in `unifi_mcp_env_extra`:
+setting from [API reference](/API) goes in `unifi_mcp_env_extra`:
 
 ```yaml
 unifi_mcp_env_extra:

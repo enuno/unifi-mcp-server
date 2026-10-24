@@ -624,7 +624,7 @@ asyncio.run(emergency_rollback("backup_20250129_160000_preRestore.unf"))
 
 For backup/restore issues:
 
-- **GitHub Issues**: https://github.com/elvis/unifi-mcp-server/issues
+- **GitHub Issues**: https://github.com/enuno/unifi-mcp-server/issues
 - **Documentation**: See `API.md` for tool references
 - **Security**: See `SECURITY.md` for vulnerability reporting
 

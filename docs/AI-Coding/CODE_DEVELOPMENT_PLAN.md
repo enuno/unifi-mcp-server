@@ -243,7 +243,7 @@ All endpoints from the UniFi API v10.0.140 documentation:
 
 ## Resources
 
-- UniFi API documentation (<https://developer.ui.com>)
+- UniFi API documentation ([developer.ui.com](https://developer.ui.com))
 - In-app Swagger/OpenAPI docs: `https://{GATEWAY_HOST}:{GATEWAY_PORT}/docs`
 - Updated `UNIFI_API.md` file
 

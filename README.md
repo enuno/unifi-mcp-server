@@ -264,7 +264,7 @@ services:
 
 The repository's [docker-compose.yml](docker-compose.yml) adds Redis and the MCP Toolbox dashboard ([MCP_TOOLBOX.md](MCP_TOOLBOX.md)); copy `.env.docker.example` to `.env` and run `make compose-up`. That example starts read-only (`UNIFI_READ_ONLY=true`) with a `viewer` stdio caller (`UNIFI_STDIO_ROLE=viewer`); to allow changes, set `UNIFI_READ_ONLY=false` and raise `UNIFI_STDIO_ROLE` to `operator`, or `admin` for destructive changes.
 
-- **Ansible:** [deploy/ansible/](deploy/ansible/README.md) deploys the server alone, a single-host fleet (server, worker, Redis, Postgres), or replicas behind nginx on several hosts. To have an AI agent run the deployment, start from a prompt in [docs/deploy-prompts/](docs/deploy-prompts/README.md).
+- **Ansible:** [deploy/ansible/](deploy/ansible/README.md) deploys the server alone, a single-host fleet (server, worker, Redis, Postgres), or replicas behind nginx on several hosts. To have an AI agent run the deployment, start from a prompt in [docs/deploy-prompts/](docs/deploy-prompts/overview.md).
 - **Kubernetes:** [deploy/helm/unifi-mcp/](deploy/helm/unifi-mcp/README.md) is a Helm chart for the server alone or in fleet mode with workers, taking every credential from an existing Secret.
 
 ## Calling the server from code

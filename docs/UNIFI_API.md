@@ -2175,7 +2175,7 @@ UniFi's QoS system provides comprehensive traffic prioritization and shaping cap
 **Best Practices:**
 - Use priority levels 5-7 for real-time traffic (voice, video conferencing)
 - Apply DSCP marking EF (46) for voice, AF41 (34) for high-quality video
-- Enable SQM on WAN interfaces <300 Mbps for best bufferbloat mitigation
+- Enable SQM on WAN interfaces under 300 Mbps for best bufferbloat mitigation
 - Use reference profiles (voice-first, video-conferencing, cloud-gaming) as starting points
 - Test QoS rules during peak hours to validate bandwidth guarantees
 
@@ -2623,7 +2623,7 @@ UniFi's Backup and Restore system provides critical disaster recovery capabiliti
 - **Cloud Sync**: Optionally sync backups to UniFi Cloud (requires account)
 
 **Backup Types:**
-- **Network Backups** (<10 MB): Network settings, device configurations, WiFi networks, firewall rules (fastest, recommended for frequent backups)
+- **Network Backups** (under 10 MB): Network settings, device configurations, WiFi networks, firewall rules (fastest, recommended for frequent backups)
 - **System Backups** (10-100+ MB): Complete OS, application, and device configurations (comprehensive, recommended for major changes)
 
 **Best Practices:**
@@ -2675,7 +2675,7 @@ Create a new backup of the specified type.
 }
 ```
 
-**Note**: Network backups complete in <30 seconds, system backups may take 1-3 minutes.
+**Note**: Network backups complete in under 30 seconds, system backups may take 1-3 minutes.
 
 ---
 

@@ -47,7 +47,7 @@ cd unifi-mcp-server
 3. Add the upstream repository as a remote:
 
 ```bash
-git remote add upstream https://github.com/elvis/unifi-mcp-server.git
+git remote add upstream https://github.com/enuno/unifi-mcp-server.git
 ```
 
 ## Development Setup

@@ -726,7 +726,7 @@ For security-related questions or concerns:
 
 We appreciate the security research community and recognize contributors who responsibly disclose vulnerabilities:
 
-<!-- Add acknowledged security researchers here -->
+{/*Add acknowledged security researchers here*/}
 
 ## Additional Resources
 

@@ -116,7 +116,7 @@ Rotation (`audit.rotateMb`) applies to the file either way.
 
 ## Values
 
-See `values.yaml`. Any non-secret setting from [API.md](../../../API.md) goes
+See `values.yaml`. Any non-secret setting from [API.md](/API) goes
 in `server.extraEnv`. The chart refuses to put a secret there.
 
 ## Image

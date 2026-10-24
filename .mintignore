@@ -1,0 +1,46 @@
+# Files excluded from the published Mintlify site.
+# Syntax is .gitignore-style. Mintlify already ignores .git, .github, .claude,
+# .agents, .cursor, .idea, .vscode, node_modules, and the root README.md,
+# LICENSE.md, CHANGELOG.md and CONTRIBUTING.md, so those are not repeated here.
+
+# --- Internal agent instructions ---------------------------------------------
+# These are prompts for coding agents working IN this repository, not
+# documentation for people or agents USING the published server.
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+
+# --- Internal planning and working documents --------------------------------
+DEVELOPMENT_PLAN.md
+GAP_REPORT.md
+TODO.md
+MAINTENANCE_POLICY.md
+RELEASE_CHECKLIST.md
+RELEASE_NOTES_0.2.5.md
+
+# --- Superseded and internal material ---------------------------------------
+# docs/archive/ holds historical plans that have been completed or abandoned.
+# docs/research/ holds working research notes, not maintained documentation.
+docs/archive/
+docs/research/
+
+# --- Local tooling and analysis output ---------------------------------------
+.serena/
+.analysis-reports/
+scripts/
+
+# --- Kubernetes and container configuration ----------------------------------
+# The Helm chart templates and the compose files are deployment inputs, not
+# documentation. Mintlify tries to parse YAML files as OpenAPI specs, so they
+# must be excluded explicitly or the build fails on the Go templating syntax.
+deploy/helm/unifi-mcp/templates/
+deploy/helm/unifi-mcp/ci/
+docker-compose*.yml
+*.yaml
+*.yml
+
+# --- Secrets -----------------------------------------------------------------
+# .env.example is kept: it documents the configuration surface with no values.
+.env
+.env.*
+!.env.example

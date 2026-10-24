@@ -17,7 +17,7 @@ outside the store (a SIEM anchor) reveals it.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +49,7 @@ async def _fill(engine: Any, chain_id: str = "a" * 32, count: int = RECORDS) -> 
         await sink.append(
             {
                 "event_id": f"{chain_id[:4]}-{n}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "event_type": "tool_call",
                 "operation": "update_network",
                 "result": "success",
@@ -288,7 +288,7 @@ class TestColumnCheck:
             "seq": 0,
             "hash": "h",
             "principal_id": None,
-            "ts": datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc),
+            "ts": datetime(2026, 10, 11, 12, 0, tzinfo=UTC),
         }
         base.update(columns)
         return SimpleNamespace(**base)
@@ -359,7 +359,7 @@ async def test_siem_anchors_catch_records_and_heads_rewritten_together(
     for n in range(RECORDS):
         record = {
             "event_id": f"anchored-{n}",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event_type": "tool_call",
             "operation": "update_network",
             "result": "success",

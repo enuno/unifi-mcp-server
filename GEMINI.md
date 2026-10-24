@@ -51,7 +51,7 @@ Create `.gemini/settings.json` in project root:
 
 ### Technology Stack
 
-- **Language**: Python 3.10+
+- **Language**: Python 3.11+
 - **Framework**: FastMCP (Model Context Protocol server)
 - **API Client**: Async UniFi Network API
 - **Testing**: pytest, pytest-asyncio, pytest-cov
@@ -84,7 +84,7 @@ src/
 
 #### Type Safety
 
-- Always use Python 3.10+ type hints
+- Always use Python 3.11+ type hints
 - Use `from __future__ import annotations` for forward references
 - Leverage Pydantic v2 for data validation
 - Use `typing` module: `Optional`, `List`, `Dict`, `Literal`, `TypedDict`
@@ -659,7 +659,7 @@ All mutating operations are logged to `audit.log`:
 
 ```bash
 # Check Python version
-python --version  # Must be 3.10+
+python --version  # Must be 3.11+
 
 # Check dependencies
 uv pip list | grep fastmcp

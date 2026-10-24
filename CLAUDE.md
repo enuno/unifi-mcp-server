@@ -7,7 +7,7 @@ Project-specific instructions for AI coding assistants working on the UniFi MCP 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network, Protect and Site Manager APIs as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface.
 
 - **Version**: v0.6.1 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
-- **Python**: 3.10+
+- **Python**: 3.11+
 - **Framework**: FastMCP, with httpx for HTTP and Pydantic v2 for models
 - **Size**: 343 tools in local mode and 71 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.
 
@@ -88,8 +88,9 @@ Project skills are in `.claude/skills/` (Claude Code loads them here). Their sou
 | `unifi-security-tools` | Firewall rules and policies, zones, groups, ACLs, content filtering, port forwarding, RADIUS |
 | `unifi-cloud-fleet-tools` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, or the fleet stack |
 | `unifi-mcp-tool-builder` | Adding a new tool in any area (the general workflow) |
+| `mintlify-docs` | The Mintlify documentation site: `docs.json`, `.mintignore`, `.mintlify/`, a published page, or the `mintlify` MCP server |
 
-To change a skill, edit `skills/<name>/SKILL.md` and copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`. `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that this file, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist. Run it after you edit them.
+To change a skill, edit `skills/<name>/SKILL.md` and copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`. The `mintlify-docs` skill is the exception: its source of truth is `.mintlify/skills/mintlify-docs/SKILL.md`, because Mintlify serves it from there. `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that this file, `AGENTS.md` and the tool-set skills cite only paths, links and names that exist. Run it after you edit them.
 
 ## Current Development Focus
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +21,7 @@ def make_entry(
 ) -> AuditLog:
     """Build an audit entry offset from a fixed base timestamp."""
     defaults: dict[str, Any] = {
-        "timestamp": datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(minutes=minutes),
+        "timestamp": datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=minutes),
         "agent_id": agent_id,
         "tool_name": tool_name,
         "params": {"site_id": "default"},
@@ -71,7 +71,7 @@ class TestSerialize:
     """Tests for the AuditLogger._serialize JSON fallback."""
 
     def test_datetimes_become_iso_strings(self) -> None:
-        moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        moment = datetime(2026, 1, 1, tzinfo=UTC)
 
         assert AuditLogger._serialize(moment) == moment.isoformat()
 
@@ -178,12 +178,12 @@ class TestGetAuditTrail:
         assert [entry.agent_id for entry in entries] == ["agent-a", "agent-b"]
 
     def test_filters_by_start_time(self, populated: AuditLogger) -> None:
-        entries = populated.get_audit_trail(start=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc))
+        entries = populated.get_audit_trail(start=datetime(2026, 1, 1, 0, 5, tzinfo=UTC))
 
         assert len(entries) == 2
 
     def test_filters_by_end_time(self, populated: AuditLogger) -> None:
-        entries = populated.get_audit_trail(end=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc))
+        entries = populated.get_audit_trail(end=datetime(2026, 1, 1, 0, 5, tzinfo=UTC))
 
         assert len(entries) == 1
 
@@ -207,17 +207,17 @@ class TestCoerceDatetime:
         assert AuditLogger._coerce_datetime(None) is None
 
     def test_aware_datetimes_are_unchanged(self) -> None:
-        moment = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        moment = datetime(2026, 1, 1, tzinfo=UTC)
 
         assert AuditLogger._coerce_datetime(moment) is moment
 
     def test_naive_datetimes_are_assumed_utc(self) -> None:
-        assert AuditLogger._coerce_datetime(datetime(2026, 1, 1)).tzinfo is timezone.utc
+        assert AuditLogger._coerce_datetime(datetime(2026, 1, 1)).tzinfo is UTC
 
     def test_iso_strings_with_a_z_suffix_are_parsed(self) -> None:
         parsed = AuditLogger._coerce_datetime("2026-01-01T00:00:00Z")
 
-        assert parsed == datetime(2026, 1, 1, tzinfo=timezone.utc)
+        assert parsed == datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class TestExportAuditLog:

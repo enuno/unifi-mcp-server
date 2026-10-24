@@ -29,6 +29,14 @@ docs/research/
 .analysis-reports/
 scripts/
 
+# --- Local Python environment ------------------------------------------------
+# A virtualenv inside the checkout holds site-packages documentation that
+# Mintlify would otherwise try to parse as MDX, failing the build on HTML
+# comments and bare URLs. It is gitignored, but the local build still
+# walks the working tree.
+.venv/
+venv/
+
 # --- Kubernetes and container configuration ----------------------------------
 # The Helm chart templates and the compose files are deployment inputs, not
 # documentation. Mintlify tries to parse YAML files as OpenAPI specs, so they

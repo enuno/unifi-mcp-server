@@ -30,7 +30,7 @@ from __future__ import annotations
 import csv
 import json
 from collections.abc import Iterable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 from typing import Any
 from uuid import uuid4
@@ -910,10 +910,10 @@ async def _create_block_action(
 
     rule_name = f"{rule_name_prefix}_{blocked_target.replace(':', '_')[:24]}"
     action_id = str(uuid4())
-    created_at = datetime.now(timezone.utc).isoformat()
+    created_at = datetime.now(UTC).isoformat()
     expires_at = None
     if duration == "temporary" and expires_in_hours:
-        expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)).isoformat()
+        expires_at = (datetime.now(UTC) + timedelta(hours=expires_in_hours)).isoformat()
 
     if dry_run:
         logger.info(sanitize_log_message(f"[DRY RUN] Would block {block_type}={blocked_target}"))

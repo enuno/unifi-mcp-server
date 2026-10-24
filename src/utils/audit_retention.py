@@ -29,7 +29,7 @@ import json
 import os
 import sys
 from collections.abc import Iterator
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -124,12 +124,12 @@ def _timestamp(record: dict[str, Any]) -> datetime | None:
         parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
     except ValueError:
         return None
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _expired(path: Path, cutoff: datetime) -> bool:
     """Every record in ``path`` is older than ``cutoff`` (and so is the file)."""
-    if datetime.fromtimestamp(path.stat().st_mtime, timezone.utc) >= cutoff:
+    if datetime.fromtimestamp(path.stat().st_mtime, UTC) >= cutoff:
         return False
     with open(path, encoding="utf-8") as f:
         for line in f:
@@ -173,7 +173,7 @@ def purge_expired_files(
     """
     if retention_days < 1:
         raise ValueError("retention_days must be at least 1")
-    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=retention_days)
+    cutoff = (now or datetime.now(UTC)) - timedelta(days=retention_days)
     result = RetentionResult(cutoff=cutoff, dry_run=dry_run)
     checkpoints = checkpoints_path(log_file)
     batches = checkpoint_batches(checkpoints)
@@ -252,7 +252,7 @@ def purge_expired_files(
             "archive": archive.name,
             "sha256": digest,
             "files": result.files,
-            "archived_at": datetime.now(timezone.utc).isoformat(),
+            "archived_at": datetime.now(UTC).isoformat(),
             "chains": [
                 {"chain_id": c.chain_id, "seq": c.last_seq, "hash": c.last_hash}
                 for c in result.chains

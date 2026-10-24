@@ -41,7 +41,7 @@ This command orchestrates the complete release preparation process including ver
    - Linting: `ruff check src/ tests/`
    - Type checking: `mypy src/`
    - Security scan: `bandit -r src/ -ll`
-   - Dependency check: `safety check`
+   - Dependency check: `pip-audit`
 
 4. Run full test suite with coverage:
    - Execute: `pytest --cov=src --cov-report=term-missing -v`

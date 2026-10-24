@@ -35,9 +35,16 @@ async def list_protect_cameras(
             params={"limit": final_limit, "offset": final_offset},
         )
 
-    data = response.get("data", []) if isinstance(response, dict) else []
-    total_count = response.get("totalCount", len(data)) if isinstance(response, dict) else len(data)
-    count = response.get("count", len(data)) if isinstance(response, dict) else len(data)
+    if isinstance(response, list):
+        data = response
+        count = len(data)
+        total_count = count
+    elif isinstance(response, dict):
+        data = response.get("data", [])
+        count = response.get("count", len(data))
+        total_count = response.get("totalCount", len(data))
+    else:
+        raise ValueError(f"Unexpected Protect inventory response type: {type(response).__name__}")
 
     cameras = [ProtectCamera.model_validate(item).model_dump(by_alias=True) for item in data]
     logger.info(sanitize_log_message(f"Listed {len(cameras)} Protect cameras"))

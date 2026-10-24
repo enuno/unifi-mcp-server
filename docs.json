@@ -274,5 +274,13 @@
       "source": "/skills",
       "destination": "/docs/SKILLS"
     }
-  ]
+  ],
+  "seo": {
+    "indexing": "navigable"
+  },
+  "integrations": {
+    "ga4": {
+      "measurementId": "G-HG3LSYPYW9"
+    }
+  }
 }

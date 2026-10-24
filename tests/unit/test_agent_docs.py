@@ -25,17 +25,23 @@ DEV_SKILLS = [
 SKILL_COPY_DIRS = (".claude/skills", ".agents/skills")
 #: Copied like the developer skills, but not citation-checked.
 COPIED_SKILLS = [*DEV_SKILLS, "unifi-mcp-tool-builder"]
+#: Skills whose source of truth is ``.mintlify/skills/`` rather than
+#: ``skills/``, because Mintlify serves them from that directory. The
+#: agent directories still hold copies, and those copies must match.
+MINTLIFY_SKILLS = ["mintlify-docs"]
+MINTLIFY_SKILL_ROOT = ".mintlify/skills"
 
 DOCS = [
     "CLAUDE.md",
     "AGENTS.md",
     ".claude/skills/zbf-implementation-guide.md",
     *(f"skills/{name}/SKILL.md" for name in DEV_SKILLS),
+    *(f"{MINTLIFY_SKILL_ROOT}/{name}/SKILL.md" for name in MINTLIFY_SKILLS),
 ]
 
 SKILLS = [doc for doc in DOCS if doc.endswith("/SKILL.md")]
 
-# Files whose text counts as "the code" when looking up a cited name.
+#: Files whose text counts as "the code" when looking up a cited name.
 CORPUS_GLOBS = [
     "src/**/*.py",
     "tests/**/*.py",
@@ -47,11 +53,18 @@ CORPUS_GLOBS = [
     ".github/workflows/*.yml",
 ]
 
+#: Docs whose backticked identifiers name things outside this repository, so
+#: the name lookup below does not apply to them. The Mintlify skill names
+#: the admin MCP's tools and its error codes, which live in Mintlify's
+#: product, not in this tree. Its repository paths are still checked.
+EXTERNAL_NAME_DOCS = {f"{MINTLIFY_SKILL_ROOT}/{name}/SKILL.md" for name in MINTLIFY_SKILLS}
+
 FENCE = re.compile(r"^```.*?^```", re.MULTILINE | re.DOTALL)
 INLINE_CODE = re.compile(r"`([^`\n]+)`")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 REPO_PATH = re.compile(
-    r"^((?:src|tests|docs|scripts|skills|\.claude|\.agents|\.github)/[\w./-]+?)(?::(\d+)(?:-(\d+))?)?(?:,\d+)*$"
+    r"^((?:src|tests|docs|scripts|skills|\.claude|\.agents|\.github|\.mintlify)/[\w./-]+?)"
+    r"(?::(\d+)(?:-(\d+))?)?(?:,\d+)*$"
 )
 SNAKE_NAME = re.compile(r"^_{0,2}[a-z][a-z0-9]*(?:_[a-z0-9]+)+(?:\(\))?$")
 UPPER_NAME = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
@@ -117,7 +130,9 @@ def test_doc_cites_only_existing_paths_links_and_names(doc_name: str) -> None:
     assert doc.is_file(), f"{doc_name} does not exist"
     text = doc.read_text()
 
-    problems = _missing_paths(text) + _broken_links(doc, text) + _unknown_names(text)
+    problems = _missing_paths(text) + _broken_links(doc, text)
+    if doc_name not in EXTERNAL_NAME_DOCS:
+        problems += _unknown_names(text)
 
     assert not problems, f"{doc_name}:\n" + "\n".join(problems)
 
@@ -147,6 +162,19 @@ def test_skill_copies_match_skills_dir(name: str, copy_dir: str):
     )
 
 
+@pytest.mark.parametrize("copy_dir", SKILL_COPY_DIRS)
+@pytest.mark.parametrize("name", MINTLIFY_SKILLS)
+def test_mintlify_skill_copies_match(name: str, copy_dir: str):
+    """Agent-directory copies of a Mintlify-hosted skill match its source."""
+    source = ROOT / MINTLIFY_SKILL_ROOT / name / "SKILL.md"
+    copy = ROOT / copy_dir / name / "SKILL.md"
+    assert copy.read_text() == source.read_text(), (
+        f"{copy_dir}/{name}/SKILL.md differs from {MINTLIFY_SKILL_ROOT}/{name}/SKILL.md; "
+        f"edit {MINTLIFY_SKILL_ROOT}/ and copy it: "
+        f"cp {MINTLIFY_SKILL_ROOT}/{name}/SKILL.md {copy_dir}/{name}/"
+    )
+
+
 @pytest.mark.parametrize(
     "skill_dir", sorted(p.name for p in (ROOT / "skills").iterdir() if p.is_dir())
 )
@@ -155,6 +183,24 @@ def test_published_skills_are_installable(skill_dir: str):
     text = (ROOT / "skills" / skill_dir / "SKILL.md").read_text()
     match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
     assert match, f"skills/{skill_dir}/SKILL.md has no YAML frontmatter"
+    frontmatter = match.group(1)
+    assert re.search(rf"^name:\s*{re.escape(skill_dir)}\s*$", frontmatter, re.M)
+    assert re.search(r"^description:", frontmatter, re.M)
+
+
+@pytest.mark.parametrize("skill_dir", MINTLIFY_SKILLS)
+def test_mintlify_skills_are_installable(skill_dir: str):
+    """Each ``.mintlify/skills/<name>/SKILL.md`` names its folder and has a description.
+
+    Mintlify reads these files to serve the site's skill discovery
+    endpoints, and it derives the published slug from the frontmatter
+    ``name``, so the name has to match the directory.
+    """
+    path = ROOT / MINTLIFY_SKILL_ROOT / skill_dir / "SKILL.md"
+    assert path.is_file(), f"{MINTLIFY_SKILL_ROOT}/{skill_dir}/SKILL.md does not exist"
+    text = path.read_text()
+    match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+    assert match, f"{MINTLIFY_SKILL_ROOT}/{skill_dir}/SKILL.md has no YAML frontmatter"
     frontmatter = match.group(1)
     assert re.search(rf"^name:\s*{re.escape(skill_dir)}\s*$", frontmatter, re.M)
     assert re.search(r"^description:", frontmatter, re.M)

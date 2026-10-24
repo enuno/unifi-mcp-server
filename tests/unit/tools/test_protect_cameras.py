@@ -72,3 +72,24 @@ async def test_get_protect_camera_success(mock_settings, mock_client):
 async def test_get_protect_camera_empty_id_raises(mock_settings):
     with pytest.raises(ValidationError, match="camera_id"):
         await get_protect_camera("", mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_list_protect_cameras_top_level_array(mock_settings, mock_client):
+    mock_client.get = AsyncMock(return_value=[{"id": "cam-1", "name": "Front Door", "model": "G4 Pro", "isRecording": True}])
+
+    with patch("src.tools.protect_cameras.ProtectClient", return_value=mock_client):
+        result = await list_protect_cameras(mock_settings)
+
+    assert result["count"] == 1
+    assert result["totalCount"] == 1
+    assert len(result["data"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_list_protect_cameras_unexpected_response_raises(mock_settings, mock_client):
+    mock_client.get = AsyncMock(return_value=None)
+
+    with patch("src.tools.protect_cameras.ProtectClient", return_value=mock_client):
+        with pytest.raises(ValueError, match="Unexpected Protect inventory response type"):
+            await list_protect_cameras(mock_settings)

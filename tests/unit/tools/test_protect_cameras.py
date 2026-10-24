@@ -76,7 +76,9 @@ async def test_get_protect_camera_empty_id_raises(mock_settings):
 
 @pytest.mark.asyncio
 async def test_list_protect_cameras_top_level_array(mock_settings, mock_client):
-    mock_client.get = AsyncMock(return_value=[{"id": "cam-1", "name": "Front Door", "model": "G4 Pro", "isRecording": True}])
+    mock_client.get = AsyncMock(
+        return_value=[{"id": "cam-1", "name": "Front Door", "model": "G4 Pro", "isRecording": True}]
+    )
 
     with patch("src.tools.protect_cameras.ProtectClient", return_value=mock_client):
         result = await list_protect_cameras(mock_settings)

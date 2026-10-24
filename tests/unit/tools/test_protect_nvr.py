@@ -83,7 +83,9 @@ async def test_get_protect_nvr_empty_id_raises(mock_settings):
 
 @pytest.mark.asyncio
 async def test_list_protect_nvrs_top_level_array(mock_settings, mock_client):
-    mock_client.get = AsyncMock(return_value=[{"id": "nvr-1", "name": "Protect NVR", "model": "UNVR"}])
+    mock_client.get = AsyncMock(
+        return_value=[{"id": "nvr-1", "name": "Protect NVR", "model": "UNVR"}]
+    )
 
     with patch("src.tools.protect_nvr.ProtectClient", return_value=mock_client):
         result = await list_protect_nvrs(mock_settings)

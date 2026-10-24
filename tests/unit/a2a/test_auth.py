@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -23,12 +23,12 @@ class TestAuthContext:
         assert AuthContext(mode="local", credentials={}).is_expired() is False
 
     def test_a_past_expiry_is_expired(self) -> None:
-        past = datetime.now(tz=timezone.utc) - timedelta(seconds=1)
+        past = datetime.now(tz=UTC) - timedelta(seconds=1)
 
         assert AuthContext(mode="local", credentials={}, expiry=past).is_expired() is True
 
     def test_a_future_expiry_is_not_expired(self) -> None:
-        future = datetime.now(tz=timezone.utc) + timedelta(hours=1)
+        future = datetime.now(tz=UTC) + timedelta(hours=1)
 
         assert AuthContext(mode="local", credentials={}, expiry=future).is_expired() is False
 
@@ -57,7 +57,7 @@ class TestLocalAuthProvider:
         assert LocalAuthProvider().authenticate({}).permissions == {"read"}
 
     def test_expiry_uses_the_default_ttl(self) -> None:
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
 
         context = LocalAuthProvider(default_ttl_seconds=60).authenticate({})
 
@@ -65,7 +65,7 @@ class TestLocalAuthProvider:
         assert timedelta(seconds=55) <= context.expiry - before <= timedelta(seconds=65)
 
     def test_expires_in_overrides_the_default_ttl(self) -> None:
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
 
         context = LocalAuthProvider(default_ttl_seconds=3600).authenticate({"expires_in": 30})
 
@@ -73,7 +73,7 @@ class TestLocalAuthProvider:
         assert context.expiry - before <= timedelta(seconds=35)
 
     def test_a_non_positive_ttl_is_clamped_to_one_second(self) -> None:
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
 
         context = LocalAuthProvider().authenticate({"expires_in": -100})
 
@@ -133,7 +133,7 @@ class TestCloudAuthProvider:
         assert CloudAuthProvider().authenticate({}).permissions == {"read"}
 
     def test_expires_in_overrides_the_default_ttl(self) -> None:
-        before = datetime.now(tz=timezone.utc)
+        before = datetime.now(tz=UTC)
 
         context = CloudAuthProvider(default_ttl_seconds=1800).authenticate({"expires_in": 30})
 

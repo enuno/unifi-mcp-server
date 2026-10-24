@@ -16,7 +16,7 @@ import secrets
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastmcp.server.auth import AccessToken, TokenVerifier
@@ -133,9 +133,7 @@ class TokenStore:
             raise ValidationError("expires_in_days must be 0 (never) or more")
         token = generate_token()
         expires_at = (
-            datetime.now(timezone.utc) + timedelta(days=expires_in_days)
-            if expires_in_days
-            else None
+            datetime.now(UTC) + timedelta(days=expires_in_days) if expires_in_days else None
         )
         row = ApiToken(
             name=name,
@@ -177,7 +175,7 @@ class TokenStore:
         async with self._sessions.begin() as session:
             row = await self._get(session, name)
             if row.revoked_at is None:
-                row.revoked_at = datetime.now(timezone.utc)
+                row.revoked_at = datetime.now(UTC)
             return TokenInfo.of(row)
 
     async def set_role(self, name: str, role: str) -> TokenInfo:
@@ -195,7 +193,7 @@ class TokenStore:
             Claims for the tool wrapper, or None if the token is unknown,
             revoked or expired
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self._sessions.begin() as session:
             row = await session.scalar(
                 select(ApiToken).where(ApiToken.token_hash == hash_token(token))

@@ -37,7 +37,7 @@ The goal of this project is to develop a Model Context Protocol (MCP) server tha
 
 The project leverages the following key technologies:
 
-- **Python:** The primary programming language (version 3.10 or higher).
+- **Python:** The primary programming language (version 3.11 or higher).
 - **FastMCP:** The core library for building the MCP server.
 - **uv:** For Python package and virtual environment management.
 - **httpx/requests:** For making HTTP requests to the UniFi Network API.

@@ -49,7 +49,7 @@ import time
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -122,8 +122,8 @@ def _timestamp(record: Mapping[str, Any]) -> datetime:
     if isinstance(stamp, str):
         with contextlib.suppress(ValueError):
             parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return datetime.now(UTC)
 
 
 def _body(record: Mapping[str, Any]) -> str:
@@ -541,7 +541,7 @@ class SiemForwarder:
 
         Without a target, one per chain head known.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with self._heads_lock:
             heads = dict(self._heads)
         return [

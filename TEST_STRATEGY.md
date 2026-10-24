@@ -77,5 +77,5 @@ Validate the server surface in the same order operators will depend on it: core 
 - `ruff check src/`
 - `mypy src/`
 - `bandit -r src/`
-- `safety check`
+- `pip-audit`
 - optional docs sync validation for `API.md`, `docs/UNIFI_API.md`, and `README.md`

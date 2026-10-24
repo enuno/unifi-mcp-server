@@ -52,7 +52,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install uv
         run: |
@@ -60,13 +60,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: uv sync --locked --python 3.10 --extra dev
-
-      - name: Run Safety check
-        run: |
-          source .venv/bin/activate
-          safety check --json --output safety-report.json
-        continue-on-error: true  # safety check deprecated in safety>=3.0; pip-audit below is the gate
+        run: uv sync --locked --python 3.12 --extra dev
 
       - name: Run pip-audit
         run: |
@@ -84,14 +78,6 @@ jobs:
           pip-audit --format json --output pip-audit-report.json \
             --ignore-vuln PYSEC-2022-42969 \
             --ignore-vuln PYSEC-2026-3740
-
-      - name: Upload Safety report
-        uses: actions/upload-artifact@v4
-        if: always() && hashFiles('safety-report.json') != ''
-        with:
-          name: safety-report
-          path: safety-report.json
-          if-no-files-found: ignore
 
       - name: Upload pip-audit report
         uses: actions/upload-artifact@v4
@@ -113,7 +99,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install detect-secrets
         run: pip install detect-secrets
@@ -157,7 +143,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
       - name: Install uv
         run: |
@@ -165,7 +151,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: uv sync --locked --python 3.10 --extra dev
+        run: uv sync --locked --python 3.12 --extra dev
 
       - name: Run Bandit
         run: |
@@ -327,7 +313,7 @@ jobs:
           echo "| Scanner | Status | Blocking? |" >> $GITHUB_STEP_SUMMARY
           echo "|---------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
           echo "| CodeQL | ${{ needs.codeql.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dependency Scan (Safety + pip-audit) | ${{ needs.dependency-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Scan (pip-audit) | ${{ needs.dependency-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Secret Scanning | ${{ needs.secret-scanning.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Bandit SAST | ${{ needs.bandit-scan.result }} | ✅ Yes |" >> $GITHUB_STEP_SUMMARY
           echo "| Trivy FS | ${{ needs.trivy-scan.result }} | ⚠️ Report only |" >> $GITHUB_STEP_SUMMARY

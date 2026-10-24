@@ -1,7 +1,7 @@
 """Network diagnostics MCP tools."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..api import UniFiClient
@@ -173,7 +173,7 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
             upload_speed_mbps=status_obj.get("xput_upload"),
             ping_ms=status_obj.get("latency"),
             timestamp=(
-                datetime.fromtimestamp(rundate, tz=timezone.utc).isoformat()
+                datetime.fromtimestamp(rundate, tz=UTC).isoformat()
                 if isinstance(rundate, int | float)
                 else None
             ),
@@ -248,7 +248,7 @@ async def get_speed_test_history(
                     upload_speed_mbps=item.get("xput_upload"),
                     ping_ms=item.get("latency"),
                     timestamp=(
-                        datetime.fromtimestamp(ts / 1000, tz=timezone.utc).isoformat()
+                        datetime.fromtimestamp(ts / 1000, tz=UTC).isoformat()
                         if isinstance(ts, int | float)
                         else None
                     ),

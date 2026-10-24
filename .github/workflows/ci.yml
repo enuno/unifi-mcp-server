@@ -129,7 +129,7 @@ jobs:
           bandit -r src/ -f json -o bandit-report.json -ll
 
       - name: Upload Bandit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bandit-report

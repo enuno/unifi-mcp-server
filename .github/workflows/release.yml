@@ -185,7 +185,7 @@ jobs:
           tags: ${{ steps.docker-meta.outputs.tags }}
           labels: ${{ steps.docker-meta.outputs.labels }}
           cache-from: type=gha
-          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm64/v8
+          platforms: linux/amd64,linux/arm64
 
       # The same image with the fleet extras (Redis, Postgres), tagged
       # <version>-fleet; the Helm chart and Ansible playbook use it.

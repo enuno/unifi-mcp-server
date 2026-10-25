@@ -1,7 +1,7 @@
 {
   "name": "unifi-mcp-server",
   "description": "MCP server for managing UniFi Network, Protect, Site Manager, and A2A delegation",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "protocol": "MCP/1.0",
   "capabilities": [
     "network-management",

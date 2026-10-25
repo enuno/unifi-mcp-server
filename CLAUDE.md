@@ -6,7 +6,7 @@ Project-specific instructions for AI coding assistants working on the UniFi MCP 
 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network, Protect and Site Manager APIs as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface.
 
-- **Version**: v0.6.1 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
+- **Version**: v0.6.2 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 - **Python**: 3.11+
 - **Framework**: FastMCP, with httpx for HTTP and Pydantic v2 for models
 - **Size**: 343 tools in local mode and 71 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.

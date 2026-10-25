@@ -31,19 +31,20 @@ After the tag is pushed, the release workflow should:
 3. Build multi-arch Docker images
 4. Publish container images to GitHub Container Registry
 5. Create the GitHub release entry
-6. Generate or attach release notes
+6. Publish the wheel and sdist to PyPI using the repository's trusted publisher
+7. Generate or attach release notes
 
 ### 3. Manual publishing steps
 
-Depending on the release channel, publish one or more of the following:
+The release workflow publishes the Python package and container images after
+the blocking test and security gates pass. Do not upload a second copy from a
+workstation.
 
 #### PyPI
 
-```bash
-python -m build
-twine check dist/*
-twine upload dist/*
-```
+PyPI publication is performed by `pypa/gh-action-pypi-publish` using GitHub
+Actions OIDC trusted publishing. The PyPI project must have the workflow
+publisher configured for this repository and the `release.yml` workflow.
 
 #### Docker images
 

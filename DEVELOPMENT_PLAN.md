@@ -511,6 +511,7 @@ Step 5 is the only route to the Live Flows terminate endpoint: Ubiquiti document
 
 | Version | Scope | Notes |
 |---|---|---|
+| v0.6.2 | Patch | **Release candidate 2026-10-25**: dependency/security maintenance, trusted PyPI publishing, and release metadata synchronization |
 | v0.6.1 | Patch | **Released 2026-10-14**: publishes the wheel, sdist and SBOM missing from v0.6.0 (immutable-release asset upload fixed), Supermemory v5 client |
 | v0.6.0 | Fleet Phases 0–5 + Phase 7 | **Released 2026-10-12**: multi-controller fleet stack (`docs/FLEET_SCALING_PLAN.md`), SIEM export and audit retention, Ansible playbook, Helm chart and `-fleet` images, agent setup prompts |
 | v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |

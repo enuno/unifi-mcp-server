@@ -42,16 +42,19 @@ workstation.
 
 #### PyPI
 
-PyPI publication is performed by `pypa/gh-action-pypi-publish` using GitHub
-Actions OIDC trusted publishing. The PyPI project must have the workflow
-publisher configured for this repository and the `release.yml` workflow.
+PyPI publication is performed by `pypa/gh-action-pypi-publish` with the
+repository Actions secret `PYPI_RELEASE_KEY`, whose value is maintained in the
+Bitwarden secrets project. The workflow uses the PyPI token as `__token__` and
+publishes only after the build-and-test job succeeds. If PyPI trusted
+publishing is configured later, replace the token inputs with OIDC and remove
+the secret after verifying the new publisher claims.
 
 #### Docker images
 
 ```bash
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1        # semver tags have no leading v
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1-fleet  # with the fleet extras (amd64, arm64)
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4        # semver tags have no leading v
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4-fleet  # with the fleet extras (amd64, arm64)
 ```
 
 #### npm (metadata wrapper)

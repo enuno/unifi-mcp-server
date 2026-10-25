@@ -402,7 +402,9 @@ async def list_pending_devices(
         offset: Number of devices to skip
 
     Returns:
-        List of pending device dictionaries
+        List of pending device dictionaries. A pending device has no
+        controller ID yet, so its ``id`` is ``None``; key it by ``mac``,
+        which is what ``adopt_device`` takes.
     """
     site_id = validate_site_id(site_id)
     limit, offset = validate_limit_offset(limit, offset)

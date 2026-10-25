@@ -6,7 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 class Device(BaseModel):
     """UniFi network device information."""
 
-    id: str = Field(..., description="Device ID", alias="_id")
+    # The controller assigns _id at adoption. A device pending adoption has
+    # none and is identified by its MAC, which adopt_device takes.
+    id: str | None = Field(
+        None, description="Device ID (absent until the device is adopted)", alias="_id"
+    )
     name: str | None = Field(None, description="Device name")
     model: str = Field(..., description="Device model")
     type: str = Field(..., description="Device type (uap, usw, ugw, etc.)")

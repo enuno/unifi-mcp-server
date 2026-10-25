@@ -31,26 +31,30 @@ After the tag is pushed, the release workflow should:
 3. Build multi-arch Docker images
 4. Publish container images to GitHub Container Registry
 5. Create the GitHub release entry
-6. Generate or attach release notes
+6. Publish the wheel and sdist to PyPI using the repository's trusted publisher
+7. Generate or attach release notes
 
 ### 3. Manual publishing steps
 
-Depending on the release channel, publish one or more of the following:
+The release workflow publishes the Python package and container images after
+the blocking test and security gates pass. Do not upload a second copy from a
+workstation.
 
 #### PyPI
 
-```bash
-python -m build
-twine check dist/*
-twine upload dist/*
-```
+PyPI publication is performed by `pypa/gh-action-pypi-publish` with the
+repository Actions secret `PYPI_RELEASE_KEY`, whose value is maintained in the
+Bitwarden secrets project. The workflow uses the PyPI token as `__token__` and
+publishes only after the build-and-test job succeeds. If PyPI trusted
+publishing is configured later, replace the token inputs with OIDC and remove
+the secret after verifying the new publisher claims.
 
 #### Docker images
 
 ```bash
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1        # semver tags have no leading v
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.1-fleet  # with the fleet extras (amd64, arm64)
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4        # semver tags have no leading v
+docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4-fleet  # with the fleet extras (amd64, arm64)
 ```
 
 #### npm (metadata wrapper)

@@ -22,7 +22,7 @@
 
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
-**Current release: 0.6.1.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
+**Current release: 0.6.4.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Contents
 

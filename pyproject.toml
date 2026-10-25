@@ -1,6 +1,6 @@
 [project]
 name = "unifi-mcp-server"
-version = "0.6.1"
+version = "0.6.4"
 description = "A Model Context Protocol (MCP) server for UniFi Network API"
 authors = [
     {name = "enuno", email = "noreply@github.com"}
@@ -236,11 +236,12 @@ select = [
     "I",  # isort
     "B",  # flake8-bugbear
     "C4", # flake8-comprehensions
-    "UP", # pyupgrade
+    "UP",  # pyupgrade
     "D",  # pydocstyle — Google-style docstrings enforced
 ]
 ignore = [
     "E501",  # line too long, handled by black
+    "UP042", # keep str/Enum classes for Python 3.11 compatibility
     "B008",  # do not perform function calls in argument defaults
     "C901",  # too complex
     "D401",  # imperative mood — too pedantic

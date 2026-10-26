@@ -3,11 +3,13 @@
 Scope: `src/api/protect_client.py`, `src/models/protect_camera.py`, `src/models/protect_nvr.py`, `src/resources/protect.py`, `src/tools/protect_cameras.py`, `src/tools/protect_nvr.py`, and related tests, compared against `src/api/client.py`, `src/resources/*.py`, and `src/tools/{networks,network_config}.py`.
 
 ## Executive summary
+
 The Protect scaffold is **not yet production-runnable**. The main problems are missing package/config wiring, import/export gaps, and test coverage that currently masks runtime failures.
 
 ## Findings
 
 ### 1) High: Protect modules depend on missing package API surface
+
 - `src/resources/protect.py` imports `ProtectClient` via `from ..api import ProtectClient`, but `src/api/__init__.py` only exports `UniFiClient` and `RateLimiter`.
 - `src/tools/protect_cameras.py` imports `ProtectCamera` via `from ..models import ProtectCamera`, but `src/models/__init__.py` does not export `ProtectCamera` or `ProtectNVR`.
 
@@ -18,6 +20,7 @@ The Protect scaffold is **not yet production-runnable**. The main problems are m
 ---
 
 ### 2) High: ProtectClient depends on a Settings helper that does not exist
+
 - `src/api/protect_client.py` and all Protect tools/resources call `settings.get_protect_integration_path(...)`.
 - That method is **not implemented** in `src/config/config.py` (no match in the config package).
 
@@ -30,6 +33,7 @@ The Protect scaffold is **not yet production-runnable**. The main problems are m
 ---
 
 ### 3) High: Protect scaffold is not wired into the MCP server
+
 - `src/main.py` imports and registers Network/Site/Client/Device modules, but there is **no import or registration path for Protect**.
 - `ProtectResource` is defined, but nothing instantiates or exposes it in `main.py`.
 - The Protect tools are not included in the tool-module lists or profile maps.
@@ -41,7 +45,9 @@ The Protect scaffold is **not yet production-runnable**. The main problems are m
 ---
 
 ### 4) Medium: ProtectClient is less consistent than the existing core client
+
 Compared with `src/api/client.py`, `ProtectClient` is much thinner:
+
 - no retry/backoff logic for transient network failures
 - no differentiated handling for 401/403/404/429
 - no response normalization beyond raw `response.json()`
@@ -54,6 +60,7 @@ Compared with `src/api/client.py`, `ProtectClient` is much thinner:
 ---
 
 ### 5) Medium: Response-shape handling is brittle and under-tested
+
 - `list_protect_cameras()` / `list_protect_nvrs()` assume dict responses with a `data` array; list-shaped JSON would be treated as empty.
 - `get_protect_camera()` / `get_protect_nvr()` assume a single object shape; there is no explicit empty-response/404 path.
 - The tests only cover happy paths, plus auth/init, and do not exercise bad responses, missing fields, or envelope variants.
@@ -63,9 +70,11 @@ Compared with `src/api/client.py`, `ProtectClient` is much thinner:
 **Fix:** add explicit response-shape tests, error-path tests, and one integration-style seam that proves the raw API contract for Protect.
 
 ## Verification performed
+
 - Ran:
   - `pytest -q tests/unit/api/test_protect_client.py` → **passed** (`6 passed`)
   - `pytest -q tests/unit/api/test_protect_client.py tests/unit/resources/test_protect_resource.py tests/unit/tools/test_protect_cameras.py tests/unit/tools/test_protect_nvr.py` → **failed during collection** with import errors from `src.api`.
 
 ## Bottom line
+
 The scaffold is a reasonable start, but it is currently blocked by missing wiring and missing config API. Fix the package exports and `Settings` helper first; then add registration in `main.py` and broaden the test matrix beyond happy-path mocks.

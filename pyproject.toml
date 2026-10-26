@@ -138,6 +138,13 @@ strict_equality = true
 show_error_codes = true
 show_column_numbers = true
 ignore_missing_imports = true
+exclude = [
+    '^\.agents/',
+    '^\.claude/',
+    '^\.memsearch/',
+    '^\.omc/',
+    '^\.serena/',
+]
 
 [[tool.mypy.overrides]]
 module = "tests.*"

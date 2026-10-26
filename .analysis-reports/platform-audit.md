@@ -1,7 +1,9 @@
 # Phase 5 Enterprise Readiness Audit
 
 ## Scope
+
 Reviewed:
+
 - `src/a2a/__init__.py`
 - `src/a2a/agent_card.py`
 - `src/a2a/audit.py`
@@ -13,6 +15,7 @@ Reviewed:
 - Supporting references in `SPEC.md`, `DEVELOPMENT_PLAN.md`, `API.md`, and `src/main.py`
 
 ## Executive verdict
+
 The Phase 5 A2A / safety / audit surface is **partially implemented but not enterprise-ready**.
 
 The code has the right building blocks — A2A routing, basic auth contexts, confirmation tokens, audit logging, and rate-limited safety policy evaluation — but several critical enterprise controls are either incomplete or inconsistent with the spec:
@@ -26,26 +29,31 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 ## What is implemented
 
 ### A2A surface
+
 - `A2AHTTPRouter` routes `/a2a/agent-card`, `/a2a/discover`, `/a2a/delegate`, `/a2a/confirm`, and `/a2a/audit` (`src/a2a/http_handlers.py:281-351`).
 - `src/main.py` mounts those routes into the FastMCP app when not using stdio (`src/main.py:430-507`).
 - `discover_handler` returns a simple manifest with capability buckets and optional rate-limit info (`src/a2a/http_handlers.py:109-147`).
 
 ### Safety / route policy
+
 - `SafetyController` classifies tools as read/write/destructive and applies per-class rate limits (`src/a2a/route_policy.py:58-314`).
 - `ConfirmationWorkflow` creates time-bounded confirmation tokens and verifies them (`src/a2a/route_policy.py:316-385`).
 - `delegate_handler` gates execution behind auth, safety validation, and audit logging (`src/a2a/http_handlers.py:150-231`).
 
 ### Audit
+
 - `AuditLogger` persists JSONL entries to disk and keeps an in-memory trail for filtering/export (`src/a2a/audit.py:32-151`).
 - `get_audit_handler` exposes filtered audit reads over HTTP (`src/a2a/http_handlers.py:255-278`).
 
 ### Auth
+
 - `AuthManager` normalizes local/cloud auth and maps permissions to tool categories (`src/a2a/auth.py:122-192`).
 - `LocalAuthProvider` and `CloudAuthProvider` both produce `AuthContext` objects with expiry support (`src/a2a/auth.py:19-119`).
 
 ## Gaps and inconsistencies
 
 ### 1) Auth is not default-deny
+
 **Why it matters:** SPEC requires default deny for unrecognized keys and per-tool permission scoping (`SPEC.md:94-108`, `DEVELOPMENT_PLAN.md:124-129`).
 
 - `LocalAuthProvider._permissions_from_credentials()` grants `{"read"}` even when credentials are empty (`src/a2a/auth.py:58-68`).
@@ -55,6 +63,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** This is a major enterprise-readiness gap. The current behavior does not match the spec’s default-deny requirement.
 
 ### 2) Confirmation can be bypassed
+
 **Why it matters:** destructive / sensitive actions should require explicit confirmation.
 
 - `SafetyController.requires_confirmation()` returns `False` as soon as any confirm-like parameter is present (`src/a2a/route_policy.py:205-230`).
@@ -64,6 +73,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** This is a high-severity logic bug. The confirmation gate should be tied to token verification, not merely a parameter hint.
 
 ### 3) Audit logging is incomplete for enterprise use
+
 **Why it matters:** SPEC requires timestamp, session id, API key id, tool name, controller, site, parameters, result, status, duration, plus export/query tools and no secrets in logs (`SPEC.md:110-119`).
 
 - `AuditLog` currently records only `timestamp`, `agent_id`, `tool_name`, `params`, `result`, `safety_level`, and `duration_ms` (`src/a2a/audit.py:19-30`).
@@ -74,6 +84,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** Useful for local debugging, but not yet a robust append-only enterprise audit trail.
 
 ### 4) A2A discovery contract is incomplete
+
 **Why it matters:** SPEC requires a repository-root `agent-card.json` and `/.well-known/agent-card.json` when HTTP transport is enabled (`SPEC.md:133-142`, `A2A.md:9-15`).
 
 - `get_agent_card_handler()` returns an in-memory manifest, but there is no repository-root `agent-card.json` artifact in the repo.
@@ -84,6 +95,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** Good start, but discovery clients will not see the exact contract described in the phase docs.
 
 ### 5) Metrics are missing
+
 **Why it matters:** SPEC and the roadmap require Prometheus metrics (`SPEC.md:121-132`, `DEVELOPMENT_PLAN.md:127-128`, `API.md:113`).
 
 - There is no metrics module, no Prometheus dependency usage, and no `/metrics` endpoint in `src/`.
@@ -93,6 +105,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** This is the largest remaining observability gap for Phase 5.
 
 ### 6) Webhook/event-bus support remains only partly realized
+
 **Why it matters:** SPEC requires normalized webhook events and optional Redis fan-out (`SPEC.md:143-152`, `WEBHOOK_SETUP.md`).
 
 - The doc set describes webhook normalization and bus fan-out, but the A2A layer does not publish normalized internal events.
@@ -101,6 +114,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 **Assessment:** Likely still a separate workstream, but it is still part of Phase 5 completeness.
 
 ## Positive signals
+
 - The codebase already has the right structural pieces for a safety-gated enterprise surface:
   - route policy abstraction
   - auth context abstraction
@@ -111,6 +125,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
 - The `src/a2a` package is organized cleanly and exports a coherent API surface from `__init__.py`.
 
 ## Recommended next implementation steps
+
 1. **Fix auth default-deny semantics**
    - Require explicit scopes/permissions for all requests.
    - Return denial for missing or unrecognized credentials.
@@ -142,6 +157,7 @@ The code has the right building blocks — A2A routing, basic auth contexts, con
    - Ensure idempotency and controlled logging.
 
 ## Readiness summary
+
 **Phase 5 status:** not yet enterprise-ready.
 
 The codebase has the framework of Phase 5 controls, but the current implementation still has two blocking security correctness issues (auth default-deny and confirmation bypass) plus two major platform gaps (metrics and A2A discovery contract).

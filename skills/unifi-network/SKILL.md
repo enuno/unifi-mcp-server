@@ -33,7 +33,7 @@ skills).
 |---|---|
 | `list_vlans` | List all networks/VLANs on a site |
 | `get_network_details` | Configuration details for a specific network |
-| `get_network_statistics` | Traffic statistics for a network |
+| `get_network_statistics` | Traffic statistics for the whole site (takes `site_id` only, not a network) |
 | `get_subnet_info` | Subnet and IP allocation info for a network |
 | `create_network` | Create a new VLAN/network |
 | `update_network` | Modify an existing network (name, VLAN ID, subnet…) |
@@ -80,7 +80,7 @@ skills).
 |---|---|
 | `list_vouchers` | List all active guest vouchers |
 | `get_voucher` | Get details for a specific voucher |
-| `create_vouchers` | Generate new guest vouchers (count, duration, quota) |
+| `create_vouchers` | Generate new guest vouchers (`count`, `time_limit_minutes`, `data_usage_limit_mb`; `name` and `time_limit_minutes` are required) |
 | `delete_voucher` | Delete a single voucher |
 | `bulk_delete_vouchers` | Delete multiple vouchers at once |
 
@@ -95,7 +95,8 @@ Create network with name "IoT", VLAN ID 20, subnet 192.168.20.0/24, then
 create SSID "IoT-WiFi" on that VLAN
 
 # Fix a guest's internet access
-Authorize guest with MAC aa:bb:cc:dd:ee:ff for 4 hours with 10 GB quota
+Authorize guest with client_id aa:bb:cc:dd:ee:ff, duration 14400 (seconds),
+and data_usage_limit_mbytes 10240 (MB)
 
 # Assign a static IP to a printer
 Create DHCP reservation for MAC 00:11:22:33:44:55 with IP 192.168.1.100

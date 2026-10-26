@@ -59,7 +59,10 @@ Groups are reusable IP/port sets referenced by rules.
 | `assign_network_to_zone` | Add a network/VLAN to a zone |
 | `unassign_network_from_zone` | Remove a network from a zone |
 | `get_zone_networks` | List networks assigned to a zone |
-| `get_zone_statistics` | Traffic stats for a zone |
+
+There is no per-zone traffic-statistics tool. Zone traffic is read through
+the flow tools (`get_top_flows`, `get_client_flow_aggregation`) or the
+topology counters (`get_topology_statistics`).
 
 ### ZBF Policies
 
@@ -75,13 +78,26 @@ Groups are reusable IP/port sets referenced by rules.
 
 | Tool | Description |
 |---|---|
-| `get_zbf_matrix` | Full zone-to-zone policy matrix |
-| `get_zone_policies` | All policies for a specific zone |
-| `get_zone_matrix_policy` | Policy between two specific zones |
-| `update_zbf_policy` | Update a zone-pair policy |
-| `delete_zbf_policy` | Delete a zone-pair policy |
-| `block_application_by_zone` | Block a DPI application category in a zone |
-| `list_blocked_applications` | List applications blocked by zone policies |
+| `get_zone_policy_matrix` | Full zone-to-zone policy matrix |
+| `list_firewall_zones_v2` | The zones, with the policies that apply to each |
+| `get_firewall_policy` | One policy in full, by id |
+| `update_firewall_policy` | Update a zone-pair policy (requires `confirm=True`) |
+| `delete_firewall_policy` | Delete a zone-pair policy (requires `confirm=True`) |
+| `get_zone_networks` | The networks assigned to one zone |
+
+### Application blocking
+
+There is no per-zone application-block tool. Blocking an application is a
+zone policy whose match criteria name the application category, and the
+categories come from the DPI tools.
+
+| Tool | Description |
+|---|---|
+| `list_dpi_application_categories` | The application categories you can match on |
+| `list_dpi_applications` | The applications in each category |
+| `get_application_info` | One application's details |
+| `list_top_applications` | The applications with the most traffic on a site |
+| `block_flow_application` | Block a flow matching an application (requires `confirm=True`) |
 
 ## ACL Rules (local API)
 
@@ -137,5 +153,5 @@ Create zone "IoT", assign IoT VLAN to it, then create ZBF policy blocking
 IoT → LAN (action: drop) but allowing IoT → WAN (action: allow)
 
 # Expose a home server
-Create port forward: external port 443 → 192.168.1.50:443 (tcp)
+Create port forward with name "https-web", dst_port 443, fwd_ip 192.168.1.50, fwd_port 443 (tcp). The name is required.
 ```

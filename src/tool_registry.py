@@ -141,12 +141,23 @@ def _audit_logger_for(settings: Any) -> AuditLogger | None:
 
 
 def _request_ids() -> tuple[str | None, str | None]:
-    """Return the MCP session and request ids of the current call, if any."""
+    """Return the MCP session and request ids of the current call, if any.
+
+    Both are optional. A tool can run outside an MCP request — the A2A
+    delegation endpoint calls tools from a plain HTTP route, and a
+    background worker calls them with no session at all — so the absence of
+    a session or a request id is not an error. It only means the audit
+    record carries no session reference.
+    """
     try:
         ctx = get_context()
     except RuntimeError:
         return None, None
-    return ctx.session_id, ctx.request_id
+    try:
+        return ctx.session_id, ctx.request_id
+    except RuntimeError:
+        # A context without a session: the ids are simply not available.
+        return None, None
 
 
 def is_mutating_tool(fn: Any) -> bool:

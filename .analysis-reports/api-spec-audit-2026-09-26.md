@@ -64,6 +64,7 @@ executing any real action):
 | F3 client actions | `POST .../clients/{clientId}/actions` -> 400 `api.request.unknown-type-id` (exists; UUID path verified) | `POST .../clients/{mac}/action` -> 404 "No endpoint" | CONFIRMED |
 
 Spec vocabulary extracted from the v10.6.106 snapshot:
+
 - Port actions: exactly one — `POWER_CYCLE` (PoE power-cycle); body `{"action"}` only.
 - Client actions: `AUTHORIZE_GUEST_ACCESS` (optional top-level
   `timeLimitMinutes` 1-1000000, `dataUsageLimitMBytes` 1-1048576,

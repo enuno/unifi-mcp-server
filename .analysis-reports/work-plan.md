@@ -7,11 +7,13 @@
 ## Wave 1: discovery and audit (complete)
 
 **Reports:**
+
 - `.analysis-reports/product-assessment.md`
 - `.analysis-reports/backend-audit.md`
 - `.analysis-reports/platform-audit.md`
 
 **Key findings:**
+
 1. Missing package exports for Protect client, models, resources, tools.
 2. Missing `Settings.get_protect_integration_path(...)` runtime helper.
 3. Protect tools/resources not registered in `src/main.py`.
@@ -21,6 +23,7 @@
 ## Wave 2: wiring and runtime enablement (complete)
 
 **Implemented changes:**
+
 - Exported `ProtectClient` from `src/api/__init__.py`.
 - Exported `ProtectCamera` and `ProtectNVR` from `src/models/__init__.py`.
 - Exported `ProtectResource` from `src/resources/__init__.py`.
@@ -30,6 +33,7 @@
 - Added `protect` profile to `_PROFILE_MODULES`.
 
 **Verification:**
+
 - `python -c "import src.main; print('OK')"` — OK
 - `pytest tests/unit/api/test_protect_client.py tests/unit/tools/test_protect_cameras.py tests/unit/tools/test_protect_nvr.py tests/unit/resources/test_protect_resource.py tests/unit/test_tool_registry.py -q` — 17 passed
 - `pytest tests/unit -q` — 1399 passed, 20 warnings

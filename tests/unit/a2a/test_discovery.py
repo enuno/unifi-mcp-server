@@ -104,11 +104,11 @@ class TestBuildAgentCard:
     def test_delegates_to_the_card_builder(self, local_settings: Settings) -> None:
         card = build_agent_card(build_populated_mcp(), local_settings)
 
-        assert {skill.name for skill in card.skills} == {
+        assert {skill["name"] for skill in card["skills"]} == {
             "list_site_clients",
             "delete_site_device",
         }
-        assert [resource.uri for resource in card.resources] == ["unifi://sites"]
+        assert [r["uri"] for r in card["metadata"]["resources"]] == ["unifi://sites"]
 
 
 class TestGetSkillsManifest:

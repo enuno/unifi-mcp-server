@@ -62,6 +62,12 @@ Requires cloud API or Site Manager access.
 | Tool | Description |
 |---|---|
 | `list_traffic_routes` | List UniFi Traffic Routes (policy-based routing, e.g. clients or domains via VPN); local API only |
+| `get_smart_queue_status` | The Smart Queue configuration and status |
+| `configure_smart_queue` | Configure Smart Queue (requires `confirm=True`) |
+
+There is **no** tool for creating, updating or deleting a traffic route.
+The server can read the routes the controller already has and can configure
+Smart Queue, but a new route must be created in the console UI.
 
 ## Traffic Flow Analytics (local API only)
 
@@ -139,13 +145,17 @@ Get top flows for the last 30 minutes, then get client flow aggregation
 to identify which device is responsible
 
 # Block Netflix on guest network
-Get DPI categories, find the streaming category ID, then block_flow_application
-for that category on the guest VLAN zone
+Get DPI categories, find the streaming category ID, then look up the flows
+matching it and block each one with block_flow_application, passing the
+flow_id of that flow. The tool blocks the destination of one flow, so it
+takes a flow_id and an optional duration, not a category and not a zone.
 
 # Set up RADIUS for WPA2-Enterprise
-Create RADIUS profile with your auth server, then update the corporate SSID
-to use WPA2-Enterprise with that profile
+Create a RADIUS profile with create_radius_profile. It needs the auth
+server's address and the shared secret (auth_secret) - the secret is
+mandatory, not optional. Then update the corporate SSID to use WPA2-
+Enterprise with that profile.
 
-# Route IoT traffic through VPN
-Create traffic route: source=IoT-VLAN, gateway=VPN-tunnel, priority=high
+# Review the routes that exist
+list_traffic_routes to see the source, gateway and priority of each route
 ```

@@ -172,7 +172,9 @@ class TestFindPolicy:
     def test_an_empty_policy_list_falls_back_to_the_defaults(self) -> None:
         controller = SafetyController(policies=[])
 
-        assert controller._find_policy("delete_site").path == "tool://*"
+        # Default policies include tier wildcards; a destructive tool name
+        # should match the destructive tier policy, not the catch-all.
+        assert controller._find_policy("delete_site").path == "tool://destructive"
 
 
 class TestRequiresConfirmation:

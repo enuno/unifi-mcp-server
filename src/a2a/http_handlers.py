@@ -1,8 +1,13 @@
 """HTTP handlers for the UniFi MCP A2A protocol surface.
 
-The functions in this module are framework-agnostic so they can be mounted onto
-FastMCP's HTTP transport, a Starlette/FastAPI app, or any compatible ASGI
-adapter. The handlers intentionally return plain JSON-serializable structures.
+The functions in this module are framework-agnostic so they can be mounted
+onto FastMCP's HTTP transport, a Starlette/FastAPI app, or any compatible
+ASGI adapter. The handlers intentionally return plain JSON-serializable
+structures.
+
+The agent card and the discovery manifest are both built from the live tool
+registry through :mod:`src.a2a.capabilities`, so a client sees the tools this
+deployment registered rather than a hand-maintained list.
 """
 
 from __future__ import annotations
@@ -17,7 +22,8 @@ from typing import Any
 from ..config import APIType, Settings
 from ..utils import get_logger
 from .audit import AuditLog, AuditLogger, get_audit_logger
-from .auth import AuthManager
+from .auth import AuthManager, current_caller_role
+from .capabilities import advertised_api_modes, advertised_capabilities, summarize_capabilities
 from .route_policy import ConfirmationWorkflow, SafetyController, SafetyResult
 
 try:
@@ -31,7 +37,20 @@ ToolExecutor = Callable[[str, dict[str, Any]], Any | Awaitable[Any]]
 
 @dataclass(slots=True)
 class A2AState:
-    """Mutable state shared by the A2A HTTP handlers."""
+    """Mutable state shared by the A2A HTTP handlers.
+
+    Attributes:
+        settings: The server settings.
+        audit_logger: Where delegated calls are recorded.
+        auth_manager: The A2A authentication and authorization layer.
+        safety_controller: The risk classification and rate limiter.
+        confirmation_workflow: The pending-confirmation store.
+        tool_executor: Runs a delegated tool call. When None, the delegation
+            endpoint reports that it cannot execute rather than pretending to
+            succeed.
+        mcp: The FastMCP server whose registered tools describe this
+            deployment.
+    """
 
     settings: Settings | None = None
     audit_logger: AuditLogger = field(default_factory=get_audit_logger)
@@ -39,6 +58,7 @@ class A2AState:
     safety_controller: SafetyController = field(default_factory=SafetyController)
     confirmation_workflow: ConfirmationWorkflow = field(default_factory=ConfirmationWorkflow)
     tool_executor: ToolExecutor | None = None
+    mcp: Any = None
 
 
 _STATE = A2AState()
@@ -82,30 +102,41 @@ async def _payload_from_request(request: Any) -> dict[str, Any]:
     return {}
 
 
-def get_agent_card_handler() -> dict[str, Any]:
-    """Return the A2A agent card advertised by this service."""
-    return {
-        "name": "unifi-mcp-server",
-        "description": "MCP server for managing UniFi Network, Protect, Site Manager, and A2A delegation",
-        "version": _SERVER_VERSION,
-        "protocol": "MCP/1.0",
-        "capabilities": [
-            "network-management",
-            "multi-site",
-            "audit-log",
-            "safety-controls",
-            "multi-auth",
-        ],
-        "authentication": {
-            "schemes": ["bearer", "api-key"],
-            "modes": [APIType.LOCAL.value, APIType.CLOUD_V1.value, APIType.CLOUD_EA.value],
-            "scopes": ["read", "write", "destructive", "admin"],
-        },
-        "tools_manifest_url": "/a2a/discover",
-        "delegate_url": "/a2a/delegate",
-        "audit_url": "/a2a/audit",
-        "contact": {"url": "https://github.com/enuno/unifi-mcp-server"},
-    }
+def get_agent_card_handler(state: A2AState | None = None) -> dict[str, Any]:
+    """Return the A2A agent card advertised by this service.
+
+    The card is built from the live tool registry, so it lists the skills
+    this deployment registered and the capabilities those skills imply.
+
+    Args:
+        state: The shared A2A state. When it carries an MCP server and
+            settings, the card is built from them; otherwise a card
+            describing an empty deployment is returned.
+
+    Returns:
+        The card document.
+    """
+    active_state = _state(state)
+    from .agent_card import build_agent_card
+
+    if active_state.mcp is None or active_state.settings is None:
+        return {
+            "protocolVersion": "0.3.0",
+            "name": "unifi-mcp-server",
+            "description": "UniFi Network and Protect control surface.",
+            "url": "/a2a",
+            "preferredTransport": "HTTP+JSON",
+            "version": _SERVER_VERSION,
+            "capabilities": {
+                "streaming": False,
+                "pushNotifications": False,
+                "stateTransitionHistory": False,
+            },
+            "skills": [],
+            "defaultInputModes": ["application/json"],
+            "defaultOutputModes": ["application/json"],
+        }
+    return build_agent_card(active_state.mcp, active_state.settings)
 
 
 async def discover_handler(
@@ -113,38 +144,53 @@ async def discover_handler(
     *,
     state: A2AState | None = None,
 ) -> dict[str, Any]:
-    """Return a lightweight skills manifest for agent discovery."""
+    """Return the capability manifest for agent discovery.
+
+    The manifest carries the same live tool surface as the agent card, plus
+    the per-domain tool inventory an orchestrator needs to pick a task.
+
+    Args:
+        payload: Optional request payload. ``transport`` overrides the
+            reported transport, and ``include_audit`` / ``include_rate_limits``
+            add the optional sections.
+        state: The shared A2A state.
+
+    Returns:
+        The manifest.
+    """
+    active_state = _state(state)
     payload = payload or {}
-    manifest = {
-        "agent": get_agent_card_handler(),
-        "skills": [
-            {
-                "name": "read-network-state",
-                "description": "Read-only site, client, device, and topology queries.",
-                "risk": "read",
-            },
-            {
-                "name": "mutate-network-state",
-                "description": "Create and update UniFi resources.",
-                "risk": "write",
-            },
-            {
-                "name": "destructive-operations",
-                "description": "Removal, reset, and other irreversible actions.",
-                "risk": "destructive",
-            },
-        ],
+
+    manifest: dict[str, Any] = {
+        "agent": get_agent_card_handler(active_state),
         "transport": payload.get("transport") or "streamable_http",
-        "api_modes": [APIType.LOCAL.value, APIType.CLOUD_V1.value, APIType.CLOUD_EA.value],
     }
+
+    if active_state.mcp is not None and active_state.settings is not None:
+        summary = summarize_capabilities(active_state.mcp, active_state.settings)
+        manifest["api_modes"] = advertised_api_modes(summary)
+        manifest["capabilities"] = advertised_capabilities(summary)
+        manifest["domains"] = {domain: list(summary.tools_in(domain)) for domain in summary.domains}
+        manifest["tool_counts"] = {
+            "total": summary.tool_count,
+            "read": summary.read_count,
+            "write": summary.write_count,
+            "destructive": summary.destructive_count,
+        }
+    else:
+        manifest["api_modes"] = [APIType.LOCAL.value]
+        manifest["capabilities"] = []
+        manifest["domains"] = {}
+        manifest["tool_counts"] = {"total": 0, "read": 0, "write": 0, "destructive": 0}
+
     if payload.get("include_audit"):
         manifest["audit"] = {"enabled": True, "endpoint": "/a2a/audit"}
     if payload.get("include_rate_limits"):
-        active_state = _state(state)
+        policies = active_state.safety_controller._build_default_policies()
         manifest["rate_limits"] = {
-            "read": active_state.safety_controller._build_default_policies()[0].rateLimit,
-            "write": active_state.safety_controller._build_default_policies()[2].rateLimit,
-            "destructive": active_state.safety_controller._build_default_policies()[6].rateLimit,
+            "read": policies[0].rateLimit,
+            "write": policies[2].rateLimit,
+            "destructive": policies[6].rateLimit,
         }
     return manifest
 
@@ -156,21 +202,35 @@ async def delegate_handler(
 ) -> dict[str, Any]:
     """Validate, audit, and execute a delegated tool call.
 
-    The payload should contain at minimum ``tool_name`` and ``params``. Optional
-    keys include ``auth`` (credentials), ``agent_id``, and ``confirmation``.
+    The payload should contain at minimum ``tool_name`` and ``params``.
+
+    Authorization uses the server's own role model, not a permission list
+    supplied by the caller: the bearer token that authenticated the request
+    determines what the caller may do, and the tool registry's tier
+    determines what the call needs. A caller cannot widen its own access by
+    naming permissions in the payload.
+
+    Args:
+        payload: The delegation request.
+        state: The shared A2A state.
+
+    Returns:
+        The delegation outcome.
     """
     active_state = _state(state)
     tool_name = str(payload.get("tool_name") or payload.get("toolName") or "").strip()
     params = dict(payload.get("params") or payload.get("arguments") or {})
-    auth_payload = dict(payload.get("auth") or payload.get("credentials") or {})
     agent_id = _agent_id_from_payload(payload)
     started = datetime.now(tz=UTC)
 
     if not tool_name:
         return {"status": "error", "error": "tool_name is required"}
 
-    mode = auth_payload.get("mode") or payload.get("mode") or APIType.LOCAL.value
-    auth_context = active_state.auth_manager.authenticate(mode, auth_payload)
+    mode = active_state.settings.api_type.value if active_state.settings else APIType.LOCAL.value
+    auth_context = active_state.auth_manager.authenticate(
+        mode,
+        active_state.auth_manager.credentials_for_caller(payload, current_caller_role.get()),
+    )
     if not active_state.auth_manager.validate_permissions(auth_context, tool_name):
         return {"status": "denied", "error": "insufficient permissions", "tool_name": tool_name}
 
@@ -185,6 +245,7 @@ async def delegate_handler(
             params,
             reason=f"{safety.risk_level} action requires confirmation",
         )
+        active_state.confirmation_workflow.remember_call(token.token, tool_name, params)
         return {
             "status": "confirmation_required",
             "tool_name": tool_name,
@@ -202,15 +263,27 @@ async def delegate_handler(
 
     executor = active_state.tool_executor
     if executor is None:
-        result: Any = {
-            "status": "accepted",
+        return {
+            "status": "unavailable",
             "tool_name": tool_name,
-            "message": "no tool executor configured",
+            "error": "this deployment has no tool executor configured",
+            "risk_level": safety.risk_level,
         }
-    else:
+
+    try:
         result = executor(tool_name, params)
         if hasattr(result, "__await__"):
             result = await result
+    except Exception as exc:
+        # A failing delegated call is reported, not raised: the route has
+        # already answered with 200 for the other outcomes.
+        logger.warning("Delegated tool call failed", extra={"tool_name": tool_name})
+        return {
+            "status": "error",
+            "tool_name": tool_name,
+            "error": str(exc),
+            "risk_level": safety.risk_level,
+        }
 
     duration_ms = (datetime.now(tz=UTC) - started).total_seconds() * 1000.0
     active_state.audit_logger.log_invocation(
@@ -238,7 +311,19 @@ async def confirm_handler(
     *,
     state: A2AState | None = None,
 ) -> dict[str, Any]:
-    """Handle a response to a previously issued confirmation request."""
+    """Handle a response to a previously issued confirmation request.
+
+    An approved confirmation runs the call that was held, with the same
+    authorization and safety checks applied again at that moment. A rejected
+    or expired confirmation runs nothing.
+
+    Args:
+        payload: The confirmation response.
+        state: The shared A2A state.
+
+    Returns:
+        The confirmation outcome.
+    """
     active_state = _state(state)
     token_value = str(payload.get("token") or payload.get("confirmation_token") or "").strip()
     response = payload.get("response")
@@ -248,10 +333,89 @@ async def confirm_handler(
     approved = active_state.confirmation_workflow.verify_confirmation(
         token_value, response or payload
     )
-    if approved:
+    if not approved:
+        return {"status": "rejected", "token": token_value}
+
+    pending = active_state.confirmation_workflow.take_call(token_value)
+    if pending is None:
         active_state.confirmation_workflow.expire_confirmation(token_value)
-        return {"status": "approved", "token": token_value}
-    return {"status": "rejected", "token": token_value}
+        return {
+            "status": "error",
+            "token": token_value,
+            "error": "no pending call for this confirmation token",
+        }
+
+    tool_name, params = pending
+
+    # The confirmation authorises the call; it does not replace the
+    # authorization. A token is a bearer capability, so it can be handed to
+    # another caller, and the role that requested it may have been the only
+    # reason the call was allowed. The confirming caller is therefore
+    # re-authorized here, against the same role model the delegation path
+    # uses, before anything runs.
+    mode = active_state.settings.api_type.value if active_state.settings else APIType.LOCAL.value
+    auth_context = active_state.auth_manager.authenticate(
+        mode,
+        active_state.auth_manager.credentials_for_caller(payload, current_caller_role.get()),
+    )
+    safety = active_state.safety_controller.check_execution_constraints(
+        tool_name, params, auth_context
+    )
+    if not safety.allowed:
+        active_state.confirmation_workflow.expire_confirmation(token_value)
+        auth_failure = safety.reason.startswith(
+            ("missing required permission", "authentication required")
+        )
+        return {
+            "status": "denied" if auth_failure else "error",
+            "token": token_value,
+            "tool_name": tool_name,
+            "error": safety.reason,
+            "rate_limited": safety.rate_limited,
+        }
+
+    executor = active_state.tool_executor
+    if executor is None:
+        active_state.confirmation_workflow.expire_confirmation(token_value)
+        return {
+            "status": "unavailable",
+            "token": token_value,
+            "tool_name": tool_name,
+            "error": "this deployment has no tool executor configured",
+        }
+
+    try:
+        result = executor(tool_name, params)
+        if hasattr(result, "__await__"):
+            result = await result
+    except Exception as exc:
+        active_state.confirmation_workflow.expire_confirmation(token_value)
+        logger.warning("Confirmed tool call failed", extra={"tool_name": tool_name})
+        return {
+            "status": "error",
+            "token": token_value,
+            "tool_name": tool_name,
+            "error": str(exc),
+        }
+
+    active_state.confirmation_workflow.expire_confirmation(token_value)
+    active_state.audit_logger.log_invocation(
+        AuditLog(
+            timestamp=datetime.now(tz=UTC),
+            agent_id=_agent_id_from_payload(payload),
+            tool_name=tool_name,
+            params=params,
+            result=result,
+            safety_level=safety.risk_level,
+            duration_ms=0.0,
+        )
+    )
+    return {
+        "status": "ok",
+        "token": token_value,
+        "tool_name": tool_name,
+        "result": result,
+    }
 
 
 async def get_audit_handler(
@@ -297,8 +461,8 @@ class A2AHTTPRouter:
         """Dispatch a request to the handler registered for its method and path."""
         payload = payload or {}
         method = method.upper()
-        if method == "GET" and path == "/a2a/agent-card":
-            return get_agent_card_handler()
+        if method == "GET" and path in ("/a2a/agent-card", "/.well-known/agent-card.json"):
+            return get_agent_card_handler(self.state)
         if method == "POST" and path == "/a2a/discover":
             return await discover_handler(payload, state=self.state)
         if method == "POST" and path == "/a2a/delegate":
@@ -323,7 +487,12 @@ class A2AHTTPRouter:
         if hasattr(app, "add_route"):
             app.add_route(
                 "/a2a/agent-card",
-                lambda request: get_agent_card_handler(),
+                lambda request: get_agent_card_handler(self.state),
+                methods=["GET"],
+            )
+            app.add_route(
+                "/.well-known/agent-card.json",
+                lambda request: get_agent_card_handler(self.state),
                 methods=["GET"],
             )
             app.add_route(

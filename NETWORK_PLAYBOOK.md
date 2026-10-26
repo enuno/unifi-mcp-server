@@ -46,6 +46,7 @@ Each runbook below follows the same structure:
 ## 1) VLAN provisioning and validation
 
 ### Objective
+
 Create or update a VLAN-backed network and confirm it is usable on the intended sites and switch ports.
 
 ### Preconditions
@@ -87,6 +88,7 @@ Create or update a VLAN-backed network and confirm it is usable on the intended 
 ## 2) Guest portal setup
 
 ### Objective
+
 Enable or update a guest portal workflow with the minimum required access and clear expiry behavior.
 
 ### Preconditions
@@ -125,6 +127,7 @@ Enable or update a guest portal workflow with the minimum required access and cl
 ## 3) Firewall policy review
 
 ### Objective
+
 Review firewall policy state for correctness, drift, and least-privilege alignment.
 
 ### Preconditions
@@ -162,6 +165,7 @@ Review firewall policy state for correctness, drift, and least-privilege alignme
 ## 4) Device adoption and post-adoption checks
 
 ### Objective
+
 Bring a device into management cleanly and confirm it is healthy after adoption.
 
 ### Preconditions
@@ -201,6 +205,7 @@ Bring a device into management cleanly and confirm it is healthy after adoption.
 ## 5) WAN failover verification
 
 ### Objective
+
 Prove that WAN failover behaves as designed before a real outage.
 
 ### Preconditions
@@ -237,6 +242,7 @@ Prove that WAN failover behaves as designed before a real outage.
 ## 6) DNS policy review
 
 ### Objective
+
 Validate DNS policy behavior for content filtering, split DNS, or resolver selection.
 
 ### Preconditions
@@ -273,6 +279,7 @@ Validate DNS policy behavior for content filtering, split DNS, or resolver selec
 ## 7) WiFi broadcast lifecycle changes
 
 ### Objective
+
 Safely create, modify, or retire a wireless broadcast without impacting unrelated SSIDs.
 
 ### Preconditions
@@ -309,6 +316,7 @@ Safely create, modify, or retire a wireless broadcast without impacting unrelate
 ## 8) Port profile rollout
 
 ### Objective
+
 Roll out a switch port profile change with minimal disruption.
 
 ### Preconditions
@@ -344,6 +352,7 @@ Roll out a switch port profile change with minimal disruption.
 ## 9) Backup and restore validation
 
 ### Objective
+
 Prove that controller backups are complete and that restores are usable.
 
 ### Preconditions

@@ -36,7 +36,17 @@ def _state(
     safety_controller.validate_safety_constraints.return_value = safety or SafetyResult(
         allowed=True, risk_level="read", reason="ok"
     )
+    from src.config.config import Settings
+
+    settings = Settings.model_validate(
+        {
+            "UNIFI_API_KEY": "test-key",  # pragma: allowlist secret
+            "UNIFI_API_TYPE": "local",
+            "UNIFI_LOCAL_HOST": "192.0.2.10",
+        }
+    )
     return h.A2AState(
+        settings=settings,
         audit_logger=MagicMock(),
         auth_manager=auth,
         safety_controller=safety_controller,
@@ -121,7 +131,9 @@ class TestDiscover:
         manifest = await h.discover_handler(None, state=_state())
 
         assert manifest["transport"] == "streamable_http"
-        assert {s["risk"] for s in manifest["skills"]} == {"read", "write", "destructive"}
+        assert "agent" in manifest
+        assert "domains" in manifest
+        assert "tool_counts" in manifest
         assert "audit" not in manifest
         assert "rate_limits" not in manifest
 
@@ -154,15 +166,71 @@ class TestDelegate:
         state.safety_controller.validate_safety_constraints.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_mode_from_auth_payload(self) -> None:
+    async def test_mode_comes_from_the_running_deployment(self) -> None:
+        state = _state()
+        await h.delegate_handler({"tool_name": "list_sites"}, state=state)
+
+        mode, _creds = state.auth_manager.authenticate.call_args.args
+        assert mode == state.settings.api_type.value
+
+    @pytest.mark.asyncio
+    async def test_the_caller_role_comes_from_the_token_not_the_payload(self) -> None:
+        """A payload cannot widen the caller's access."""
         state = _state()
         await h.delegate_handler(
-            {"tool_name": "list_sites", "auth": {"mode": "cloud-v1", "token": "t"}}, state=state
+            {
+                "tool_name": "list_sites",
+                "auth": {"permissions": ["destructive", "admin"]},
+            },
+            state=state,
         )
 
-        mode, creds = state.auth_manager.authenticate.call_args.args
-        assert mode == "cloud-v1"
-        assert creds == {"mode": "cloud-v1", "token": "t"}
+        _mode, creds = state.auth_manager.authenticate.call_args.args
+        assert "destructive" not in creds["permissions"]
+        assert "admin" not in creds["permissions"]
+
+    @pytest.mark.asyncio
+    async def test_an_admin_role_grants_the_destructive_tier(self) -> None:
+        """The real auth manager derives the tiers from the caller's role."""
+        from src.a2a.auth import AuthManager, current_caller_role
+
+        state = _state(executor=MagicMock(return_value={"sites": []}))
+        state.auth_manager = AuthManager()
+        token = current_caller_role.set("admin")
+        try:
+            result = await h.delegate_handler({"tool_name": "list_sites"}, state=state)
+        finally:
+            current_caller_role.reset(token)
+
+        assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_scopes_can_only_narrow_the_role(self) -> None:
+        from src.a2a.auth import AuthManager, current_caller_role
+
+        state = _state()
+        state.auth_manager = AuthManager()
+        token = current_caller_role.set("admin")
+        try:
+            await h.delegate_handler({"tool_name": "list_sites", "scopes": ["read"]}, state=state)
+        finally:
+            current_caller_role.reset(token)
+
+        creds = state.auth_manager.credentials_for_caller({"scopes": ["read"]}, "admin")
+        assert creds["permissions"] == ["read"]
+
+    @pytest.mark.asyncio
+    async def test_an_anonymous_caller_gets_read_only(self) -> None:
+        from src.a2a.auth import AuthManager
+
+        state = _state(executor=MagicMock(return_value={"sites": []}))
+        state.auth_manager = AuthManager()
+        result = await h.delegate_handler({"tool_name": "list_sites"}, state=state)
+
+        assert result["status"] == "ok"
+
+        creds = state.auth_manager.credentials_for_caller({}, None)
+        assert creds["permissions"] == ["read"]
 
     @pytest.mark.asyncio
     async def test_confirmation_required(self) -> None:
@@ -196,22 +264,17 @@ class TestDelegate:
         state.tool_executor.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_without_executor_is_accepted_and_audited(self) -> None:
+    async def test_without_an_executor_the_call_is_refused_not_faked(self) -> None:
+        """A delegation that cannot run must not report success."""
         state = _state()
         result = await h.delegate_handler(
             {"tool_name": "list_sites", "agent_id": "agent-7", "arguments": {"limit": 5}},
             state=state,
         )
 
-        assert result["status"] == "ok"
-        assert result["result"]["message"] == "no tool executor configured"
-        entry = state.audit_logger.log_invocation.call_args.args[0]
-        assert (entry.agent_id, entry.tool_name, entry.params) == (
-            "agent-7",
-            "list_sites",
-            {"limit": 5},
-        )
-        assert entry.safety_level == "read"
+        assert result["status"] == "unavailable"
+        assert "no tool executor" in result["error"]
+        state.audit_logger.log_invocation.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_sync_executor(self) -> None:
@@ -244,14 +307,35 @@ class TestConfirm:
         assert result == {"status": "error", "error": "confirmation token is required"}
 
     @pytest.mark.asyncio
-    async def test_approved_token_is_expired(self) -> None:
-        state = _state()
+    async def test_an_approved_token_runs_the_pending_call(self) -> None:
+        executor = MagicMock(return_value={"ok": True})
+        state = _state(executor=executor)
         state.confirmation_workflow = MagicMock()
         state.confirmation_workflow.verify_confirmation.return_value = True
+        state.confirmation_workflow.take_call.return_value = (
+            "create_network",
+            {"site_id": "default"},
+        )
 
         result = await h.confirm_handler({"token": "t1", "response": "yes"}, state=state)
 
-        assert result == {"status": "approved", "token": "t1"}
+        executor.assert_called_once_with("create_network", {"site_id": "default"})
+        assert result["status"] == "ok"
+        assert result["tool_name"] == "create_network"
+        assert result["result"] == {"ok": True}
+
+    @pytest.mark.asyncio
+    async def test_an_approved_token_without_a_pending_call_runs_nothing(self) -> None:
+        executor = MagicMock(return_value={"ok": True})
+        state = _state(executor=executor)
+        state.confirmation_workflow = MagicMock()
+        state.confirmation_workflow.verify_confirmation.return_value = True
+        state.confirmation_workflow.take_call.return_value = None
+
+        result = await h.confirm_handler({"token": "t1", "response": "yes"}, state=state)
+
+        executor.assert_not_called()
+        assert result["status"] == "error"
         state.confirmation_workflow.verify_confirmation.assert_called_once_with("t1", "yes")
         state.confirmation_workflow.expire_confirmation.assert_called_once_with("t1")
 
@@ -298,7 +382,8 @@ class TestRouter:
         ("method", "path", "key"),
         [
             ("get", "/a2a/agent-card", "name"),
-            ("POST", "/a2a/discover", "skills"),
+            ("POST", "/a2a/discover", "domains"),
+            ("GET", "/.well-known/agent-card.json", "name"),
             ("POST", "/a2a/delegate", "status"),
             ("POST", "/a2a/confirm", "status"),
             ("GET", "/a2a/audit", "count"),
@@ -327,13 +412,14 @@ class TestRouter:
         routes = {call.args[0]: call for call in app.add_route.call_args_list}
         assert set(routes) == {
             "/a2a/agent-card",
+            "/.well-known/agent-card.json",
             "/a2a/discover",
             "/a2a/delegate",
             "/a2a/confirm",
             "/a2a/audit",
         }
         assert routes["/a2a/agent-card"].args[1](None)["name"] == "unifi-mcp-server"
-        assert "skills" in await routes["/a2a/discover"].args[1]({})
+        assert "domains" in await routes["/a2a/discover"].args[1]({})
         assert (await routes["/a2a/delegate"].args[1]({}))["status"] == "error"
         assert (await routes["/a2a/confirm"].args[1]({}))["status"] == "error"
         assert (await routes["/a2a/audit"].args[1](None))["count"] == 0
@@ -384,7 +470,7 @@ class TestAsgi:
         assert sent[0]["status"] == 200
         assert (b"content-type", b"application/json") in sent[0]["headers"]
         body = json.loads(sent[1]["body"])
-        assert body["status"] == "ok"
+        assert body["status"] == "unavailable"
         assert body["tool_name"] == "list_sites"
 
     @pytest.mark.asyncio

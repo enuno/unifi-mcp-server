@@ -10,12 +10,12 @@ author: UniFi MCP Server Team
 
 ## Overview
 
-This skill guides you through adding new MCP tools to the existing UniFi MCP Server. Unlike building an MCP server from scratch, this focuses on **extending** the current 74-tool implementation with new UniFi Network Controller functionality while maintaining the project's quality standards.
+This skill guides you through adding new MCP tools to the existing UniFi MCP Server. Unlike building an MCP server from scratch, this focuses on **extending** the current 343-tool implementation with new UniFi Network Controller functionality while maintaining the project's quality standards.
 
 **Project Context:**
 
-- **Existing Tools**: 74 MCP tools across 9 feature categories
-- **Test Coverage**: 990 tests, 78.18% overall coverage
+- **Existing Tools**: 343 MCP tools across the feature categories below
+- **Test Coverage**: the unit suite is the gate. Run `pytest tests/unit/ -q --cov=src --cov-fail-under=80` from the repository root; the coverage gate is 80%. The exact test count changes with every change, so read it from that run rather than from this file.
 - **Architecture**: FastMCP + Pydantic v2 + async/await patterns
 - **API Support**: Local gateway (full), Cloud V1/EA (limited)
 - **Quality Standards**: 80% minimum test coverage, TDD required
@@ -79,7 +79,7 @@ Read: src/tools/networks.py
 Read: src/tools/network_config.py
 
 # For testing patterns:
-Read: tests/unit/test_devices.py
+Read: tests/unit/tools/test_devices_tools.py
 ```
 
 **Key patterns to identify:**

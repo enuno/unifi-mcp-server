@@ -33,6 +33,7 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 - [Tool profiles and safety controls](#tool-profiles-and-safety-controls)
 - [Network transports and deployment](#network-transports-and-deployment)
 - [Calling the server from code](#calling-the-server-from-code)
+- [Native MCP prompts](#native-mcp-prompts)
 - [Documentation](#documentation)
 - [Development](#development)
 
@@ -47,7 +48,9 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 - **Cloud:** Site Manager (hosts, sites, cross-site statistics), the connector proxy, Mobility workspaces and devices, InnerSpace floor plans and inventory, Carrier Fabric subscribers and service plans.
 - **Operations:** sites, backups (create, schedule, download, restore), events, multi-site aggregation, device migration between sites.
 - **Fleet mode** (optional, with Postgres and Redis): many controllers behind one server, a controller registry with encrypted credentials, server-issued tokens with roles, a shared read cache, several replicas and background workers, and `fleet_*` tools that read across controllers. See [MULTI_CONTROLLER.md](MULTI_CONTROLLER.md) and [docs/FLEET_SCALING_PLAN.md](docs/FLEET_SCALING_PLAN.md).
+- **Native prompts:** eight parameterised UniFi operational workflows (health check, client connectivity, WiFi performance, device investigation, firewall review, change planning, Protect health, fleet summary) exposed through the standard `prompts/list` and `prompts/get` operations. See [docs/PROMPTS.md](docs/PROMPTS.md).
 - **Safety:** every mutating tool needs `confirm=True` and supports `dry_run=True`, plus read-only and dry-run server modes, role-based access over risk tiers, and a hash-chained audit log (see [below](#tool-profiles-and-safety-controls)).
+- **A2A discovery and delegation:** an agent card built from the live tool registry, served at `/a2a/agent-card` and `/.well-known/agent-card.json`, plus a capability manifest and a delegation endpoint that runs a registered tool under the server's own role, confirmation and audit controls. See [A2A.md](A2A.md).
 - **Observability:** Prometheus `/metrics`, `/healthz`, SIEM export of audit records, optional Redis caching, webhooks with HMAC verification.
 
 ## API modes
@@ -97,7 +100,7 @@ Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json
       "command": "uvx",
       "args": ["unifi-mcp-server"],
       "env": {
-        "UNIFI_API_KEY": "your-api-key-here",
+        "UNIFI_API_KEY": "<your-api-key>",
         "UNIFI_API_TYPE": "local",
         "UNIFI_LOCAL_HOST": "192.168.2.1"
       }
@@ -281,7 +284,7 @@ config = {
         "unifi": {
             "command": "unifi-mcp-server",
             "env": {
-                "UNIFI_API_KEY": "your-api-key-here",
+                "UNIFI_API_KEY": "<your-api-key>",
                 "UNIFI_API_TYPE": "local",
                 "UNIFI_LOCAL_HOST": "192.168.2.1",
             },
@@ -311,11 +314,81 @@ asyncio.run(main())
 
 `bin/unifi-cli` runs a single tool from a shell (`unifi-cli list-clients --site default`); see [docs/SKILLS.md](docs/SKILLS.md#binunifi-cli--cli-wrapper).
 
+## Native MCP prompts
+
+Besides the tools, the server exposes eight parameterised UniFi operational
+workflows through the standard MCP prompts interface. A client discovers them
+with `prompts/list` and retrieves a rendered workflow brief with `prompts/get`.
+
+```python
+import asyncio
+
+from fastmcp import Client
+
+config = {
+    "mcpServers": {
+        "unifi": {
+            "command": "unifi-mcp-server",
+            "env": {
+                "UNIFI_API_KEY": "<your-api-key>",
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "192.168.2.1",
+            },
+        }
+    }
+}
+
+
+async def main() -> None:
+    async with Client(config) as client:
+        for prompt in await client.list_prompts():
+            print(prompt.name, prompt.description)
+
+        result = await client.get_prompt(
+            "network_health_check",
+            {"site_id": "default", "focus": "wan"},
+        )
+        for message in result.messages:
+            print(message.content.text)
+
+
+asyncio.run(main())
+```
+
+The prompts are `network_health_check`, `troubleshoot_client_connectivity`,
+`troubleshoot_wifi_performance`, `investigate_device`,
+`review_firewall_policy`, `plan_network_change`, `protect_health_check` and
+`fleet_health_summary`. A workflow is advertised only when the tools it needs
+are registered on this server, so the prompt list follows the API mode, the
+profile and the read-only and dry-run settings.
+
+Retrieving a prompt does **not** run the workflow and grants no approval. The
+rendered text tells an agent which read tools to call and what to report; the
+agent calls the tools itself, and the server's role checks, `confirm` gate and
+audit trail still apply.
+
+Use `make inspect` to open the MCP Inspector and browse the prompts, or the
+MCPJungle CLI to check what the gateway forwards:
+
+```bash
+mcpjungle list prompts --server unifi
+mcpjungle get prompt unifi__network_health_check --arg site_id=default
+```
+
+A tools-only client will not display the prompts; that is a client limitation.
+There is no prompts-as-tools shim.
+
+See [docs/PROMPTS.md](docs/PROMPTS.md) for the full catalog, the availability
+matrix, the validation rules and the manual acceptance steps.
+
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [API.md](API.md) | Every MCP tool and resource, with parameters and examples |
+| [docs/PROMPTS.md](docs/PROMPTS.md) | The native MCP prompt catalog, with arguments and availability rules |
+| [A2A.md](A2A.md) | The agent card, the capability manifest and the delegation endpoint |
+| [docs/AUDIT_A2A_SKILLS.md](docs/AUDIT_A2A_SKILLS.md) | The A2A and skills audit: what was implemented, what was not, and why |
 | [docs/SKILLS.md](docs/SKILLS.md) | Agent skills, profiles and the CLI wrapper |
 | [docs/UNIFI_API.md](docs/UNIFI_API.md) | The UniFi endpoints behind the tools |
 | [MULTI_CONTROLLER.md](MULTI_CONTROLLER.md) | Fleet mode: controllers, tokens and roles |

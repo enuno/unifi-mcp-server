@@ -20,7 +20,7 @@ All tools require `local` API mode unless noted.
 | `get_device_details` | Full configuration and status for a device |
 | `get_device_statistics` | CPU, memory, uptime, and traffic stats |
 | `list_pending_devices` | List devices waiting for adoption |
-| `adopt_device` | Adopt a pending device into the site |
+| `adopt_device` | Adopt a pending device into the site. It identifies the device by `mac`, where the other device tools use `device_mac` |
 | `execute_port_action` | Execute an action on a specific device port |
 
 ## Device Control
@@ -92,6 +92,8 @@ Locate device with MAC aa:bb:cc:11:22:33 (LED flash), then restart it
 List devices by type "ap", then upgrade each one (dry_run=True first)
 
 # Configure a trunk port
-Set device port overrides on switch aa:bb:cc:dd:ee:ff, port 12,
-profile "Trunk-All-VLANs"
+Set device port overrides on device_id aa:bb:cc:dd:ee:ff with a
+port_overrides list (one entry per port, each with its port index and
+port profile). There is no "port" or "profile" argument: the list carries
+both, and merge=False replaces every existing override.
 ```

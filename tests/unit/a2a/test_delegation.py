@@ -213,7 +213,10 @@ class TestCreateDelegationContract:
     def test_read_only_registered_tools_do_not_require_confirmation(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        mcp = FakeMCP({"list_site_clients": make_tool(list_site_clients)})
+        from src.tool_registry import TOOL_TIERS
+
+        monkeypatch.setitem(TOOL_TIERS, "list_site_clients", "read")
+        mcp = FakeMCP({"tool:list_site_clients@": make_tool(list_site_clients)})
         monkeypatch.setattr(delegation, "_active_mcp", lambda: mcp)
 
         contract = create_delegation_contract("list_site_clients", {"site_id": "s"}, "agent-a")

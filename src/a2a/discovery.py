@@ -11,7 +11,7 @@ from fastmcp.tools.function_tool import FunctionTool
 
 from ..config import Settings
 from .agent_card import build_agent_card as _build_agent_card
-from .types import AgentCard, ResourceURI, Skill
+from .types import ResourceURI, Skill
 
 
 def _iter_components(mcp: FastMCP) -> Iterable[Any]:
@@ -35,7 +35,7 @@ def _resolve_active_mcp() -> FastMCP | None:
     return None
 
 
-def build_agent_card(mcp: FastMCP, settings: Settings) -> AgentCard:
+def build_agent_card(mcp: FastMCP, settings: Settings) -> dict[str, Any]:
     """Build an agent card from the registered FastMCP tools and resources."""
     return _build_agent_card(mcp, settings)
 

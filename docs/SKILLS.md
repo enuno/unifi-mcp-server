@@ -21,7 +21,11 @@ A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify se
 | `skills/unifi-devices/` | Inventory, adoption, restarts and upgrades, radios, port profiles, switching, topology, diagnostics |
 | `skills/unifi-security/` | Firewall rules and groups, zone-based firewall, ACL rules, port forwarding, VPN, content filtering |
 | `skills/unifi-system/` | Sites, backups, QoS and traffic routes, traffic flows, DPI, RADIUS, guest portal, traffic matching lists |
+| `skills/unifi-protect/` | Cameras, NVRs, alarm hubs, sensors, chimes, sirens, lights, views and viewers |
+| `skills/unifi-fleet-operations/` | Running a multi-controller deployment: controller selection, fleet health, the fan-out budget, registry and token management |
 | `skills/unifi-channel-planning/` | Building a low-interference WiFi channel plan from neighbor scans |
+| `skills/unifi-discovery/` | Finding what a deployment exposes, and choosing between local, cloud and fleet mode |
+| `skills/unifi-safe-changes/` | The `confirm` and `dry_run` gates, the read-only and dry-run modes, what can break the network, and how to roll back |
 
 ## Developer skills (changing the codebase)
 
@@ -32,8 +36,19 @@ A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify se
 | `skills/unifi-security-tools/` | Firewall, ZBF, ACL, traffic matching list, port forward and RADIUS tools, and their risk tiers |
 | `skills/unifi-protect-tools/` | The `protect_*` modules: Protect client and paths, v7 models, the write pattern |
 | `skills/unifi-cloud-fleet-tools/` | Site Manager, connector, integration API, Mobility, InnerSpace, Carrier, and the fleet stack |
+| `skills/unifi-docs-sync/` | Keeping the tools, the A2A agent card, the native prompt catalog and the documentation synchronized |
 
 The developer skills are also kept in `.claude/skills/` (Claude Code loads them automatically in this repository) and `.agents/skills/` (Codex and other agents). `skills/` is the source of truth: `tests/unit/test_agent_docs.py` fails if a copy differs, and checks that the developer skills cite only paths and names that exist.
+
+Two further guards read the live tool registry and fail when a skill drifts
+from it. `tests/unit/test_skill_tool_references.py` rejects a skill table
+that names a tool the server does not register, and
+`tests/unit/test_skill_parameter_references.py` rejects a skill that states
+an argument the tool's schema does not have. The second reads an explicit
+argument list, so prose that mentions a response field or a contrasting
+spelling is not mistaken for an argument claim. The first also compares any
+tool count or module count a skill or the README states with the live
+registry, so a figure in prose cannot go stale without the suite noticing.
 
 The `mintlify-docs` skill follows the same pattern with a different source of truth: `.mintlify/skills/mintlify-docs/SKILL.md` is the original, and `.claude/skills/mintlify-docs/` and `.agents/skills/mintlify-docs/` hold copies of it. The same test keeps those copies in sync.
 

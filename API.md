@@ -10,7 +10,10 @@ This document provides comprehensive documentation for the Model Context Protoco
 - [Performance Tracking](#performance-tracking)
 - [MCP Tools](#mcp-tools)
 - [MCP Resources](#mcp-resources)
-- [Error Handling](#error-handling)
+- [MCP Prompts](#mcp-prompts)
+- [A2A Endpoints](#a2a-endpoints)
+- [A2A Error Handling](#a2a-error-handling)
+- [Resource Error Handling](#resource-error-handling)
 - [Rate Limiting](#rate-limiting)
 - [Examples](#examples)
 
@@ -2168,7 +2171,63 @@ Force a client to reconnect.
 
 **Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
 
-### Error Handling
+### MCP Prompts
+
+The server exposes eight parameterised UniFi operational workflows through
+the standard MCP prompts interface. A client discovers them with
+`prompts/list` and retrieves a rendered workflow brief with `prompts/get`.
+
+| Prompt | Purpose |
+|---|---|
+| `network_health_check` | Read-only site health assessment across devices, clients, connectivity, WAN and events |
+| `troubleshoot_client_connectivity` | Investigate one client across association, addressing, VLAN, DHCP/DNS, signal, roaming and reachability |
+| `troubleshoot_wifi_performance` | Analyse RF, channel, utilisation, client-distribution and roaming evidence |
+| `investigate_device` | Read-only investigation of one device using inventory, status, topology, port and event evidence |
+| `review_firewall_policy` | Read-only review of the firewall, zone, ACL and related configuration |
+| `plan_network_change` | Produce a proposed change plan: scope, dependencies, risks, tool calls, dry run, validation, rollback, approval |
+| `protect_health_check` | Read-only Protect health assessment from configuration and event metadata |
+| `fleet_health_summary` | Summarise health across the authorised controllers, within a bounded investigation budget |
+
+**Availability.** A workflow is advertised only when the tools it needs are
+registered on this server, so the prompt list follows the API mode, the
+profile and the read-only and dry-run settings. The full catalog, with each
+prompt's arguments and the tools it depends on, is in
+[docs/PROMPTS.md](docs/PROMPTS.md).
+
+**Retrieving a prompt is not running it.** `prompts/get` returns text: a
+scoped brief telling an agent which read tools to call and what to report.
+The agent then calls the tools itself, and the server's role check, the
+`confirm` gate and the audit trail all still apply. Listing and retrieving
+a prompt contacts no controller, runs no tool, reads no secret and starts
+no work.
+
+## A2A Endpoints
+
+On the network transports the server also serves an A2A-style discovery and
+delegation surface, behind the same bearer token as `/mcp`.
+
+| Route | Method | Returns |
+|---|---|---|
+| `/a2a/agent-card` | GET | The agent card, built from the live tool registry |
+| `/.well-known/agent-card.json` | GET | The same card, at the path the A2A specification recommends |
+| `/a2a/discover` | POST | The capability manifest: the card, the per-domain tool inventory, the tool counts |
+| `/a2a/delegate` | POST | Runs a delegated tool call |
+| `/a2a/confirm` | POST | Approves a held call and runs it |
+| `/a2a/audit` | GET | The A2A audit trail. Requires the `admin` role |
+
+The card follows the AgentCard object shape of the A2A specification
+version 0.3.0. The server does not implement the A2A task protocol, so the
+card declares `streaming: false` and `pushNotifications: false`. See
+[A2A.md](A2A.md) for the runbook and
+[docs/AUDIT_A2A_SKILLS.md](docs/AUDIT_A2A_SKILLS.md) for what is and is not
+implemented.
+
+A delegated call runs the registered tool through its own wrapper, so the
+role check, the `confirm` gate, the dry-run behaviour and the audit record
+apply exactly as they do for an MCP client. The caller's permissions come
+from the bearer token's role, never from the request body.
+
+## A2A Error Handling
 
 All mutating tools raise:
 
@@ -3372,7 +3431,7 @@ List all active clients in a site.
 clients = await mcp.read_resource("sites://default/clients")
 ```
 
-## Error Handling
+## Resource Error Handling
 
 ### Error Response Format
 

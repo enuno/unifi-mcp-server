@@ -211,8 +211,24 @@ class SafetyController:
 
     def _find_policy(self, tool_name: str) -> RoutePolicy:
         normalized = self._normalize_tool_name(tool_name)
+        specific = f"tool://{normalized}"
+        # Prefer an exact tool policy, then the tier wildcards, then fall
+        # back to a classification inferred from the tool's name/registry.
         for policy in self._policies:
-            if policy.path in {"tool://*", f"tool://{normalized}"}:
+            if policy.path == specific:
+                return policy
+        for policy in self._policies:
+            if policy.path == "tool://destructive":
+                level, _ = self._classify_tool(normalized, {})
+                if level == "destructive":
+                    return policy
+        for policy in self._policies:
+            if policy.path == "tool://write":
+                level, _ = self._classify_tool(normalized, {})
+                if level == "write":
+                    return policy
+        for policy in self._policies:
+            if policy.path == "tool://*":
                 return policy
         level, inferred = self._classify_tool(normalized, {})
         if level == "destructive":
@@ -280,13 +296,18 @@ class SafetyController:
             return "destructive" in permission_set
         return required in permission_set
 
-    def validate_safety_constraints(
+    def check_execution_constraints(
         self,
         tool_name: str,
         params: Mapping[str, Any],
         auth_context: Any,
     ) -> SafetyResult:
-        """Validate auth, safety, and rate-limit constraints for a tool call."""
+        """Validate auth and rate-limit constraints for an execution.
+
+        This is the safety check used when a call is actually about to run,
+        either immediately or after a confirmation has been approved. It does
+        *not* require confirmation again.
+        """
         policy = self._find_policy(tool_name)
         normalized = self._normalize_tool_name(tool_name)
         risk_level, inferred_policy = self._classify_tool(normalized, params)
@@ -320,16 +341,32 @@ class SafetyController:
                 policy=policy,
             )
 
+        return SafetyResult(True, risk_level, "allowed", policy=policy)
+
+    def validate_safety_constraints(
+        self,
+        tool_name: str,
+        params: Mapping[str, Any],
+        auth_context: Any,
+    ) -> SafetyResult:
+        """Validate auth, safety, and rate-limit constraints for a tool call.
+
+        If the call requires confirmation, no rate-limit quota is consumed:
+        the call has not executed yet. The rate limit is checked when the
+        confirmation is later approved via :meth:`check_execution_constraints`.
+        """
+        normalized = self._normalize_tool_name(tool_name)
+        risk_level, _ = self._classify_tool(normalized, params)
+
         if self.requires_confirmation(normalized, params):
             return SafetyResult(
                 False,
                 risk_level,
                 "confirmation required",
                 requires_confirmation=True,
-                policy=policy,
             )
 
-        return SafetyResult(True, risk_level, "allowed", policy=policy)
+        return self.check_execution_constraints(tool_name, params, auth_context)
 
 
 class ConfirmationWorkflow:
@@ -340,7 +377,42 @@ class ConfirmationWorkflow:
         self.ttl_seconds = ttl_seconds
         self._lock = RLock()
         self._tokens: dict[str, ConfirmationToken] = {}
+        self._pending_calls: dict[str, tuple[str, dict[str, Any]]] = {}
         self.logger = get_logger(__name__)
+
+    def remember_call(
+        self,
+        token: str,
+        tool_name: str,
+        params: dict[str, Any],
+    ) -> None:
+        """Store the call a confirmation token authorises.
+
+        The token itself carries only a hash of the parameters, which is
+        enough to detect a mismatch but not enough to run the call. The
+        pending call is kept here so an approved confirmation can actually
+        execute it.
+
+        Args:
+            token: The confirmation token.
+            tool_name: The tool the token authorises.
+            params: The parameters the call would run with.
+        """
+        with self._lock:
+            self._pending_calls[token] = (tool_name, dict(params))
+
+    def take_call(self, token: str) -> tuple[str, dict[str, Any]] | None:
+        """Return and remove the call a confirmation token authorises.
+
+        Args:
+            token: The confirmation token.
+
+        Returns:
+            The tool name and parameters, or None when the token has no
+            pending call.
+        """
+        with self._lock:
+            return self._pending_calls.pop(token, None)
 
     def request_confirmation(
         self, tool_name: str, params: Mapping[str, Any], reason: str

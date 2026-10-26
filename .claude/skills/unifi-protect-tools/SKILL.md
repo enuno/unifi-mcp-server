@@ -9,7 +9,7 @@ Protect tools talk to the Protect integration API on the local console. Read thi
 
 ## Module map
 
-15 modules, 72 functions, 71 registered tool names.
+15 modules, 71 functions, 71 registered tool names.
 
 | Module | Tools | Examples |
 |--------|-------|----------|
@@ -18,7 +18,7 @@ Protect tools talk to the Protect integration API on the local console. Read thi
 | `src/tools/protect_bridges.py` | 3 | `get_protect_bridge`, `update_protect_bridge` |
 | `src/tools/protect_cameras.py` | 2 | `list_protect_cameras`, `get_protect_camera` |
 | `src/tools/protect_devices.py` | 13 | `list_protect_devices`, `update_protect_light`, `get_protect_chime` |
-| `src/tools/protect_events.py` | 7 | `list_protect_events`, `send_protect_alarm_webhook` |
+| `src/tools/protect_events.py` | 6 | `list_protect_events`, `send_protect_alarm_webhook` |
 | `src/tools/protect_fobs.py` | 3 | `update_protect_fob` |
 | `src/tools/protect_link_stations.py` | 3 | `update_protect_link_station` |
 | `src/tools/protect_nvr.py` | 2 | `list_protect_nvrs`, `get_protect_nvr` |

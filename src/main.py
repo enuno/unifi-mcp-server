@@ -20,13 +20,17 @@ from fastmcp import FastMCP
 
 from .a2a import A2AState
 from .a2a.audit import get_audit_logger
-from .a2a.auth import AuthManager
+from .a2a.auth import AuthManager, current_caller_role
+from .a2a.capabilities import iter_registered_tools
+from .a2a.executor import build_tool_executor
 from .a2a.route_policy import ConfirmationWorkflow, SafetyController
+from .access import ROLES
 from .api.pool import ClientPool
 from .config import APIType, Settings, TransportMode
 from .fleet import EnvRegistry
 from .fleet.router import FleetRouter
 from .fleet.tools import register_fleet_tools
+from .prompts import register_prompts
 from .resources import ClientsResource, DevicesResource, NetworksResource, SitesResource
 from .resources import protect as protect_resource
 from .resources import site_manager as site_manager_resource
@@ -93,6 +97,10 @@ from .tools import wans as wans_tools
 from .tools import wifi as wifi_tools
 from .utils import get_logger
 from .utils.audit import get_audit_logger as get_tool_audit_logger
+
+#: The roles in ascending order of privilege. A caller at a higher role
+#: satisfies a requirement for a lower one.
+ROLE_ORDER: tuple[str, ...] = ROLES
 
 # ---------------------------------------------------------------------------
 # Initialisation
@@ -264,6 +272,46 @@ def ensure_network_transport_authenticated(current_settings: Settings, auth_prov
         )
 
 
+def _role_from_claims(claims: Any) -> str | None:
+    """Return the role carried by a verified bearer token's claims.
+
+    Args:
+        claims: The claims of the verified token.
+
+    Returns:
+        The role name, or None when the token carries no role.
+    """
+    if not isinstance(claims, dict):
+        return None
+    for key in ("static_role", "role"):
+        value = claims.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def _role_grants(role: str | None, required: str) -> bool:
+    """Return whether a role is at or above a required role.
+
+    The role table is the server's own, so an A2A route and an MCP tool
+    call are gated the same way. Roles are ordered
+    viewer < operator < admin < fleet-admin; a caller at a higher role
+    satisfies a lower requirement.
+
+    Args:
+        role: The caller's role, or None when it could not be resolved.
+        required: The role the route requires.
+
+    Returns:
+        True when the caller's role satisfies the requirement.
+    """
+    if role is None:
+        return False
+    if role not in ROLE_ORDER:
+        return False
+    return ROLE_ORDER.index(role) >= ROLE_ORDER.index(required)
+
+
 def register_a2a_routes(server: FastMCP, state: A2AState, auth_provider: Any) -> None:
     """Register the /a2a/* HTTP endpoints on a FastMCP server.
 
@@ -292,25 +340,52 @@ def register_a2a_routes(server: FastMCP, state: A2AState, auth_provider: Any) ->
 
     def _bearer_required(
         handler: Callable[[Request], Awaitable[Response]],
+        *,
+        required_role: str | None = None,
     ) -> Callable[[Request], Awaitable[Response]]:
         async def wrapper(request: Request) -> Response:
             scheme, _, token = request.headers.get("authorization", "").partition(" ")
+            role: str | None = None
             if scheme.lower() != "bearer" or not token.strip():
                 authorized = False
             else:
-                authorized = await auth_provider.verify_token(token.strip()) is not None
+                verified = await auth_provider.verify_token(token.strip())
+                authorized = verified is not None
+                if authorized is not None and verified is not None:
+                    role = _role_from_claims(verified.claims)
             if not authorized:
                 return JSONResponse(
                     {"error": "invalid_token", "error_description": "Authentication required"},
                     status_code=401,
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            return await handler(request)
+            if required_role is not None and not _role_grants(role, required_role):
+                return JSONResponse(
+                    {
+                        "error": "insufficient_scope",
+                        "error_description": (
+                            f"This endpoint requires the '{required_role}' role."
+                        ),
+                    },
+                    status_code=403,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            # The role is bound to the request so the A2A authorization
+            # layer can use the caller's real role instead of one the
+            # request body asserts.
+            role_token = current_caller_role.set(role)
+            try:
+                return await handler(request)
+            finally:
+                current_caller_role.reset(role_token)
 
         return wrapper
 
     async def _a2a_agent_card(request: Request) -> Response:
-        return JSONResponse(get_agent_card_handler())
+        return JSONResponse(get_agent_card_handler(state))
+
+    async def _a2a_well_known(request: Request) -> Response:
+        return JSONResponse(get_agent_card_handler(state))
 
     async def _a2a_discover(request: Request) -> Response:
         body = await request.body()
@@ -329,14 +404,17 @@ def register_a2a_routes(server: FastMCP, state: A2AState, auth_provider: Any) ->
         payload = dict(request.query_params)
         return JSONResponse(await get_audit_handler(payload, state=state))
 
-    for path, methods, handler in (
-        ("/a2a/agent-card", ["GET"], _a2a_agent_card),
-        ("/a2a/discover", ["POST"], _a2a_discover),
-        ("/a2a/delegate", ["POST"], _a2a_delegate),
-        ("/a2a/confirm", ["POST"], _a2a_confirm),
-        ("/a2a/audit", ["GET"], _a2a_audit),
+    for path, methods, handler, required_role in (
+        ("/a2a/agent-card", ["GET"], _a2a_agent_card, None),
+        ("/.well-known/agent-card.json", ["GET"], _a2a_well_known, None),
+        ("/a2a/discover", ["POST"], _a2a_discover, None),
+        ("/a2a/delegate", ["POST"], _a2a_delegate, None),
+        ("/a2a/confirm", ["POST"], _a2a_confirm, None),
+        ("/a2a/audit", ["GET"], _a2a_audit, "admin"),
     ):
-        server.custom_route(path, methods=methods)(_bearer_required(handler))
+        server.custom_route(path, methods=methods)(
+            _bearer_required(handler, required_role=required_role)
+        )
 
 
 def register_metrics_route(server: FastMCP, auth_provider: Any) -> None:
@@ -744,6 +822,16 @@ if settings.database_url:
     )
 
 # ---------------------------------------------------------------------------
+# Native MCP prompts
+# ---------------------------------------------------------------------------
+
+# Registered after the tools, because a workflow is only advertised when the
+# tools it needs are actually registered on this server. The prompt catalog
+# therefore follows the API mode, the profile and the read-only and dry-run
+# settings automatically, without a second copy of that logic.
+register_prompts(mcp, settings)
+
+# ---------------------------------------------------------------------------
 # Resource handlers
 # ---------------------------------------------------------------------------
 
@@ -1006,13 +1094,24 @@ def main() -> None:
     # ---------------------------------------------------------------------------
     # A2A protocol HTTP routes (registered when not in stdio mode)
     # ---------------------------------------------------------------------------
+    a2a_auth_manager = AuthManager()
+    # The A2A authorization layer resolves a tool's risk tier from the tool
+    # itself, so it needs the live tool surface. The registry's own tier
+    # table covers most tools; the fleet tools and the health check
+    # register by another path and are covered by this.
+    a2a_auth_manager.register_tools({tool.name: tool for tool in iter_registered_tools(mcp)}, mcp)
     a2a_state = A2AState(
         settings=settings,
         audit_logger=get_audit_logger(),
-        auth_manager=AuthManager(),
-        safety_controller=SafetyController(),
+        auth_manager=a2a_auth_manager,
+        safety_controller=SafetyController(settings=settings),
         confirmation_workflow=ConfirmationWorkflow(),
+        tool_executor=build_tool_executor(mcp),
+        mcp=mcp,
     )
+    # Exposed so a caller (and the test suite) can reach the live state the
+    # A2A routes share.
+    globals()["a2a_state"] = a2a_state
 
     if settings.server_transport == TransportMode.STDIO:
         logger.info("Transport: stdio (default)")

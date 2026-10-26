@@ -8,13 +8,78 @@ layer and HTTP endpoints.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..config import APIType
-from ..tool_registry import TOOL_TIERS
+from ..tool_registry import TOOL_TIERS, tool_tier
 from ..utils import get_logger
+
+#: The role of the caller whose request is being handled, as resolved from
+#: its bearer token by the transport. None when the caller could not be
+#: identified, which grants read only.
+current_caller_role: ContextVar[str | None] = ContextVar("unifi_a2a_caller_role", default=None)
+
+
+class _Tiers:
+    """The risk tiers a role grants, in permission-name form.
+
+    These mirror ``src.access.ROLE_TIERS``. The A2A layer cannot import the
+    role table directly because that module reads the request context, so
+    the mapping is restated here in the vocabulary the A2A auth providers
+    use and checked against the role table by a unit test.
+    """
+
+    READ = frozenset({"read"})
+    WRITE = frozenset({"read", "write"})
+    DESTRUCTIVE = frozenset({"read", "write", "destructive"})
+    ADMIN = frozenset({"read", "write", "destructive", "admin"})
+
+
+#: The tiers each role grants.
+_ROLE_TIERS: dict[str, frozenset[str]] = {
+    "viewer": _Tiers.READ,
+    "operator": _Tiers.WRITE,
+    "admin": _Tiers.DESTRUCTIVE,
+    "fleet-admin": _Tiers.ADMIN,
+}
+
+
+def _tiers_for_role(role: str | None) -> frozenset[str]:
+    """Return the permission tiers a role grants.
+
+    Args:
+        role: The role name, or None when the caller is anonymous.
+
+    Returns:
+        The granted tiers. An unknown role grants read only, so an
+        unrecognised role can never widen access.
+    """
+    if not role:
+        return _Tiers.READ
+    return _ROLE_TIERS.get(role, _Tiers.READ)
+
+
+def _agent_id_from_payload(payload: Mapping[str, Any]) -> str:
+    """Return the caller's identifier from a delegation payload.
+
+    Args:
+        payload: The delegation request.
+
+    Returns:
+        The agent identifier, or ``anonymous``.
+    """
+    return str(
+        payload.get("agent_id")
+        or payload.get("agentId")
+        or payload.get("client_id")
+        or payload.get("clientId")
+        or payload.get("subject")
+        or payload.get("sub")
+        or "anonymous"
+    )
 
 
 @dataclass(slots=True)
@@ -130,6 +195,65 @@ class AuthManager:
         self.logger = get_logger(__name__)
         self.local_provider = LocalAuthProvider()
         self.cloud_provider = CloudAuthProvider()
+        # The tools this deployment registered, keyed by public name. A
+        # tool's tier decides what role may call it, so the tier is
+        # resolved from the tool itself rather than from its name.
+        self._registered_tools: dict[str, Any] = {}
+        # The server the tools are registered on, when there is one.
+        self._mcp: Any | None = None
+
+    def register_tools(self, tools: Mapping[str, Any], mcp: Any | None = None) -> None:
+        """Record the tools this deployment registered.
+
+        The tool registry covers most tools; the fleet tools and the
+        health check register by another path and are covered here.
+
+        Args:
+            tools: The registered tools, keyed by public name.
+            mcp: The server the tools are registered on, so a tool
+                registered later can still be classified.
+        """
+        self._registered_tools = dict(tools)
+        self._mcp = mcp
+
+    def _tier_of_registered_tool(self, tool_name: str) -> str | None:
+        """Return the risk tier of a registered tool, or None if unknown.
+
+        The tool's own function is classified with the registry's
+        classifier, so a tool that mutates state is a write or destructive
+        tool whatever its name happens to look like.
+
+        The lookup is against the live server, not a snapshot taken at
+        startup, so a tool registered later is classified correctly too.
+        """
+        tool = self._registered_tools.get(tool_name)
+        if tool is None:
+            tool = self._live_tool(tool_name)
+        if tool is None:
+            return None
+        function = getattr(tool, "fn", None)
+        if function is None:
+            return None
+        try:
+            return tool_tier(function)
+        except Exception:  # pragma: no cover - a tool with an odd signature
+            return None
+
+    def _live_tool(self, tool_name: str) -> Any | None:
+        """Return a registered tool from the live server, if there is one."""
+        server = self._mcp
+        if server is None:
+            return None
+        for provider in getattr(server, "providers", []):
+            components = getattr(provider, "_components", None)
+            if not isinstance(components, dict):
+                continue
+            for key, component in components.items():
+                if not key.startswith("tool:"):
+                    continue
+                if key[5:].split("@", 1)[0] == tool_name:
+                    return component
+        return None
 
     @staticmethod
     def _normalize_mode(mode: str | APIType) -> str:
@@ -156,7 +280,7 @@ class AuthManager:
 
     def validate_permissions(self, auth_context: AuthContext, tool_name: str) -> bool:
         """Return True when the context grants permission for the requested tool."""
-        required = self._required_permission(tool_name)
+        required = self.required_permission(tool_name)
         permissions = {permission.lower() for permission in auth_context.permissions}
         if "admin" in permissions:
             return True
@@ -167,6 +291,63 @@ class AuthManager:
         if required == "destructive":
             return "destructive" in permissions
         return required in permissions
+
+    def credentials_for_caller(
+        self,
+        payload: Mapping[str, Any],
+        role: str | None = None,
+    ) -> dict[str, Any]:
+        """Return the credentials describing the caller of a delegated request.
+
+        The permissions come from the caller's authenticated role, not from
+        the request body. A delegation payload may name scopes, but they can
+        only narrow what the authenticated role already grants; they can
+        never widen it. The server's role model (``src.access.ROLE_TIERS``)
+        is the enforcement boundary, and a self-asserted permission list
+        must not become a second one.
+
+        Args:
+            payload: The delegation request.
+            role: The authenticated role of the caller, as resolved from the
+                bearer token by the transport. None means the caller could
+                not be identified, which grants read only.
+
+        Returns:
+            The credentials for the auth provider.
+        """
+        granted = _tiers_for_role(role)
+
+        requested = {
+            str(scope).lower() for scope in payload.get("scopes", []) or [] if scope is not None
+        }
+        if requested:
+            granted = granted & requested
+
+        return {
+            "role": role,
+            "permissions": sorted(granted),
+            "agent_id": _agent_id_from_payload(payload),
+        }
+
+    def required_permission(self, tool_name: str) -> str:
+        """Return the permission a tool needs, for this deployment.
+
+        A tool the registry table does not cover is still a registered
+        tool: the fleet tools and the health check register by another
+        path. Its tier comes from its own function, classified the same
+        way the registry classifies one, so the tier never depends on what
+        the name happens to look like.
+
+        Args:
+            tool_name: The public name of the tool.
+
+        Returns:
+            The risk tier the tool requires.
+        """
+        tier = self._tier_of_registered_tool(tool_name.strip().lower())
+        if tier is not None:
+            return tier
+        return self._required_permission(tool_name)
 
     @staticmethod
     def _required_permission(tool_name: str) -> str:
@@ -198,7 +379,11 @@ class AuthManager:
             )
         ):
             return "write"
-        return "read"
+        if normalized.startswith(
+            ("get_", "list_", "fetch_", "read_", "inspect_", "stat_", "search_")
+        ):
+            return "read"
+        return "destructive"
 
 
 __all__ = [

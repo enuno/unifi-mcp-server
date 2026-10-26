@@ -5,7 +5,7 @@ description: Use when adding, changing or testing a UniFi security MCP tool (leg
 
 # UniFi Security Tools
 
-These tools change who can reach what on the network, so a mistake can lock users or the operator out. Read this before you change one. For the general add-a-tool workflow, see `unifi-mcp-tool-builder`. For zone-based firewall (ZBF) background, see `zbf-implementation-guide.md` in this folder.
+These tools change who can reach what on the network, so a mistake can lock users or the operator out. Read this before you change one. For the general add-a-tool workflow, see `unifi-mcp-tool-builder`. For zone-based firewall (ZBF) background, see `zbf-implementation-guide.md` in the `.claude/skills/` directory.
 
 ## Module map
 
@@ -71,7 +71,7 @@ The integration API needs a site UUID; get it with `await client.resolve_site_id
 ## Risk tiers
 
 - `tool_tier()` (`src/tool_registry.py`) makes a tool destructive when its name starts with `delete_`, `remove_` or `bulk_delete_`, or when it is in `DESTRUCTIVE_TOOLS`.
-- Tools that change firewall policy are in `DESTRUCTIVE_TOOLS`, so only the admin role can call them: `create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone` and `unassign_network_from_zone` (`test_firewall_policy_changes_need_admin`).
+- Tools that change firewall policy are in `DESTRUCTIVE_TOOLS`, so only the admin role can call them: `create_firewall_policy`, `update_firewall_policy`, `update_zbf_policy`, `create_firewall_rule`, `update_firewall_rule`, `assign_network_to_zone` and `unassign_network_from_zone`. The test that proves this is `test_firewall_policy_changes_need_admin`.
 - Everything else that mutates is `write` tier, which the operator role can call. That includes ACL rules, port forwards, firewall groups and zones, traffic matching lists and the content filter.
 - When a new tool can cut off traffic, decide with the owner whether it belongs in `DESTRUCTIVE_TOOLS`.
 - A tool with a risky word in its name (`block`, `disable` and others) must be in `DESTRUCTIVE_TOOLS` or in `RISKY_NAME_EXEMPTIONS` (`tests/unit/fleet/test_tiers.py`).

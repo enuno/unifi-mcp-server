@@ -15,19 +15,22 @@ This command runs the `scripts/update-api-docs.js` Puppeteer-based scraper to fe
 
 **API Sources:**
 
-- Site Manager API (v1.0.0): https://developer.ui.com/site-manager/v1.0.0/gettingstarted
-- Network API (v10.1.68): https://developer.ui.com/network/v10.1.68/gettingstarted
-- Protect API (v6.2.83): https://developer.ui.com/protect/v6.2.83/gettingstarted
+- Site Manager API (v1.0.0): <https://developer.ui.com/site-manager/v1.0.0/gettingstarted>
+- Network API (v10.1.68): <https://developer.ui.com/network/v10.1.68/gettingstarted>
+- Protect API (v6.2.83): <https://developer.ui.com/protect/v6.2.83/gettingstarted>
 
 **Steps to execute:**
 
 1. Verify dependencies are installed:
+
    ```bash
    npm list puppeteer
    ```
+
    If not installed, run: `npm install puppeteer`
 
 2. Run the API documentation updater:
+
    ```bash
    node scripts/update-api-docs.js
    ```
@@ -38,6 +41,7 @@ This command runs the `scripts/update-api-docs.js` Puppeteer-based scraper to fe
    - Review the extracted examples and descriptions
 
 4. Show summary:
+
    ```bash
    git diff --stat docs/UNIFI_API.md
    ```

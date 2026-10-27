@@ -30,7 +30,9 @@ services:
         EXTRAS: fleet
     command: ["python", "-m", "src.fleet.cli", "migrate"]
     environment:
-      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      DATABASE_URL: ${DATABASE_URL:-postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp}
+      # The migration service may use a separate owner role; defaults to DATABASE_URL.
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:-${DATABASE_URL:-postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp}}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,7 +47,7 @@ services:
       # Loopback only; put an authenticating TLS proxy in front to expose it.
       - "127.0.0.1:${MCP_SERVER_PORT:-3000}:${MCP_SERVER_PORT:-3000}"
     environment:
-      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      DATABASE_URL: ${DATABASE_URL:-postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp}
       UNIFI_FLEET_CREDENTIAL_KEY: ${UNIFI_FLEET_CREDENTIAL_KEY:?UNIFI_FLEET_CREDENTIAL_KEY required}
       UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
       UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}
@@ -88,7 +90,7 @@ services:
     restart: unless-stopped
     command: ["python", "-m", "src.worker"]
     environment:
-      DATABASE_URL: postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp
+      DATABASE_URL: ${DATABASE_URL:-postgresql://unifi_mcp:${POSTGRES_PASSWORD}@postgres:5432/unifi_mcp}
       UNIFI_FLEET_CREDENTIAL_KEY: ${UNIFI_FLEET_CREDENTIAL_KEY:?UNIFI_FLEET_CREDENTIAL_KEY required}
       UNIFI_API_KEY: ${UNIFI_API_KEY:?UNIFI_API_KEY required}
       UNIFI_API_TYPE: ${UNIFI_API_TYPE:-cloud-ea}

@@ -10,6 +10,7 @@ transport). It fails closed: without ``WEBHOOK_SECRET`` every request is
 refused, and every request must carry a valid ``X-UniFi-Signature``.
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -23,6 +24,12 @@ from starlette.responses import JSONResponse
 
 from ..config import Settings
 from ..utils import get_logger
+
+#: Most webhook publishes allowed to be in flight at once. Reached only when
+#: Redis stops answering; further events are dropped from the fan-out with a
+#: warning rather than queueing without bound. Local handlers still run and the
+#: HTTP response is unaffected.
+MAX_PENDING_PUBLISHES = 1000
 
 
 class WebhookEvent(BaseModel):
@@ -51,6 +58,7 @@ class WebhookReceiver:
         settings: Settings,
         app: Any | None = None,
         path: str = "/webhooks/unifi",
+        event_bus: Any | None = None,
     ):
         """Initialize webhook receiver.
 
@@ -58,6 +66,7 @@ class WebhookReceiver:
             settings: Application settings
             app: Optional app to mount the route on (anything with ``add_route``)
             path: Webhook endpoint path
+            event_bus: Optional Redis pub/sub bus for fanning events to other replicas
         """
         self.settings = settings
         self.path = path
@@ -65,6 +74,13 @@ class WebhookReceiver:
         self.handlers: dict[str, list[Callable]] = {}
         self._event_cache: dict[str, datetime] = {}
         self._rate_limit_cache: dict[str, list[datetime]] = {}
+        self.event_bus = event_bus
+        # Publishes run off the HTTP acknowledgement path: a Redis that accepts
+        # connections but stops answering would otherwise add the pool's socket
+        # timeout to every webhook response. Tasks are tracked so they can be
+        # drained on shutdown and so a stalled Redis cannot accumulate without
+        # bound while events keep arriving.
+        self._publish_tasks: set[asyncio.Task[None]] = set()
 
         secret = getattr(settings, "webhook_secret", None)
         if isinstance(secret, SecretStr):
@@ -197,9 +213,9 @@ class WebhookReceiver:
 
         if not all_handlers:
             self.logger.debug(f"No handlers registered for event type: {event.event_type}")
-            return
 
         # Execute handlers
+        handler_errors: list[str] = []
         for handler in all_handlers:
             try:
                 await handler(event)
@@ -208,6 +224,80 @@ class WebhookReceiver:
                     f"Error in handler for {event.event_type}: {e}",
                     exc_info=True,
                 )
+                handler_errors.append(str(e))
+
+        # Fan the event out to other replicas/workers over Redis when configured.
+        # The publish is dispatched as a background task rather than awaited: a
+        # Redis that accepts connections but stops answering would otherwise add
+        # the connection pool's socket timeout to this webhook's HTTP response,
+        # and a caller with a shorter delivery timeout would retry an event whose
+        # local handlers already ran. Publishing is attempted regardless of
+        # handler success so observers on other processes still see the event.
+        if self.event_bus is not None:
+            self._dispatch_publish(event)
+
+    def _dispatch_publish(self, event: WebhookEvent) -> None:
+        """Schedule the Redis fan-out for ``event`` without blocking the response.
+
+        Args:
+            event: The validated event to publish
+        """
+        if len(self._publish_tasks) >= MAX_PENDING_PUBLISHES:
+            self.logger.warning(
+                "Dropping webhook event %s from the Redis fan-out: %d publishes are "
+                "already in flight, which means Redis is not answering. Local handlers "
+                "still ran.",
+                event.event_id,
+                len(self._publish_tasks),
+            )
+            return
+
+        task = asyncio.create_task(self._publish_event(event))
+        self._publish_tasks.add(task)
+        task.add_done_callback(self._publish_tasks.discard)
+
+    async def _publish_event(self, event: WebhookEvent) -> None:
+        """Publish one event to the bus, logging rather than raising on failure.
+
+        Args:
+            event: The validated event to publish
+        """
+        if self.event_bus is None:  # pragma: no cover - guarded by the caller
+            return
+        try:
+            await self.event_bus.publish(
+                event_type=event.event_type,
+                site_id=event.site_id,
+                event_id=event.event_id,
+                timestamp=event.timestamp.isoformat(),
+                data=event.data,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            self.logger.warning(f"Could not publish webhook event to bus: {e}")
+
+    async def aclose(self, timeout: float = 5.0) -> None:
+        """Drain outstanding publishes, then cancel whatever has not finished.
+
+        Call this on shutdown so an event accepted over HTTP is not lost to a
+        process exit while its publish is still in flight.
+
+        Args:
+            timeout: Seconds to wait for in-flight publishes before cancelling
+        """
+        pending = set(self._publish_tasks)
+        if not pending:
+            return
+        _done, unfinished = await asyncio.wait(pending, timeout=timeout)
+        for task in unfinished:
+            task.cancel()
+        if unfinished:
+            self.logger.warning(
+                "Cancelled %d webhook publish(es) that had not reached Redis at shutdown",
+                len(unfinished),
+            )
+        await asyncio.gather(*unfinished, return_exceptions=True)
 
     def _verify_signature(self, payload: str, signature: str) -> bool:
         """Verify webhook signature.

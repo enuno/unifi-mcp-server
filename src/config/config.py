@@ -126,6 +126,19 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_API_TYPE",
     )
 
+    mixed_mode: bool = Field(
+        default=False,
+        description=(
+            "Register the cloud and local tool modules together, for a deployment "
+            "whose controller registry holds both cloud controllers and local "
+            "gateways. Without it the exposed tool modules follow the single base "
+            "UNIFI_API_TYPE, so local-only tools are absent on a cloud-typed server "
+            "even when a local gateway is registered. Needs no base UNIFI_LOCAL_HOST: "
+            "the gateways come from the registry."
+        ),
+        validation_alias="UNIFI_MIXED_MODE",
+    )
+
     # Cloud API Configuration
     cloud_api_url: str = Field(
         default="https://api.ui.com",

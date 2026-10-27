@@ -1,12 +1,14 @@
 """Unit tests for webhook receiver and handlers."""
 
+import asyncio
 import hashlib
 import hmac
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from src.webhooks import receiver as receiver_module
 from src.webhooks.handlers import WebhookEventHandler
 from src.webhooks.receiver import WebhookEvent, WebhookReceiver
 
@@ -296,6 +298,182 @@ class TestWebhookReceiverHandlers:
         )
 
         await receiver._process_event(event)
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_to_bus(self, mock_settings):
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="device.online",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={"mac": "00:11:22:33:44:55"},
+            event_id="evt-bus-1",
+        )
+
+        await receiver._process_event(event)
+        await receiver.aclose()
+
+        event_bus.publish.assert_awaited_once()
+        call_kwargs = event_bus.publish.await_args.kwargs
+        assert call_kwargs["event_type"] == "device.online"
+        assert call_kwargs["site_id"] == "default"
+        assert call_kwargs["event_id"] == "evt-bus-1"
+        assert call_kwargs["data"]["mac"] == "00:11:22:33:44:55"
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_even_with_no_handlers(self, mock_settings):
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="unknown.event",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-2",
+        )
+
+        await receiver._process_event(event)
+        await receiver.aclose()
+
+        event_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_even_when_handler_fails(self, mock_settings):
+        async def failing_handler(event):
+            raise ValueError("Handler error")
+
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+        receiver.register_handler("event.test", failing_handler)
+
+        event = WebhookEvent(
+            event_type="event.test",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-3",
+        )
+
+        await receiver._process_event(event)
+        await receiver.aclose()
+
+        event_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_process_event_bus_failure_is_logged(self, mock_settings, caplog):
+        event_bus = AsyncMock()
+        event_bus.publish = AsyncMock(side_effect=RuntimeError("Redis down"))
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="device.online",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-4",
+        )
+
+        with caplog.at_level("WARNING"):
+            await receiver._process_event(event)
+            await receiver.aclose()
+
+        assert "Could not publish webhook event to bus" in caplog.text
+        event_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_process_event_does_not_wait_for_a_hung_publish(self, mock_settings):
+        """A Redis that accepts connections but never answers must not delay the ack."""
+        release = asyncio.Event()
+
+        async def hanging_publish(**kwargs):
+            await release.wait()
+
+        event_bus = AsyncMock()
+        event_bus.publish = AsyncMock(side_effect=hanging_publish)
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="device.online",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-hung",
+        )
+
+        # Returns while the publish is still blocked; a synchronous await here
+        # would hang until the bus gave up.
+        await asyncio.wait_for(receiver._process_event(event), timeout=1)
+
+        assert len(receiver._publish_tasks) == 1
+        release.set()
+        await receiver.aclose()
+        assert not receiver._publish_tasks
+
+    @pytest.mark.asyncio
+    async def test_publishes_are_dropped_once_too_many_are_in_flight(self, mock_settings, caplog):
+        """A stalled Redis must not let in-flight publishes grow without bound."""
+        release = asyncio.Event()
+
+        async def hanging_publish(**kwargs):
+            await release.wait()
+
+        event_bus = AsyncMock()
+        event_bus.publish = AsyncMock(side_effect=hanging_publish)
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        def _event(index: int) -> WebhookEvent:
+            return WebhookEvent(
+                event_type="device.online",
+                timestamp=datetime.now(),
+                site_id="default",
+                data={},
+                event_id=f"evt-flood-{index}",
+            )
+
+        for index in range(receiver_module.MAX_PENDING_PUBLISHES):
+            receiver._dispatch_publish(_event(index))
+        assert len(receiver._publish_tasks) == receiver_module.MAX_PENDING_PUBLISHES
+
+        with caplog.at_level("WARNING"):
+            receiver._dispatch_publish(_event(receiver_module.MAX_PENDING_PUBLISHES))
+
+        assert len(receiver._publish_tasks) == receiver_module.MAX_PENDING_PUBLISHES
+        assert "Dropping webhook event" in caplog.text
+
+        release.set()
+        await receiver.aclose()
+
+    @pytest.mark.asyncio
+    async def test_aclose_cancels_a_publish_that_never_finishes(self, mock_settings, caplog):
+        async def never_finishes(**kwargs):
+            await asyncio.Event().wait()
+
+        event_bus = AsyncMock()
+        event_bus.publish = AsyncMock(side_effect=never_finishes)
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        receiver._dispatch_publish(
+            WebhookEvent(
+                event_type="device.online",
+                timestamp=datetime.now(),
+                site_id="default",
+                data={},
+                event_id="evt-shutdown",
+            )
+        )
+
+        with caplog.at_level("WARNING"):
+            await receiver.aclose(timeout=0.05)
+
+        assert "had not reached Redis at shutdown" in caplog.text
+        assert not receiver._publish_tasks
+
+    @pytest.mark.asyncio
+    async def test_aclose_without_a_bus_is_a_no_op(self, receiver):
+        await receiver.aclose()
 
 
 class TestWebhookEventHandler:

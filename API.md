@@ -6,6 +6,7 @@ This document provides comprehensive documentation for the Model Context Protoco
 
 - [Overview](#overview)
 - [Configuration](#configuration)
+- [Connecting to the cloud API and local gateways together](#connecting-to-the-cloud-api-and-local-gateways-together)
 - [Authentication](#authentication)
 - [Performance Tracking](#performance-tracking)
 - [MCP Tools](#mcp-tools)
@@ -100,6 +101,7 @@ Configure the MCP server using environment variables:
 |----------|-------------|----------|---------|
 | `UNIFI_API_KEY` | UniFi API Key (used for both Network and Site Manager APIs) | Yes | - |
 | `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
+| `UNIFI_MIXED_MODE` | Expose the cloud **and** local tool modules together, for a fleet whose registry holds both cloud controllers and local gateways. Without it the exposed modules follow the single `UNIFI_API_TYPE`, so local-only tools are missing on a cloud-typed server even when a local gateway is registered. Needs no `UNIFI_LOCAL_HOST`: the gateways come from the registry. See [Connecting to the cloud API and local gateways together](#connecting-to-the-cloud-api-and-local-gateways-together) | No | `false` |
 | `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
 | `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
 | `UNIFI_LOCAL_VERIFY_SSL` | Verify the local gateway's TLS certificate. Setting `false` logs a startup warning; prefer `UNIFI_LOCAL_CA_FILE` for self-signed certs | No | `true` |
@@ -190,6 +192,126 @@ mcp:
 ```
 
 **Note:** Environment variables take precedence over configuration file settings.
+
+## Connecting to the cloud API and local gateways together
+
+One server can talk to the UniFi cloud API, to a local gateway, or to several
+of each at once. Three topologies are supported; which one you are in is
+decided by whether `DATABASE_URL` is set and whether `UNIFI_MIXED_MODE` is on.
+
+### 1. One controller, from the environment
+
+No `DATABASE_URL`. `UNIFI_API_TYPE` picks the backend and the `UNIFI_*`
+variables describe it; the registry holds a single controller named `default`.
+
+```env
+# Cloud
+UNIFI_API_TYPE=cloud-ea
+UNIFI_API_KEY=<key>
+
+# or one local gateway
+UNIFI_API_TYPE=local
+UNIFI_LOCAL_HOST=192.0.2.1
+UNIFI_API_KEY=<key>
+```
+
+The API key lives in the environment. Tool modules follow `UNIFI_API_TYPE`:
+`local` registers the cloud **and** local modules, a cloud type registers only
+the cloud ones.
+
+### 2. Several controllers, from Postgres (fleet mode)
+
+Set `DATABASE_URL` and `UNIFI_FLEET_CREDENTIAL_KEY`, run
+`python -m src.fleet.cli migrate`, then register each controller. Any mix of
+local gateways and cloud controllers is allowed, each with **its own API key,
+stored encrypted in the database** — not in the environment:
+
+```python
+# A local gateway, with its own key
+await mcp.call_tool("register_controller", {
+    "name": "hq", "api_type": "local", "local_host": "192.0.2.1",
+    "api_key": "<hq-key>", "labels": {"region": "west"}, "confirm": True,
+})
+
+# Another local gateway
+await mcp.call_tool("register_controller", {
+    "name": "branch-017", "api_type": "local", "local_host": "192.0.2.17",
+    "api_key": "<branch-key>", "confirm": True,
+})
+
+# A cloud controller sharing one Site Manager key
+await mcp.call_tool("register_cloud_account", {
+    "name": "corp", "api_key": "<cloud-key>", "confirm": True,
+})
+await mcp.call_tool("register_controller", {
+    "name": "cloud-east", "api_type": "cloud-ea",
+    "cloud_account": "corp", "confirm": True,
+})
+```
+
+Each key is stored in the `credentials` table as a Fernet ciphertext, encrypted
+with `UNIFI_FLEET_CREDENTIAL_KEY`; `list_controllers` never returns a
+credential, and `rotate_fleet_credentials` re-encrypts every stored key under a
+new one. Calls are routed per call with `controller=<name>`, per session with
+`select_controller`, or to the registry default. See `MULTI_CONTROLLER.md`.
+
+### 3. Mixed cloud and local, in one server
+
+Fleet mode routes to controllers of any type, but the **tool modules** are
+chosen once at start-up from the base `UNIFI_API_TYPE`. On a cloud-typed
+server the local-only modules (firewall zones and policies, MAC tags,
+switching, QoS, RADIUS, Protect, topology and the rest) are therefore never
+registered, so a registered local gateway is routable while most of its tools
+do not exist.
+
+Set `UNIFI_MIXED_MODE=true` to register the union instead:
+
+```env
+UNIFI_API_TYPE=cloud-ea          # the base stays cloud-shaped
+UNIFI_MIXED_MODE=true            # expose cloud AND local tools
+UNIFI_API_KEY=<cloud-key>
+DATABASE_URL=postgresql://...    # the gateways come from the registry
+UNIFI_FLEET_CREDENTIAL_KEY=<key>
+```
+
+With it:
+
+- the cloud and local tool modules are both registered, so a call routed to a
+  cloud controller reaches the cloud tools and a call routed to a local gateway
+  reaches the local ones;
+- no base `UNIFI_LOCAL_HOST` is needed — the gateways come from the registry;
+- `UNIFI_PROFILE` still narrows the union, so `UNIFI_PROFILE=protect` in mixed
+  mode exposes the Protect modules only;
+- the start-up log names the mode and the module count, so the exposed surface
+  is visible rather than inferred.
+
+Mixed mode widens the **tool** surface only. MCP resources are not routed —
+they take no `controller` argument and are built from the process-wide
+settings — so they stay gated on the base `UNIFI_API_TYPE`: a cloud base
+exposes no local resources even with mixed mode on. Read a specific gateway
+with a tool and `controller=<name>` instead.
+
+Mixed mode changes **which tools exist**, never which controller a call reaches
+or what a role may do: routing, the risk tiers, `UNIFI_READ_ONLY`,
+`UNIFI_DRY_RUN` and the audit trail are unchanged.
+
+### Limitations
+
+- **A tool must be registered to be reachable.** A module outside the
+  registered set cannot be called on any controller, whatever its type. This is
+  what `UNIFI_MIXED_MODE` exists to fix.
+- **MCP resources always read the default controller.** The `sites://` family
+  and friends take no `controller` argument; use the tools for a specific
+  controller. Because they are built from the process-wide settings and cannot
+  be routed, they stay gated on the base `UNIFI_API_TYPE` — mixed mode does not
+  expose local resources on a cloud base.
+- **Tool modules are process-wide.** A cloud-only call routed to a cloud
+  controller still fails on a local-only endpoint, and the reverse, because the
+  endpoint does not exist on that backend — mixed mode registers both sets, it
+  does not make an endpoint appear on a controller that lacks it.
+- **One API type per registered controller.** A controller entry is `local`,
+  `cloud-ea` or `cloud-v1`; to reach the same hardware both ways, register it
+  twice under different names.
 
 ## Performance Tracking
 
@@ -3425,6 +3547,39 @@ secret configured (receiver mounted by hand only).
 configured). A payload does not say which controller sent it, so the cached
 reads of every controller are cleared. Custom handlers can be registered with
 `receiver.register_handler(event_type, handler)`.
+
+#### Redis webhook event bus
+
+When Redis is configured (`REDIS_URL` or `REDIS_HOST`), every verified webhook
+event is also published to the pub/sub channel `unifi:webhooks:v1:events` after
+local handlers run. Other replicas and workers can subscribe to the channel to
+react to events without each process receiving the HTTP callback directly.
+
+**Payload shape:**
+
+```json
+{
+  "event_type": "device.online",
+  "site_id": "default",
+  "event_id": "evt-123456",
+  "timestamp": "2026-10-27T12:34:56",
+  "data": { "mac": "00:11:22:33:44:55", "name": "Access Point" },
+  "origin": "<instance-id>"
+}
+```
+
+A listener ignores messages whose `origin` matches its own instance id, so a
+process does not handle an event twice.
+
+The publish does not sit on the HTTP acknowledgement path. It is dispatched as
+a background task once the local handlers have run, so a Redis that accepts
+connections but stops answering cannot add the connection pool's socket
+timeout to the webhook response, and a sender with a short delivery timeout
+does not retry an event whose handlers already ran. At most 1000 publishes may
+be in flight at once; past that the fan-out drops events with a warning rather
+than queueing without bound, and local handling is unaffected. On shutdown the
+server waits up to 5 seconds for outstanding publishes, then cancels them and
+logs how many never reached Redis.
 
 ## MCP Resources
 

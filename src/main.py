@@ -134,6 +134,11 @@ if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.mo
 
     read_cache = ReadCache.from_settings(settings)
 
+#: The mounted webhook receiver, when ``WEBHOOK_SECRET`` is set and a network
+#: transport is in use. Set by :func:`register_webhook_route`; the lifespan
+#: drains its in-flight Redis publishes on shutdown.
+webhook_receiver: Any = None
+
 
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
@@ -157,6 +162,8 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
                 health_listener.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await health_listener
+            if webhook_receiver is not None:
+                await webhook_receiver.aclose()
             await client_pool.aclose()
             if hasattr(fleet_registry, "stop"):
                 await fleet_registry.stop()
@@ -502,11 +509,17 @@ def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     if not current_settings.webhook_secret:
         return None
 
+    from .fleet.bus import WebhookBus
     from .webhooks import WebhookEventHandler, WebhookReceiver
 
-    receiver = WebhookReceiver(current_settings)
+    global webhook_receiver
+
+    event_bus = WebhookBus.from_settings(current_settings)
+    receiver = WebhookReceiver(current_settings, event_bus=event_bus)
     WebhookEventHandler(current_settings, read_cache=read_cache).register_default_handlers(receiver)
     server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
+    # The lifespan drains the receiver's in-flight Redis publishes on shutdown.
+    webhook_receiver = receiver
     return receiver
 
 
@@ -763,12 +776,50 @@ if settings.read_only:
     logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 
 _TOOL_MODULES: list[Any] = []
-if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
-    _base_modules = list(_CLOUD_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
-        _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _base_modules = [m for m in _base_modules if m in _profile_set] or _base_modules
-    _TOOL_MODULES = _base_modules
+
+
+def _apply_profile(modules: list[Any]) -> list[Any]:
+    """Narrow ``modules`` to the active ``UNIFI_PROFILE``, if one is set.
+
+    An unrecognised profile, or one that matches nothing in ``modules``, leaves
+    the list unchanged rather than registering an empty server.
+
+    Args:
+        modules: The candidate tool modules for this API mode
+
+    Returns:
+        The profile's subset of ``modules``, or ``modules`` unchanged
+    """
+    if not _active_profile or _active_profile in ("all", ""):
+        return modules
+    profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
+    return [m for m in modules if m in profile_set] or modules
+
+
+# Which tool modules this process exposes. Normally this follows the single base
+# UNIFI_API_TYPE. UNIFI_MIXED_MODE registers the union instead, for a fleet whose
+# registry holds both cloud controllers and local gateways: without it the
+# local-only modules are absent on a cloud-typed server, so a registered local
+# gateway is routable but most of its tools do not exist (DEVELOPMENT_PLAN.md
+# Phase 5.6).
+_cloud_base = settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA)
+if settings.mixed_mode:
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES))
+    logger.info(
+        f"Mixed API mode (UNIFI_MIXED_MODE, base {settings.api_type.value})"
+        + (f", profile={_active_profile}" if _active_profile else "")
+        + f" - registering {len(_TOOL_MODULES)} tool module(s): cloud and local tools "
+        "are both exposed, and each call is routed to its controller"
+    )
+    for _module in _TOOL_MODULES:
+        # get_site_statistics is excluded only on a cloud-typed base, where its
+        # endpoints 404; in mixed mode a local controller can still serve it, so
+        # the exclusion is dropped and a cloud-routed call surfaces the 404.
+        register_module_tools(
+            mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+        )
+elif _cloud_base:
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES))
     logger.info(
         f"Cloud API mode ({settings.api_type.value})"
         + (f", profile={_active_profile}" if _active_profile else "")
@@ -792,12 +843,7 @@ if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
                 mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
             )
 else:
-    _all_local = list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
-        _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _TOOL_MODULES = [m for m in _all_local if m in _profile_set] or _all_local
-    else:
-        _TOOL_MODULES = _all_local
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES))
     logger.info(
         "Local API mode"
         + (f", profile={_active_profile}" if _active_profile else "")
@@ -838,6 +884,13 @@ register_prompts(mcp, settings)
 sites_resource = SitesResource(settings)
 site_manager_res = site_manager_resource.SiteManagerResource(settings)
 
+# The local resources are gated on the base API type, not on mixed mode. They
+# take no `controller` argument and are built from the process-wide settings,
+# so under a cloud base they would be constructed against the cloud URL and
+# could not reach a registered gateway: `get_traffic_flows` would raise
+# NotImplementedError outright. Advertising them would promise a surface that
+# cannot work. Mixed mode widens the *tool* surface, which is routed per call;
+# use a tool with `controller=<name>` to read a specific gateway.
 if settings.api_type == APIType.LOCAL:
     devices_resource = DevicesResource(settings)
     clients_resource = ClientsResource(settings)

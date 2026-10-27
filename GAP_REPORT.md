@@ -89,24 +89,24 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 ### Implemented baseline
 
 - Network, switching, firewall, QoS, topology, backup, and Site Manager foundations exist.
-- Network Integration API docs are verified against the v10.6.106 spec (73/73 operations covered; endpoint-stable since v10.3.55).
-- Protect surface is native through v7.3.68 (cameras, devices, NVR, views, events, arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion); write paths await hardware verification.
+- Network Integration API docs are verified against the v11.0.97 spec (73/73 operations covered; endpoint-stable since v10.3.55; re-audited 2026-10-27 — see DEVELOPMENT_PLAN.md §2.3).
+- Every write tool previews correctly under `dry_run` — verified 2026-10-27 by AST-walking all 146 `@write_tool`-decorated functions: all reference `dry_run` in their body and short-circuit before the real API call; the 3 that don't (`src/tools/zbf_matrix.py`) are deprecated phantom tools that raise `NotImplementedError` unconditionally before any mutation, so there is nothing for `dry_run` to gate.
+- Protect surface is native through v7.3.68 (cameras, devices, NVR, views, events, arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion); write paths await hardware verification. Reconfirmed unchanged against live v7.3.70, 2026-10-27.
 - Mobility, InnerSpace and Carrier Fabric (Phase 6) are implemented and mock-tested over the Site Manager client and Cloud Connector proxy.
 - Fleet (multi-controller orchestration), RBAC (static and fleet-issued token roles), append-only audit logging, Prometheus metrics, the Redis webhook event bus, and A2A discovery/delegation are implemented — see DEVELOPMENT_PLAN.md §2.1.
 - Traffic-flow historical streaming remains constrained by the current API cap and should stay documented as unsupported.
+- spec-drift guardrail: pinned spec snapshots (Network v10.6.106 + v11.0.97, Protect v7.3.68 + v7.3.70) committed under `scripts/`; first quarterly re-audit run 2026-10-27, no actionable endpoint changes found (see DEVELOPMENT_PLAN.md §2.3).
 
 ### Planned next work
 
 - Access endpoint mapping and model coverage — blocked until Ubiquiti publishes a spec
-- Dry-run / change-safe mode: extend preview coverage to every write tool (currently partial)
-- Remaining tool exposure profiles: access, talk, drive
+- Remaining tool exposure profiles: access, talk, drive — all three blocked; no published spec exists for any of them as of 2026-10-27 (`developer.ui.com/access|talk|drive/` all 404)
 - UniFi Network 11 / UniFi OS 6 compatibility verification on a live controller (DEVELOPMENT_PLAN.md Phase 8; four items cannot be settled from documentation alone)
-- spec-drift guardrail: pinned spec snapshots + quarterly re-audit against developer.ui.com
+- Next spec-drift re-audit due ~2027-01 (quarterly cadence)
 
 ## Success criteria
 
 This report is considered closed when:
 
 - Access work is mapped and queued — or confirmed still blocked by the absence of an official spec.
-- Every write tool is previewable under `dry_run` (not just a subset).
 - The four Network 11 "needs live controller test" items (DEVELOPMENT_PLAN.md §2.4) are resolved on a real UniFi OS 6 / Network 11 controller.

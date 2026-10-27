@@ -118,7 +118,7 @@ Describe how to execute the plan without losing sight of the current production 
 - Traffic Route writes are not available until the v2 write path is verified on real hardware.
 - Access API is not yet implemented. **Blocked upstream**: no official Access spec exists as of 2026-09-26 (`developer.ui.com/access/` returns 404; the API does not appear in the developer portal index).
 - Multi-controller orchestration: fleet Phases 0–5 shipped; discovering the consoles behind a cloud account is deferred until per-console routing exists (`docs/FLEET_SCALING_PLAN.md` Phase 4b).
-- The Redis webhook event bus is not yet implemented (runbook only). The webhook receiver is served at `POST /webhooks/unifi` on network transports when `WEBHOOK_SECRET` is set.
+- The Redis webhook event bus is implemented: verified webhook deliveries on `POST /webhooks/unifi` are published to `unifi:webhooks:v1:events` after local handlers run, with origin deduplication and graceful Redis outage handling (`src/fleet/bus.py`, `src/webhooks/receiver.py`, `WEBHOOK_SETUP.md`).
 - Tool profiles exist for network, devices, security, system, minimal, and protect; access, talk, and drive profiles are pending.
 - **UniFi Network 11 / UniFi OS 6 support is not yet claimed.** Per the 2026-10-22 audit (§2.4) the server is compatible with Network 11.0.83 per released documentation, but two platform-level deployment targets are removed (USG gateways, the standalone Network Application Server) and four items still need a live-controller test before full support can be claimed. Phase 8 (§4) carries the work; the honest current claim is "compatible per released documentation, with four items pending live verification".
 

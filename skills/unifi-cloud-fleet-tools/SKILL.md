@@ -74,6 +74,7 @@ Routing happens in the registry wrapper (`_make_tool_wrapper()` in `src/tool_reg
   - Any write that is not a dry run clears the controller's cached reads.
 - **Workers.** `python -m src.worker` runs health and sync jobs (`src/worker/jobs.py`). Controllers are split between workers by rendezvous hashing and Redis leases (`src/worker/shards.py`).
 - **Fan-out.** `fleet_fanout` runs only read-tier tools that take a `controller` argument, and returns one `{ok, data|error}` entry per controller. Writes are never fanned out. The limits are `UNIFI_FLEET_FANOUT_CONCURRENCY`, `UNIFI_FLEET_FANOUT_TIMEOUT_SECONDS` and `UNIFI_FLEET_FANOUT_DEADLINE_SECONDS`.
+- **Webhook event bus.** When Redis is configured, verified webhook deliveries on `POST /webhooks/unifi` are published to `unifi:webhooks:v1:events` after local handlers run. Other replicas and workers can subscribe to react to events without each receiving the HTTP callback. Messages carry an `origin` instance id; listeners ignore their own messages. Redis outages are logged and do not block the HTTP response (`src/fleet/bus.py`, `src/webhooks/receiver.py`, `WEBHOOK_SETUP.md`).
 - **Install.** The `fleet` extra in `pyproject.toml` adds redis, SQLAlchemy, asyncpg and alembic.
 
 ## Auth, roles and audit

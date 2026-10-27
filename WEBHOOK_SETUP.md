@@ -107,6 +107,45 @@ Do not log secrets, full webhook signing material, or sensitive payload content 
 - Prefer normalized events over source-specific parsing in downstream automations.
 - Keep the receiver small and deterministic.
 
+## Implementation
+
+When `WEBHOOK_SECRET` is set, the server mounts `POST /webhooks/unifi`. After
+signature verification, deduplication, and rate limiting, the receiver runs any
+registered handlers and then publishes the normalized event to Redis pub/sub on
+channel `unifi:webhooks:v1:events` if Redis is configured. Other replicas and
+workers can subscribe to this channel to react to events without each receiving
+the HTTP callback directly.
+
+### Redis channel
+
+- Channel: `unifi:webhooks:v1:events`
+- Payload (JSON):
+
+  ```json
+  {
+    "event_type": "device.online",
+    "site_id": "default",
+    "event_id": "evt-123456",
+    "timestamp": "2026-10-27T12:34:56",
+    "data": { "mac": "00:11:22:33:44:55", "name": "Access Point" },
+    "origin": "<instance-id>"
+  }
+  ```
+
+- Messages from the same instance are ignored by its own listener, so a process
+does not react twice to an event it already handled locally.
+- Redis outages are logged and do not block the HTTP response: the receiver
+still returns `200` after local handlers run.
+
+### Verification
+
+1. Register a webhook on the controller pointing at `https://<server>/webhooks/unifi`.
+2. Trigger an event and confirm the receiver returns `200`.
+3. With Redis configured, subscribe to `unifi:webhooks:v1:events` and confirm
+the normalized event arrives.
+4. Stop Redis, trigger an event, and confirm the receiver still returns `200`
+while logging a warning.
+
 ## Status
 
-Phase-5 documentation.
+Phase-5 documentation; Redis pub/sub fan-out implemented.

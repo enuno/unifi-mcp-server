@@ -3426,6 +3426,31 @@ configured). A payload does not say which controller sent it, so the cached
 reads of every controller are cleared. Custom handlers can be registered with
 `receiver.register_handler(event_type, handler)`.
 
+#### Redis webhook event bus
+
+When Redis is configured (`REDIS_URL` or `REDIS_HOST`), every verified webhook
+event is also published to the pub/sub channel `unifi:webhooks:v1:events` after
+local handlers run. Other replicas and workers can subscribe to the channel to
+react to events without each process receiving the HTTP callback directly.
+
+**Payload shape:**
+
+```json
+{
+  "event_type": "device.online",
+  "site_id": "default",
+  "event_id": "evt-123456",
+  "timestamp": "2026-10-27T12:34:56",
+  "data": { "mac": "00:11:22:33:44:55", "name": "Access Point" },
+  "origin": "<instance-id>"
+}
+```
+
+A listener ignores messages whose `origin` matches its own instance id, so a
+process does not handle an event twice. Redis being unavailable is logged but
+does not block the HTTP response: the receiver still returns `200` after local
+handlers run.
+
 ## MCP Resources
 
 Resources provide read-only access to UniFi data through standardized URIs.

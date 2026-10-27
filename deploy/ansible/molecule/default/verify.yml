@@ -69,5 +69,10 @@
     - name: Nginx accepted the connection
       ansible.builtin.assert:
         that:
-          - unifi_mcp_lb_probe.status is defined
-        fail_msg: "nginx did not accept a connection on port 443"
+          # ansible.builtin.uri with failed_when: false still returns a
+          # defined status of -1 on a connection failure or timeout, so
+          # checking only "is defined" (Codex review finding) would pass
+          # even when nginx refuses every connection. Assert the status is
+          # one of the explicitly accepted codes instead.
+          - unifi_mcp_lb_probe.status in [200, 502, 503]
+        fail_msg: "nginx did not accept a connection on port 443: status={{ unifi_mcp_lb_probe.status }}"

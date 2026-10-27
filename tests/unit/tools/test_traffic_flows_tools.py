@@ -190,10 +190,21 @@ def sample_raw_flows() -> list[dict[str, Any]]:
     ]
 
 
-def _mock_client(raw_flows: list[dict[str, Any]]) -> AsyncMock:
-    """Build an AsyncMock UniFiClient returning the given raw flows."""
+def _mock_client(raw_flows: list[dict[str, Any]] | dict[str, Any]) -> AsyncMock:
+    """Build an AsyncMock UniFiClient returning the given raw flows.
+
+    ``_site_uuid_to_name`` must be a real dict. On a bare ``AsyncMock`` the
+    attribute is auto-created as a child ``AsyncMock``, so the
+    ``client._site_uuid_to_name.get(site_id, site_id)`` in
+    ``traffic_flows._fetch_raw_flows`` would return a **coroutine that is never
+    awaited**: it would be interpolated into the endpoint as a
+    ``<coroutine ...>`` repr, and the orphaned coroutine would later raise
+    ``RuntimeWarning: coroutine ... was never awaited`` at garbage-collection
+    time, failing whatever unrelated test happened to be running (issue #260).
+    """
     client = AsyncMock()
     client.is_authenticated = True
+    client._site_uuid_to_name = {}
     client.authenticate = AsyncMock()
     client.post = AsyncMock(return_value=raw_flows)
     client.__aenter__ = AsyncMock(return_value=client)
@@ -258,8 +269,44 @@ class TestGetTrafficFlows:
 
         client.post.assert_called_once()
         endpoint = client.post.call_args.args[0]
-        assert endpoint.endswith("/traffic-flows")
+        # Asserted in full, not just the suffix: an endswith() check passes even
+        # when the site segment is a stray `<coroutine ...>` repr, which is how
+        # the un-awaited-coroutine leak of issue #260 stayed hidden here.
+        assert endpoint == "/proxy/network/v2/api/site/default/traffic-flows"
         assert client.post.call_args.kwargs["json_data"] == {}
+
+    @pytest.mark.asyncio
+    async def test_site_uuid_is_normalized_to_its_short_name(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """A site UUID is mapped through the client's lookup before the call.
+
+        ``_fetch_raw_flows`` resolves the site through
+        ``client._site_uuid_to_name``; this pins that the resolved name reaches
+        the endpoint, which the mock previously made unobservable.
+        """
+        site_uuid = "88f7af54-98f8-306a-a1c7-c9349722b1f6"
+        client = _mock_client(sample_raw_flows)
+        client._site_uuid_to_name = {site_uuid: "hq"}
+
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            await tf.get_traffic_flows(site_uuid, mock_settings)
+
+        assert client.post.call_args.args[0] == "/proxy/network/v2/api/site/hq/traffic-flows"
+
+    @pytest.mark.asyncio
+    async def test_an_unmapped_site_is_passed_through_unchanged(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(sample_raw_flows)
+        client._site_uuid_to_name = {"other-uuid": "elsewhere"}
+
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            await tf.get_traffic_flows("default", mock_settings)
+
+        assert client.post.call_args.args[0] == "/proxy/network/v2/api/site/default/traffic-flows"
 
     @pytest.mark.asyncio
     async def test_filter_by_source_mac(
@@ -412,14 +459,9 @@ class TestGetTrafficFlows:
         self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
     ) -> None:
         wrapped = {"data": sample_raw_flows}
-        client = AsyncMock()
-        client.is_authenticated = True
-        client.post = AsyncMock(return_value=wrapped)
-        client.__aenter__ = AsyncMock(return_value=client)
-        client.__aexit__ = AsyncMock(return_value=False)
 
         with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
-            MockClient.return_value = client
+            MockClient.return_value = _mock_client(wrapped)
             result = await tf.get_traffic_flows("default", mock_settings)
         assert len(result) == 3
 

@@ -1,0 +1,6 @@
+---
+# Converges the real playbook operators run (deploy/ansible/site.yml), not a
+# scenario-local copy, so this test rots the moment the playbook's own
+# behaviour changes instead of silently drifting from it.
+- name: Import the playbook under test
+  ansible.builtin.import_playbook: ../../site.yml

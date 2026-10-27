@@ -1,0 +1,38 @@
+---
+# Nested Docker-in-Docker test instances cannot always mount another
+# overlayfs layer on top of whatever filesystem the outer container already
+# uses (the inner dockerd's default `overlay2` storage driver fails with
+# "invalid argument" on the mount(2) syscall in that case). This is purely a
+# nested-test-environment artifact, not something a real deployment target
+# hits (those have a normal disk under Docker), so the workaround lives in
+# the molecule scenario and never touches the `docker` role itself.
+- name: Prepare
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create /etc/docker
+      ansible.builtin.file:
+        path: /etc/docker
+        state: directory
+        mode: "0755"
+
+    - name: Use the vfs storage driver for the nested dockerd
+      ansible.builtin.copy:
+        content: "{{ {'storage-driver': 'vfs'} | to_nice_json }}\n"
+        dest: /etc/docker/daemon.json
+        mode: "0644"
+
+    - name: Install git (needed before the real git-config task below)
+      ansible.builtin.package:
+        name: git
+        state: present
+        update_cache: true
+
+    - name: Trust the bind-mounted checkout's ownership (bind mount, not a clone)
+      ansible.builtin.command:
+        argv: [git, config, --global, --add, safe.directory, "{{ item }}"]
+      changed_when: false
+      loop:
+        - /unifi-mcp-src
+        - /unifi-mcp-src/.git

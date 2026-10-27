@@ -235,6 +235,41 @@ jobs:
         working-directory: deploy/ansible
         run: ansible-lint --offline site.yml
 
+  ansible-molecule:
+    name: Ansible Playbook Converge Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install ansible-core, molecule and the playbook's collections
+        working-directory: deploy/ansible
+        run: |
+          pip install "ansible-core==2.17.5" "molecule==24.9.0" "molecule-plugins[docker]" docker
+          ansible-galaxy collection install -r requirements.yml -p ./collections
+
+      # Converge, idempotence and verify (molecule.yml's test_sequence) for
+      # the single-host layout: installs Docker, builds the image from this
+      # checkout, runs Postgres/Redis/the server/nginx on one privileged,
+      # systemd-enabled container, waits for every replica to report
+      # healthy, converges a second time expecting zero changes, then runs
+      # verify.yml's own health and container checks. See
+      # deploy/ansible/molecule/default/molecule.yml and
+      # DEVELOPMENT_PLAN.md §4 Phase 7.1.
+      # molecule generates its own ephemeral ansible.cfg for the test run,
+      # which shadows deploy/ansible/ansible.cfg's collections_path — so the
+      # collections installed above are invisible unless named explicitly.
+      - name: Converge, prove idempotence, and verify
+        working-directory: deploy/ansible
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ./collections
+        run: molecule test
+
   helm:
     name: Helm Chart Check
     runs-on: ubuntu-latest

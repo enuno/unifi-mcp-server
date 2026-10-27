@@ -1,0 +1,37 @@
+---
+# Test-only values for a throwaway molecule instance. Never real secrets,
+# never reused outside this scenario; generated per the pattern in
+# vault.yml.example. Flagged by detect-secrets as high-entropy/keyword
+# matches, which is correct — they are strings shaped like secrets — but
+# they are scenario-local literals checked into a public test fixture, not
+# credentials for anything real.
+vault_unifi_api_key: molecule-test-controller-api-key  # pragma: allowlist secret
+vault_mcp_auth_token: molecule-test-bearer-token-at-least-32-chars-long  # pragma: allowlist secret
+vault_audit_chain_key: molecule-test-audit-chain-hmac-key-32-bytes-min  # pragma: allowlist secret
+vault_fleet_credential_key: ws8cBGQBDEoE5xDLXk69HNk88pgnef-EV0Hf-30238Q=  # pragma: allowlist secret
+vault_postgres_password: molecule-test-postgres-owner-password  # pragma: allowlist secret
+vault_runtime_db_password: molecule-test-postgres-runtime-password  # pragma: allowlist secret
+vault_redis_password: molecule-test-redis-password  # pragma: allowlist secret
+
+# The server never dials the controller at startup (lazy connection), so a
+# dummy, unreachable host proves the playbook without a real UniFi console.
+unifi_mcp_api_type: local
+unifi_mcp_local_host: 192.0.2.1
+unifi_mcp_local_verify_ssl: false
+
+# Build the image under test from THIS checkout (bind-mounted read-only by
+# molecule.yml), not from the public repo's `main` branch. `unifi_mcp_version:
+# HEAD` fails inside the ansible.builtin.git module when the source repo is
+# in a detached-HEAD state (every GitHub Actions checkout, and any CI runner
+# in general) — it resolves the branch to Python's `None` and then tries to
+# `git checkout None`. Resolve the exact commit on the control node instead,
+# which is well-defined whether the checkout is a branch or detached HEAD.
+unifi_mcp_repo: file:///unifi-mcp-src
+unifi_mcp_version: "{{ lookup('ansible.builtin.pipe', 'git rev-parse HEAD') }}"
+
+# Keep the scenario to what the playbook itself does; retention and SIEM
+# export are covered by their own unit tests, not this converge test.
+unifi_mcp_audit_retention_days: ""
+unifi_mcp_siem_targets: ""
+
+private_address: 127.0.0.1

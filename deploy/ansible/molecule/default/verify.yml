@@ -1,0 +1,78 @@
+---
+# Confirms the playbook's own exit criteria: every server replica reports
+# healthy, Postgres and Redis are reachable, and nginx is listening — the
+# same checks deploy/ansible/README.md tells an operator to run by hand.
+- name: Verify
+  hosts: mcp
+  become: true
+  gather_facts: false
+  tasks:
+    - name: The server's /healthz answers 200 without a token
+      ansible.builtin.uri:
+        # Matches molecule/default/group_vars/all.yml: private_address
+        # 127.0.0.1 (the unifi_mcp_bind_address default) and the role's
+        # default unifi_mcp_port (3000). Role defaults are not visible here
+        # — verify.yml runs no role — so this intentionally repeats the
+        # scenario's own fixed values rather than re-deriving them.
+        url: "http://127.0.0.1:3000/healthz"
+        return_content: true
+      register: unifi_mcp_healthz
+
+    - name: The health body reports ok
+      ansible.builtin.assert:
+        that:
+          - unifi_mcp_healthz.json.status == 'ok'
+        fail_msg: "/healthz did not report ok: {{ unifi_mcp_healthz.content }}"
+
+    - name: Every expected container is running
+      ansible.builtin.command:
+        argv: [docker, inspect, -f, "{{ '{{' }}.State.Running{{ '}}' }}", "{{ item }}"]
+      register: unifi_mcp_container_state
+      changed_when: false
+      loop:
+        - unifi-mcp-0
+        - unifi-mcp-worker-0
+        - unifi-mcp-postgres
+        - unifi-mcp-redis
+        - unifi-mcp-lb
+
+    - name: Containers report Running=true
+      ansible.builtin.assert:
+        that: "item.stdout == 'true'"
+        fail_msg: "{{ item.item }} is not running: {{ item.stdout }}"
+      loop: "{{ unifi_mcp_container_state.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Postgres accepts connections as the runtime role
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - unifi-mcp-postgres
+          - pg_isready
+          - -U
+          - unifi_mcp_runtime
+          - -d
+          - unifi_mcp
+      changed_when: false
+
+    - name: Nginx answers on the load-balanced port
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:443/healthz"
+        status_code: [200, 502, 503]
+      register: unifi_mcp_lb_probe
+      # nginx proxies to the same backends /healthz already proved are up;
+      # any HTTP response (not a connection failure) shows it is listening.
+      failed_when: false
+
+    - name: Nginx accepted the connection
+      ansible.builtin.assert:
+        that:
+          # ansible.builtin.uri with failed_when: false still returns a
+          # defined status of -1 on a connection failure or timeout, so
+          # checking only "is defined" (Codex review finding) would pass
+          # even when nginx refuses every connection. Assert the status is
+          # one of the explicitly accepted codes instead.
+          - unifi_mcp_lb_probe.status in [200, 502, 503]
+        fail_msg: "nginx did not accept a connection on port 443: status={{ unifi_mcp_lb_probe.status }}"

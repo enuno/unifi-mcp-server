@@ -595,7 +595,7 @@ python -m src.fleet.cli tokens revoke --name first-admin
 
 Available when `DATABASE_URL` is set. All six are `read` tier, from the module `fleet` (so `deny_modules: ["fleet"]` removes them), take no `controller` argument, and cover only the controllers inside the caller's `controller_labels` scope. Naming a controller that is unknown, disabled or out of scope is refused without saying which.
 
-`fleet_health`, `fleet_sites`, `fleet_inventory`, `fleet_compare_versions` and `fleet_compare_sites` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; every entry says how many seconds old it is. Without a running worker they report `unknown` health and no sites or devices.
+`fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; `fleet_compare_versions` and `fleet_compare_sites` also read those snapshots but return comparison summaries without per-entry age fields. Without a running worker, these snapshot tools return unknown health or no sites/devices as applicable.
 
 #### `fleet_health`
 

@@ -205,3 +205,46 @@ class HealthBus(_Bus):
                     await result
 
         await self._listen(handle)
+
+
+WEBHOOK_CHANNEL = "unifi:webhooks:v1:events"
+
+
+class WebhookBus(_Bus):
+    """Publish validated webhook events to Redis pub/sub for cross-replica fan-out."""
+
+    channel = WEBHOOK_CHANNEL
+    label = "Webhook event"
+
+    async def publish(
+        self,
+        event_type: str,
+        site_id: str,
+        event_id: str | None,
+        timestamp: str,
+        data: dict[str, Any],
+    ) -> None:
+        """Publish a normalized webhook event.
+
+        Args:
+            event_type: Event type, e.g. ``device.online``
+            site_id: Site identifier from the webhook payload
+            event_id: Optional unique event identifier
+            timestamp: ISO-8601 timestamp from the event
+            data: Event payload (kept small; the receiver already validated it)
+        """
+        await self._publish(
+            {
+                "event_type": event_type,
+                "site_id": site_id,
+                "event_id": event_id,
+                "timestamp": timestamp,
+                "data": data,
+            },
+            "Could not announce webhook event to other replicas (%s); they will not see "
+            "events from this process",
+        )
+
+    async def listen(self, on_event: Callable[[dict[str, Any]], Awaitable[Any]]) -> None:
+        """Call ``on_event(payload)`` for every webhook event from another process."""
+        await self._listen(on_event)

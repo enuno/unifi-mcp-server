@@ -502,9 +502,11 @@ def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     if not current_settings.webhook_secret:
         return None
 
+    from .fleet.bus import WebhookBus
     from .webhooks import WebhookEventHandler, WebhookReceiver
 
-    receiver = WebhookReceiver(current_settings)
+    event_bus = WebhookBus.from_settings(current_settings)
+    receiver = WebhookReceiver(current_settings, event_bus=event_bus)
     WebhookEventHandler(current_settings, read_cache=read_cache).register_default_handlers(receiver)
     server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
     return receiver

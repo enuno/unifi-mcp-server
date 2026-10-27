@@ -51,6 +51,7 @@ class WebhookReceiver:
         settings: Settings,
         app: Any | None = None,
         path: str = "/webhooks/unifi",
+        event_bus: Any | None = None,
     ):
         """Initialize webhook receiver.
 
@@ -58,6 +59,7 @@ class WebhookReceiver:
             settings: Application settings
             app: Optional app to mount the route on (anything with ``add_route``)
             path: Webhook endpoint path
+            event_bus: Optional Redis pub/sub bus for fanning events to other replicas
         """
         self.settings = settings
         self.path = path
@@ -65,6 +67,7 @@ class WebhookReceiver:
         self.handlers: dict[str, list[Callable]] = {}
         self._event_cache: dict[str, datetime] = {}
         self._rate_limit_cache: dict[str, list[datetime]] = {}
+        self.event_bus = event_bus
 
         secret = getattr(settings, "webhook_secret", None)
         if isinstance(secret, SecretStr):
@@ -197,9 +200,9 @@ class WebhookReceiver:
 
         if not all_handlers:
             self.logger.debug(f"No handlers registered for event type: {event.event_type}")
-            return
 
         # Execute handlers
+        handler_errors: list[str] = []
         for handler in all_handlers:
             try:
                 await handler(event)
@@ -208,6 +211,22 @@ class WebhookReceiver:
                     f"Error in handler for {event.event_type}: {e}",
                     exc_info=True,
                 )
+                handler_errors.append(str(e))
+
+        # Fan the event out to other replicas/workers over Redis when configured.
+        # Publishing happens regardless of handler success so that observers on
+        # other processes still see the event; local handler failures are logged.
+        if self.event_bus is not None:
+            try:
+                await self.event_bus.publish(
+                    event_type=event.event_type,
+                    site_id=event.site_id,
+                    event_id=event.event_id,
+                    timestamp=event.timestamp.isoformat(),
+                    data=event.data,
+                )
+            except Exception as e:
+                self.logger.warning(f"Could not publish webhook event to bus: {e}")
 
     def _verify_signature(self, payload: str, signature: str) -> bool:
         """Verify webhook signature.

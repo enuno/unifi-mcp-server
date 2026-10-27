@@ -3,7 +3,7 @@
 import hashlib
 import hmac
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -296,6 +296,86 @@ class TestWebhookReceiverHandlers:
         )
 
         await receiver._process_event(event)
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_to_bus(self, mock_settings):
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="device.online",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={"mac": "00:11:22:33:44:55"},
+            event_id="evt-bus-1",
+        )
+
+        await receiver._process_event(event)
+
+        event_bus.publish.assert_awaited_once()
+        call_kwargs = event_bus.publish.await_args.kwargs
+        assert call_kwargs["event_type"] == "device.online"
+        assert call_kwargs["site_id"] == "default"
+        assert call_kwargs["event_id"] == "evt-bus-1"
+        assert call_kwargs["data"]["mac"] == "00:11:22:33:44:55"
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_even_with_no_handlers(self, mock_settings):
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="unknown.event",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-2",
+        )
+
+        await receiver._process_event(event)
+
+        event_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_process_event_publishes_even_when_handler_fails(self, mock_settings):
+        async def failing_handler(event):
+            raise ValueError("Handler error")
+
+        event_bus = AsyncMock()
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+        receiver.register_handler("event.test", failing_handler)
+
+        event = WebhookEvent(
+            event_type="event.test",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-3",
+        )
+
+        await receiver._process_event(event)
+
+        event_bus.publish.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_process_event_bus_failure_is_logged(self, mock_settings, caplog):
+        event_bus = AsyncMock()
+        event_bus.publish = AsyncMock(side_effect=RuntimeError("Redis down"))
+        receiver = WebhookReceiver(settings=mock_settings, event_bus=event_bus)
+
+        event = WebhookEvent(
+            event_type="device.online",
+            timestamp=datetime.now(),
+            site_id="default",
+            data={},
+            event_id="evt-bus-4",
+        )
+
+        with caplog.at_level("WARNING"):
+            await receiver._process_event(event)
+
+        assert "Could not publish webhook event to bus" in caplog.text
+        event_bus.publish.assert_awaited_once()
 
 
 class TestWebhookEventHandler:

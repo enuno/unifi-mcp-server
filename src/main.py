@@ -134,6 +134,11 @@ if settings.cache_enabled and (settings.redis_url or "redis_host" in settings.mo
 
     read_cache = ReadCache.from_settings(settings)
 
+#: The mounted webhook receiver, when ``WEBHOOK_SECRET`` is set and a network
+#: transport is in use. Set by :func:`register_webhook_route`; the lifespan
+#: drains its in-flight Redis publishes on shutdown.
+webhook_receiver: Any = None
+
 
 @contextlib.asynccontextmanager
 async def _lifespan(server: Any) -> AsyncIterator[None]:
@@ -157,6 +162,8 @@ async def _lifespan(server: Any) -> AsyncIterator[None]:
                 health_listener.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await health_listener
+            if webhook_receiver is not None:
+                await webhook_receiver.aclose()
             await client_pool.aclose()
             if hasattr(fleet_registry, "stop"):
                 await fleet_registry.stop()
@@ -505,10 +512,14 @@ def register_webhook_route(server: FastMCP, current_settings: Settings) -> Any:
     from .fleet.bus import WebhookBus
     from .webhooks import WebhookEventHandler, WebhookReceiver
 
+    global webhook_receiver
+
     event_bus = WebhookBus.from_settings(current_settings)
     receiver = WebhookReceiver(current_settings, event_bus=event_bus)
     WebhookEventHandler(current_settings, read_cache=read_cache).register_default_handlers(receiver)
     server.custom_route(receiver.path, methods=["POST"])(receiver.handle_request)
+    # The lifespan drains the receiver's in-flight Redis publishes on shutdown.
+    webhook_receiver = receiver
     return receiver
 
 

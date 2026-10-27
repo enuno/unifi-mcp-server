@@ -134,8 +134,13 @@ the HTTP callback directly.
 
 - Messages from the same instance are ignored by its own listener, so a process
 does not react twice to an event it already handled locally.
-- Redis outages are logged and do not block the HTTP response: the receiver
-still returns `200` after local handlers run.
+- The publish runs as a background task, off the HTTP acknowledgement path: a
+Redis that accepts connections but stops answering cannot delay the webhook
+response, and the receiver still returns `200` after local handlers run.
+- At most 1000 publishes may be in flight. Past that the fan-out drops events
+with a warning rather than queueing without bound; local handlers still run.
+- On shutdown the receiver waits up to 5 seconds for outstanding publishes,
+then cancels them and logs how many never reached Redis.
 
 ### Verification
 

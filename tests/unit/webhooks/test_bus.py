@@ -17,7 +17,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 fakeredis = pytest.importorskip("fakeredis")
-import redis.asyncio  # noqa: E402,F401
+# fakeredis's TCP server needs redis-py's asyncio client to be installed for the
+# bus to reach it; skip rather than fail where the fleet extra is absent.
+pytest.importorskip("redis.asyncio")
 
 from src.config.config import Settings  # noqa: E402
 from src.fleet.bus import WebhookBus  # noqa: E402
@@ -48,9 +50,13 @@ async def _listening(bus: WebhookBus, on_event):
     try:
         yield
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        await _cancel(task)
+
+
+async def _cancel(task: asyncio.Task) -> None:
+    """Cancel ``task`` and collect its result, swallowing the cancellation."""
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
 
 
 async def _until(predicate, timeout: float = 5.0) -> None:
@@ -169,6 +175,4 @@ class TestRedisUnavailable:
         await asyncio.sleep(0.2)
 
         assert not task.done()
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        await _cancel(task)

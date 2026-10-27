@@ -3447,9 +3447,17 @@ react to events without each process receiving the HTTP callback directly.
 ```
 
 A listener ignores messages whose `origin` matches its own instance id, so a
-process does not handle an event twice. Redis being unavailable is logged but
-does not block the HTTP response: the receiver still returns `200` after local
-handlers run.
+process does not handle an event twice.
+
+The publish does not sit on the HTTP acknowledgement path. It is dispatched as
+a background task once the local handlers have run, so a Redis that accepts
+connections but stops answering cannot add the connection pool's socket
+timeout to the webhook response, and a sender with a short delivery timeout
+does not retry an event whose handlers already ran. At most 1000 publishes may
+be in flight at once; past that the fan-out drops events with a warning rather
+than queueing without bound, and local handling is unaffected. On shutdown the
+server waits up to 5 seconds for outstanding publishes, then cancels them and
+logs how many never reached Redis.
 
 ## MCP Resources
 

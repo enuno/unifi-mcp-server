@@ -285,6 +285,12 @@ With it:
 - the start-up log names the mode and the module count, so the exposed surface
   is visible rather than inferred.
 
+Mixed mode widens the **tool** surface only. MCP resources are not routed —
+they take no `controller` argument and are built from the process-wide
+settings — so they stay gated on the base `UNIFI_API_TYPE`: a cloud base
+exposes no local resources even with mixed mode on. Read a specific gateway
+with a tool and `controller=<name>` instead.
+
 Mixed mode changes **which tools exist**, never which controller a call reaches
 or what a role may do: routing, the risk tiers, `UNIFI_READ_ONLY`,
 `UNIFI_DRY_RUN` and the audit trail are unchanged.
@@ -296,7 +302,9 @@ or what a role may do: routing, the risk tiers, `UNIFI_READ_ONLY`,
   what `UNIFI_MIXED_MODE` exists to fix.
 - **MCP resources always read the default controller.** The `sites://` family
   and friends take no `controller` argument; use the tools for a specific
-  controller.
+  controller. Because they are built from the process-wide settings and cannot
+  be routed, they stay gated on the base `UNIFI_API_TYPE` — mixed mode does not
+  expose local resources on a cloud base.
 - **Tool modules are process-wide.** A cloud-only call routed to a cloud
   controller still fails on a local-only endpoint, and the reverse, because the
   endpoint does not exist on that backend — mixed mode registers both sets, it

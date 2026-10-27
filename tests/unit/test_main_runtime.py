@@ -359,13 +359,28 @@ class TestMixedModeModuleSelection:
         assert not mod.settings.local_host
         assert set(mod._LOCAL_TOOL_MODULES) <= set(mod._TOOL_MODULES)
 
-    def test_mixed_mode_registers_the_local_resources(self) -> None:
-        """A local gateway's resources exist even though the base is cloud."""
+    def test_mixed_mode_does_not_advertise_the_local_resources(self) -> None:
+        """Resources are not routed, so mixed mode must not advertise them.
+
+        They take no ``controller`` argument and are built from the
+        process-wide settings. Under a cloud base they would be constructed
+        against the cloud URL and could not reach a registered gateway —
+        ``get_traffic_flows`` would raise ``NotImplementedError`` outright — so
+        advertising them would promise a surface that cannot work.
+        """
         mod = _reload_main(
             UNIFI_API_TYPE="cloud-ea",
             UNIFI_LOCAL_HOST="",
             UNIFI_MIXED_MODE="true",
         )
+
+        assert not hasattr(mod, "devices_resource")
+        assert not hasattr(mod, "protect_res")
+        # The tools, which are routed per call, are still there.
+        assert set(mod._LOCAL_TOOL_MODULES) <= set(mod._TOOL_MODULES)
+
+    def test_a_local_base_still_has_the_local_resources(self) -> None:
+        mod = _reload_main()
 
         assert hasattr(mod, "devices_resource")
         assert hasattr(mod, "protect_res")

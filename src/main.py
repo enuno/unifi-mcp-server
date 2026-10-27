@@ -884,10 +884,14 @@ register_prompts(mcp, settings)
 sites_resource = SitesResource(settings)
 site_manager_res = site_manager_resource.SiteManagerResource(settings)
 
-# The local resources read a gateway, so they exist in local mode and in mixed
-# mode (where a local gateway comes from the registry). They always read the
-# default controller, as the controller-selection docs note.
-if settings.api_type == APIType.LOCAL or settings.mixed_mode:
+# The local resources are gated on the base API type, not on mixed mode. They
+# take no `controller` argument and are built from the process-wide settings,
+# so under a cloud base they would be constructed against the cloud URL and
+# could not reach a registered gateway: `get_traffic_flows` would raise
+# NotImplementedError outright. Advertising them would promise a surface that
+# cannot work. Mixed mode widens the *tool* surface, which is routed per call;
+# use a tool with `controller=<name>` to read a specific gateway.
+if settings.api_type == APIType.LOCAL:
     devices_resource = DevicesResource(settings)
     clients_resource = ClientsResource(settings)
     networks_resource = NetworksResource(settings)
@@ -941,7 +945,7 @@ async def get_sites_resource() -> str:
     return "\n".join([f"Site: {s.name} ({s.id})" for s in sites])
 
 
-if settings.api_type == APIType.LOCAL or settings.mixed_mode:
+if settings.api_type == APIType.LOCAL:
 
     @mcp.resource("sites://{site_id}/devices")
     async def get_devices_resource(site_id: str) -> str:

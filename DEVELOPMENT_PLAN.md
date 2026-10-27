@@ -346,6 +346,7 @@ So a fleet whose base is a cloud type can *route* to a registered local gateway,
 
 - `UNIFI_MIXED_MODE` (bool, default `false`): register the union of the cloud and local tool modules regardless of the base `UNIFI_API_TYPE`, for a deployment that has both kinds of controller. Profile filtering (`UNIFI_PROFILE`) still applies to the union.
 - Mixed mode does not require a base `UNIFI_LOCAL_HOST`: the local gateways come from the registry, and the base settings stay cloud-shaped.
+- Mixed mode widens the **tool** surface only. MCP resources take no `controller` argument and are built from the process-wide settings, so they remain gated on the base `UNIFI_API_TYPE`; exposing them on a cloud base would advertise a surface that cannot reach a gateway (`get_traffic_flows` raises `NotImplementedError` outright).
 - A startup log line naming the mode and the module count, so the exposed surface is visible in the log rather than inferred.
 - An `API.md` section — "Connecting to the cloud API and local gateways together" — setting out the three supported topologies (single controller from the environment; several controllers from Postgres; mixed cloud + local with `UNIFI_MIXED_MODE`), where each controller's API key lives in each, and the two standing limitations (MCP resources always read the default controller; a tool module absent from the registered set cannot be reached on any controller).
 - Settings-table and `.env.example` entries (both are enforced by `tests/unit/config/test_config.py`).

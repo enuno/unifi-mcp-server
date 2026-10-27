@@ -160,6 +160,43 @@ class TestLifespan:
         aclose.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_drains_the_webhook_receiver_before_closing_the_pool(
+        self, main_mod: ModuleType
+    ) -> None:
+        """An accepted event's in-flight Redis publish is not lost to shutdown."""
+        order: list[str] = []
+        receiver = MagicMock()
+        receiver.aclose = AsyncMock(side_effect=lambda: order.append("receiver.aclose"))
+
+        with (
+            patch.object(main_mod, "audit_server_start", AsyncMock()),
+            patch.object(main_mod, "webhook_receiver", receiver),
+            patch.object(
+                main_mod.client_pool,
+                "aclose",
+                AsyncMock(side_effect=lambda: order.append("pool.aclose")),
+            ),
+        ):
+            async with main_mod._lifespan(None):
+                receiver.aclose.assert_not_called()
+
+        receiver.aclose.assert_awaited_once()
+        assert order == ["receiver.aclose", "pool.aclose"]
+
+    @pytest.mark.asyncio
+    async def test_no_webhook_receiver_is_not_an_error(self, main_mod: ModuleType) -> None:
+        """Over stdio no receiver is mounted, so the lifespan has nothing to drain."""
+        with (
+            patch.object(main_mod, "audit_server_start", AsyncMock()),
+            patch.object(main_mod, "webhook_receiver", None),
+            patch.object(main_mod.client_pool, "aclose", AsyncMock()) as aclose,
+        ):
+            async with main_mod._lifespan(None):
+                pass
+
+        aclose.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_siem_forwarder_starts_before_the_registry(self, main_mod: ModuleType) -> None:
         order: list[str] = []
         forwarder = MagicMock()
@@ -213,6 +250,152 @@ class TestLifespan:
             async with main_mod._lifespan(None):
                 pass
         assert order == ["registry.start", "warn"]
+
+
+class TestRegisterWebhookRoute:
+    def test_no_secret_mounts_nothing(self, main_mod: ModuleType) -> None:
+        settings = MagicMock()
+        settings.webhook_secret = None
+
+        assert main_mod.register_webhook_route(MagicMock(), settings) is None
+
+    def test_mounts_the_route_and_publishes_the_receiver_for_shutdown(
+        self, main_mod: ModuleType
+    ) -> None:
+        """The lifespan drains whatever this sets, so the global must be set."""
+        from src.fleet import bus
+
+        settings = MagicMock()
+        settings.webhook_secret = "a-secret"  # pragma: allowlist secret
+        settings.log_level = "INFO"
+        server = MagicMock()
+        event_bus = object()
+
+        with (
+            patch.object(bus.WebhookBus, "from_settings", return_value=event_bus),
+            patch.object(main_mod, "webhook_receiver", None),
+        ):
+            receiver = main_mod.register_webhook_route(server, settings)
+
+            assert receiver is not None
+            assert receiver.event_bus is event_bus
+            assert main_mod.webhook_receiver is receiver
+            server.custom_route.assert_called_once_with(receiver.path, methods=["POST"])
+
+
+class TestApplyProfile:
+    """``_apply_profile`` decides the module set in all three API modes."""
+
+    def test_no_profile_keeps_every_module(self, main_mod: ModuleType) -> None:
+        modules = list(main_mod._CLOUD_TOOL_MODULES)
+
+        with patch.object(main_mod, "_active_profile", None):
+            assert main_mod._apply_profile(modules) == modules
+
+    @pytest.mark.parametrize("profile", ["all", ""])
+    def test_the_catch_all_profiles_keep_every_module(
+        self, profile: str, main_mod: ModuleType
+    ) -> None:
+        modules = list(main_mod._CLOUD_TOOL_MODULES)
+
+        with patch.object(main_mod, "_active_profile", profile):
+            assert main_mod._apply_profile(modules) == modules
+
+    def test_a_profile_narrows_the_set(self, main_mod: ModuleType) -> None:
+        modules = list(main_mod._CLOUD_TOOL_MODULES) + list(main_mod._LOCAL_TOOL_MODULES)
+
+        with patch.object(main_mod, "_active_profile", "protect"):
+            narrowed = main_mod._apply_profile(modules)
+
+        assert narrowed != modules
+        assert set(narrowed) <= set(modules)
+        assert narrowed, "a known profile must select something"
+
+    def test_a_profile_matching_nothing_falls_back_to_the_whole_set(
+        self, main_mod: ModuleType
+    ) -> None:
+        """Better the full surface than an empty server."""
+        modules = list(main_mod._CLOUD_TOOL_MODULES)
+
+        with (
+            patch.object(main_mod, "_active_profile", "nonexistent"),
+            patch.dict(main_mod._PROFILE_MODULES, {"nonexistent": []}, clear=False),
+        ):
+            assert main_mod._apply_profile(modules) == modules
+
+
+class TestMixedModeModuleSelection:
+    """``UNIFI_MIXED_MODE`` exposes the cloud and local tool surfaces together.
+
+    ``tests/unit/test_mixed_mode.py`` checks the resulting tool names from a
+    clean subprocess; these reload in-process so the import-time branch itself
+    is exercised.
+    """
+
+    def test_cloud_base_registers_only_the_cloud_modules(self) -> None:
+        mod = _reload_main(UNIFI_API_TYPE="cloud-ea", UNIFI_LOCAL_HOST="")
+
+        assert set(mod._TOOL_MODULES) == set(mod._CLOUD_TOOL_MODULES)
+
+    def test_mixed_mode_registers_the_union_on_a_cloud_base(self) -> None:
+        mod = _reload_main(
+            UNIFI_API_TYPE="cloud-ea",
+            UNIFI_LOCAL_HOST="",
+            UNIFI_MIXED_MODE="true",
+        )
+
+        expected = set(mod._CLOUD_TOOL_MODULES) | set(mod._LOCAL_TOOL_MODULES)
+        assert set(mod._TOOL_MODULES) == expected
+        assert mod.settings.mixed_mode is True
+
+    def test_mixed_mode_needs_no_base_local_host(self) -> None:
+        """The gateways come from the registry, so the base stays cloud-shaped."""
+        mod = _reload_main(
+            UNIFI_API_TYPE="cloud-ea",
+            UNIFI_LOCAL_HOST="",
+            UNIFI_MIXED_MODE="true",
+        )
+
+        assert not mod.settings.local_host
+        assert set(mod._LOCAL_TOOL_MODULES) <= set(mod._TOOL_MODULES)
+
+    def test_mixed_mode_registers_the_local_resources(self) -> None:
+        """A local gateway's resources exist even though the base is cloud."""
+        mod = _reload_main(
+            UNIFI_API_TYPE="cloud-ea",
+            UNIFI_LOCAL_HOST="",
+            UNIFI_MIXED_MODE="true",
+        )
+
+        assert hasattr(mod, "devices_resource")
+        assert hasattr(mod, "protect_res")
+
+    def test_a_cloud_base_without_mixed_mode_has_no_local_resources(self) -> None:
+        mod = _reload_main(UNIFI_API_TYPE="cloud-ea", UNIFI_LOCAL_HOST="")
+
+        assert not hasattr(mod, "devices_resource")
+
+    def test_a_profile_still_narrows_the_union(self) -> None:
+        mod = _reload_main(
+            UNIFI_API_TYPE="cloud-ea",
+            UNIFI_LOCAL_HOST="",
+            UNIFI_MIXED_MODE="true",
+            UNIFI_PROFILE="protect",
+        )
+
+        union = set(mod._CLOUD_TOOL_MODULES) | set(mod._LOCAL_TOOL_MODULES)
+        assert set(mod._TOOL_MODULES) < union
+
+    def test_mixed_mode_matches_the_local_mode_module_set(self) -> None:
+        mixed = _reload_main(
+            UNIFI_API_TYPE="cloud-ea",
+            UNIFI_LOCAL_HOST="",
+            UNIFI_MIXED_MODE="true",
+        )
+        mixed_modules = set(mixed._TOOL_MODULES)
+        local = _reload_main()
+
+        assert mixed_modules == set(local._TOOL_MODULES)
 
 
 class TestMainEntryPoint:

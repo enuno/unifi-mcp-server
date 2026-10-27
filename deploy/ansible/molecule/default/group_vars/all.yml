@@ -20,9 +20,14 @@ unifi_mcp_local_host: 192.0.2.1
 unifi_mcp_local_verify_ssl: false
 
 # Build the image under test from THIS checkout (bind-mounted read-only by
-# molecule.yml), not from the public repo's `main` branch.
+# molecule.yml), not from the public repo's `main` branch. `unifi_mcp_version:
+# HEAD` fails inside the ansible.builtin.git module when the source repo is
+# in a detached-HEAD state (every GitHub Actions checkout, and any CI runner
+# in general) — it resolves the branch to Python's `None` and then tries to
+# `git checkout None`. Resolve the exact commit on the control node instead,
+# which is well-defined whether the checkout is a branch or detached HEAD.
 unifi_mcp_repo: file:///unifi-mcp-src
-unifi_mcp_version: HEAD
+unifi_mcp_version: "{{ lookup('ansible.builtin.pipe', 'git rev-parse HEAD') }}"
 
 # Keep the scenario to what the playbook itself does; retention and SIEM
 # export are covered by their own unit tests, not this converge test.

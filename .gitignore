@@ -226,6 +226,8 @@ bandit-report.json
 # Ansible deploy (deploy/ansible): secrets and downloaded collections
 deploy/ansible/inventories/*/group_vars/all/vault.yml
 deploy/ansible/collections/
+deploy/ansible/.molecule-venv/
+deploy/ansible/.cache/
 
 # Claude Code plugin session state (autoharness, handoff notes, nudge counters)
 autoharness/

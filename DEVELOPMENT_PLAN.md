@@ -305,9 +305,9 @@ Items the audit explicitly leaves alone, recorded here so they are not re-litiga
 
 - Multi-controller / multi-site orchestration — done (fleet Phases 0–5, `docs/FLEET_SCALING_PLAN.md`; cloud-account discovery deferred)
 - Dry-run / change-safe mode — partial
-- Tool-level RBAC via roles and API tokens — partial (transport-level bearer auth only); design in `docs/FLEET_SCALING_PLAN.md` §3.6, Phases 1 and 2b
+- Tool-level RBAC via roles and API tokens — done for static tokens (`<role>:<token>` on `MCP_AUTH_TOKEN`: `viewer`/`operator`/`admin`/`fleet-admin`, enforced on every tool call and the A2A path) and for fleet-issued tokens (`docs/FLEET_SCALING_PLAN.md` §3.6, Phases 1 and 2b); open: no self-service token management UI beyond the fleet CLI
 - Append-only audit log — done (payload encryption, hash chain, Postgres store, SIEM export and anchors, retention for Postgres and JSONL); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5
-- Prometheus metrics endpoint — open (runbook only)
+- Prometheus metrics endpoint — done (`GET /metrics`, opt-in via `UNIFI_METRICS_ENABLED`, bearer-gated on network transports; see `src/utils/metrics.py`, `src/main.py:register_metrics_route`)
 - A2A agent card and manifest — done
 - Webhook event bus with Redis pub/sub — done (Phase 5.5: `unifi:webhooks:v1:events`, origin deduplication, background publish off the HTTP acknowledgement path)
 - **Mixed cloud + local-gateway tool exposure — done (Phase 5.6: `UNIFI_MIXED_MODE` registers the cloud and local modules together)**
@@ -423,13 +423,13 @@ So a fleet whose base is a cloud type can *route* to a registered local gateway,
 
 ---
 
-### Phase 7: Deployment automation (done; a molecule test for the playbook is open)
+### Phase 7: Deployment automation (done)
 
 **Goal:** install the server and its fleet stack (Redis, Postgres) repeatably, from a single host to a cluster, without hand-editing compose files. Today the only paths are `docker-compose.yml` (server only), `docker-compose.fleet.yml` (server, Redis, Postgres on one host) and `docker-compose.fleet-scale.yml` (replicas and workers on one host).
 
 #### 7.1 Ansible playbook (Docker hosts)
 
-**Status: done** (`deploy/ansible/`, `deploy/ansible/README.md`). Redis and Postgres run as single containers; for high availability the inventory points at managed endpoints (`unifi_mcp_redis_url`, `unifi_mcp_database_url`) instead of running Sentinel or Patroni itself. The replicas serve plain HTTP on loopback or the private network, with TLS at nginx. A new unauthenticated `GET /healthz` backs the container health check and the load balancer. CI runs `--syntax-check`; a converge-and-idempotence test (molecule or equivalent) is still open.
+**Status: done** (`deploy/ansible/`, `deploy/ansible/README.md`). Redis and Postgres run as single containers; for high availability the inventory points at managed endpoints (`unifi_mcp_redis_url`, `unifi_mcp_database_url`) instead of running Sentinel or Patroni itself. The replicas serve plain HTTP on loopback or the private network, with TLS at nginx. A new unauthenticated `GET /healthz` backs the container health check and the load balancer. CI runs `--syntax-check`, `ansible-lint`, and a molecule converge-and-idempotence test against the single-host layout (`deploy/ansible/molecule/default/`): installs Docker, builds the image from the checkout under test, brings up Postgres, Redis, the server, its worker and nginx, waits for every replica to report healthy, converges a second time expecting zero changes, then verifies health, container state and the nginx listener. Testing that converge surfaced and fixed a real race in the `postgres` role: the official Postgres image's first-run temporary server can answer one `pg_isready` moments before it restarts into its real server, so the "Apply the owner password" step now retries instead of trusting a single check.
 
 - A role-based playbook (`deploy/ansible/`) that installs Docker, then the server, Redis and Postgres as containers, driven by an inventory:
   - **Single server:** everything on one host, equivalent to `docker-compose.fleet.yml`.
@@ -438,7 +438,7 @@ So a fleet whose base is a cloud type can *route* to a registered local gateway,
 - Secrets (`UNIFI_API_KEY`, `MCP_AUTH_TOKEN`, `UNIFI_AUDIT_CHAIN_KEY`, `UNIFI_AUDIT_LOG_KEY`, `UNIFI_FLEET_CREDENTIAL_KEY`, database passwords) from Ansible Vault or an external lookup, never written into the repository or templates in clear.
 - Runs `python -m src.fleet.cli migrate` once (as `MIGRATION_DATABASE_URL`) and creates the least-privilege runtime role from SECURITY.md.
 - Safe defaults carried over: TLS on network transports, bearer auth on, `UNIFI_AUDIT_FAIL_CLOSED=true`, audit log and SIEM buffer on a persistent volume with 0700 permissions.
-- Idempotent (a second run changes nothing), with `--check` support, and a molecule (or equivalent) test in CI.
+- Idempotent (a second run changes nothing, proved by `deploy/ansible/molecule/default/` in CI), with `--check` support.
 
 #### 7.2 Kubernetes option (Helm chart)
 

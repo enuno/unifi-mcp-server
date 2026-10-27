@@ -4,15 +4,10 @@ This report tracks the remaining work implied by the current evolution plan. It 
 
 ## Executive summary
 
-The current server is strong on UniFi Network coverage, but the next material gaps are:
+The current server has native Network, Protect (v6 and v7.3.68), Mobility, InnerSpace and Carrier Fabric coverage, RBAC, audit logging, Prometheus metrics, a webhook event bus and A2A discovery. The remaining material gap is:
 
-- Protect v7 expansion — v6 surface is native; v7.3.68 added 39 unmapped operations (arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion)
 - Access API support — **blocked**: no official spec published as of 2026-09-26
-- multi-controller orchestration
-- safety and governance controls for write operations
-- first-class observability and eventing
-- new API domains: Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (Phase 6)
-- API-spec alignment: docs and pins refreshed to Network v10.6.106 / Protect v7.3.68 with a repeatable audit workflow
+- API-spec alignment: keep docs and pins current against Network v10.6.106 / Protect v7.3.68 with the repeatable audit workflow, and track the Network 11 / UniFi OS 6 compatibility work (DEVELOPMENT_PLAN.md Phase 8)
 
 ## Operator handling
 
@@ -56,30 +51,30 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 
 | ID | Gap | Priority | Phase |
 |---|---|---:|
-| G1 | Protect API | Highest | 3 (v6 done) / 5a (v7 expansion) |
+| G1 | Protect API | Done | 3 (v6) / 5a (v7.3.68, 39 ops) |
 | G2 | Access API | Highest | 5+ — blocked: no official spec published as of 2026-09-26 |
-| G3 | Multi-controller orchestration | Highest | 5 |
-| G4 | Protect v7 expansion | High | 5a |
-| G5 | Mobility API | Medium | 6 |
-| G6 | InnerSpace API | Medium | 6 |
-| G7 | Carrier Fabric API | Medium | 6 |
+| G3 | Multi-controller orchestration | Done | 5 (fleet Phases 0–5) |
+| G4 | Protect v7 expansion | Done | 5a |
+| G5 | Mobility API | Done | 6 |
+| G6 | InnerSpace API | Done | 6 |
+| G7 | Carrier Fabric API | Done | 6 |
 
 ### 2. Safety and governance gaps
 
 | ID | Gap | Priority | Phase |
 |---|---|---:|
-| G8 | Dry-run / change-safe mode | High | 5 |
-| G9 | Tool-level RBAC | High | 5 |
-| G10 | Append-only audit log | High | 5 |
+| G8 | Dry-run / change-safe mode | Partial | 5 |
+| G9 | Tool-level RBAC | Done (static and fleet-issued tokens) | 5 |
+| G10 | Append-only audit log | Done | 5 |
 
 ### 3. Observability and platform gaps
 
 | ID | Gap | Priority | Phase |
 |---|---|---:|
-| G11 | Prometheus metrics endpoint | High | 5 |
-| G12 | Webhook event bus | Medium | 5 |
-| G13 | A2A agent card / manifest | Medium | 5 |
-| G14 | Tool exposure profiles | Medium | 5 |
+| G11 | Prometheus metrics endpoint | Done | 5 |
+| G12 | Webhook event bus | Done | 5.5 |
+| G13 | A2A agent card / manifest | Done | 5 |
+| G14 | Tool exposure profiles | Partial (network, devices, security, system, minimal, protect done; access, talk, drive pending) | 5 |
 
 ### 4. Developer-experience gaps
 
@@ -95,25 +90,23 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 
 - Network, switching, firewall, QoS, topology, backup, and Site Manager foundations exist.
 - Network Integration API docs are verified against the v10.6.106 spec (73/73 operations covered; endpoint-stable since v10.3.55).
-- Protect v6-era surface (cameras, devices, NVR, views, events) exists.
+- Protect surface is native through v7.3.68 (cameras, devices, NVR, views, events, arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion); write paths await hardware verification.
+- Mobility, InnerSpace and Carrier Fabric (Phase 6) are implemented and mock-tested over the Site Manager client and Cloud Connector proxy.
+- Fleet (multi-controller orchestration), RBAC (static and fleet-issued token roles), append-only audit logging, Prometheus metrics, the Redis webhook event bus, and A2A discovery/delegation are implemented — see DEVELOPMENT_PLAN.md §2.1.
 - Traffic-flow historical streaming remains constrained by the current API cap and should stay documented as unsupported.
 
 ### Planned next work
 
-- Protect v7 expansion: 39 new operations (arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion)
-- New API domains: Mobility (8 ops), InnerSpace (6 ops, Cloud Connector proxy), Carrier Fabric (11 ops, subscriber management)
 - Access endpoint mapping and model coverage — blocked until Ubiquiti publishes a spec
-- controller-specific routing and fleet query operations
-- change-safe wrappers for all writes
-- metrics, audit, and webhook event handling
+- Dry-run / change-safe mode: extend preview coverage to every write tool (currently partial)
+- Remaining tool exposure profiles: access, talk, drive
+- UniFi Network 11 / UniFi OS 6 compatibility verification on a live controller (DEVELOPMENT_PLAN.md Phase 8; four items cannot be settled from documentation alone)
 - spec-drift guardrail: pinned spec snapshots + quarterly re-audit against developer.ui.com
 
 ## Success criteria
 
 This report is considered closed when:
 
-- Protect coverage matches spec v7.3.68 (all 74 operations implemented or explicitly out-of-scope).
-- Mobility, InnerSpace, and Carrier Fabric domains are implemented or explicitly deferred with specs pinned.
 - Access work is mapped and queued — or confirmed still blocked by the absence of an official spec.
-- write operations are previewable, auditable, and access-scoped.
-- the docs no longer imply a single-controller-only architecture.
+- Every write tool is previewable under `dry_run` (not just a subset).
+- The four Network 11 "needs live controller test" items (DEVELOPMENT_PLAN.md §2.4) are resolved on a real UniFi OS 6 / Network 11 controller.

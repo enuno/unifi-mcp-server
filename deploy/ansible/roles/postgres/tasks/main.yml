@@ -48,6 +48,14 @@
 
 # POSTGRES_PASSWORD only applies when the data directory is first created;
 # set it on every run so a changed vault_postgres_password takes effect.
+#
+# On first initialization the official image starts a temporary server to
+# run its init scripts, stops it, then starts the server it actually serves
+# from (postgres-entrypoint behaviour). The "Wait for Postgres to accept
+# connections" task above can observe a successful pg_isready against that
+# temporary server moments before it shuts down, so this call can land in
+# the restart gap ("the database system is shutting down"). Retry it too,
+# rather than trusting a single race-prone pg_isready.
 - name: Apply the owner password
   ansible.builtin.command:
     argv:
@@ -70,5 +78,9 @@
       ALTER ROLE {{ postgres_owner }} PASSWORD :'owner_password';
   environment:
     OWNER_PASSWORD: "{{ vault_postgres_password }}"
+  register: unifi_mcp_set_owner_password
+  until: unifi_mcp_set_owner_password.rc == 0
+  retries: 30
+  delay: 2
   changed_when: false
   no_log: true

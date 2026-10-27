@@ -261,8 +261,13 @@ jobs:
       # verify.yml's own health and container checks. See
       # deploy/ansible/molecule/default/molecule.yml and
       # DEVELOPMENT_PLAN.md §4 Phase 7.1.
+      # molecule generates its own ephemeral ansible.cfg for the test run,
+      # which shadows deploy/ansible/ansible.cfg's collections_path — so the
+      # collections installed above are invisible unless named explicitly.
       - name: Converge, prove idempotence, and verify
         working-directory: deploy/ansible
+        env:
+          ANSIBLE_COLLECTIONS_PATH: ./collections
         run: molecule test
 
   helm:

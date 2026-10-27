@@ -1,8 +1,8 @@
-# UniFi Network API Documentation (v10.6.106)
+# UniFi Network API Documentation (v11.0.97)
 
 ## Overview
 
-This document provides comprehensive reference documentation for the UniFi Network API version 10.6.106. Each UniFi Application has its own API endpoints running locally on each site, offering detailed analytics and control related to that specific application. For a single endpoint with high-level insights across all your UniFi sites, refer to the [UniFi Site Manager API](https://developer.ui.com/).
+This document provides comprehensive reference documentation for the UniFi Network API version 11.0.97. Each UniFi Application has its own API endpoints running locally on each site, offering detailed analytics and control related to that specific application. For a single endpoint with high-level insights across all your UniFi sites, refer to the [UniFi Site Manager API](https://developer.ui.com/).
 
 ## Operator usage
 
@@ -68,6 +68,10 @@ Treat this as the source of truth for Network API shape when verifying endpoint 
 ---
 
 ## Version History
+
+### v11.0.97 (October 2026)
+
+Verified against the canonical OpenAPI spec snapshot (`scripts/scraped-api-spec-v11.0.97.json`, audit 2026-10-27). Endpoint count unchanged (73 total, 44 paths) — the Integration API surface has been stable since v10.3.55; all 73 operations confirmed covered by this document. Two optional fields were added to the live spec: `reportFlowEnabled` (boolean) on the firewall-policy create/read/patch schemas, and a `DISABLED` enum value on the read-only `Wireless radio overview` schema's `txPowerMode` field. Neither reaches this server's current implementation: firewall policy CRUD and AP radio configuration both call the v2 local API / legacy `rest/device` endpoints rather than the public Integration API paths these fields belong to (`/v1/sites/{siteId}/firewall/policies/*`), per the existing architecture documented in `DEVELOPMENT_PLAN.md` §2.1. Recorded as a documented, not-yet-implemented capability rather than acted on, since confirming the v2/legacy endpoints' own field support needs a live controller. Also reconfirmed Protect unchanged at v7.3.70 against the pinned v7.3.68 snapshot (same 74 operations, 55 paths, 302 schemas, zero property changes). See `DEVELOPMENT_PLAN.md` §2.3 for the full audit findings.
 
 ### v10.6.106 (September 2026)
 

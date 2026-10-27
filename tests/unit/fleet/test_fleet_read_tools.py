@@ -257,8 +257,12 @@ class TestFleetCompareVersions:
         assert u7pro["newest"] == "8.0.10"
         assert u7pro["controllers"]["hq"]["count"] == 2
         assert u7pro["controllers"]["hq"]["behind"] is False
+        assert u7pro["controllers"]["hq"]["synced_seconds_ago"] >= 0
+        assert u7pro["controllers"]["hq"]["stale"] is False
         assert u7pro["controllers"]["branch"]["count"] == 0
         assert u7pro["controllers"]["branch"]["behind"] is False
+        assert u7pro["data_as_of_seconds_ago"] >= 0
+        assert u7pro["stale"] is False
 
     async def test_model_filter(self, tools: dict[str, Any]) -> None:
         result = await tools["compare_versions"](model="UDM", settings=tools["settings"])
@@ -311,6 +315,11 @@ class TestFleetCompareSites:
         assert result["unique_sites"]["hq"] == []
         assert result["unique_sites"]["branch"] == []
         assert result["by_controller"]["hq"][0]["short_name"] == "default"
+        assert result["by_controller"]["hq"][0]["synced_seconds_ago"] >= 0
+        assert result["by_controller"]["hq"][0]["stale"] is False
+        assert result["controller_sync_age"]["hq"] >= 0
+        assert result["data_as_of_seconds_ago"] >= 0
+        assert result["stale"] is False
 
     async def test_named_controllers(self, tools: dict[str, Any]) -> None:
         result = await tools["compare_sites"](controllers=["hq"], settings=tools["settings"])

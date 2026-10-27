@@ -629,7 +629,7 @@ Devices across the fleet (local controllers; the worker does not inventory cloud
 
 #### `fleet_compare_versions`
 
-Compare firmware versions for one model across controllers. Returns the set of versions seen, the newest version, per-controller counts and versions, and a `behind` flag for each controller that does not have the newest version. Devices with no recorded version are not considered behind.
+Compare firmware versions for one model across controllers. Returns the set of versions seen, the newest version, per-controller counts and versions, and a `behind` flag for each controller that does not have the newest version. Devices with no recorded version are not considered behind. Each model and controller entry also reports the age of the oldest inventory snapshot it used and a `stale` flag when that age exceeds three health-check intervals.
 
 **Parameters:** `model` (substring, case-insensitive), `controllers`, `labels`
 
@@ -641,9 +641,11 @@ Compare firmware versions for one model across controllers. Returns the set of v
       "versions": ["8.0.10", "7.6.1"],
       "newest": "8.0.10",
       "controllers": {
-        "hq": {"count": 2, "versions": ["8.0.10", "7.6.1"], "behind": false},
-        "branch": {"count": 1, "versions": ["7.6.1"], "behind": true}
-      }
+        "hq": {"count": 2, "versions": ["8.0.10", "7.6.1"], "behind": false, "synced_seconds_ago": 120, "stale": false},
+        "branch": {"count": 1, "versions": ["7.6.1"], "behind": true, "synced_seconds_ago": 95, "stale": false}
+      },
+      "data_as_of_seconds_ago": 120,
+      "stale": false
     }
   },
   "controllers_compared": ["branch", "hq"],
@@ -653,7 +655,7 @@ Compare firmware versions for one model across controllers. Returns the set of v
 
 #### `fleet_compare_sites`
 
-Compare site short names across controllers. Returns the sites common to every controller compared, the sites unique to each controller, and the full per-controller site lists. Controllers with no synced sites contribute nothing to the common set.
+Compare site short names across controllers. Returns the sites common to every controller compared, the sites unique to each controller, and the full per-controller site lists. Controllers with no synced sites contribute nothing to the common set. Every site entry includes the age of its snapshot; the response also reports the oldest snapshot age per controller and overall, plus a top-level `stale` flag when the overall age exceeds three health-check intervals.
 
 **Parameters:** `controllers`, `labels`
 
@@ -663,9 +665,12 @@ Compare site short names across controllers. Returns the sites common to every c
   "common_sites": ["default"],
   "unique_sites": {"hq": [], "branch": []},
   "by_controller": {
-    "hq": [{"site_id": "s-hq", "short_name": "default", "name": "Head office"}],
-    "branch": [{"site_id": "s-br", "short_name": "default", "name": "Branch"}]
+    "hq": [{"site_id": "s-hq", "short_name": "default", "name": "Head office", "synced_seconds_ago": 120, "stale": false}],
+    "branch": [{"site_id": "s-br", "short_name": "default", "name": "Branch", "synced_seconds_ago": 95, "stale": false}]
   },
+  "controller_sync_age": {"hq": 120, "branch": 95},
+  "data_as_of_seconds_ago": 120,
+  "stale": false,
   "controllers_compared": ["branch", "hq"],
   "total_sites": 2
 }

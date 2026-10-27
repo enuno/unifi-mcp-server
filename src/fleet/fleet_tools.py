@@ -281,6 +281,8 @@ def build_snapshot_tools(
         caller = _caller(settings or config)
         names = await _in_scope(registry, caller, controllers, labels)
         devices = await snapshots.fleet_devices(names, model=model)
+        now = datetime.now(UTC)
+        stale_seconds = config.fleet_worker_health_seconds * STALE_INTERVALS
 
         by_model: dict[str, dict[str, Any]] = {}
         for d in devices:
@@ -291,19 +293,28 @@ def build_snapshot_tools(
                     "versions": set(),
                     "controllers": {},
                     "total": 0,
+                    "oldest_synced_at": None,
                 },
             )
             version = d.device.version
             if version:
                 entry["versions"].add(version)
             entry["total"] += 1
+            if entry["oldest_synced_at"] is None or (
+                d.synced_at and d.synced_at < entry["oldest_synced_at"]
+            ):
+                entry["oldest_synced_at"] = d.synced_at
             ctrl = entry["controllers"].setdefault(
                 d.controller,
-                {"count": 0, "versions": set()},
+                {"count": 0, "versions": set(), "oldest_synced_at": None},
             )
             ctrl["count"] += 1
             if version:
                 ctrl["versions"].add(version)
+            if ctrl["oldest_synced_at"] is None or (
+                d.synced_at and d.synced_at < ctrl["oldest_synced_at"]
+            ):
+                ctrl["oldest_synced_at"] = d.synced_at
 
         models_out: dict[str, Any] = {}
         for key, entry in sorted(by_model.items()):
@@ -316,15 +327,21 @@ def build_snapshot_tools(
                 behind = False
                 if newest and ctrl_versions:
                     behind = version_key(ctrl_versions[0]) < version_key(newest)
+                ctrl_age = _age(ctrl.get("oldest_synced_at"), now)
                 controllers_out[name] = {
                     "count": ctrl["count"],
                     "versions": ctrl_versions,
                     "behind": behind,
+                    "synced_seconds_ago": ctrl_age,
+                    "stale": (ctrl_age is not None and ctrl_age > stale_seconds),
                 }
+            model_age = _age(entry["oldest_synced_at"], now)
             models_out[key] = {
                 "versions": versions,
                 "newest": newest,
                 "controllers": controllers_out,
+                "data_as_of_seconds_ago": model_age,
+                "stale": (model_age is not None and model_age > stale_seconds),
             }
 
         return {
@@ -357,21 +374,33 @@ def build_snapshot_tools(
         caller = _caller(settings or config)
         names = await _in_scope(registry, caller, controllers, labels)
         sites = await snapshots.fleet_sites(names)
+        now = datetime.now(UTC)
+        stale_seconds = config.fleet_worker_health_seconds * STALE_INTERVALS
 
         by_controller: dict[str, list[dict[str, Any]]] = {name: [] for name in names}
         by_short: dict[str, set[str]] = {}
         by_uuid: dict[str, set[str]] = {}
+        oldest_by_controller: dict[str, datetime | None] = dict.fromkeys(names)
+        oldest_overall: datetime | None = None
         for s in sites:
+            site_age = _age(s.synced_at, now)
             by_controller[s.controller].append(
                 {
                     "site_id": s.site.site_uuid,
                     "short_name": s.site.short_name,
                     "name": s.site.display_name,
+                    "synced_seconds_ago": site_age,
+                    "stale": (site_age is not None and site_age > stale_seconds),
                 }
             )
             if s.site.short_name:
                 by_short.setdefault(s.site.short_name, set()).add(s.controller)
             by_uuid.setdefault(s.site.site_uuid, set()).add(s.controller)
+            controller_oldest = oldest_by_controller[s.controller]
+            if controller_oldest is None or s.synced_at < controller_oldest:
+                oldest_by_controller[s.controller] = s.synced_at
+            if oldest_overall is None or s.synced_at < oldest_overall:
+                oldest_overall = s.synced_at
 
         common_short = sorted(name for name, ctrls in by_short.items() if ctrls == set(names))
         common_uuid = sorted(uuid for uuid, ctrls in by_uuid.items() if ctrls == set(names))
@@ -384,6 +413,9 @@ def build_snapshot_tools(
                 if s["short_name"] and s["short_name"] not in common_short
             )
 
+        controller_sync_age = {name: _age(oldest_by_controller[name], now) for name in names}
+        overall_age = _age(oldest_overall, now)
+
         return {
             "common_sites": common_short,
             "common_site_ids": common_uuid,
@@ -392,6 +424,9 @@ def build_snapshot_tools(
                 name: sorted(entries, key=lambda x: x["short_name"] or "")
                 for name, entries in by_controller.items()
             },
+            "controller_sync_age": controller_sync_age,
+            "data_as_of_seconds_ago": overall_age,
+            "stale": (overall_age is not None and overall_age > stale_seconds),
             "controllers_compared": names,
             "total_sites": len(sites),
         }

@@ -593,9 +593,9 @@ python -m src.fleet.cli tokens revoke --name first-admin
 
 ### Fleet-Wide Reads
 
-Available when `DATABASE_URL` is set. All four are `read` tier, from the module `fleet` (so `deny_modules: ["fleet"]` removes them), take no `controller` argument, and cover only the controllers inside the caller's `controller_labels` scope. Naming a controller that is unknown, disabled or out of scope is refused without saying which.
+Available when `DATABASE_URL` is set. All six are `read` tier, from the module `fleet` (so `deny_modules: ["fleet"]` removes them), take no `controller` argument, and cover only the controllers inside the caller's `controller_labels` scope. Naming a controller that is unknown, disabled or out of scope is refused without saying which.
 
-`fleet_health`, `fleet_sites` and `fleet_inventory` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; every entry says how many seconds old it is. Without a running worker they report `unknown` health and no sites or devices.
+`fleet_health`, `fleet_sites`, `fleet_inventory`, `fleet_compare_versions` and `fleet_compare_sites` answer from the worker's snapshots (`python -m src.worker`, see `MULTI_CONTROLLER.md`) with one database query and no controller calls; every entry says how many seconds old it is. Without a running worker they report `unknown` health and no sites or devices.
 
 #### `fleet_health`
 
@@ -624,6 +624,50 @@ Devices across the fleet (local controllers; the worker does not inventory cloud
      "synced_seconds_ago": 412.7}
   ],
   "total": 1, "offset": 0, "by_model": {"UDM-Pro": 1}
+}
+```
+
+#### `fleet_compare_versions`
+
+Compare firmware versions for one model across controllers. Returns the set of versions seen, the newest version, per-controller counts and versions, and a `behind` flag for each controller that does not have the newest version. Devices with no recorded version are not considered behind.
+
+**Parameters:** `model` (substring, case-insensitive), `controllers`, `labels`
+
+```json
+// fleet_compare_versions(model="U7PRO")
+{
+  "models": {
+    "U7PRO": {
+      "versions": ["8.0.10", "7.6.1"],
+      "newest": "8.0.10",
+      "controllers": {
+        "hq": {"count": 2, "versions": ["8.0.10", "7.6.1"], "behind": false},
+        "branch": {"count": 1, "versions": ["7.6.1"], "behind": true}
+      }
+    }
+  },
+  "controllers_compared": ["branch", "hq"],
+  "total_devices": 3
+}
+```
+
+#### `fleet_compare_sites`
+
+Compare site short names across controllers. Returns the sites common to every controller compared, the sites unique to each controller, and the full per-controller site lists. Controllers with no synced sites contribute nothing to the common set.
+
+**Parameters:** `controllers`, `labels`
+
+```json
+// fleet_compare_sites(controllers=["hq", "branch"])
+{
+  "common_sites": ["default"],
+  "unique_sites": {"hq": [], "branch": []},
+  "by_controller": {
+    "hq": [{"site_id": "s-hq", "short_name": "default", "name": "Head office"}],
+    "branch": [{"site_id": "s-br", "short_name": "default", "name": "Branch"}]
+  },
+  "controllers_compared": ["branch", "hq"],
+  "total_sites": 2
 }
 ```
 

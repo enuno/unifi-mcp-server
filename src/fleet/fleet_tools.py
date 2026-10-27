@@ -255,7 +255,148 @@ def build_snapshot_tools(
             "by_model": dict(sorted(by_model.items())),
         }
 
-    return [fleet_health, fleet_sites, fleet_inventory]
+    @read_tool
+    async def fleet_compare_versions(
+        model: str | None = None,
+        controllers: list[str] | None = None,
+        labels: dict[str, str] | None = None,
+        settings: Settings | None = None,
+    ) -> dict[str, Any]:
+        """Compare firmware versions of devices across controllers.
+
+        Answers from the worker's device-inventory snapshot, so no controller is
+        contacted. Use it to find controllers running older firmware or mixed
+        versions for a given model.
+
+        Args:
+            model: Only compare this model (case-insensitive substring match)
+            controllers: Only these controllers (default: every controller in scope)
+            labels: Only controllers carrying all of these labels
+            settings: Injected by the server
+
+        Returns:
+            Per-model version summary, per-controller counts and versions, the
+            newest version seen, and which controllers are behind it
+        """
+        caller = _caller(settings or config)
+        names = await _in_scope(registry, caller, controllers, labels)
+        devices = await snapshots.fleet_devices(names, model=model)
+
+        by_model: dict[str, dict[str, Any]] = {}
+        for d in devices:
+            key = d.device.model or "unknown"
+            entry = by_model.setdefault(
+                key,
+                {
+                    "versions": set(),
+                    "controllers": {},
+                    "total": 0,
+                },
+            )
+            version = d.device.version
+            if version:
+                entry["versions"].add(version)
+            entry["total"] += 1
+            ctrl = entry["controllers"].setdefault(
+                d.controller,
+                {"count": 0, "versions": set()},
+            )
+            ctrl["count"] += 1
+            if version:
+                ctrl["versions"].add(version)
+
+        models_out: dict[str, Any] = {}
+        for key, entry in sorted(by_model.items()):
+            versions = sorted(entry["versions"], key=version_key, reverse=True)
+            newest = versions[0] if versions else None
+            controllers_out: dict[str, Any] = {}
+            for name in names:
+                ctrl = entry["controllers"].get(name, {"count": 0, "versions": set()})
+                ctrl_versions = sorted(ctrl["versions"], key=version_key, reverse=True)
+                behind = False
+                if newest and ctrl_versions:
+                    behind = version_key(ctrl_versions[0]) < version_key(newest)
+                controllers_out[name] = {
+                    "count": ctrl["count"],
+                    "versions": ctrl_versions,
+                    "behind": behind,
+                }
+            models_out[key] = {
+                "versions": versions,
+                "newest": newest,
+                "controllers": controllers_out,
+            }
+
+        return {
+            "models": models_out,
+            "controllers_compared": names,
+            "total_devices": len(devices),
+        }
+
+    @read_tool
+    async def fleet_compare_sites(
+        controllers: list[str] | None = None,
+        labels: dict[str, str] | None = None,
+        settings: Settings | None = None,
+    ) -> dict[str, Any]:
+        """Compare site names across controllers.
+
+        Answers from the worker's site snapshot, so no controller is contacted.
+        Shows sites that exist on every controller and sites that exist only on
+        some.
+
+        Args:
+            controllers: Only these controllers (default: every controller in scope)
+            labels: Only controllers carrying all of these labels
+            settings: Injected by the server
+
+        Returns:
+            Common site short names, per-controller unique sites, the full
+            per-controller site lists, and the controllers compared
+        """
+        caller = _caller(settings or config)
+        names = await _in_scope(registry, caller, controllers, labels)
+        sites = await snapshots.fleet_sites(names)
+
+        by_controller: dict[str, list[dict[str, Any]]] = {name: [] for name in names}
+        by_short: dict[str, set[str]] = {}
+        by_uuid: dict[str, set[str]] = {}
+        for s in sites:
+            by_controller[s.controller].append(
+                {
+                    "site_id": s.site.site_uuid,
+                    "short_name": s.site.short_name,
+                    "name": s.site.display_name,
+                }
+            )
+            if s.site.short_name:
+                by_short.setdefault(s.site.short_name, set()).add(s.controller)
+            by_uuid.setdefault(s.site.site_uuid, set()).add(s.controller)
+
+        common_short = sorted(name for name, ctrls in by_short.items() if ctrls == set(names))
+        common_uuid = sorted(uuid for uuid, ctrls in by_uuid.items() if ctrls == set(names))
+
+        unique_short: dict[str, list[str]] = {}
+        for name in names:
+            unique_short[name] = sorted(
+                s["short_name"]
+                for s in by_controller[name]
+                if s["short_name"] and s["short_name"] not in common_short
+            )
+
+        return {
+            "common_sites": common_short,
+            "common_site_ids": common_uuid,
+            "unique_sites": unique_short,
+            "by_controller": {
+                name: sorted(entries, key=lambda x: x["short_name"] or "")
+                for name, entries in by_controller.items()
+            },
+            "controllers_compared": names,
+            "total_sites": len(sites),
+        }
+
+    return [fleet_health, fleet_sites, fleet_inventory, fleet_compare_versions, fleet_compare_sites]
 
 
 def build_fanout_tool(mcp: FastMCP, registry: ControllerRegistry, config: Settings) -> Any:

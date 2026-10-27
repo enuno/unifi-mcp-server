@@ -114,3 +114,40 @@ Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are c
 ---
 
 **Last Updated**: 2026-10-13
+
+<!-- omh:agent-instructions:begin -->
+
+## Agent-Artifact Sync
+
+This section is machine-maintained. Hand-written text lives outside the markers.
+
+A tool change must update every surface that names it:
+
+1. `API.md` — tool entry with parameters and example.
+2. `skills/<name>/SKILL.md` — the relevant operator or developer skill.
+3. Developer skill copies — `.claude/skills/<name>/` and `.agents/skills/<name>/` (except `mintlify-docs`, whose source is `.mintlify/skills/mintlify-docs/SKILL.md`).
+4. `src/prompts/catalog.py` and `docs/PROMPTS.md` — if a prompt workflow reads the tool.
+5. `agent-card.json` — regenerate with `python scripts/generate_agent_card.py` when the tool surface changes.
+
+Verified commands (exit 0, 2026-10-27):
+
+- `make test`, `make test-cov`, `make lint`, `make typecheck`, `make security`, `make docs-coverage`
+- `python scripts/generate_agent_card.py`
+- `pytest tests/unit/test_skill_tool_references.py tests/unit/test_skill_parameter_references.py tests/unit/test_agent_docs.py`
+
+Generated files:
+
+| File | Source | Regenerate | Gate |
+|---|---|---|---|
+| `agent-card.json` | `src/a2a/capabilities.py` + live registry | `python scripts/generate_agent_card.py` | `tests/unit/a2a/test_agent_card.py` |
+| Tool-tier snapshot | `src/tool_registry.py` | `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py` | `tests/unit/fleet/test_tiers.py` |
+| Developer skill copies | `skills/<name>/SKILL.md` | `cp` to `.claude/skills/<name>/` and `.agents/skills/<name>/` | `tests/unit/test_agent_docs.py` |
+
+Key pitfalls:
+
+- A renamed tool can make a prompt workflow disappear from `prompts/list`.
+- `tests/unit/test_agent_docs.py` fails when a developer skill copy is stale.
+- Never hand-edit `agent-card.json`; regenerate it from the source.
+- Do not write tool or module counts in prose; the skill-reference guard checks them against the live registry.
+
+<!-- omh:agent-instructions:end -->

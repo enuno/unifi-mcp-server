@@ -276,3 +276,70 @@ XERJ_URL=http://127.0.0.1:9300 xerj code unifi-mcp-reference "<problem or patter
 That corpus contains FastMCP, the MCP Python SDK, aiounifi, and pyunifiprotect.
 Index or refresh a repo with `xerj autoindex <folder>`. Cite file:line for
 anything you rely on.
+
+<!-- omh:agent-instructions:begin -->
+
+## Agent-Artifact Sync
+
+This section is machine-maintained. Hand-written text lives outside the markers.
+
+### Skills, A2A and prompt catalog updates
+
+The repository exposes the same capability surface in several places. A tool change must keep them aligned:
+
+- MCP tools — live registry at runtime
+- Native MCP prompts — `src/prompts/catalog.py` lists the tools each workflow reads
+- A2A agent card — `agent-card.json`, generated from `src/a2a/capabilities.py`
+- Operator and developer skills — `skills/<name>/SKILL.md`
+- API reference — `API.md`
+
+When you add, remove or rename a tool:
+
+1. Update `API.md` for the tool's parameters and an example.
+2. Update the relevant skill under `skills/<name>/SKILL.md`.
+3. If the skill is a developer skill, copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`. The `mintlify-docs` skill is the exception: its source of truth is `.mintlify/skills/mintlify-docs/SKILL.md`.
+4. If a prompt workflow reads the tool, update `src/prompts/catalog.py` and `docs/PROMPTS.md`.
+5. Regenerate the agent card if the tool surface changed: `python scripts/generate_agent_card.py`.
+6. Run the drift guards: `pytest tests/unit/test_skill_tool_references.py tests/unit/test_skill_parameter_references.py tests/unit/test_agent_docs.py`.
+
+### Verified commands
+
+| Command | Purpose | Status |
+|---|---|---|
+| `make test` | Run unit tests | verified (exit 0, 2026-10-27) |
+| `make test-cov` | Unit tests with the CI coverage gate | verified (exit 0, 2026-10-27) |
+| `make lint` | black, isort, ruff | verified (exit 0, 2026-10-27) |
+| `make typecheck` | mypy over `src/` | verified (exit 0, 2026-10-27) |
+| `make security` | bandit scan | verified (exit 0, 2026-10-27) |
+| `make docs-coverage` | docstring coverage gate | verified (exit 0, 2026-10-27) |
+| `make ci` | Every blocking CI check locally | unverified — runs `audit` and fleet-scale verification that need extra setup |
+| `pre-commit run --files <changed files>` | Hooks on changed files | unverified — depends on local hook installation |
+| `python scripts/generate_agent_card.py` | Regenerate `agent-card.json` from the live registry | verified (exit 0, 2026-10-27) |
+| `pytest tests/unit/test_skill_tool_references.py tests/unit/test_skill_parameter_references.py tests/unit/test_agent_docs.py` | Drift guards for skills, parameters and docs | verified (exit 0, 2026-10-27) |
+
+### Generated files
+
+| File | Source | Regenerate command | Gate |
+|---|---|---|---|
+| `agent-card.json` | `src/a2a/capabilities.py` + live tool registry | `python scripts/generate_agent_card.py` | `tests/unit/a2a/test_agent_card.py` |
+| Tool-tier snapshot (`tests/unit/fleet/test_tiers.py`) | `src/tool_registry.py` tier classification | `UPDATE_TOOL_TIERS=1 pytest tests/unit/fleet/test_tiers.py` | `tests/unit/fleet/test_tiers.py` |
+| Developer skill copies | `skills/<name>/SKILL.md` | `cp skills/<name>/SKILL.md .claude/skills/<name>/SKILL.md && cp skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md` | `tests/unit/test_agent_docs.py` |
+
+Never hand-edit `agent-card.json`. Always regenerate it from the source.
+
+### Gates
+
+- `tests/unit/test_skill_tool_references.py` fails when a skill names a tool that does not exist.
+- `tests/unit/test_skill_parameter_references.py` fails when a skill states an argument the tool's schema does not have.
+- `tests/unit/test_agent_docs.py` fails when a developer skill copy differs from its source, when skill frontmatter names do not match their folders, or when a document cites a path, link or tool name that does not exist.
+- `tests/unit/a2a/test_agent_card.py` fails when `agent-card.json` disagrees with the generator.
+- `tests/unit/prompts/test_prompt_catalog.py` fails when a prompt names a tool that is not registered.
+
+### Pitfalls
+
+- **Changing a tool name without updating the prompt catalog.** A prompt's `requirements` list gates whether the workflow is advertised. A renamed tool makes the workflow disappear from `prompts/list` without an obvious error. Run `pytest tests/unit/prompts/test_prompt_catalog.py` to catch it.
+- **Forgetting to copy a developer skill.** `tests/unit/test_agent_docs.py` fails when `.claude/skills/<name>/SKILL.md` or `.agents/skills/<name>/SKILL.md` differs from `skills/<name>/SKILL.md`. Copy after editing.
+- **Hand-editing `agent-card.json`.** The next regeneration will silently overwrite it, and `test_agent_card.py` will fail if the hand edit does not match the generator. Edit `src/a2a/capabilities.py` or `src/a2a/agent_card.py` instead.
+- **Writing tool or module counts in prose.** The skill-reference guard checks counts stated in skills and the README against the live registry. Use "the live registry" or the verification command instead of a number.
+
+<!-- omh:agent-instructions:end -->

@@ -121,13 +121,20 @@ Phases 0–3, 5a (Protect v7) and 6 (Mobility, InnerSpace, Carrier Fabric) are c
 
 This section is machine-maintained. Hand-written text lives outside the markers.
 
-A tool change must update every surface that names it:
+A tool or resource change must update every surface that names it:
 
 1. `API.md` — tool entry with parameters and example.
 2. `skills/<name>/SKILL.md` — the relevant operator or developer skill.
 3. Developer skill copies — `.claude/skills/<name>/` and `.agents/skills/<name>/` (except `mintlify-docs`, whose source is `.mintlify/skills/mintlify-docs/SKILL.md`).
 4. `src/prompts/catalog.py` and `docs/PROMPTS.md` — if a prompt workflow reads the tool.
 5. `agent-card.json` — regenerate with `python scripts/generate_agent_card.py` when the tool surface changes.
+
+When you add or change an MCP resource (`@mcp.resource("scheme://...")` in `src/main.py`):
+
+1. Add or update tests under `tests/unit/resources/`.
+2. Update `docs/UNIFI_API.md` "Supporting Resources" with the URI template and endpoint mapping.
+3. Regenerate `agent-card.json` (the generator reads the live registry).
+4. Update any skill that references the resource URI and copy it to `.claude/skills/<name>/` and `.agents/skills/<name>/`.
 
 Verified commands (exit 0, 2026-10-27):
 

@@ -283,15 +283,16 @@ anything you rely on.
 
 This section is machine-maintained. Hand-written text lives outside the markers.
 
-### Skills, A2A and prompt catalog updates
+### Skills, A2A, prompts and resources updates
 
-The repository exposes the same capability surface in several places. A tool change must keep them aligned:
+The repository exposes the same capability surface in several places. A tool or resource change must keep them aligned:
 
 - MCP tools — live registry at runtime
 - Native MCP prompts — `src/prompts/catalog.py` lists the tools each workflow reads
-- A2A agent card — `agent-card.json`, generated from `src/a2a/capabilities.py`
+- MCP resources — `src/main.py` registers them with `@mcp.resource("scheme://...")` URIs
+- A2A agent card — `agent-card.json`, generated from `src/a2a/capabilities.py`; it includes tools, prompts and resources
 - Operator and developer skills — `skills/<name>/SKILL.md`
-- API reference — `API.md`
+- API reference — `API.md` and `docs/UNIFI_API.md`
 
 When you add, remove or rename a tool:
 
@@ -301,6 +302,14 @@ When you add, remove or rename a tool:
 4. If a prompt workflow reads the tool, update `src/prompts/catalog.py` and `docs/PROMPTS.md`.
 5. Regenerate the agent card if the tool surface changed: `python scripts/generate_agent_card.py`.
 6. Run the drift guards: `pytest tests/unit/test_skill_tool_references.py tests/unit/test_skill_parameter_references.py tests/unit/test_agent_docs.py`.
+
+When you add, remove or rename an MCP resource:
+
+1. Add or update tests under `tests/unit/resources/` for the resource class and the `mcp.resource` registration.
+2. Update `docs/UNIFI_API.md` "Supporting Resources" with the URI template, endpoint mapping, and status.
+3. Update the agent card if resources changed (the generator reads the live registry): `python scripts/generate_agent_card.py`.
+4. If a skill references the resource URI, update the skill and its developer copies.
+5. Run the drift guards above plus `pytest tests/unit/a2a/test_agent_card.py tests/unit/a2a/test_agent_card_capabilities.py`.
 
 ### Verified commands
 

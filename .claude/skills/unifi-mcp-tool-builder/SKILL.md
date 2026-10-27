@@ -570,9 +570,9 @@ If you have access to a UniFi controller:
 
 ---
 
-## Phase 6: Skills and A2A sync
+## Phase 6: Skills, A2A, prompts and resources sync
 
-A new or changed tool must also update the artifacts that describe the surface to agents and to A2A orchestrators.
+A new or changed tool or MCP resource must also update the artifacts that describe the surface to agents and to A2A orchestrators.
 
 ### 6.1 Creating or updating a skill
 
@@ -601,7 +601,7 @@ The A2A agent card and capability manifest are derived from the live tool regist
 - `src/a2a/agent_card.py` — the card shape and safety-requirement logic.
 - `agent-card.json` — the committed reference artifact.
 
-When you add a tool in a new domain or change a tool's tier:
+When you add a tool in a new domain, change a tool's tier, or add/change an MCP resource:
 
 1. Update `_MODULE_DOMAINS` in `src/a2a/capabilities.py` if the module is not already mapped.
 2. Regenerate the reference card:
@@ -632,6 +632,31 @@ If a prompt workflow reads the new or changed tool:
    ```
 
 A renamed tool can make a workflow disappear from `prompts/list` because the workflow is advertised only when every required tool is registered.
+
+### 6.4 Updating MCP resources
+
+MCP resources are registered in `src/main.py` with `@mcp.resource("scheme://...")` URI templates. They are advertised through the MCP handshake and included in the A2A agent card.
+
+When you add, remove or rename a resource:
+
+1. Add or update tests under `tests/unit/resources/` for the resource class and the `mcp.resource` registration.
+2. Update `docs/UNIFI_API.md` "Supporting Resources" with the URI template, endpoint mapping, and status.
+3. Regenerate `agent-card.json` so the A2A surface matches the live registry:
+
+   ```bash
+   python scripts/generate_agent_card.py
+   ```
+
+4. If a skill references the resource URI, update the skill and its developer copies.
+5. Run the drift guards and the A2A card tests:
+
+   ```bash
+   pytest tests/unit/test_skill_tool_references.py \
+          tests/unit/test_skill_parameter_references.py \
+          tests/unit/test_agent_docs.py \
+          tests/unit/a2a/test_agent_card.py \
+          tests/unit/a2a/test_agent_card_capabilities.py -q
+   ```
 
 ---
 
@@ -675,6 +700,8 @@ Before submitting:
 - [ ] Relevant skill updated in `skills/<name>/SKILL.md` and developer-skill copies synced
 - [ ] `agent-card.json` regenerated if the tool surface changed
 - [ ] Native prompt catalog updated if a workflow reads the tool
+- [ ] MCP resource tests added or updated if a resource changed
+- [ ] `docs/UNIFI_API.md` "Supporting Resources" updated if a resource URI changed
 
 ### Integration
 

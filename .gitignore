@@ -226,3 +226,9 @@ bandit-report.json
 # Ansible deploy (deploy/ansible): secrets and downloaded collections
 deploy/ansible/inventories/*/group_vars/all/vault.yml
 deploy/ansible/collections/
+
+# Claude Code plugin session state (autoharness, handoff notes, nudge counters)
+autoharness/
+.handoff/
+.claude/handoff-nudge-state.json
+.claude/skill-nudge-state

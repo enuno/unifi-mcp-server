@@ -255,7 +255,183 @@ def build_snapshot_tools(
             "by_model": dict(sorted(by_model.items())),
         }
 
-    return [fleet_health, fleet_sites, fleet_inventory]
+    @read_tool
+    async def fleet_compare_versions(
+        model: str | None = None,
+        controllers: list[str] | None = None,
+        labels: dict[str, str] | None = None,
+        settings: Settings | None = None,
+    ) -> dict[str, Any]:
+        """Compare firmware versions of devices across controllers.
+
+        Answers from the worker's device-inventory snapshot, so no controller is
+        contacted. Use it to find controllers running older firmware or mixed
+        versions for a given model.
+
+        Args:
+            model: Only compare this model (case-insensitive substring match)
+            controllers: Only these controllers (default: every controller in scope)
+            labels: Only controllers carrying all of these labels
+            settings: Injected by the server
+
+        Returns:
+            Per-model version summary, per-controller counts and versions, the
+            newest version seen, and which controllers are behind it
+        """
+        caller = _caller(settings or config)
+        names = await _in_scope(registry, caller, controllers, labels)
+        devices = await snapshots.fleet_devices(names, model=model)
+        now = datetime.now(UTC)
+        stale_seconds = config.fleet_worker_health_seconds * STALE_INTERVALS
+
+        by_model: dict[str, dict[str, Any]] = {}
+        for d in devices:
+            key = d.device.model or "unknown"
+            entry = by_model.setdefault(
+                key,
+                {
+                    "versions": set(),
+                    "controllers": {},
+                    "total": 0,
+                    "oldest_synced_at": None,
+                },
+            )
+            version = d.device.version
+            if version:
+                entry["versions"].add(version)
+            entry["total"] += 1
+            if entry["oldest_synced_at"] is None or (
+                d.synced_at and d.synced_at < entry["oldest_synced_at"]
+            ):
+                entry["oldest_synced_at"] = d.synced_at
+            ctrl = entry["controllers"].setdefault(
+                d.controller,
+                {"count": 0, "versions": set(), "oldest_synced_at": None},
+            )
+            ctrl["count"] += 1
+            if version:
+                ctrl["versions"].add(version)
+            if ctrl["oldest_synced_at"] is None or (
+                d.synced_at and d.synced_at < ctrl["oldest_synced_at"]
+            ):
+                ctrl["oldest_synced_at"] = d.synced_at
+
+        models_out: dict[str, Any] = {}
+        for key, entry in sorted(by_model.items()):
+            versions = sorted(entry["versions"], key=version_key, reverse=True)
+            newest = versions[0] if versions else None
+            controllers_out: dict[str, Any] = {}
+            for name in names:
+                ctrl = entry["controllers"].get(name, {"count": 0, "versions": set()})
+                ctrl_versions = sorted(ctrl["versions"], key=version_key, reverse=True)
+                behind = False
+                if newest and ctrl_versions:
+                    behind = version_key(ctrl_versions[0]) < version_key(newest)
+                ctrl_age = _age(ctrl.get("oldest_synced_at"), now)
+                controllers_out[name] = {
+                    "count": ctrl["count"],
+                    "versions": ctrl_versions,
+                    "behind": behind,
+                    "synced_seconds_ago": ctrl_age,
+                    "stale": (ctrl_age is not None and ctrl_age > stale_seconds),
+                }
+            model_age = _age(entry["oldest_synced_at"], now)
+            models_out[key] = {
+                "versions": versions,
+                "newest": newest,
+                "controllers": controllers_out,
+                "data_as_of_seconds_ago": model_age,
+                "stale": (model_age is not None and model_age > stale_seconds),
+            }
+
+        return {
+            "models": models_out,
+            "controllers_compared": names,
+            "total_devices": len(devices),
+        }
+
+    @read_tool
+    async def fleet_compare_sites(
+        controllers: list[str] | None = None,
+        labels: dict[str, str] | None = None,
+        settings: Settings | None = None,
+    ) -> dict[str, Any]:
+        """Compare site names across controllers.
+
+        Answers from the worker's site snapshot, so no controller is contacted.
+        Shows sites that exist on every controller and sites that exist only on
+        some.
+
+        Args:
+            controllers: Only these controllers (default: every controller in scope)
+            labels: Only controllers carrying all of these labels
+            settings: Injected by the server
+
+        Returns:
+            Common site short names, per-controller unique sites, the full
+            per-controller site lists, and the controllers compared
+        """
+        caller = _caller(settings or config)
+        names = await _in_scope(registry, caller, controllers, labels)
+        sites = await snapshots.fleet_sites(names)
+        now = datetime.now(UTC)
+        stale_seconds = config.fleet_worker_health_seconds * STALE_INTERVALS
+
+        by_controller: dict[str, list[dict[str, Any]]] = {name: [] for name in names}
+        by_short: dict[str, set[str]] = {}
+        by_uuid: dict[str, set[str]] = {}
+        oldest_by_controller: dict[str, datetime | None] = dict.fromkeys(names)
+        oldest_overall: datetime | None = None
+        for s in sites:
+            site_age = _age(s.synced_at, now)
+            by_controller[s.controller].append(
+                {
+                    "site_id": s.site.site_uuid,
+                    "short_name": s.site.short_name,
+                    "name": s.site.display_name,
+                    "synced_seconds_ago": site_age,
+                    "stale": (site_age is not None and site_age > stale_seconds),
+                }
+            )
+            if s.site.short_name:
+                by_short.setdefault(s.site.short_name, set()).add(s.controller)
+            by_uuid.setdefault(s.site.site_uuid, set()).add(s.controller)
+            controller_oldest = oldest_by_controller[s.controller]
+            if controller_oldest is None or s.synced_at < controller_oldest:
+                oldest_by_controller[s.controller] = s.synced_at
+            if oldest_overall is None or s.synced_at < oldest_overall:
+                oldest_overall = s.synced_at
+
+        common_short = sorted(name for name, ctrls in by_short.items() if ctrls == set(names))
+        common_uuid = sorted(uuid for uuid, ctrls in by_uuid.items() if ctrls == set(names))
+
+        unique_short: dict[str, list[str]] = {}
+        for name in names:
+            unique_short[name] = sorted(
+                s["short_name"]
+                for s in by_controller[name]
+                if s["short_name"] and s["short_name"] not in common_short
+            )
+
+        controller_sync_age = {name: _age(oldest_by_controller[name], now) for name in names}
+        overall_age = _age(oldest_overall, now)
+
+        return {
+            "common_sites": common_short,
+            "common_site_ids": common_uuid,
+            "unique_sites": unique_short,
+            "by_controller": {
+                name: sorted(entries, key=lambda x: x["short_name"] or "")
+                for name, entries in by_controller.items()
+            },
+            "controller_sync_age": controller_sync_age,
+            "data_as_of_seconds_ago": overall_age,
+            "stale": (overall_age is not None and overall_age > stale_seconds),
+            "controllers_compared": names,
+            "total_sites": len(sites),
+        }
+
+    return [fleet_health, fleet_sites, fleet_inventory, fleet_compare_versions, fleet_compare_sites]
 
 
 def build_fanout_tool(mcp: FastMCP, registry: ControllerRegistry, config: Settings) -> Any:

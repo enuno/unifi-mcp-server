@@ -12,9 +12,20 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:?REDIS_PASSWORD required}"
+      - "--save"
+      - ""
+      - "--appendonly"
+      - "yes"
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD required}
+    volumes:
+      - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep -qx PONG"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -23,7 +34,7 @@ services:
     # Replicas are reached through the load balancer, not a host port.
     ports: !reset []
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0}
       # 3 replicas + 2 workers draw from each controller's budget: while Redis
       # is down each process keeps a fifth of it (keep in step with replicas).
       UNIFI_FLEET_EXPECTED_REPLICAS: "5"
@@ -35,7 +46,7 @@ services:
 
   worker:
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:?REDIS_PASSWORD required}@redis:6379/0}
       # 3 replicas + 2 workers draw from each controller's budget: while Redis
       # is down each process keeps a fifth of it (keep in step with replicas).
       UNIFI_FLEET_EXPECTED_REPLICAS: "5"
@@ -62,7 +73,7 @@ configs:
   nginx:
     content: |
       # "unifi-mcp" resolves to every replica when nginx starts, one peer per
-      # address; after scaling the replicas, restart lb to pick up the change.
+      # address; after scaling the replicas, restart the lb to pick up the change.
       # The key must be stable from `initialize` onward, so not mcp-session-id
       # (initialize has none, and the next request would rehash).
       upstream unifi_mcp {
@@ -79,3 +90,6 @@ configs:
               proxy_read_timeout 1h;
           }
       }
+
+volumes:
+  redis-data:

@@ -25,7 +25,7 @@ Fleet tools are built inside functions, not defined at module level, so the "eve
 |--------|-------|-----------------|
 | `register_fleet_tools()` in `src/fleet/tools.py` | `list_controllers`, `select_controller`, `get_active_controller` | always |
 | `register_admin_tools()` in `src/fleet/admin_tools.py` | 11, such as `register_controller`, `create_api_token`, `verify_audit_chain` | `DATABASE_URL` is set, and not read-only |
-| `register_fleet_read_tools()` in `src/fleet/fleet_tools.py` | `fleet_health`, `fleet_sites`, `fleet_inventory`, `fleet_fanout` | `DATABASE_URL` is set |
+| `register_fleet_read_tools()` in `src/fleet/fleet_tools.py` | `fleet_health`, `fleet_sites`, `fleet_inventory`, `fleet_compare_versions`, `fleet_compare_sites`, `fleet_fanout` | `DATABASE_URL` is set |
 
 ## API modes and gating
 

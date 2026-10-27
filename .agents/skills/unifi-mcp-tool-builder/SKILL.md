@@ -10,11 +10,11 @@ author: UniFi MCP Server Team
 
 ## Overview
 
-This skill guides you through adding new MCP tools to the existing UniFi MCP Server. Unlike building an MCP server from scratch, this focuses on **extending** the current 343-tool implementation with new UniFi Network Controller functionality while maintaining the project's quality standards.
+This skill guides you through adding new MCP tools to the existing UniFi MCP Server. Unlike building an MCP server from scratch, this focuses on **extending** the current implementation with new UniFi Network Controller functionality while maintaining the project's quality standards.
 
 **Project Context:**
 
-- **Existing Tools**: 343 MCP tools across the feature categories below
+- **Existing Tools**: 343 MCP tools in local mode. The live count is what the registry reports; this figure is checked by `tests/unit/test_skill_tool_references.py`, so the test fails if it drifts.
 - **Test Coverage**: the unit suite is the gate. Run `pytest tests/unit/ -q --cov=src --cov-fail-under=80` from the repository root; the coverage gate is 80%. The exact test count changes with every change, so read it from that run rather than from this file.
 - **Architecture**: FastMCP + Pydantic v2 + async/await patterns
 - **API Support**: Local gateway (full), Cloud V1/EA (limited)
@@ -570,6 +570,96 @@ If you have access to a UniFi controller:
 
 ---
 
+## Phase 6: Skills, A2A, prompts and resources sync
+
+A new or changed tool or MCP resource must also update the artifacts that describe the surface to agents and to A2A orchestrators.
+
+### 6.1 Creating or updating a skill
+
+Skills live in `skills/<name>/SKILL.md`. Developer skills (the ones an agent loads while coding) are also copied to `.claude/skills/<name>/` and `.agents/skills/<name>/`. The `mintlify-docs` skill is the exception: its source of truth is `.mintlify/skills/mintlify-docs/SKILL.md`.
+
+To add a new skill:
+
+1. Create `skills/<name>/SKILL.md` with YAML frontmatter containing at least `name` and `description`.
+2. If it is a developer skill, copy it to `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`.
+3. If it names tools or arguments, use the explicit argument-list form so the skill-reference guards can check it.
+4. Run the guards:
+
+   ```bash
+   pytest tests/unit/test_skill_tool_references.py \
+          tests/unit/test_skill_parameter_references.py \
+          tests/unit/test_agent_docs.py -q
+   ```
+
+To update an existing skill, edit `skills/<name>/SKILL.md` and re-copy the developer-skill copies. Do not edit the copies directly; `test_agent_docs.py` fails when they differ from the source.
+
+### 6.2 Updating the A2A configuration
+
+The A2A agent card and capability manifest are derived from the live tool registry, but several hand-written sources shape what they advertise:
+
+- `src/a2a/capabilities.py` — capability names, module-to-domain map (`_MODULE_DOMAINS`), and the advertised API modes.
+- `src/a2a/agent_card.py` — the card shape and safety-requirement logic.
+- `agent-card.json` — the committed reference artifact.
+
+When you add a tool in a new domain, change a tool's tier, or add/change an MCP resource:
+
+1. Update `_MODULE_DOMAINS` in `src/a2a/capabilities.py` if the module is not already mapped.
+2. Regenerate the reference card:
+
+   ```bash
+   python scripts/generate_agent_card.py
+   ```
+
+3. Verify the card and the generator agree:
+
+   ```bash
+   pytest tests/unit/a2a/test_agent_card.py \
+          tests/unit/a2a/test_agent_card_capabilities.py -q
+   ```
+
+Never hand-edit `agent-card.json`; the generator overwrites it and `test_agent_card.py` will fail if it does not match the source.
+
+### 6.3 Updating the native prompt catalog
+
+If a prompt workflow reads the new or changed tool:
+
+1. Update `src/prompts/catalog.py` — the workflow's `evidence` and `requirements` tool lists.
+2. Update `docs/PROMPTS.md` with the workflow's purpose and parameters.
+3. Verify with:
+
+   ```bash
+   pytest tests/unit/prompts/test_prompt_catalog.py -q
+   ```
+
+A renamed tool can make a workflow disappear from `prompts/list` because the workflow is advertised only when every required tool is registered.
+
+### 6.4 Updating MCP resources
+
+MCP resources are registered in `src/main.py` with `@mcp.resource("scheme://...")` URI templates. They are advertised through the MCP handshake and included in the A2A agent card.
+
+When you add, remove or rename a resource:
+
+1. Add or update tests under `tests/unit/resources/` for the resource class and the `mcp.resource` registration.
+2. Update `docs/UNIFI_API.md` "Supporting Resources" with the URI template, endpoint mapping, and status.
+3. Regenerate `agent-card.json` so the A2A surface matches the live registry:
+
+   ```bash
+   python scripts/generate_agent_card.py
+   ```
+
+4. If a skill references the resource URI, update the skill and its developer copies.
+5. Run the drift guards and the A2A card tests:
+
+   ```bash
+   pytest tests/unit/test_skill_tool_references.py \
+          tests/unit/test_skill_parameter_references.py \
+          tests/unit/test_agent_docs.py \
+          tests/unit/a2a/test_agent_card.py \
+          tests/unit/a2a/test_agent_card_capabilities.py -q
+   ```
+
+---
+
 ## Quality Checklist
 
 Before submitting:
@@ -607,6 +697,11 @@ Before submitting:
 - [ ] API mode support clearly indicated
 - [ ] CHANGELOG.md updated
 - [ ] README.md updated (if major feature)
+- [ ] Relevant skill updated in `skills/<name>/SKILL.md` and developer-skill copies synced
+- [ ] `agent-card.json` regenerated if the tool surface changed
+- [ ] Native prompt catalog updated if a workflow reads the tool
+- [ ] MCP resource tests added or updated if a resource changed
+- [ ] `docs/UNIFI_API.md` "Supporting Resources" updated if a resource URI changed
 
 ### Integration
 

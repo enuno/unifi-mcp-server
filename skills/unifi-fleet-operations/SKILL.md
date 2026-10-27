@@ -61,6 +61,8 @@ call instead.
 | `fleet_health` | Per-controller health, capabilities and snapshot age |
 | `fleet_sites` | Which sites each controller holds |
 | `fleet_inventory` | Device inventory across the fleet, with firmware and state |
+| `fleet_compare_versions` | Firmware versions per model across controllers, with a `behind` flag |
+| `fleet_compare_sites` | Site short names common or unique across controllers |
 | `fleet_fanout` | Runs one read tool across a bounded set of controllers |
 
 ### `fleet_health` is a snapshot, not a live read

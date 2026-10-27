@@ -83,10 +83,9 @@ class TestPostgresDown:
     async def test_snapshot_tools_fail_without_echoing_credentials(
         self, settings: Settings, dead_engine: Any, registry: StaticRegistry, tool: str
     ) -> None:
-        health, sites, inventory = build_snapshot_tools(
-            registry, SnapshotStore(dead_engine), settings
-        )
-        call = {"health": health, "sites": sites, "inventory": inventory}[tool]
+        tools = build_snapshot_tools(registry, SnapshotStore(dead_engine), settings)
+        by_name = {t.__name__: t for t in tools}
+        call = by_name[f"fleet_{tool}"]
 
         with pytest.raises(Exception) as excinfo:  # noqa: B017 - whatever the driver raises
             await asyncio.wait_for(call(settings=settings), timeout=30)

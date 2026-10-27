@@ -83,8 +83,17 @@ async def tools(settings: Settings, migrated_engine: Any) -> Any:
         ],
     )
     await snapshots.replace_inventory("branch", "s-br", [_device("d-11", "UDM", "4.1.0")])
-    health, sites, inventory = build_snapshot_tools(registry, snapshots, settings)
-    yield {"health": health, "sites": sites, "inventory": inventory, "settings": settings}
+    tools_list = build_snapshot_tools(registry, snapshots, settings)
+    names = [t.__name__ for t in tools_list]
+    yield {
+        "health": tools_list[names.index("fleet_health")],
+        "sites": tools_list[names.index("fleet_sites")],
+        "inventory": tools_list[names.index("fleet_inventory")],
+        "compare_versions": tools_list[names.index("fleet_compare_versions")],
+        "compare_sites": tools_list[names.index("fleet_compare_sites")],
+        "snapshots": snapshots,
+        "settings": settings,
+    }
     await registry.stop()
 
 
@@ -236,3 +245,90 @@ class TestFleetInventory:
     ) -> None:
         with pytest.raises(ValidationError, match=message):
             await tools["inventory"](settings=tools["settings"], **arguments)
+
+
+class TestFleetCompareVersions:
+    async def test_across_controllers(self, tools: dict[str, Any]) -> None:
+        result = await tools["compare_versions"](settings=tools["settings"])
+
+        assert result["controllers_compared"] == ["branch", "cloud", "hq"]
+        assert result["total_devices"] == 5
+        u7pro = result["models"]["U7PRO"]
+        assert u7pro["newest"] == "8.0.10"
+        assert u7pro["controllers"]["hq"]["count"] == 2
+        assert u7pro["controllers"]["hq"]["behind"] is False
+        assert u7pro["controllers"]["hq"]["synced_seconds_ago"] >= 0
+        assert u7pro["controllers"]["hq"]["stale"] is False
+        assert u7pro["controllers"]["branch"]["count"] == 0
+        assert u7pro["controllers"]["branch"]["behind"] is False
+        assert u7pro["data_as_of_seconds_ago"] >= 0
+        assert u7pro["stale"] is False
+
+    async def test_model_filter(self, tools: dict[str, Any]) -> None:
+        result = await tools["compare_versions"](model="UDM", settings=tools["settings"])
+
+        assert sorted(result["models"]) == ["UDM", "UDM-Pro"]
+        udm = result["models"]["UDM"]
+        assert udm["newest"] == "4.1.0"
+        assert udm["controllers"]["branch"]["behind"] is False
+        assert udm["controllers"]["hq"]["behind"] is False
+
+    async def test_behind_flag(self, tools: dict[str, Any]) -> None:
+        await tools["snapshots"].replace_inventory(
+            "branch",
+            "s-br",
+            [
+                _device("d-11", "UDM", "4.1.0"),
+                _device("d-12", "U7PRO", "7.6.0"),
+            ],
+        )
+        result = await tools["compare_versions"](model="U7PRO", settings=tools["settings"])
+
+        u7pro = result["models"]["U7PRO"]
+        assert u7pro["newest"] == "8.0.10"
+        assert u7pro["controllers"]["branch"]["behind"] is True
+        assert u7pro["controllers"]["hq"]["behind"] is False
+
+    async def test_unknown_version_not_behind(self, tools: dict[str, Any]) -> None:
+        result = await tools["compare_versions"](model="USW_24", settings=tools["settings"])
+
+        usw = result["models"]["USW_24"]
+        assert usw["newest"] is None
+        assert usw["controllers"]["hq"]["behind"] is False
+
+    async def test_scope_and_labels(self, tools: dict[str, Any], monkeypatch: Any) -> None:
+        _as(monkeypatch, "viewer", controller_labels={"group": "retail"})
+        result = await tools["compare_versions"](settings=tools["settings"])
+        assert result["controllers_compared"] == ["hq"]
+        assert "hq" in result["models"].get("UDM-Pro", {}).get("controllers", {})
+
+
+class TestFleetCompareSites:
+    async def test_common_and_unique(self, tools: dict[str, Any]) -> None:
+        result = await tools["compare_sites"](
+            controllers=["hq", "branch"], settings=tools["settings"]
+        )
+
+        assert result["controllers_compared"] == ["branch", "hq"]
+        assert result["total_sites"] == 2
+        assert result["common_sites"] == ["default"]
+        assert result["unique_sites"]["hq"] == []
+        assert result["unique_sites"]["branch"] == []
+        assert result["by_controller"]["hq"][0]["short_name"] == "default"
+        assert result["by_controller"]["hq"][0]["synced_seconds_ago"] >= 0
+        assert result["by_controller"]["hq"][0]["stale"] is False
+        assert result["controller_sync_age"]["hq"] >= 0
+        assert result["data_as_of_seconds_ago"] >= 0
+        assert result["stale"] is False
+
+    async def test_named_controllers(self, tools: dict[str, Any]) -> None:
+        result = await tools["compare_sites"](controllers=["hq"], settings=tools["settings"])
+        assert result["controllers_compared"] == ["hq"]
+        assert result["common_sites"] == ["default"]
+        assert result["unique_sites"]["hq"] == []
+
+    async def test_scope(self, tools: dict[str, Any], monkeypatch: Any) -> None:
+        _as(monkeypatch, "viewer", controller_labels={"group": "retail"})
+        result = await tools["compare_sites"](settings=tools["settings"])
+        assert result["controllers_compared"] == ["hq"]
+        assert result["total_sites"] == 1

@@ -309,7 +309,8 @@ Items the audit explicitly leaves alone, recorded here so they are not re-litiga
 - Append-only audit log — done (payload encryption, hash chain, Postgres store, SIEM export and anchors, retention for Postgres and JSONL); design in `docs/FLEET_SCALING_PLAN.md` §3.7, Phases 1, 2b and 5
 - Prometheus metrics endpoint — open (runbook only)
 - A2A agent card and manifest — done
-- Webhook event bus with Redis pub/sub — partial (receiver only)
+- Webhook event bus with Redis pub/sub — done (Phase 5.5: `unifi:webhooks:v1:events`, origin deduplication, background publish off the HTTP acknowledgement path)
+- **Mixed cloud + local-gateway tool exposure — done (Phase 5.6: `UNIFI_MIXED_MODE` registers the cloud and local modules together)**
 - Tool exposure profiles for network, protect, access, talk, drive, and read-only sessions — partial (read-only and protect done)
 - Access API implementation — open
 
@@ -320,6 +321,41 @@ Items the audit explicitly leaves alone, recorded here so they are not re-litiga
 - Metrics and logs are first-class operational outputs
 - Named tool profiles keep per-session context bounded
 - Access domain coverage is documented and implemented
+
+---
+
+### Phase 5.6: Mixed cloud + local-gateway deployments (new)
+
+**Goal:** let one server serve the cloud API and one or more local gateways at the same time, and document how that is configured. Today the capability is half-present and undocumented, so an operator cannot tell from the docs whether it works.
+
+#### What already exists
+
+- **Many controllers of mixed kinds, routed per call.** With `DATABASE_URL`, `PostgresRegistry` holds any number of `ControllerProfile` rows, each with its own `api_type` (`local`, `cloud-ea`, `cloud-v1`), `local_host`, `local_port`, `local_verify_ssl`, `default_site` and labels. `register_controller` adds them, every controller-bound tool takes `controller=<name>`, and `select_controller` sets a session default (`src/fleet/registry.py`, `src/fleet/router.py`, fleet Phase 1–2a).
+- **Per-controller API keys in the database.** Each key is stored in the `credentials` table as a Fernet ciphertext with a `key_fingerprint`, encrypted with `UNIFI_FLEET_CREDENTIAL_KEY`; `register_cloud_account` shares one cloud key across cloud controllers, and `rotate_fleet_credentials` re-encrypts every stored key under a new one (`src/fleet/credentials.py`, `src/fleet/db/models.py`). **No work needed here** — fleet mode already keeps keys in Postgres, not in the environment.
+
+#### The gap
+
+Tool **modules** are selected once, at import, from the single base `UNIFI_API_TYPE` (`src/main.py`):
+
+- base `cloud-ea`/`cloud-v1` registers only `_CLOUD_TOOL_MODULES` (7 modules);
+- base `local` registers `_CLOUD_TOOL_MODULES` + `_LOCAL_TOOL_MODULES` (60 modules).
+
+So a fleet whose base is a cloud type can *route* to a registered local gateway, but roughly 53 local-only modules (firewall zones and policies, MAC tags, switching, QoS, RADIUS, Protect, topology, …) were never registered on the server, and are therefore unreachable on that gateway. The only workaround is to set the base `UNIFI_API_TYPE=local`, which also forces a base `UNIFI_LOCAL_HOST`, misrepresents a cloud-first deployment as local-only, and is documented nowhere.
+
+#### Deliverables
+
+- `UNIFI_MIXED_MODE` (bool, default `false`): register the union of the cloud and local tool modules regardless of the base `UNIFI_API_TYPE`, for a deployment that has both kinds of controller. Profile filtering (`UNIFI_PROFILE`) still applies to the union.
+- Mixed mode does not require a base `UNIFI_LOCAL_HOST`: the local gateways come from the registry, and the base settings stay cloud-shaped.
+- A startup log line naming the mode and the module count, so the exposed surface is visible in the log rather than inferred.
+- An `API.md` section — "Connecting to the cloud API and local gateways together" — setting out the three supported topologies (single controller from the environment; several controllers from Postgres; mixed cloud + local with `UNIFI_MIXED_MODE`), where each controller's API key lives in each, and the two standing limitations (MCP resources always read the default controller; a tool module absent from the registered set cannot be reached on any controller).
+- Settings-table and `.env.example` entries (both are enforced by `tests/unit/config/test_config.py`).
+- Tests: the union is registered in mixed mode with a cloud base; a cloud base without mixed mode still registers only the cloud modules; mixed mode needs no base `local_host`; profile filtering still narrows the union.
+
+#### Exit criteria
+
+- One server reaches cloud-only tools on a cloud controller and local-only tools on a registered local gateway, in the same process, without setting the base type to `local`.
+- The three topologies, and the API-key storage in each, are documented in `API.md`.
+- No change in behaviour when `UNIFI_MIXED_MODE` is unset.
 
 ---
 

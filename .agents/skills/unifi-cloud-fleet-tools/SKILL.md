@@ -117,7 +117,7 @@ Routing happens in the registry wrapper (`_make_tool_wrapper()` in `src/tool_reg
 - Spec snapshots for Mobility, InnerSpace and Carrier Fabric are in `scripts/`. Upstream hosts only the current version, so keep old snapshots when you need a diff.
 - MCP resources still read the default controller, not the routed one.
 - Stateful HTTP behind a load balancer needs sticky routing on `mcp-session-id`.
-- Tool modules are chosen once, from the base `UNIFI_API_TYPE`. A registered controller with a different API type still gets that tool set.
+- Tool modules are chosen once, from the base `UNIFI_API_TYPE`. A registered controller with a different API type still gets that tool set, so on a cloud-typed base a registered local gateway is routable while the local-only modules were never registered. Set `UNIFI_MIXED_MODE=true` to register the cloud and local modules together for a mixed fleet; `UNIFI_PROFILE` still narrows the union, and no base `UNIFI_LOCAL_HOST` is needed. See API.md, "Connecting to the cloud API and local gateways together".
 
 ## Known defects (not fixed)
 

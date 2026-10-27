@@ -776,12 +776,50 @@ if settings.read_only:
     logger.info("Read-only mode enabled (UNIFI_READ_ONLY) - mutating tools will not be registered")
 
 _TOOL_MODULES: list[Any] = []
-if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
-    _base_modules = list(_CLOUD_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
-        _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _base_modules = [m for m in _base_modules if m in _profile_set] or _base_modules
-    _TOOL_MODULES = _base_modules
+
+
+def _apply_profile(modules: list[Any]) -> list[Any]:
+    """Narrow ``modules`` to the active ``UNIFI_PROFILE``, if one is set.
+
+    An unrecognised profile, or one that matches nothing in ``modules``, leaves
+    the list unchanged rather than registering an empty server.
+
+    Args:
+        modules: The candidate tool modules for this API mode
+
+    Returns:
+        The profile's subset of ``modules``, or ``modules`` unchanged
+    """
+    if not _active_profile or _active_profile in ("all", ""):
+        return modules
+    profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
+    return [m for m in modules if m in profile_set] or modules
+
+
+# Which tool modules this process exposes. Normally this follows the single base
+# UNIFI_API_TYPE. UNIFI_MIXED_MODE registers the union instead, for a fleet whose
+# registry holds both cloud controllers and local gateways: without it the
+# local-only modules are absent on a cloud-typed server, so a registered local
+# gateway is routable but most of its tools do not exist (DEVELOPMENT_PLAN.md
+# Phase 5.6).
+_cloud_base = settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA)
+if settings.mixed_mode:
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES))
+    logger.info(
+        f"Mixed API mode (UNIFI_MIXED_MODE, base {settings.api_type.value})"
+        + (f", profile={_active_profile}" if _active_profile else "")
+        + f" - registering {len(_TOOL_MODULES)} tool module(s): cloud and local tools "
+        "are both exposed, and each call is routed to its controller"
+    )
+    for _module in _TOOL_MODULES:
+        # get_site_statistics is excluded only on a cloud-typed base, where its
+        # endpoints 404; in mixed mode a local controller can still serve it, so
+        # the exclusion is dropped and a cloud-routed call surfaces the 404.
+        register_module_tools(
+            mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
+        )
+elif _cloud_base:
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES))
     logger.info(
         f"Cloud API mode ({settings.api_type.value})"
         + (f", profile={_active_profile}" if _active_profile else "")
@@ -805,12 +843,7 @@ if settings.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA):
                 mcp, _module, settings, router=fleet_router, pool=client_pool, read_cache=read_cache
             )
 else:
-    _all_local = list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES)
-    if _active_profile and _active_profile not in ("all", ""):
-        _profile_set = set(_PROFILE_MODULES.get(_active_profile, []))
-        _TOOL_MODULES = [m for m in _all_local if m in _profile_set] or _all_local
-    else:
-        _TOOL_MODULES = _all_local
+    _TOOL_MODULES = _apply_profile(list(_CLOUD_TOOL_MODULES) + list(_LOCAL_TOOL_MODULES))
     logger.info(
         "Local API mode"
         + (f", profile={_active_profile}" if _active_profile else "")
@@ -851,7 +884,10 @@ register_prompts(mcp, settings)
 sites_resource = SitesResource(settings)
 site_manager_res = site_manager_resource.SiteManagerResource(settings)
 
-if settings.api_type == APIType.LOCAL:
+# The local resources read a gateway, so they exist in local mode and in mixed
+# mode (where a local gateway comes from the registry). They always read the
+# default controller, as the controller-selection docs note.
+if settings.api_type == APIType.LOCAL or settings.mixed_mode:
     devices_resource = DevicesResource(settings)
     clients_resource = ClientsResource(settings)
     networks_resource = NetworksResource(settings)
@@ -905,7 +941,7 @@ async def get_sites_resource() -> str:
     return "\n".join([f"Site: {s.name} ({s.id})" for s in sites])
 
 
-if settings.api_type == APIType.LOCAL:
+if settings.api_type == APIType.LOCAL or settings.mixed_mode:
 
     @mcp.resource("sites://{site_id}/devices")
     async def get_devices_resource(site_id: str) -> str:

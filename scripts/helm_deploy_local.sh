@@ -84,6 +84,19 @@ case "$target" in
 esac
 image="${repo}:${tag}"
 
+# Mirrors templates/_helpers.tpl's unifi-mcp.fullname: when the release
+# name already contains the chart name, the fullname IS the release name
+# (no "-unifi-mcp" suffix) -- true for the default release "unifi-mcp".
+case "$release" in
+  *unifi-mcp*) fullname="$release" ;;
+  *) fullname="${release}-unifi-mcp" ;;
+esac
+
+kube_context_args=()
+case "$target" in
+  kind) kube_context_args=(--kube-context "kind-${kind_cluster}") ;;
+esac
+
 echo "--- building ${image} (EXTRAS=${extras:-<none>})"
 docker build ${extras:+--build-arg "EXTRAS=$extras"} -t "$image" "$here/.."
 
@@ -106,19 +119,22 @@ case "$target" in
 esac
 
 helm_values_args=(-f "$local_values")
-for f in "${values_files[@]:-}"; do
-  [ -z "$f" ] || helm_values_args+=(-f "$f")
-done
+if [ "${#values_files[@]}" -gt 0 ]; then
+  for f in "${values_files[@]}"; do
+    helm_values_args+=(-f "$f")
+  done
+fi
 
 echo "--- helm upgrade --install ${release} -n ${namespace} (image ${image}, pullPolicy ${pull_policy})"
 helm upgrade --install "$release" "$chart" --namespace "$namespace" --create-namespace \
+  "${kube_context_args[@]}" \
   "${helm_values_args[@]}" \
   --set "image.repository=${repo}" --set "image.tag=${tag}" --set "image.pullPolicy=${pull_policy}" \
-  "${extra_helm_args[@]:-}"
+  "${extra_helm_args[@]}"
 
-kubectl -n "$namespace" rollout status "deployment/${release}-unifi-mcp" --timeout=300s
+kubectl "${kube_context_args[@]}" -n "$namespace" rollout status "deployment/${fullname}" --timeout=300s
 
-deployed_image="$(kubectl -n "$namespace" get "deployment/${release}-unifi-mcp" \
+deployed_image="$(kubectl "${kube_context_args[@]}" -n "$namespace" get "deployment/${fullname}" \
   -o jsonpath='{.spec.template.spec.containers[0].image}')"
 echo "--- deployed image: ${deployed_image}"
 [ "$deployed_image" = "$image" ] || {

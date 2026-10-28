@@ -80,6 +80,22 @@
 - name: Build the image from the local working tree (dev-local)
   when: unifi_mcp_image | length == 0 and unifi_mcp_local_checkout | bool
   block:
+    - name: Require a real checkout path before touching anything
+      ansible.builtin.assert:
+        that:
+          - unifi_mcp_checkout_path | length > 0
+        fail_msg: >-
+          unifi_mcp_checkout_path is required with unifi_mcp_local_checkout
+          (e.g. -e "unifi_mcp_checkout_path=$(git rev-parse --show-toplevel)"):
+          without it, resolve_dev_tag.sh and the sync below would default to
+          this control machine's own checkout and could try to synchronize
+          an unrelated path into the build directory.
+        quiet: true
+
+    - name: Install rsync (synchronize needs the executable, not just the collection)
+      ansible.builtin.package:
+        name: rsync
+
     - name: Resolve the dev tag from the local working tree
       ansible.builtin.command: "{{ role_path }}/../../../../scripts/resolve_dev_tag.sh {{ unifi_mcp_checkout_path }}"
       delegate_to: localhost
@@ -91,6 +107,7 @@
       ansible.posix.synchronize:
         src: "{{ unifi_mcp_checkout_path }}/"
         dest: "{{ unifi_mcp_root }}/src"
+        delete: true
         rsync_opts:
           - "--exclude=.git"
           - "--exclude=.venv"

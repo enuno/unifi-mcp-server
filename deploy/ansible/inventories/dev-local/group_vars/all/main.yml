@@ -1,0 +1,27 @@
+# Settings for the dev-local inventory. Secrets are in vault.yml next to
+# this file: cp vault.yml.example vault.yml && ansible-vault encrypt vault.yml
+# (or skip the vault file entirely for a throwaway dev box and pass -e).
+
+unifi_mcp_local_checkout: true
+# Required at runtime, not defaulted here: the repo root this inventory
+# should deploy. Pass it explicitly so there is never any ambiguity about
+# which checkout produced the running image:
+#   ansible-playbook -i deploy/ansible/inventories/dev-local site.yml \
+#     -e "unifi_mcp_checkout_path=$(git rev-parse --show-toplevel)"
+unifi_mcp_checkout_path: ""
+
+# Irrelevant in local-checkout mode (no git clone happens) but the role
+# still reads unifi_mcp_api_type etc.; leave them as a real dev target.
+unifi_mcp_api_type: local
+unifi_mcp_local_host: 192.168.1.1
+unifi_mcp_local_port: 443
+unifi_mcp_local_verify_ssl: true
+
+unifi_mcp_bind_address: 127.0.0.1
+unifi_mcp_port: 3000
+unifi_mcp_replicas: 1
+unifi_mcp_workers: 1
+
+# Keep the audit trail small and local; this is a dev box.
+unifi_mcp_audit_retention_days: 7
+unifi_mcp_audit_log_rotate_mb: 50

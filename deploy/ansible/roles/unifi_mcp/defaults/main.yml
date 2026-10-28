@@ -3,6 +3,17 @@ unifi_mcp_version: main
 # A prebuilt image with the fleet extras; empty builds one from source.
 unifi_mcp_image: ""
 
+# true: skip unifi_mcp_repo/unifi_mcp_version entirely and rsync the live
+# working tree at unifi_mcp_checkout_path (uncommitted changes included)
+# into unifi_mcp_root/src, building from that. The image is tagged
+# local-<sha>[-dirty] via scripts/resolve_dev_tag.sh, never a version
+# string, so a dev build can never be mistaken for a real release. Only
+# meant for the dev-local inventory (localhost) -- leave false everywhere
+# else.
+unifi_mcp_local_checkout: false
+# Only read when unifi_mcp_local_checkout is true: the repo root to sync.
+unifi_mcp_checkout_path: ""
+
 unifi_mcp_api_type: local
 unifi_mcp_local_host: ""
 unifi_mcp_local_port: 443

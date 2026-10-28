@@ -1,0 +1,30 @@
+# Values profile for a local-build deployment (scripts/helm_deploy_local.sh).
+#
+# Not a standalone install target: the script always overrides
+# image.repository/image.tag/image.pullPolicy with the values it resolves
+# from the current working tree (scripts/resolve_dev_tag.sh), after this
+# file is applied. The placeholders below exist only so `helm lint` and
+# `helm template` (CI's "Lint and render the chart" step) have something
+# valid to render without the script.
+#
+# Layer your own secrets/config on top with --values, same as any other
+# helm install: this file carries no credential and no controller address.
+image:
+  repository: unifi-mcp-server
+  tag: "local-build-placeholder"
+  pullPolicy: Never
+
+existingSecret: unifi-mcp  # pragma: allowlist secret (a Secret's name)
+
+controller:
+  apiType: local
+  localHost: 192.0.2.1
+
+server:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 384Mi

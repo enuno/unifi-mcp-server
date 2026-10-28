@@ -2,3 +2,6 @@
 collections:
   - name: community.docker
     version: ">=3.10.0,<4.0.0"
+  # ansible.posix.synchronize: the dev-local inventory's local-checkout mode.
+  - name: ansible.posix
+    version: ">=1.6.0,<2.0.0"

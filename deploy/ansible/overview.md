@@ -11,6 +11,7 @@ least-privilege database role and the audit retention job that
 | MCP server only | `inventories/single`, with the `redis` and `postgres` groups deleted | The server on one host, its audit log in a file, the controller from `UNIFI_*` settings |
 | Single-server fleet | `inventories/single` | The server, a worker, Redis and Postgres on one host |
 | Cluster | `inventories/cluster` | Replicas and workers on each `mcp` host, Redis and Postgres on a data host, nginx on `lb` |
+| Local dev | `inventories/dev-local` | Same as single-server fleet, but built from your working tree (including uncommitted changes) instead of a git ref — see "Local dev deployment" below |
 
 Every layout serves Streamable HTTP with a bearer token (`MCP_AUTH_TOKEN`).
 To have an AI agent run all of this for you, start from a prompt in
@@ -126,3 +127,45 @@ following SECURITY.md.
 - The vault holds every secret. Rotate `vault_mcp_auth_token` by changing it
   and rerunning. Rotate the Fernet keys as SECURITY.md describes, not by
   replacing them.
+
+## Local dev deployment
+
+`inventories/dev-local` is a third mode, alongside "pull a prebuilt image"
+and "git clone `unifi_mcp_repo`@`unifi_mcp_version`": set
+`unifi_mcp_local_checkout: true` and the role skips git entirely, rsyncs
+the live working tree at `unifi_mcp_checkout_path` (uncommitted changes
+included) onto the target host, and builds from that. The image is tagged
+`local-<short-sha>[-dirty]` by `scripts/resolve_dev_tag.sh` — the same
+script `scripts/helm_deploy_local.sh` uses for the Helm chart's equivalent
+mode, so both deployment methods agree on one tag format. `-dirty` is a
+deliberate, unmissable signal that the running image does not correspond
+to any committed state.
+
+```bash
+cd deploy/ansible
+cp inventories/dev-local/group_vars/all/vault.yml.example \
+   inventories/dev-local/group_vars/all/vault.yml
+# fill it in; a throwaway dev box can use dummy values — this inventory
+# is not meant to hold anything that outlives the box.
+ansible-playbook -i inventories/dev-local/hosts.yml site.yml \
+  -e "unifi_mcp_checkout_path=$(git rev-parse --show-toplevel)" \
+  --ask-vault-pass
+```
+
+`unifi_mcp_checkout_path` is required and never defaulted — pass it
+explicitly (or set it in `group_vars/all/main.yml` if your checkout always
+lives at the same absolute path) so there is never any ambiguity about
+which tree produced the running image.
+
+The build always runs (`force_source: true`, unlike the git-ref mode's
+"only rebuild if the checkout changed") — a dev loop cares about picking
+up the latest edit, and Docker's own layer cache already makes a
+same-content rebuild cheap. Re-running the playbook after any edit,
+committed or not, is the whole point: do it instead of expecting the
+container to notice a change under a tag it already has.
+
+This mode is `ansible_connection: local` by default (deploy to the
+machine you are running Ansible from); it is not exercised by CI or
+molecule, since its correctness is "did it deploy *my* tree right now,"
+not "is it reproducible" — verify it manually, the same way you would any
+other local dev loop.

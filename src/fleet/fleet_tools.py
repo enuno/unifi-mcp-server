@@ -41,6 +41,24 @@ MAX_INVENTORY_LIMIT = 1000
 #: A health check older than this many health intervals is reported as stale.
 STALE_INTERVALS = 3
 
+#: Device model substring that flags a site as USG-gated (DEVELOPMENT_PLAN.md
+#: §4 Phase 8, Fix 6 / N6). The last USG firmware release is 10.6; UniFi OS 6
+#: / Network 11 requires a UniFi OS console or gateway, so a controller with
+#: at least one USG on its device inventory cannot run Network 11 as-is.
+#: Covers every USG variant (USG, USG-PRO-4, USG-3P, ...); no other UniFi
+#: model name contains this substring.
+USG_MODEL_SUBSTRING = "USG"
+
+#: Human-readable reason attached to a USG-gated controller's platform_compat
+#: field, matching the wording in DEVELOPMENT_PLAN.md §2.4 and §4 Phase 8.
+USG_GATED_REASON = (
+    "USG-gated: at least one USG gateway was seen in this controller's device "
+    "inventory. UniFi Network 11 / UniFi OS 6 removed USG support (10.6 is the "
+    "last USG release) — this controller cannot run Network 11 until the "
+    "gateway is replaced. Not a confirmed break for every call; it means the "
+    "site has no Network 11 target at all."
+)
+
 #: Longest error message kept per controller in fleet_fanout results.
 _ERROR_LENGTH = 500
 
@@ -101,10 +119,12 @@ def build_snapshot_tools(
     """Return the snapshot-backed fleet tools bound to ``registry`` and ``snapshots``."""
     stale_after = STALE_INTERVALS * config.fleet_worker_health_seconds
 
-    def _status_view(status: FleetStatus, now: datetime) -> dict[str, Any]:
+    def _status_view(
+        status: FleetStatus, now: datetime, usg_gated: frozenset[str]
+    ) -> dict[str, Any]:
         health = status.health
         age = _age(health.checked_at, now)
-        return {
+        view = {
             "name": status.name,
             "api_type": status.api_type,
             "labels": status.labels,
@@ -115,6 +135,12 @@ def build_snapshot_tools(
             "last_seen_seconds_ago": _age(health.last_seen_at, now),
             "capabilities": health.capabilities,
         }
+        if status.name in usg_gated:
+            view["platform_compat"] = {
+                "network_11_capable": False,
+                "reason": USG_GATED_REASON,
+            }
+        return view
 
     @read_tool
     async def fleet_health(
@@ -128,20 +154,35 @@ def build_snapshot_tools(
         entry is ``stale`` when its last check is more than three health
         intervals old or the worker has never checked it (``unknown``).
 
+        A controller with a USG gateway anywhere in its synced device
+        inventory carries ``platform_compat.network_11_capable: false`` — USG
+        support ends at Network 10.6, so the site has no Network 11 target at
+        all (DEVELOPMENT_PLAN.md §4 Phase 8, Fix 6). Cloud controllers are
+        never flagged this way: the worker does not inventory them. There is
+        no API signal that distinguishes a classic, self-hosted Network
+        Application Server from a UniFi OS console, so that platform break
+        cannot be auto-detected here; tag those controllers with a label
+        (e.g. ``deployment=classic-server``) and use the ``labels`` filter to
+        track them instead.
+
         Args:
             health: Only controllers in this state: ok, degraded, down or unknown
             labels: Only controllers carrying all of these labels
             settings: Injected by the server
 
         Returns:
-            Per-controller health, capabilities (Network version) and ages in
-            seconds, plus a count per state
+            Per-controller health, capabilities (Network version), platform
+            compatibility (when USG-gated) and ages in seconds, plus a count
+            per state
         """
         if health is not None and health not in ("ok", "degraded", "down", "unknown"):
             raise ValidationError("health must be one of: ok, degraded, down, unknown")
         names = await _in_scope(registry, _caller(settings or config), None, labels)
         now = datetime.now(UTC)
-        entries = [_status_view(s, now) for s in await snapshots.fleet_status(names)]
+        usg_gated = frozenset(
+            d.controller for d in await snapshots.fleet_devices(names, model=USG_MODEL_SUBSTRING)
+        )
+        entries = [_status_view(s, now, usg_gated) for s in await snapshots.fleet_status(names)]
         counts: dict[str, int] = {}
         for entry in entries:
             counts[entry["health"]] = counts.get(entry["health"], 0) + 1

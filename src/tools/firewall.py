@@ -1,4 +1,17 @@
-"""Firewall rules management MCP tools."""
+"""Legacy (ZBF-era) firewall rules management MCP tools.
+
+**Prefer `src/tools/firewall_policies.py` for new work on a current
+controller.** UniFi Network pushes this legacy `rest/firewallrule` /
+`rest/firewallgroup` surface behind Zone-Based Firewall (ZBF): on an
+already-migrated site the legacy rule tables are largely cosmetic, and the
+v2 firewall-policies endpoints these tools fall back to for reads
+(`firewall_policies.py`) are the real, current write path. Whether legacy
+writes still take effect after a Network 11 migration specifically is one
+of the "needs live controller test" items (DEVELOPMENT_PLAN.md §4 Phase 8,
+Fix 1 / N1) — not yet confirmed either way on 11.0.83+, so no behavioural
+change has shipped here; this is a steering note for the choice between the
+two tool modules, not a deprecation.
+"""
 
 from typing import Any, cast
 
@@ -24,6 +37,10 @@ async def list_firewall_rules(
     offset: int | None = None,
 ) -> list[dict[str, Any]]:
     """List all firewall rules in a site (read-only).
+
+    Legacy ZBF-era rule table. On a zone-based-firewall site, prefer
+    `list_firewall_policies` (`firewall_policies.py`) for the current rule
+    set — this call already falls back to it when the legacy list is empty.
 
     Args:
         site_id: Site identifier
@@ -106,6 +123,11 @@ async def create_firewall_rule(
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a new firewall rule.
+
+    Legacy ZBF-era rule write. On a site migrated to zone-based firewall,
+    prefer `create_firewall_policy` (`firewall_policies.py`) — whether this
+    legacy write still takes effect after migration is unconfirmed and
+    tracked as DEVELOPMENT_PLAN.md §4 Phase 8, Fix 1 / N1.
 
     Args:
         site_id: Site identifier
@@ -268,6 +290,11 @@ async def update_firewall_rule(
 ) -> dict[str, Any]:
     """Update an existing firewall rule.
 
+    Legacy ZBF-era rule write. On a site migrated to zone-based firewall,
+    prefer `update_firewall_policy` (`firewall_policies.py`) — whether this
+    legacy write still takes effect after migration is unconfirmed and
+    tracked as DEVELOPMENT_PLAN.md §4 Phase 8, Fix 1 / N1.
+
     Args:
         site_id: Site identifier
         rule_id: Firewall rule ID
@@ -412,6 +439,11 @@ async def delete_firewall_rule(
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Delete a firewall rule.
+
+    Legacy ZBF-era rule write. On a site migrated to zone-based firewall,
+    prefer `delete_firewall_policy` (`firewall_policies.py`) — whether this
+    legacy write still takes effect after migration is unconfirmed and
+    tracked as DEVELOPMENT_PLAN.md §4 Phase 8, Fix 1 / N1.
 
     Args:
         site_id: Site identifier

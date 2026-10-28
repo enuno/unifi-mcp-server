@@ -14,7 +14,7 @@ from sqlalchemy import text  # noqa: E402
 
 from src.config.config import APIType, Settings  # noqa: E402
 from src.fleet.db.snapshots import DeviceRecord, SiteRecord, SnapshotStore  # noqa: E402
-from src.fleet.fleet_tools import build_snapshot_tools, version_key  # noqa: E402
+from src.fleet.fleet_tools import USG_GATED_REASON, build_snapshot_tools, version_key  # noqa: E402
 from src.fleet.postgres_registry import PostgresRegistry  # noqa: E402
 from src.utils.exceptions import ValidationError  # noqa: E402
 
@@ -161,6 +161,32 @@ class TestFleetHealth:
         _as(monkeypatch, "viewer", controller_labels={"group": "retail"})
         result = await tools["health"](settings=tools["settings"])
         assert [c["name"] for c in result["controllers"]] == ["hq"]
+
+    async def test_no_platform_compat_without_a_usg(self, tools: dict[str, Any]) -> None:
+        result = await tools["health"](settings=tools["settings"])
+        by_name = {c["name"]: c for c in result["controllers"]}
+        assert "platform_compat" not in by_name["hq"]
+        assert "platform_compat" not in by_name["branch"]
+        assert "platform_compat" not in by_name["cloud"]
+
+    async def test_platform_compat_flags_a_usg_gated_controller(
+        self, tools: dict[str, Any]
+    ) -> None:
+        await tools["snapshots"].replace_inventory(
+            "branch",
+            "s-br",
+            [_device("d-11", "UDM", "4.1.0"), _device("d-12", "USG-PRO-4", "4.4.56")],
+        )
+
+        result = await tools["health"](settings=tools["settings"])
+
+        by_name = {c["name"]: c for c in result["controllers"]}
+        assert by_name["branch"]["platform_compat"] == {
+            "network_11_capable": False,
+            "reason": USG_GATED_REASON,
+        }
+        assert "platform_compat" not in by_name["hq"]
+        assert "platform_compat" not in by_name["cloud"]
 
 
 class TestFleetSites:

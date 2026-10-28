@@ -67,6 +67,8 @@ The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.u
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 
+**UniFi Network 11 / UniFi OS 6:** compatible per released documentation, with four items pending live-controller verification — not yet a claim of full support. USG gateways and the classic, self-hosted Network Application Server are removed platform targets; `fleet_health` automatically flags any registered controller with a USG in its device inventory, but there is no API signal to auto-detect a classic Network Application Server, so label that controller instead (e.g. `deployment=classic-server`) and filter on it. See [docs/NETWORK_11_COMPATIBILITY.md](docs/NETWORK_11_COMPATIBILITY.md) for the full compatibility matrix.
+
 ## Quick start
 
 ### 1. Get an API key

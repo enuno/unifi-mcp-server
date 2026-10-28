@@ -6,8 +6,8 @@ This report tracks the remaining work implied by the current evolution plan. It 
 
 The current server has native Network, Protect (v6 and v7.3.68), Mobility, InnerSpace and Carrier Fabric coverage, RBAC, audit logging, Prometheus metrics, a webhook event bus and A2A discovery. The remaining material gap is:
 
-- Access API support — **blocked**: no official spec published as of 2026-09-26
-- API-spec alignment: keep docs and pins current against Network v10.6.106 / Protect v7.3.68 with the repeatable audit workflow, and track the Network 11 / UniFi OS 6 compatibility work (DEVELOPMENT_PLAN.md Phase 8)
+- Access API support — **blocked**: no official spec published as of 2026-10-27
+- API-spec alignment: keep docs and pins current against Network v11.0.97 / Protect v7.3.70 with the repeatable audit workflow (re-run quarterly), and track the Network 11 / UniFi OS 6 compatibility work (DEVELOPMENT_PLAN.md Phase 8 — USG-gating detection and the compatibility doc landed 2026-10-27; four live-controller items remain)
 
 ## Operator handling
 
@@ -52,7 +52,7 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 | ID | Gap | Priority | Phase |
 |---|---|---:|
 | G1 | Protect API | Done | 3 (v6) / 5a (v7.3.68, 39 ops) |
-| G2 | Access API | Highest | 5+ — blocked: no official spec published as of 2026-09-26 |
+| G2 | Access API | Highest | 5+ — blocked: no official spec published as of 2026-10-27 |
 | G3 | Multi-controller orchestration | Done | 5 (fleet Phases 0–5) |
 | G4 | Protect v7 expansion | Done | 5a |
 | G5 | Mobility API | Done | 6 |
@@ -63,7 +63,7 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 
 | ID | Gap | Priority | Phase |
 |---|---|---:|
-| G8 | Dry-run / change-safe mode | Partial | 5 |
+| G8 | Dry-run / change-safe mode | Done | 5 |
 | G9 | Tool-level RBAC | Done (static and fleet-issued tokens) | 5 |
 | G10 | Append-only audit log | Done | 5 |
 
@@ -101,7 +101,7 @@ Turn the gap list into a working queue that can be triaged, verified, and closed
 
 - Access endpoint mapping and model coverage — blocked until Ubiquiti publishes a spec
 - Remaining tool exposure profiles: access, talk, drive — all three blocked; no published spec exists for any of them as of 2026-10-27 (`developer.ui.com/access|talk|drive/` all 404)
-- UniFi Network 11 / UniFi OS 6 compatibility verification on a live controller (DEVELOPMENT_PLAN.md Phase 8; four items cannot be settled from documentation alone)
+- UniFi Network 11 / UniFi OS 6 compatibility verification on a live controller (DEVELOPMENT_PLAN.md Phase 8; four items cannot be settled from documentation alone). The hardware-independent half landed 2026-10-27: `docs/NETWORK_11_COMPATIBILITY.md`, automatic USG-gating detection in `fleet_health`, and doc-only steering toward the v2 firewall-policy tools in both tool docstrings and the README (N1). Still open from that same batch: the statistics-reset caveat in the actual stats tool *output* (N3 — docs-only half done), and N1's deprecation note (gated on live verification).
 - Next spec-drift re-audit due ~2027-01 (quarterly cadence)
 
 ## Success criteria

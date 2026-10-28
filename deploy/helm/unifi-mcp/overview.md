@@ -128,6 +128,42 @@ Redis and Postgres extras that the release workflow publishes for
 build your own, run `docker build --build-arg EXTRAS=fleet .` and set
 `image.repository` and `image.tag`.
 
+## Deploying from a local checkout
+
+`scripts/helm_deploy_local.sh` automates the "build your own" step above
+for a real (not throwaway) deployment of whatever is checked out right
+now, including uncommitted changes (`make helm-deploy-local` wraps it with
+sane defaults):
+
+```bash
+scripts/helm_deploy_local.sh --namespace unifi-mcp --release unifi-mcp \
+  --extras fleet --values my-secrets-values.yaml \
+  -- --set controller.localHost=192.168.1.1
+```
+
+It builds the image, tags it `local-<short-sha>[-dirty]`
+(`scripts/resolve_dev_tag.sh` — shared with the Ansible local-checkout
+mode, see `deploy/ansible/overview.md`), gets it into the target cluster's
+runtime, and runs `helm upgrade --install` with
+`deploy/helm/unifi-mcp/ci/local-build-values.yaml` plus any `--values`
+file you pass. `--target` picks how the image reaches the cluster:
+
+- `k3s` (default) — `k3s ctr images import` (needs root for the
+  containerd socket; the script sudos explicitly).
+- `kind` — `kind load docker-image`, for dev against a kind cluster
+  instead of a real one.
+- `push --registry <repo>` — `docker push` for a remote/multi-node
+  cluster. Refuses to push to `ghcr.io/enuno/unifi-mcp-server` (the
+  release workflow's own path) without
+  `--i-know-this-overwrites-releases`.
+
+A `-dirty` tag means uncommitted changes are running — check
+`helm get values` or `kubectl describe pod` before treating a deployment
+as reproducible. The tag only changes with the tree: re-running the
+script after a new commit is what picks the change up, since Kubernetes
+does not notice an in-place image change under a reused tag with
+`pullPolicy: Never`/`IfNotPresent`.
+
 ## Tests
 
 CI lints and renders the chart with each file in `ci/`, validates the

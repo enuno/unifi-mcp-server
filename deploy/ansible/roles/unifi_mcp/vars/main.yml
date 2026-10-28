@@ -39,4 +39,5 @@ unifi_mcp_server_env: >-
 
 unifi_mcp_image_ref: >-
   {{ unifi_mcp_image if unifi_mcp_image
-     else 'unifi-mcp-server:' ~ (unifi_mcp_version | regex_replace('[^A-Za-z0-9_.-]', '-')) ~ '-fleet' }}
+     else ('unifi-mcp-server:' ~ unifi_mcp_dev_tag.stdout if unifi_mcp_local_checkout | bool
+           else 'unifi-mcp-server:' ~ (unifi_mcp_version | regex_replace('[^A-Za-z0-9_.-]', '-')) ~ '-fleet') }}

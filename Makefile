@@ -96,6 +96,15 @@ inspect: ## Open the server in the MCP Inspector (needs Node.js)
 docker-build: ## Build the Docker image (IMAGE=unifi-mcp-server TAG=dev by default)
 	docker build -t $(IMAGE):$(TAG) .
 
+.PHONY: helm-deploy-local
+helm-deploy-local: ## Build this checkout and deploy it via Helm (NS=unifi-mcp RELEASE=unifi-mcp; ARGS for --target kind/push etc.)
+	scripts/helm_deploy_local.sh --namespace $(or $(NS),unifi-mcp) --release $(or $(RELEASE),unifi-mcp) --extras fleet $(ARGS)
+
+.PHONY: ansible-dev-deploy
+ansible-dev-deploy: ## Build this checkout and deploy it with Ansible's dev-local inventory
+	cd deploy/ansible && ansible-playbook -i inventories/dev-local/hosts.yml site.yml \
+		-e "unifi_mcp_checkout_path=$$(git rev-parse --show-toplevel)" $(ARGS)
+
 .PHONY: compose-up
 compose-up: ## Start the docker-compose stack in the background
 	docker compose up -d

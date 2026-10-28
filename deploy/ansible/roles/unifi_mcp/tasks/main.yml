@@ -48,7 +48,7 @@
   when: unifi_mcp_image | length > 0
 
 - name: Build the image from source
-  when: unifi_mcp_image | length == 0
+  when: unifi_mcp_image | length == 0 and not unifi_mcp_local_checkout | bool
   block:
     - name: Install git
       ansible.builtin.package:
@@ -68,6 +68,40 @@
         name: "{{ unifi_mcp_image_ref }}"
         source: build
         force_source: "{{ unifi_mcp_checkout.changed }}"
+        build:
+          path: "{{ unifi_mcp_root }}/src"
+          args:
+            EXTRAS: fleet
+
+# dev-local inventory only: builds whatever is actually checked out right
+# now, including uncommitted changes, instead of a git ref. Always
+# rebuilds -- a dev loop cares about picking up the latest edit, and
+# Docker's own layer cache already makes a same-content rebuild cheap.
+- name: Build the image from the local working tree (dev-local)
+  when: unifi_mcp_image | length == 0 and unifi_mcp_local_checkout | bool
+  block:
+    - name: Resolve the dev tag from the local working tree
+      ansible.builtin.command: "{{ role_path }}/../../../../scripts/resolve_dev_tag.sh {{ unifi_mcp_checkout_path }}"
+      delegate_to: localhost
+      become: false
+      register: unifi_mcp_dev_tag
+      changed_when: false
+
+    - name: Copy the working tree to the target host (uncommitted changes included)
+      ansible.posix.synchronize:
+        src: "{{ unifi_mcp_checkout_path }}/"
+        dest: "{{ unifi_mcp_root }}/src"
+        rsync_opts:
+          - "--exclude=.git"
+          - "--exclude=.venv"
+          - "--exclude=__pycache__"
+          - "--exclude=node_modules"
+
+    - name: Build the dev image
+      community.docker.docker_image:
+        name: "{{ unifi_mcp_image_ref }}"
+        source: build
+        force_source: true
         build:
           path: "{{ unifi_mcp_root }}/src"
           args:

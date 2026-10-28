@@ -58,7 +58,7 @@ call instead.
 |---|---|
 | `list_controllers` | Which controllers the registry holds, and their labels |
 | `get_active_controller` | Which controller a call without `controller` would reach |
-| `fleet_health` | Per-controller health, capabilities and snapshot age |
+| `fleet_health` | Per-controller health, capabilities, Network 11 USG-gating signal, and snapshot age |
 | `fleet_sites` | Which sites each controller holds |
 | `fleet_inventory` | Device inventory across the fleet, with firmware and state |
 | `fleet_compare_versions` | Firmware versions per model across controllers, with a `behind` flag |
@@ -73,6 +73,24 @@ controller. That makes it cheap and safe to call across the whole fleet.
 A **stale** snapshot means the evidence is missing, not that the controller
 is healthy. The tool reports the snapshot's age; read it before you
 conclude anything.
+
+### Reading the Network 11 / UniFi OS 6 compatibility signal
+
+A controller carries `platform_compat.network_11_capable: false` when a USG
+gateway was seen anywhere in its synced device inventory — USG support ends
+at Network 10.6, so that site has no Network 11 target at all. Treat the
+**absence** of `platform_compat` as "no USG-gating signal found", never as
+an affirmative "this controller can run Network 11": a cloud controller
+(never inventoried), a local controller the worker has not yet synced, and
+a genuinely USG-free site all look identical — no `platform_compat` field.
+
+There is no automatic signal for the other platform break, a classic,
+self-hosted Network Application Server: the Integration API's `/v1/info`
+only returns `applicationVersion`, with no host-type field. If you know a
+controller is on a classic server, say so from other evidence (an operator
+statement, a label someone already set) — do not infer it from
+`fleet_health`, and do not guess at a label convention the fleet does not
+already use. See `docs/NETWORK_11_COMPATIBILITY.md` for the full matrix.
 
 ### `fleet_fanout` contacts controllers
 

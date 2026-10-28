@@ -4599,7 +4599,7 @@
       }
     },
     {
-      "description": "Create a new firewall rule.",
+      "description": "Create a new firewall rule.\n\nLegacy ZBF-era rule write. On a site migrated to zone-based firewall,\nprefer `create_firewall_policy` (`firewall_policies.py`) \u2014 whether this\nlegacy write still takes effect after migration is unconfirmed and\ntracked as DEVELOPMENT_PLAN.md \u00a74 Phase 8, Fix 1 / N1.",
       "examples": [
         {
           "arguments": {
@@ -6993,7 +6993,7 @@
       }
     },
     {
-      "description": "Delete a firewall rule.",
+      "description": "Delete a firewall rule.\n\nLegacy ZBF-era rule write. On a site migrated to zone-based firewall,\nprefer `delete_firewall_policy` (`firewall_policies.py`) \u2014 whether this\nlegacy write still takes effect after migration is unconfirmed and\ntracked as DEVELOPMENT_PLAN.md \u00a74 Phase 8, Fix 1 / N1.",
       "examples": [
         {
           "arguments": {
@@ -15403,7 +15403,7 @@
       }
     },
     {
-      "description": "List all firewall rules in a site (read-only).",
+      "description": "List all firewall rules in a site (read-only).\n\nLegacy ZBF-era rule table. On a zone-based-firewall site, prefer\n`list_firewall_policies` (`firewall_policies.py`) for the current rule\nset \u2014 this call already falls back to it when the legacy list is empty.",
       "examples": [
         {
           "arguments": {
@@ -23636,7 +23636,7 @@
       }
     },
     {
-      "description": "Update an existing firewall rule.",
+      "description": "Update an existing firewall rule.\n\nLegacy ZBF-era rule write. On a site migrated to zone-based firewall,\nprefer `update_firewall_policy` (`firewall_policies.py`) \u2014 whether this\nlegacy write still takes effect after migration is unconfirmed and\ntracked as DEVELOPMENT_PLAN.md \u00a74 Phase 8, Fix 1 / N1.",
       "examples": [
         {
           "arguments": {

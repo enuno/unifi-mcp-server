@@ -723,6 +723,27 @@ Available when `DATABASE_URL` is set. All six are `read` tier, from the module `
 
 Each enabled controller's last health check: `ok`, `degraded` (failing), `down` (`UNIFI_FLEET_WORKER_DOWN_AFTER` failures in a row) or `unknown` (never checked), the failure detail, `capabilities` (`network_version` on local controllers), and ages. An entry is `stale` when its last check is more than three health intervals old. Also returns a count per state.
 
+**Network 11 / UniFi OS 6 platform compatibility.** A controller with a USG gateway anywhere in its synced device inventory carries a `platform_compat` field: `{"network_11_capable": false, "reason": "..."}`. USG support ends at Network 10.6, so that site has no Network 11 target at all (DEVELOPMENT_PLAN.md §4 Phase 8, Fix 6). `platform_compat` is **absent** — not `null`, not `true` — on every other controller, including cloud controllers (the worker never inventories them) and any local controller the worker has not yet synced; absence means "no USG-gating signal found", not an affirmative "compatible" result. There is no corresponding field for the other platform break (a classic, self-hosted Network Application Server): the Integration API's `/v1/info` has no host-type field, so it cannot be auto-detected — label that controller instead (e.g. `deployment=classic-server`) and filter `fleet_health`/`fleet_sites` on the `labels` parameter. See `docs/NETWORK_11_COMPATIBILITY.md` for the full compatibility matrix.
+
+```json
+{
+  "controllers": [
+    {
+      "name": "branch-office",
+      "api_type": "local",
+      "health": "ok",
+      "capabilities": {"network_version": "10.6.21"},
+      "platform_compat": {
+        "network_11_capable": false,
+        "reason": "USG-gated: at least one USG gateway was seen in this controller's device inventory. ..."
+      }
+    }
+  ],
+  "counts": {"ok": 1},
+  "total": 1
+}
+```
+
 **Parameters:** `health` (`ok`, `degraded`, `down` or `unknown`), `labels` (controllers carrying all of these)
 
 #### `fleet_sites`

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-29
+
 ### Added
 
 - **Statistics-reset caveat in the stats tool output (Phase 8, N3 tool half).** `get_historical_stats`, `get_speed_test_history`, `get_dpi_statistics`, `list_top_applications` and `get_client_dpi` now carry a `statistics_note` field whenever the history they return is empty: after a UniFi Network 11 upgrade the statistics engine resets, so an empty series is the expected consequence of the engine change, not evidence of an outage or a broken tool. The field is absent on non-empty responses, and the shared text lives in `src/utils/helpers.py` (`STATISTICS_RESET_NOTE`).

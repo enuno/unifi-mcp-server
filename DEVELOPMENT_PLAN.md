@@ -560,7 +560,8 @@ Step 5 is the only route to the Live Flows terminate endpoint: Ubiquiti document
 | v0.5.0 | Phases 3 + 4 + 5a + 6 | **Tagged 2026-09-28, not published** (see the note below): 343 tools / 60 modules, Network v10.6.106 + Protect v7.3.68 + Mobility/InnerSpace/Carrier Fabric, transport auth hardening, spec-audit baseline. Folds the never-tagged `[0.4.0]` changelog entries |
 | v0.2.5 | Earlier release | Tag `v0.2.5`; `v0.2.6` exists only on `batch2-review*` branches, not `main` |
 | v1.0.0 | Phase 5 | Enterprise scale & operational excellence |
-| v0.7.0+ | Post-release increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; a converge-and-idempotence test for the playbook; **Phase 8 (Network 11 / UniFi OS 6 compatibility)**, whose code and documentation half (N3 caveat, N5, N6, discovery for N7–N9) can ship ahead of the live-controller verification, and whose verification half (N1–N4) needs a Network 11 controller |
+| v0.7.0 | Post-release increments | **Released 2026-10-29**: Phase 8 code/doc halves (N3 caveat in the stats tool output, N1 doc steering, N6 USG gating), the 10.6.109 live-controller baseline evidence and the early N1 answer (`.analysis-reports/live-controller-10.6-baseline-2026-10-29/`), local-build deployment paths, native MCP prompts, live A2A capabilities, Redis webhook event bus, `UNIFI_MIXED_MODE`, and the converge-and-idempotence playbook test. Breaking: `list_top_applications` / `get_speed_test_history` / `get_historical_stats` return dicts |
+| v0.7.1+ | Later increments | Access API if/when Ubiquiti publishes a spec; remaining Phase 5 items; Phase 8's verification half (N1–N4 on a Network 11 controller, checklist step 5's UI capture, N5's URL-source field name, N1's deprecation decision) |
 
 ---
 

@@ -53,8 +53,8 @@ the secret after verifying the new publisher claims.
 
 ```bash
 docker pull ghcr.io/enuno/unifi-mcp-server:latest
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4        # semver tags have no leading v
-docker pull ghcr.io/enuno/unifi-mcp-server:0.6.4-fleet  # with the fleet extras (amd64, arm64)
+docker pull ghcr.io/enuno/unifi-mcp-server:0.7.0        # semver tags have no leading v
+docker pull ghcr.io/enuno/unifi-mcp-server:0.7.0-fleet  # with the fleet extras (amd64, arm64)
 ```
 
 #### npm (metadata wrapper)

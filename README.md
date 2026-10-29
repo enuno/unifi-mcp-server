@@ -22,7 +22,7 @@
 
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
-**Current release: 0.6.4.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
+**Current release: 0.7.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Contents
 
@@ -67,7 +67,7 @@ The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.u
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 
-**UniFi Network 11 / UniFi OS 6:** compatible per released documentation, with four items pending live-controller verification — not yet a claim of full support. USG gateways and the classic, self-hosted Network Application Server are removed platform targets; `fleet_health` automatically flags any registered controller with a USG in its device inventory, but there is no API signal to auto-detect a classic Network Application Server, so label that controller instead (e.g. `deployment=classic-server`) and filter on it. See [docs/NETWORK_11_COMPATIBILITY.md](docs/NETWORK_11_COMPATIBILITY.md) for the full compatibility matrix.
+**UniFi Network 11 / UniFi OS 6:** compatible per released documentation, with four items pending live-controller verification — not yet a claim of full support. USG gateways and the classic, self-hosted Network Application Server are removed platform targets; `fleet_health` automatically flags any registered controller with a USG in its device inventory, but there is no API signal to auto-detect a classic Network Application Server, so label that controller instead (e.g. `deployment=classic-server`) and filter on it. Network 11 replaces the statistics engine and resets historical data, so the statistics tools (`get_historical_stats`, `get_speed_test_history`, `get_dpi_statistics`, `list_top_applications`, `get_client_dpi`) attach a `statistics_note` to every empty response — an empty history right after the upgrade is expected, not an outage. See [docs/NETWORK_11_COMPATIBILITY.md](docs/NETWORK_11_COMPATIBILITY.md) for the full compatibility matrix.
 
 ## Quick start
 

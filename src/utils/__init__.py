@@ -15,6 +15,7 @@ from .exceptions import (
     ValidationError,
 )
 from .helpers import (
+    STATISTICS_RESET_NOTE,
     build_uri,
     first_response_item,
     format_bytes,
@@ -104,4 +105,5 @@ __all__ = [
     "parse_device_type",
     "build_uri",
     "first_response_item",
+    "STATISTICS_RESET_NOTE",
 ]

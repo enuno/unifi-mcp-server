@@ -1,0 +1,13 @@
+{
+  "captured_at": "2026-10-29T17:16:59.721000+00:00",
+  "site": "default",
+  "sequence": [
+    {
+      "op": "create",
+      "ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}",
+      "traceback_tail": "Traceback (most recent call last):\n  File \"/work/phase8_capture.py\", line 126, in cap_main\n    created = await firewall.create_firewall_rule(\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    ...<3 lines>...\n    )\n    ^\n  File \"/opt/venv/lib/python3.14/site-packages/src/tools/firewall.py\", line 245, in create_firewall_rule\n    response = await client.post(\n               ^^^^^^^^^^^^^^^^^^\n        f\"/ea/sites/{site_id}/rest/firewallrule\", json_data=rule_data\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"/opt/venv/lib/python3.14/site-packages/src/api/client.py\", line 645, in post\n    return await self._request(\"POST\", endpoint, params=params, json_data=json_data)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.14/site-packages/src/api/client.py\", line 421, in _request\n    return await self._send(method, endpoint, params, json_data, retry_count, started_at)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/venv/lib/python3.14/site-packages/src/api/client.py\", line 544, in _send\n    raise APIError(\n    ...<3 lines>...\n    )\nsrc.utils.exceptions.APIError: API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}\n"
+    }
+  ]
+}

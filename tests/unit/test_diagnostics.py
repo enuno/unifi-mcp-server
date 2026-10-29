@@ -289,11 +289,12 @@ class TestGetSpeedTestHistory:
             assert body["attrs"] == ["time", "xput_download", "xput_upload", "latency"]
             assert body["end"] > body["start"]
 
-            assert len(result) == 2
-            assert result[0]["download_speed_mbps"] == 935.0
-            assert result[0]["upload_speed_mbps"] == 918.0
-            assert result[0]["ping_ms"] == 12
-            assert result[0]["timestamp"].startswith("2026-")
+            assert len(result["results"]) == 2
+            assert result["results"][0]["download_speed_mbps"] == 935.0
+            assert result["results"][0]["upload_speed_mbps"] == 918.0
+            assert result["results"][0]["ping_ms"] == 12
+            assert result["results"][0]["timestamp"].startswith("2026-")
+            assert "statistics_note" not in result
 
     @pytest.mark.asyncio
     async def test_get_speed_test_history_window(self, mock_settings):
@@ -311,7 +312,7 @@ class TestGetSpeedTestHistory:
 
     @pytest.mark.asyncio
     async def test_get_speed_test_history_empty(self, mock_settings):
-        """Test speed test history with empty response."""
+        """Empty history wraps to a dict carrying the N3 reset caveat."""
         mock_client = create_mock_client()
         mock_client.post = AsyncMock(return_value={"data": []})
 
@@ -320,7 +321,8 @@ class TestGetSpeedTestHistory:
 
             result = await get_speed_test_history("site-1", mock_settings)
 
-            assert result == []
+            assert result["results"] == []
+            assert "Network 11" in result["statistics_note"]
 
     @pytest.mark.asyncio
     async def test_get_speed_test_history_invalid_site_id(self, mock_settings):
@@ -341,7 +343,7 @@ class TestGetSpeedTestHistory:
 
             result = await get_speed_test_history("site-1", mock_settings)
 
-        assert [r["id"] for r in result] == ["st-1", "st-2"]
+        assert [r["id"] for r in result["results"]] == ["st-1", "st-2"]
 
     @pytest.mark.asyncio
     async def test_get_speed_test_history_rejects_bad_hours(self, mock_settings):
@@ -581,7 +583,8 @@ class TestGetHistoricalStats:
         assert "cu_total" not in body["attrs"]
         assert body["end"] - body["start"] == 48 * 3600 * 1000
         assert "macs" not in body
-        assert [s["time"] for s in result] == [1000, 2000]
+        assert [s["time"] for s in result["samples"]] == [1000, 2000]
+        assert "statistics_note" not in result
 
     @pytest.mark.asyncio
     async def test_mac_filter_and_custom_attrs_get_time_added(self, mock_settings):
@@ -611,6 +614,18 @@ class TestGetHistoricalStats:
             await get_historical_stats("default", mock_settings, subject="switch")
         with pytest.raises(ValidationError, match="hours"):
             await get_historical_stats("default", mock_settings, hours=0)
+
+    @pytest.mark.asyncio
+    async def test_empty_archive_carries_the_statistics_reset_note(self, mock_settings):
+        """N3: an empty series is expected right after a Network 11 upgrade."""
+        client = create_mock_client()
+        client.post = AsyncMock(return_value={"data": []})
+
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_historical_stats("default", mock_settings)
+
+        assert result["samples"] == []
+        assert "Network 11" in result["statistics_note"]
 
 
 class TestStartSpectrumScan:

@@ -1,0 +1,20 @@
+{
+  "captured_at": "2026-10-29T17:17:00.107640+00:00",
+  "site": "default",
+  "sequence": [
+    {
+      "op": "create",
+      "ok": true,
+      "response": {
+        "id": "<hex-id>",
+        "name": "PHASE8-THROWAWAY-PORTS",
+        "group_type": "port-group",
+        "group_members": [
+          "65534"
+        ],
+        "site_id": "<site-objectid>",
+        "external_id": "87407d7d-d951-4c01-b9aa-2cd1bbc7465b"
+      }
+    }
+  ]
+}

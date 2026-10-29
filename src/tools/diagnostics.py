@@ -8,6 +8,7 @@ from ..api import UniFiClient
 from ..config import Settings
 from ..models.diagnostics import NetworkReference, SpeedTestResult
 from ..utils import (
+    STATISTICS_RESET_NOTE,
     APIError,
     ValidationError,
     coerce_bool,
@@ -186,7 +187,7 @@ async def get_speed_test_status(site_id: str, settings: Settings) -> dict[str, A
 @read_tool
 async def get_speed_test_history(
     site_id: str, settings: Settings, hours: int = 168
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Get historical speed test results for a site.
 
     Reads the ``stat/report/archive.speedtest`` report — the route the
@@ -200,7 +201,10 @@ async def get_speed_test_history(
         hours: How far back to look (default 168 = 7 days)
 
     Returns:
-        List of speed test result dictionaries, oldest first
+        ``{"results": [...]}``, oldest first. An empty history adds
+        ``statistics_note`` — after a UniFi Network 11 upgrade the
+        statistics engine resets, so an empty archive is expected, not
+        an outage (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
@@ -260,7 +264,10 @@ async def get_speed_test_history(
                 f"Retrieved {len(results)} speed test results for site '{site_id}'"
             )
         )
-        return results
+        payload: dict[str, Any] = {"results": results}
+        if not results:
+            payload["statistics_note"] = STATISTICS_RESET_NOTE
+        return payload
 
 
 async def _spectrum_scan_targets(
@@ -425,7 +432,7 @@ async def get_historical_stats(
     hours: int = 24,
     macs: list[str] | str | None = None,
     attrs: list[str] | None = None,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Read archived time-series statistics from the controller.
 
     The controller keeps rollup archives on
@@ -449,7 +456,11 @@ async def get_historical_stats(
             "time" is always included
 
     Returns:
-        List of samples, oldest first, each carrying epoch-ms ``time``
+        ``{"samples": [...]}``, oldest first, each sample carrying
+        epoch-ms ``time``. An empty series adds ``statistics_note`` —
+        after a UniFi Network 11 upgrade the statistics engine resets,
+        so an empty archive is expected, not an outage
+        (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
     """
     site_id = validate_site_id(site_id)
     if interval not in REPORT_INTERVALS:
@@ -494,7 +505,10 @@ async def get_historical_stats(
                 f"(last {hours}h)"
             )
         )
-        return samples
+        result: dict[str, Any] = {"samples": samples}
+        if not samples:
+            result["statistics_note"] = STATISTICS_RESET_NOTE
+        return result
 
 
 @write_tool

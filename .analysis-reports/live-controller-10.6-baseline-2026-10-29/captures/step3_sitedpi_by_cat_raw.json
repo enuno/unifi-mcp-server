@@ -1,0 +1,9 @@
+{
+  "captured_at": "2026-10-29T17:17:01.204694+00:00",
+  "endpoint": "stat/sitedpi type=by_cat",
+  "row_count": 1,
+  "key_union": [],
+  "first_row": [
+    {}
+  ]
+}

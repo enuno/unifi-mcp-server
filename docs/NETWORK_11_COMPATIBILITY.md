@@ -30,10 +30,10 @@ Not a confirmed break — the point cannot be settled from released material alo
 
 | # | Item | Surface in this repo | Status |
 |---|---|---|---|
-| N1 | Legacy firewall rules/groups (`rest/firewallrule`, `rest/firewallgroup`) behaviour after the forced Zone-Based Firewall migration | `src/tools/firewall.py`, `src/tools/firewall_groups.py` vs. `src/tools/firewall_policies.py` | **Doc half landed 2026-10-27**: tool docstrings and module docstring now steer callers to the v2 policy tools on a migrated site. Whether the legacy write still takes effect is still unverified — needs live test. |
-| N2 | Site-UID stability across the upgrade (single unverified community report) | `src/api/client.py`, `src/api/pool.py`, `src/fleet/db/models.py`, `src/worker/jobs.py` | Needs live test. No code change until UID drift is actually observed — see `DEVELOPMENT_PLAN.md` §4 Phase 8 Fix 2. |
-| N3 | Statistics tools against the new statistics engine (`stat/report/*`, `stat/sitedpi`, `stat/stadpi`) | `src/tools/dpi.py`, `src/tools/diagnostics.py` | Needs live test for payload-shape drift. The "history was reset by the upgrade" caveat in the tool output itself has **not** shipped yet — tracked as a follow-up; do not read an empty post-upgrade history as an outage in the meantime. |
-| N4 | v2 `traffic-flows` continuity | `src/tools/traffic_flows.py` (50-flow cap) | Needs live test. |
+| N1 | Legacy firewall rules/groups (`rest/firewallrule`, `rest/firewallgroup`) behaviour after the forced Zone-Based Firewall migration | `src/tools/firewall.py`, `src/tools/firewall_groups.py` vs. `src/tools/firewall_policies.py` | **Doc half landed 2026-10-27**; **first live evidence 2026-10-29** (10.6.109, already ZBF-migrated): legacy rule writes are rejected outright (HTTP 400 across 15 probed `rule_index` bands; loud failure, never a silent no-op), `rest/firewallgroup` mutations still work. Network 11 confirmation and the deprecation-note decision remain open — see `.analysis-reports/live-controller-10.6-baseline-2026-10-29/report.md`. |
+| N2 | Site-UID stability across the upgrade (single unverified community report) | `src/api/client.py`, `src/api/pool.py`, `src/fleet/db/models.py`, `src/worker/jobs.py` | Needs live test. "Before" UUID recorded 2026-10-29 (same report). No code change until UID drift is actually observed — see `DEVELOPMENT_PLAN.md` §4 Phase 8 Fix 2. |
+| N3 | Statistics tools against the new statistics engine (`stat/report/*`, `stat/sitedpi`, `stat/stadpi`) | `src/tools/dpi.py`, `src/tools/diagnostics.py` | Needs live test for payload-shape drift; 10.6.109 field-set baseline recorded 2026-10-29 (same report). The "history was reset by the upgrade" caveat **shipped in the tool output 2026-10-29**: every empty response from `get_historical_stats`, `get_speed_test_history`, `get_dpi_statistics`, `list_top_applications` and `get_client_dpi` carries `statistics_note`. |
+| N4 | v2 `traffic-flows` continuity | `src/tools/traffic_flows.py` (50-flow cap) | Needs live test against Network 11; 10.6.109 baseline recorded 2026-10-29 (same report): 50-flow cap holds, pagination params ignored, server-side protocol filter non-functional. Rolling-window churn not observable on a quiet gateway. |
 
 ## The four "Changed" items
 
@@ -56,13 +56,13 @@ External (URL-sourced) Network Lists, WiFi WAN configuration, Live Flows parity 
 
 ## Live-controller test checklist
 
-Until all five steps are run and recorded under `.analysis-reports/`, the supportable claim stays "compatible per released documentation, with four items pending live verification":
+Until all five steps are run and recorded under `.analysis-reports/`, the supportable claim stays "compatible per released documentation, with four items pending live verification". The 10.6 "before" halves of steps 1–4 were captured 2026-10-29 (`.analysis-reports/live-controller-10.6-baseline-2026-10-29/report.md`); step 5 is blocked on console-UI credentials, and steps 1–4 still need their Network 11 "after" halves:
 
-1. Record `GET /integration/v1/info` (`applicationVersion`) and all site UUIDs before the upgrade; repeat after; diff.
-2. On a migrated site: read a legacy firewall rule, create a throwaway rule, delete it — record the exact responses from `rest/firewallrule` and `rest/firewallgroup`.
-3. Pull `stat/report/hourly/site`, `stat/sitedpi` and `stat/stadpi` post-upgrade; compare the field sets against a 10.6 capture.
-4. Poll the v2 `traffic-flows` endpoint for five minutes on a busy gateway; compare the record shape and the drop behaviour against 10.6.
-5. While doing step 4, capture the Live Flows UI's network calls (terminate action especially) — the only practical route to the undocumented terminate endpoint.
+1. Record `GET /integration/v1/info` (`applicationVersion`) and all site UUIDs before the upgrade; repeat after; diff. — **before half recorded 2026-10-29** (10.6.109, one site)
+2. On a migrated site: read a legacy firewall rule, create a throwaway rule, delete it — record the exact responses from `rest/firewallrule` and `rest/firewallgroup`. — **early answer on 10.6.109** (migrated site: rule writes 400-rejected, group writes work); Network 11 confirmation open
+3. Pull `stat/report/hourly/site`, `stat/sitedpi` and `stat/stadpi` post-upgrade; compare the field sets against a 10.6 capture. — **10.6 capture recorded 2026-10-29**
+4. Poll the v2 `traffic-flows` endpoint for five minutes on a busy gateway; compare the record shape and the drop behaviour against 10.6. — **10.6 capture recorded 2026-10-29** (quiet gateway; repeat on a busy one)
+5. While doing step 4, capture the Live Flows UI's network calls (terminate action especially) — the only practical route to the undocumented terminate endpoint. — **BLOCKED**: needs console-UI credentials (the API-key-only access used for the baseline cannot drive the UI)
 
 See `DEVELOPMENT_PLAN.md` §4 Phase 8 for the full fix list, sequencing notes, and exit criteria.
 

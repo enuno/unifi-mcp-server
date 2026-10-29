@@ -1,0 +1,53 @@
+{
+  "captured_at": "2026-10-29T17:17:00.483968+00:00",
+  "tool": "get_historical_stats(hourly.site, 24h)",
+  "row_count": 24,
+  "key_union": [
+    "num_sta",
+    "o",
+    "oid",
+    "site",
+    "time",
+    "wan-rx_bytes",
+    "wan-tx_bytes",
+    "wlan-num_sta",
+    "wlan_bytes"
+  ],
+  "first_two": [
+    {
+      "time": 1793210400000,
+      "wlan_bytes": 3147032146.560439,
+      "num_sta": 5,
+      "wlan-num_sta": 5,
+      "wan-tx_bytes": 93382425.4065934,
+      "wan-rx_bytes": 3058901266.912088,
+      "site": "<site-objectid>",
+      "o": "site",
+      "oid": "<site-objectid>"
+    },
+    {
+      "time": 1793214000000,
+      "wlan_bytes": 493334605.73406595,
+      "num_sta": 5,
+      "wlan-num_sta": 5,
+      "wan-tx_bytes": 83474498.96923079,
+      "wan-rx_bytes": 410595239.1501832,
+      "site": "<site-objectid>",
+      "o": "site",
+      "oid": "<site-objectid>"
+    }
+  ],
+  "last_one": [
+    {
+      "time": 1793293200000,
+      "wlan_bytes": 495342009.0434783,
+      "num_sta": 6,
+      "wlan-num_sta": 6,
+      "wan-tx_bytes": 56612334.81521739,
+      "wan-rx_bytes": 440896247.2065218,
+      "site": "<site-objectid>",
+      "o": "site",
+      "oid": "<site-objectid>"
+    }
+  ]
+}

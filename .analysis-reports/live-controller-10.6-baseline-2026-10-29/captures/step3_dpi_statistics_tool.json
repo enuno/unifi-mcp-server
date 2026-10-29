@@ -1,0 +1,11 @@
+{
+  "captured_at": "2026-10-29T17:17:00.832794+00:00",
+  "tool": "get_dpi_statistics",
+  "app_count": 0,
+  "cat_count": 0,
+  "app_key_union": [],
+  "cat_key_union": [],
+  "app_sample": [],
+  "cat_sample": [],
+  "note": "This controller reports no site DPI counters. Current releases expose traffic identification through the traffic-flow tools instead (get_top_flows, get_flow_analytics)."
+}

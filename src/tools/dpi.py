@@ -5,6 +5,7 @@ from typing import Any
 from ..api import UniFiClient
 from ..config import Settings
 from ..utils import (
+    STATISTICS_RESET_NOTE,
     coerce_bool,
     get_logger,
     log_audit,
@@ -35,6 +36,10 @@ async def get_dpi_statistics(
     traffic-flow engine; a controller whose classic DPI counters are off
     reports empty lists here, and the ``note`` field says where to look
     instead.
+
+    An empty history also carries ``statistics_note``: after a UniFi
+    Network 11 upgrade the statistics engine resets, so empty counters
+    are expected, not an outage (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
 
     Args:
         site_id: Site identifier
@@ -86,6 +91,7 @@ async def get_dpi_statistics(
                 "traffic-flow tools instead (get_top_flows, "
                 "get_flow_analytics)."
             )
+            result["statistics_note"] = STATISTICS_RESET_NOTE
 
         logger.info(sanitize_log_message(f"Retrieved DPI statistics for site '{site_id}'"))
         return result
@@ -96,7 +102,7 @@ async def list_top_applications(
     site_id: str,
     settings: Settings,
     limit: int = 10,
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """List top applications by bandwidth usage.
 
     See :func:`get_dpi_statistics` for the data source and for why the
@@ -108,7 +114,10 @@ async def list_top_applications(
         limit: Number of top applications to return
 
     Returns:
-        List of top application dictionaries sorted by bandwidth
+        ``{"applications": [...]}`` sorted by bandwidth. An empty list
+        adds ``statistics_note`` — after a UniFi Network 11 upgrade the
+        statistics engine resets, so an empty history is expected, not
+        an outage (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
     """
     site_id = validate_site_id(site_id)
     logger = get_logger(__name__, settings.log_level)
@@ -121,7 +130,10 @@ async def list_top_applications(
         sanitize_log_message(f"Retrieved top {len(top_apps)} applications for site '{site_id}'")
     )
 
-    return top_apps
+    result: dict[str, Any] = {"applications": top_apps}
+    if not top_apps:
+        result["statistics_note"] = STATISTICS_RESET_NOTE
+    return result
 
 
 @read_tool
@@ -144,7 +156,10 @@ async def get_client_dpi(
         offset: Number of applications to skip
 
     Returns:
-        Client DPI statistics dictionary
+        Client DPI statistics dictionary. A client with no DPI rows
+        adds ``statistics_note`` — after a UniFi Network 11 upgrade the
+        statistics engine resets, so an empty history is expected, not
+        an outage (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
     """
     site_id = validate_site_id(site_id)
     client_mac = validate_mac_address(client_mac)
@@ -213,7 +228,7 @@ async def get_client_dpi(
             )
         )
 
-        return {
+        result: dict[str, Any] = {
             "site_id": site_id,
             "client_mac": client_mac,
             "time_range": time_range,
@@ -223,6 +238,9 @@ async def get_client_dpi(
             "applications": paginated_apps,
             "total_applications": len(applications),
         }
+        if not applications:
+            result["statistics_note"] = STATISTICS_RESET_NOTE
+        return result
 
 
 @write_tool

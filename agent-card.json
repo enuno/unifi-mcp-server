@@ -1707,7 +1707,7 @@
       }
     },
     {
-      "description": "Block a flow's identified application.\n\nThe v2 ``traffic-flows`` endpoint reports a coarse ``service`` field\n(\"DNS\", \"OTHER\", etc.) rather than a DPI application id, so this tool\nfalls back to blocking the destination IP when no distinct application\ncan be inferred.",
+      "description": "Block a flow's identified application.\n\nThe v2 ``traffic-flows`` endpoint reports a coarse ``service`` field\n(\"DNS\", \"OTHER\", etc.) rather than a DPI application id, so this tool\nfalls back to blocking the destination IP when no distinct application\ncan be inferred.\n\nUses the legacy ``rest/firewallrule`` surface \u2014 on a ZBF-migrated\nsite that write is rejected (see the module note above).",
       "examples": [
         {
           "arguments": {
@@ -1791,7 +1791,7 @@
       }
     },
     {
-      "description": "Create a firewall rule blocking the destination IP of a specific flow.",
+      "description": "Create a firewall rule blocking the destination IP of a specific flow.\n\nUses the legacy ``rest/firewallrule`` surface \u2014 on a ZBF-migrated\nsite that write is rejected (see the module note above).",
       "examples": [
         {
           "arguments": {
@@ -1875,7 +1875,7 @@
       }
     },
     {
-      "description": "Create a firewall rule blocking the source IP of a specific flow.",
+      "description": "Create a firewall rule blocking the source IP of a specific flow.\n\nUses the legacy ``rest/firewallrule`` surface \u2014 on a ZBF-migrated\nsite that write is rejected (see the module note above).",
       "examples": [
         {
           "arguments": {
@@ -9752,7 +9752,7 @@
       }
     },
     {
-      "description": "Get site-wide Deep Packet Inspection statistics.\n\nReads the ``stat/sitedpi`` report (``by_app`` and ``by_cat``), the\nroute that actually carries site DPI counters. The previous\n``stat/dpi`` path answers with nothing on current controllers, so the\ntool always reported zero applications. The old ``time_range``\nparameter is gone: the counters are lifetime totals, and no variant of\nthis endpoint accepts a window \u2014 the parameter changed nothing.\n\nOn current releases traffic identification is exposed through the\ntraffic-flow engine; a controller whose classic DPI counters are off\nreports empty lists here, and the ``note`` field says where to look\ninstead.",
+      "description": "Get site-wide Deep Packet Inspection statistics.\n\nReads the ``stat/sitedpi`` report (``by_app`` and ``by_cat``), the\nroute that actually carries site DPI counters. The previous\n``stat/dpi`` path answers with nothing on current controllers, so the\ntool always reported zero applications. The old ``time_range``\nparameter is gone: the counters are lifetime totals, and no variant of\nthis endpoint accepts a window \u2014 the parameter changed nothing.\n\nOn current releases traffic identification is exposed through the\ntraffic-flow engine; a controller whose classic DPI counters are off\nreports empty lists here, and the ``note`` field says where to look\ninstead.\n\nAn empty history also carries ``statistics_note``: after a UniFi\nNetwork 11 upgrade the statistics engine resets, so empty counters\nare expected, not an outage (DEVELOPMENT_PLAN.md \u00a74 Phase 8, N3).",
       "examples": [
         {
           "arguments": {
@@ -10313,20 +10313,8 @@
       },
       "name": "get_historical_stats",
       "outputSchema": {
-        "properties": {
-          "result": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "x-fastmcp-wrap-result": true
+        "additionalProperties": true,
+        "type": "object"
       }
     },
     {
@@ -12796,20 +12784,8 @@
       },
       "name": "get_speed_test_history",
       "outputSchema": {
-        "properties": {
-          "result": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "x-fastmcp-wrap-result": true
+        "additionalProperties": true,
+        "type": "object"
       }
     },
     {
@@ -18825,20 +18801,8 @@
       },
       "name": "list_top_applications",
       "outputSchema": {
-        "properties": {
-          "result": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "type": "array"
-          }
-        },
-        "required": [
-          "result"
-        ],
-        "type": "object",
-        "x-fastmcp-wrap-result": true
+        "additionalProperties": true,
+        "type": "object"
       }
     },
     {

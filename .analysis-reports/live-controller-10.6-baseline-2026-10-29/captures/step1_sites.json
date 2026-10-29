@@ -1,0 +1,19 @@
+{
+  "captured_at": "2026-10-29T17:16:57.423265+00:00",
+  "endpoint": "/proxy/network/integration/v1/sites",
+  "site_count": 1,
+  "sites_full": [
+    {
+      "id": "88f7af54-98f8-306a-a1c7-c9349722b1f6",
+      "internalReference": "default",
+      "name": "Default"
+    }
+  ],
+  "uuid_name_map": [
+    {
+      "id": "88f7af54-98f8-306a-a1c7-c9349722b1f6",
+      "name": "Default",
+      "internalReference": "default"
+    }
+  ]
+}

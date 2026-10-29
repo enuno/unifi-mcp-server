@@ -1,0 +1,7 @@
+{
+  "captured_at": "2026-10-29T17:17:58.475171+00:00",
+  "ok": false,
+  "error_class": "ResourceNotFoundError",
+  "error_message": "firewall_rule '000000000000000000000000' not found",
+  "traceback_tail": "Traceback (most recent call last):\n  File \"/work/phase8_followup.py\", line 79, in main\n    r = await coro\n        ^^^^^^^^^^\n  File \"/opt/venv/lib/python3.14/site-packages/src/tools/firewall.py\", line 380, in update_firewall_rule\n    raise ResourceNotFoundError(\"firewall_rule\", rule_id)\nsrc.utils.exceptions.ResourceNotFoundError: firewall_rule '000000000000000000000000' not found\n"
+}

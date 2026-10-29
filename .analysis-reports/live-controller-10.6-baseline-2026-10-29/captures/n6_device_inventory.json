@@ -1,0 +1,17 @@
+{
+  "captured_at": "2026-10-29T17:17:03.931767+00:00",
+  "endpoint": "stat/device",
+  "device_count": 1,
+  "models": [
+    "udm:UDMA69B"
+  ],
+  "usg_like_models": [],
+  "version_sample": [
+    {
+      "type": "udm",
+      "model": "UDMA69B",
+      "version": "5.2.10.34061",
+      "name": "<hostname>"
+    }
+  ]
+}

@@ -789,6 +789,16 @@ async def get_connection_states(
 # --------------------------------------------------------------------------- #
 
 
+# The block_flow_* tools create their rules through the LEGACY
+# rest/firewallrule surface (create_firewall_rule in firewall.py). On a
+# Zone-Based-Firewall-migrated site that surface rejects writes outright
+# (HTTP 400 in every rule_index band, verified live on Network 10.6.109 —
+# .analysis-reports/live-controller-10.6-baseline-2026-10-29/report.md),
+# so these tools fail there with a loud APIError rather than blocking
+# anything; routing them to the v2 policy surface instead is tracked as
+# follow-up work under Phase 8 / N1.
+
+
 @write_tool
 async def block_flow_source_ip(
     site_id: str,
@@ -799,7 +809,11 @@ async def block_flow_source_ip(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Create a firewall rule blocking the source IP of a specific flow."""
+    """Create a firewall rule blocking the source IP of a specific flow.
+
+    Uses the legacy ``rest/firewallrule`` surface — on a ZBF-migrated
+    site that write is rejected (see the module note above).
+    """
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow source IP", dry_run)
 
@@ -830,7 +844,11 @@ async def block_flow_destination_ip(
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
-    """Create a firewall rule blocking the destination IP of a specific flow."""
+    """Create a firewall rule blocking the destination IP of a specific flow.
+
+    Uses the legacy ``rest/firewallrule`` surface — on a ZBF-migrated
+    site that write is rejected (see the module note above).
+    """
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow destination IP", dry_run)
 
@@ -867,6 +885,9 @@ async def block_flow_application(
     ("DNS", "OTHER", etc.) rather than a DPI application id, so this tool
     falls back to blocking the destination IP when no distinct application
     can be inferred.
+
+    Uses the legacy ``rest/firewallrule`` surface — on a ZBF-migrated
+    site that write is rejected (see the module note above).
     """
     site_id = validate_site_id(site_id)
     validate_confirmation(confirm, "block flow application", dry_run)

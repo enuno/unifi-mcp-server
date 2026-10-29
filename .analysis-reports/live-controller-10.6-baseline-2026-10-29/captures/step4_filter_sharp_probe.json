@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-10-29T17:19:14.196535+00:00",
+  "plain_count": 50,
+  "plain_protocol_breakdown": {
+    "TCP": 11,
+    "UDP": 39
+  },
+  "udp_filtered_count": 50,
+  "udp_filtered_protocol_breakdown": {
+    "TCP": 11,
+    "UDP": 39
+  },
+  "non_udp_returned_under_udp_filter": 11,
+  "filter_is_functional": false
+}

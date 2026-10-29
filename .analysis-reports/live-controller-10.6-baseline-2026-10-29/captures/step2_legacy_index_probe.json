@@ -1,0 +1,114 @@
+{
+  "captured_at": "2026-10-29T17:18:26.890819+00:00",
+  "site": "default",
+  "indices_probed": [
+    1,
+    999,
+    1000,
+    1999,
+    2001,
+    2500,
+    2999,
+    3000,
+    3001,
+    3999,
+    4000,
+    5000,
+    9999,
+    10000,
+    65535
+  ],
+  "accepted": [],
+  "results": [
+    {
+      "rule_index": 1,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 999,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 1000,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 1999,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 2001,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"rule_index\":2001,\"name\":\"PHASE8-PROBE-2001\",\"msg\":\"api.err.FirewallRuleIndexOutOfRange\"},\"data\":[]}"
+    },
+    {
+      "rule_index": 2500,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"rule_index\":2500,\"name\":\"PHASE8-PROBE-2500\",\"msg\":\"api.err.FirewallRuleIndexOutOfRange\"},\"data\":[]}"
+    },
+    {
+      "rule_index": 2999,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"rule_index\":2999,\"name\":\"PHASE8-PROBE-2999\",\"msg\":\"api.err.FirewallRuleIndexOutOfRange\"},\"data\":[]}"
+    },
+    {
+      "rule_index": 3000,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 3001,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 3999,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 4000,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"rule_index\":4000,\"name\":\"PHASE8-PROBE-4000\",\"msg\":\"api.err.FirewallRuleIndexOutOfRange\"},\"data\":[]}"
+    },
+    {
+      "rule_index": 5000,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 9999,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 10000,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    },
+    {
+      "rule_index": 65535,
+      "create_ok": false,
+      "error_class": "APIError",
+      "error_message": "API request failed: {\"meta\":{\"rc\":\"error\",\"msg\":\"api.err.InvalidPayload\"},\"data\":[{\"validationError\":{},\"rc\":\"error\",\"msg\":\"api.err.InvalidValue\"}]}"
+    }
+  ]
+}

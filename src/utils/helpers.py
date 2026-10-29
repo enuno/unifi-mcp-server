@@ -4,6 +4,17 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
+# Surfaced by the statistics tools (dpi.py, diagnostics.py) whenever a
+# history comes back empty. UniFi Network 11 replaces the statistics engine
+# and resets historical data, so an empty series immediately after the
+# upgrade is the expected consequence of the engine change — not evidence
+# of an outage or a broken tool (DEVELOPMENT_PLAN.md §4 Phase 8, N3).
+STATISTICS_RESET_NOTE = (
+    "An empty statistics history immediately after a UniFi Network 11 upgrade "
+    "is the expected consequence of the statistics-engine change, not evidence "
+    "of an outage or a broken tool; series re-accrue from the upgrade onward."
+)
+
 
 def get_timestamp() -> int:
     """Get current Unix timestamp in seconds.

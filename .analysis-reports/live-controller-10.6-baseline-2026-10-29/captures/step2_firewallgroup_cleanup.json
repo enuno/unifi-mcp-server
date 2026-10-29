@@ -1,0 +1,30 @@
+{
+  "captured_at": "2026-10-29T17:17:56.972443+00:00",
+  "group_id": "<hex-id>",
+  "sequence": [
+    {
+      "op": "update",
+      "ok": true,
+      "response": {
+        "id": "<hex-id>",
+        "name": "PHASE8-THROWAWAY-PORTS",
+        "group_type": "port-group",
+        "group_members": [
+          "65534",
+          "65533"
+        ],
+        "site_id": "<site-objectid>",
+        "external_id": "87407d7d-d951-4c01-b9aa-2cd1bbc7465b"
+      }
+    },
+    {
+      "op": "delete",
+      "ok": true,
+      "response": {
+        "status": "success",
+        "group_id": "<hex-id>",
+        "action": "deleted"
+      }
+    }
+  ]
+}

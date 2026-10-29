@@ -2658,6 +2658,62 @@ Delete a port forwarding rule.
 - **`confirm`** (boolean, required): Confirmation flag
 - **`dry_run`** (boolean, optional): Preview without deleting
 
+### Diagnostics and Historical Statistics
+
+#### `get_speed_test_history`
+
+Get historical speed test results for a site, oldest first. Reads the
+`stat/report/archive.speedtest` report.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `hours` (integer, optional): How far back to look (default: 168 = 7 days)
+
+**Returns:** `{"results": [...]}`. An empty history adds `statistics_note`
+(see the note on the statistics reset below).
+
+```json
+{
+  "results": [
+    {
+      "id": "st-1",
+      "download_speed_mbps": 935.0,
+      "upload_speed_mbps": 918.0,
+      "ping_ms": 12,
+      "timestamp": "2026-10-22T03:00:00+00:00"
+    }
+  ]
+}
+```
+
+#### `get_historical_stats`
+
+Read archived time-series statistics from `stat/report/{interval}.{subject}`
+— the only place historical airtime, per-client signal, and gateway counters
+live.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+- `subject` (string, optional): `site`, `ap`, `user`, or `gw` (default: `ap`)
+- `interval` (string, optional): `5minutes`, `hourly`, `daily`, or `monthly` (default: `hourly`)
+- `hours` (integer, optional): Window ending now, 1-2160 (default: 24)
+- `macs` (string or array, optional): Restrict to specific devices/clients
+- `attrs` (array, optional): Report attributes; defaults per subject, `time` always included
+
+**Returns:** `{"samples": [...]}`, oldest first, each sample carrying
+epoch-ms `time`. An empty series adds `statistics_note` (below).
+
+> **The statistics reset note.** UniFi Network 11 replaces the statistics
+> engine and resets historical data, so an empty history immediately after
+> the upgrade is expected — not evidence of an outage or a broken tool
+> (DEVELOPMENT_PLAN.md §4 Phase 8, N3). Every empty response from
+> `get_historical_stats`, `get_speed_test_history`, `get_dpi_statistics`,
+> `list_top_applications` and `get_client_dpi` carries a
+> `statistics_note` field saying so. The field is absent on non-empty
+> responses.
+
 ### DPI (Deep Packet Inspection) Statistics
 
 #### `get_dpi_statistics`
@@ -2673,7 +2729,8 @@ endpoint accepts no time window. `app` and `cat` are the controller's
 numeric catalog ids — translate them with `list_dpi_applications` and
 `list_dpi_categories`. A controller that runs traffic identification
 through the flow engine reports empty lists plus a `note` pointing at
-`get_top_flows` / `get_flow_analytics`.
+`get_top_flows` / `get_flow_analytics`, and the `statistics_note` described
+above.
 
 **Example:**
 
@@ -2731,16 +2788,20 @@ result = await mcp.call_tool("list_top_applications", {
 **Response:**
 
 ```json
-[
-  {
-    "app": 194,
-    "cat": 4,
-    "tx_bytes": 5120000000,
-    "rx_bytes": 10240000000,
-    "total_bytes": 15360000000
-  }
-]
+{
+  "applications": [
+    {
+      "app": 194,
+      "cat": 4,
+      "tx_bytes": 5120000000,
+      "rx_bytes": 10240000000,
+      "total_bytes": 15360000000
+    }
+  ]
+}
 ```
+
+An empty list adds `statistics_note` (see the statistics reset note above).
 
 #### `list_dpi_categories`
 
@@ -2830,6 +2891,9 @@ result = await mcp.call_tool("get_client_dpi", {
   "total_applications": 8
 }
 ```
+
+A client with no DPI rows adds `statistics_note` (see the statistics reset
+note above).
 
 ### Traffic Flow Monitoring
 

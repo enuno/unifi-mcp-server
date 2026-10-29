@@ -1,0 +1,70 @@
+{
+  "captured_at": "2026-10-29T17:16:59.410784+00:00",
+  "endpoint": "/proxy/network/v2/api/site/default/firewall-policies",
+  "policy_count": 78,
+  "key_union": [
+    "_id",
+    "action",
+    "connection_state_type",
+    "connection_states",
+    "create_allow_respond",
+    "description",
+    "destination",
+    "enabled",
+    "hits",
+    "icmp_typename",
+    "icmp_v6_typename",
+    "index",
+    "ip_version",
+    "last_hit",
+    "logging",
+    "match_ip_sec",
+    "match_ip_sec_type",
+    "match_opposite_protocol",
+    "name",
+    "origin_id",
+    "origin_type",
+    "predefined",
+    "protocol",
+    "schedule",
+    "source"
+  ],
+  "sample": [
+    {
+      "_id": "<hex-id>",
+      "action": "ALLOW",
+      "connection_state_type": "ALL",
+      "connection_states": [],
+      "create_allow_respond": true,
+      "destination": {
+        "match_opposite_ports": false,
+        "matching_target": "ANY",
+        "port_matching_type": "ANY",
+        "zone_id": "<hex-id>"
+      },
+      "enabled": true,
+      "hits": 7046964,
+      "icmp_typename": "ANY",
+      "icmp_v6_typename": "ANY",
+      "index": 2147483647,
+      "ip_version": "BOTH",
+      "last_hit": 1793205963871,
+      "logging": false,
+      "match_ip_sec": false,
+      "match_opposite_protocol": false,
+      "name": "Allow All Traffic",
+      "origin_id": "<hex-id>",
+      "predefined": true,
+      "protocol": "all",
+      "schedule": {
+        "mode": "ALWAYS"
+      },
+      "source": {
+        "match_opposite_ports": false,
+        "matching_target": "ANY",
+        "port_matching_type": "ANY",
+        "zone_id": "<hex-id>"
+      }
+    }
+  ]
+}

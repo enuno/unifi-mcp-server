@@ -86,6 +86,21 @@ async def test_get_dpi_statistics_empty_notes_flow_engine(mock_settings):
     assert result["applications"] == []
     assert result["categories"] == []
     assert "traffic-flow" in result["note"]
+    # N3: the statistics-reset caveat rides every empty stats response.
+    assert "Network 11" in result["statistics_note"]
+
+
+@pytest.mark.asyncio
+async def test_get_dpi_statistics_nonempty_has_no_statistics_note(mock_settings):
+    """The caveat only fires on an empty history, not on real data."""
+    client = _sitedpi_client(
+        by_app=[{"app": 94, "cat": 4, "tx_bytes": 1, "rx_bytes": 2}],
+    )
+
+    with patch.object(dpi_module, "UniFiClient", return_value=client):
+        result = await get_dpi_statistics("site-1", mock_settings)
+
+    assert "statistics_note" not in result
 
 
 @pytest.mark.asyncio
@@ -124,7 +139,8 @@ async def test_list_top_applications_success(mock_settings):
     with patch.object(dpi_module, "UniFiClient", return_value=client):
         result = await list_top_applications("site-1", mock_settings)
 
-    assert [r["app"] for r in result] == [7, 94]
+    assert [r["app"] for r in result["applications"]] == [7, 94]
+    assert "statistics_note" not in result
 
 
 @pytest.mark.asyncio
@@ -136,18 +152,20 @@ async def test_list_top_applications_with_limit(mock_settings):
     with patch.object(dpi_module, "UniFiClient", return_value=client):
         result = await list_top_applications("site-1", mock_settings, limit=2)
 
-    assert len(result) == 2
-    assert result[0]["app"] == 5
+    assert len(result["applications"]) == 2
+    assert result["applications"][0]["app"] == 5
 
 
 @pytest.mark.asyncio
 async def test_list_top_applications_empty(mock_settings):
+    """N3: an empty history wraps to a dict carrying the reset caveat."""
     client = _sitedpi_client()
 
     with patch.object(dpi_module, "UniFiClient", return_value=client):
         result = await list_top_applications("site-1", mock_settings)
 
-    assert result == []
+    assert result["applications"] == []
+    assert "Network 11" in result["statistics_note"]
 
 
 @pytest.mark.asyncio
@@ -253,7 +271,7 @@ async def test_get_client_dpi_percentage_calculation(mock_settings):
 
 @pytest.mark.asyncio
 async def test_get_client_dpi_empty(mock_settings):
-    """Test client DPI with no data."""
+    """Test client DPI with no data — N3 caveat rides the empty result."""
     mock_response = {"data": []}
 
     mock_client = MagicMock()
@@ -267,6 +285,24 @@ async def test_get_client_dpi_empty(mock_settings):
 
     assert result["applications"] == []
     assert result["total_bytes"] == 0
+    assert "Network 11" in result["statistics_note"]
+
+
+@pytest.mark.asyncio
+async def test_get_client_dpi_nonempty_has_no_statistics_note(mock_settings):
+    """The caveat only fires on an empty history, not on real data."""
+    mock_response = {"data": [{"app": "YouTube", "cat": "Streaming", "tx_bytes": 1, "rx_bytes": 2}]}
+
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(dpi_module, "UniFiClient", return_value=mock_client):
+        result = await get_client_dpi("default", "aa:bb:cc:dd:ee:ff", mock_settings)
+
+    assert "statistics_note" not in result
 
 
 # =============================================================================

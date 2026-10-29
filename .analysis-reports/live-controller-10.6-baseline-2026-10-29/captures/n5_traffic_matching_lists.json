@@ -1,0 +1,24 @@
+{
+  "captured_at": "2026-10-29T17:17:03.585014+00:00",
+  "endpoint": "/proxy/network/integration/v1/sites/88f7af54-98f8-306a-a1c7-c9349722b1f6/traffic-matching-lists",
+  "list_count": 1,
+  "key_union": [
+    "id",
+    "items",
+    "name",
+    "type"
+  ],
+  "lists_full": [
+    {
+      "type": "PORTS",
+      "id": "87407d7d-d951-4c01-b9aa-2cd1bbc7465b",
+      "name": "PHASE8-THROWAWAY-PORTS",
+      "items": [
+        {
+          "type": "PORT_NUMBER",
+          "value": 65534
+        }
+      ]
+    }
+  ]
+}

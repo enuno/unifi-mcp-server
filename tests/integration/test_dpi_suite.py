@@ -106,10 +106,13 @@ async def test_list_top_applications(settings, env: TestEnvironment) -> dict[str
             limit=5,
         )
 
-        # Validate response structure
-        assert isinstance(result, list), "Result must be a list"
+        # Validate response structure (dict wrapper since the N3 caveat)
+        assert isinstance(result, dict), "Result must be a dict"
+        assert "applications" in result, "Result must carry 'applications'"
+        apps = result["applications"]
 
-        if not result:
+        if not apps:
+            assert "statistics_note" in result, "Empty result must carry statistics_note"
             return {
                 "status": "SKIP",
                 "message": "No application data found (flow-engine controller or no traffic)",
@@ -117,16 +120,16 @@ async def test_list_top_applications(settings, env: TestEnvironment) -> dict[str
 
         # Rows are the controller's own sitedpi entries: numeric catalog ids
         # plus byte counters and the computed total.
-        app = result[0]
+        app = apps[0]
         assert "app" in app, "Application row must carry the 'app' catalog id"
         assert "total_bytes" in app, "Application row must have 'total_bytes'"
 
         # Verify limit is respected
-        assert len(result) <= 5, "Result should respect limit parameter"
+        assert len(apps) <= 5, "Result should respect limit parameter"
 
         return {
             "status": "PASS",
-            "message": f"Retrieved top {len(result)} applications",
+            "message": f"Retrieved top {len(apps)} applications",
             "details": {
                 "top_app_id": app.get("app"),
                 "top_app_bytes": app.get("total_bytes", 0),

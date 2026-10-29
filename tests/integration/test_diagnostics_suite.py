@@ -148,9 +148,12 @@ async def test_get_speed_test_history(settings, env: TestEnvironment) -> dict[st
             settings=settings,
         )
 
-        assert isinstance(result, list), "Result must be a list"
+        assert isinstance(result, dict), "Result must be a dict"
+        assert "results" in result, "Result must carry 'results'"
+        results = result["results"]
 
-        if not result:
+        if not results:
+            assert "statistics_note" in result, "Empty result must carry statistics_note"
             return {
                 "status": "SKIP",
                 "message": "No speed test history found",
@@ -158,10 +161,10 @@ async def test_get_speed_test_history(settings, env: TestEnvironment) -> dict[st
 
         return {
             "status": "PASS",
-            "message": f"Retrieved {len(result)} speed test results",
+            "message": f"Retrieved {len(results)} speed test results",
             "details": {
-                "count": len(result),
-                "latest_status": result[0].get("status") if result else None,
+                "count": len(results),
+                "latest_status": results[0].get("status") if results else None,
             },
         }
 

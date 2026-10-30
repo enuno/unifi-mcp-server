@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Paged time-window fetch for the traffic-flow tools.** `get_traffic_flows`, `filter_traffic_flows` and `get_client_flow_aggregation` take optional `hours` and `max_flows` parameters. With either set, the tools page through the v2 `traffic-flows` endpoint with the web UI's own camelCase parameters (`pageNumber` / `pageSize` up to 500, `timestampFrom` / `timestampTo`) and send `source_mac` as `search_text` and `direction` as a server-side pre-filter; the client-side filters still run afterwards, because `search_text` also matches flows *to* the address. Verified live on a UDM Pro running UniFi Network 10.6.109: the endpoint pages through the full retention, where the previous call only ever saw the 50 newest flows of the whole site. Without the new parameters the request body stays `{}`, so default behaviour is unchanged.
+
 ## [0.7.0] - 2026-10-29
 
 ### Added

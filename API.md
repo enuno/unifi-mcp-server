@@ -2903,25 +2903,41 @@ Real-time traffic flow monitoring and analysis for UniFi Network 9.0+. Provides 
 
 Retrieve traffic flows with optional filtering.
 
+By default the tool returns the 50 most-recent completed flows. Pass `hours` and/or
+`max_flows` to page through a longer window instead (`pageNumber` / `pageSize` with
+`timestampFrom` / `timestampTo` on the v2 endpoint); `source_mac` and `direction` are then also
+sent as server-side pre-filters. The client-side filters apply in both modes.
+
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
+- `source_mac` (string, optional): Filter by source MAC address (case-insensitive)
 - `source_ip` (string, optional): Filter by source IP address
+- `source_zone_name` (string, optional): Filter by source firewall zone name
+- `source_network_name` (string, optional): Filter by source VLAN display name
 - `destination_ip` (string, optional): Filter by destination IP address
-- `protocol` (string, optional): Filter by protocol (tcp/udp/icmp)
-- `application_id` (string, optional): Filter by DPI application ID
-- `time_range` (string, optional): Time range (1h, 6h, 12h, 24h, 7d, 30d) (default: 24h)
-- `limit` (integer, optional): Maximum number of flows to return
-- `offset` (integer, optional): Number of flows to skip
+- `destination_port` (integer, optional): Filter by destination port
+- `destination_zone_name` (string, optional): Filter by destination zone name (useful for `External`)
+- `destination_network_name` (string, optional): Filter by destination VLAN display name
+- `protocol` (string, optional): Filter by protocol (`TCP`, `UDP`, `ICMP`, ...)
+- `action` (string, optional): Filter by firewall action (`allowed`, `blocked`)
+- `direction` (string, optional): Filter by direction (`outgoing`, `incoming`, `local`)
+- `risk` (string, optional): Filter by risk classification
+- `min_bytes` (integer, optional): Only flows with at least this many total bytes
+- `client_name_contains` (string, optional): Substring match against the source client name
+- `limit` (integer, optional): Maximum number of flows to return (after filtering)
+- `hours` (integer, optional): Page through the flows completed in the last `hours` (at least 1)
+- `max_flows` (integer, optional): Upper bound on flows fetched in paged mode, before
+  client-side filtering (1-50000, default 5000)
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("get_traffic_flows", {
     "site_id": "default",
-    "protocol": "tcp",
-    "time_range": "1h",
-    "limit": 100
+    "source_mac": "aa:bb:cc:dd:ee:ff",
+    "direction": "outgoing",
+    "hours": 24
 })
 ```
 
@@ -2982,7 +2998,9 @@ Get comprehensive traffic aggregation for a specific client.
 
 - `site_id` (string, required): Site identifier
 - `client_mac` (string, required): Client MAC address
-- `time_range` (string, optional): Time range (default: 24h)
+- `hours` (integer, optional): Aggregate the flows of the last `hours` instead of the latest-50
+  snapshot (see `get_traffic_flows`)
+- `max_flows` (integer, optional): Upper bound on flows fetched in paged mode (1-50000, default 5000)
 
 **Example:**
 
@@ -2990,7 +3008,7 @@ Get comprehensive traffic aggregation for a specific client.
 result = await mcp.call_tool("get_client_flow_aggregation", {
     "site_id": "default",
     "client_mac": "aa:bb:cc:dd:ee:ff",
-    "time_range": "24h"
+    "hours": 24
 })
 ```
 
@@ -3287,21 +3305,24 @@ result = await mcp.call_tool("get_flow_risks", {
 
 #### `filter_traffic_flows`
 
-Filter flows using complex filter expressions.
+Filter flows with a comma-separated list of `key=value` pairs.
 
 **Parameters:**
 
 - `site_id` (string, required): Site identifier
-- `filter_expression` (string, required): Filter expression (e.g., "bytes > 1000000 AND protocol = 'tcp'")
-- `time_range` (string, optional): Time range (default: 24h)
+- `filter_expression` (string, required): Comma-separated `key=value` pairs using the filter
+  parameters of `get_traffic_flows` (e.g. `"protocol=TCP,destination_zone_name=External,min_bytes=1000"`)
 - `limit` (integer, optional): Maximum number of flows
+- `hours` (integer, optional): Page through the flows of the last `hours` (see `get_traffic_flows`)
+- `max_flows` (integer, optional): Upper bound on flows fetched in paged mode (1-50000, default 5000)
 
 **Example:**
 
 ```python
 result = await mcp.call_tool("filter_traffic_flows", {
     "site_id": "default",
-    "filter_expression": "bytes > 10000000 AND protocol = 'tcp'",
+    "filter_expression": "protocol=TCP,min_bytes=10000000",
+    "hours": 6,
     "limit": 100
 })
 ```

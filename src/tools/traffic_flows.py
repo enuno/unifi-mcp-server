@@ -4,21 +4,30 @@ The UniFi Integration API (``/proxy/network/integration/v1/...``) does **not**
 expose traffic flow data on any documented endpoint or firmware. Flow data is
 only available via the local private v2 endpoint
 ``POST /proxy/network/v2/api/site/{site_id}/traffic-flows``, which is the
-endpoint the UniFi Network web UI uses internally. It returns up to 50 of the
-most recently-completed flows with full source/destination metadata, matched
-firewall policies, byte counters, and risk classification.
+endpoint the UniFi Network web UI uses internally. It returns completed flows
+with full source/destination metadata, matched firewall policies, byte
+counters, and risk classification.
 
 Key constraints of the v2 endpoint, verified live against a UDM Pro running
-UniFi Network 10.2.x:
+UniFi Network 10.2.x and 10.6.109:
 
-* Hard cap at 50 flows per call; ``limit`` / ``offset`` / ``page_size`` /
-  ``duration`` / ``start`` parameters are accepted but ignored.
-* The response is a rolling snapshot of the latest completed flows, so
-  repeated calls return different IDs as new flows arrive.
-* Server-side filter keys (``source_zone_ids``, ``protocols``, ``actions``,
-  ``risks``, etc.) are accepted but **non-functional** — they pass syntax
-  validation but do not actually narrow the result set. All filtering must
-  therefore be performed client-side after fetching the sample.
+* An empty request body returns the 50 most-recently completed flows. The
+  snake_case parameters ``limit`` / ``offset`` / ``page_size`` /
+  ``duration`` / ``start`` are accepted but ignored.
+* The web UI's own camelCase parameters do work (verified on 10.6.109):
+  ``pageNumber`` / ``pageSize`` (up to 500) page through the history, the
+  response carries ``has_next`` / ``total_page_count``, and
+  ``timestampFrom`` / ``timestampTo`` (epoch ms) bound the time window.
+  ``search_text`` (e.g. a MAC) and ``direction`` (e.g. ``["outgoing"]``)
+  narrow the result server-side. ``search_text`` also matches flows *to*
+  the searched address, so the client-side filters still run afterwards.
+* The default call is a rolling snapshot of the latest completed flows, so
+  repeated calls return different IDs as new flows arrive. Pass ``hours`` or
+  ``max_flows`` to the fetch tools to page through a time window instead.
+* Other server-side filter keys (``source_zone_ids``, ``protocols``,
+  ``actions``, ``risks``, etc.) are accepted but **non-functional** — they
+  pass syntax validation but do not actually narrow the result set. All other
+  filtering is therefore performed client-side after fetching.
 
 Because this endpoint is only reachable via the local gateway proxy, every
 function in this module calls :func:`_ensure_local_api` and raises
@@ -47,6 +56,7 @@ from ..models.traffic_flow import (
 from ..utils import (
     APIError,
     ResourceNotFoundError,
+    ValidationError,
     audit_action,
     get_logger,
     sanitize_log_message,
@@ -74,17 +84,23 @@ def _ensure_local_api(settings: Settings) -> None:
         )
 
 
-async def _fetch_raw_flows(
-    client: UniFiClient, settings: Settings, site_id: str
-) -> list[dict[str, Any]]:
-    """Hit the v2 traffic-flows endpoint and return the raw flow dicts.
+_PAGE_SIZE = 500
+_DEFAULT_MAX_FLOWS = 5000
+_MAX_FLOWS_LIMIT = 50000
 
-    The endpoint ignores pagination/filter params so we always send an empty
-    body and apply filtering client-side in the public wrappers below.
-    """
-    normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
-    endpoint = f"{settings.get_v2_api_path(normalized_site_id)}/traffic-flows"
-    response = await client.post(endpoint, json_data={})
+
+def _validate_window(hours: int | None, max_flows: int | None) -> None:
+    """Reject a time window or flow cap the paged fetch cannot honour."""
+    if hours is not None and hours < 1:
+        raise ValidationError(f"hours must be at least 1, got {hours}")
+    if max_flows is not None and not 1 <= max_flows <= _MAX_FLOWS_LIMIT:
+        raise ValidationError(
+            f"max_flows must be between 1 and {_MAX_FLOWS_LIMIT}, got {max_flows}"
+        )
+
+
+def _extract_flows(response: Any) -> list[dict[str, Any]]:
+    """Return the flow dicts from a bare-list or ``{"data": [...]}`` response."""
     if isinstance(response, list):
         return [f for f in response if isinstance(f, dict)]
     if isinstance(response, dict):
@@ -92,6 +108,61 @@ async def _fetch_raw_flows(
         if isinstance(inner, list):
             return [f for f in inner if isinstance(f, dict)]
     return []
+
+
+async def _fetch_raw_flows(
+    client: UniFiClient,
+    settings: Settings,
+    site_id: str,
+    *,
+    hours: int | None = None,
+    max_flows: int | None = None,
+    search_text: str | None = None,
+    direction: str | None = None,
+) -> list[dict[str, Any]]:
+    """Hit the v2 traffic-flows endpoint and return the raw flow dicts.
+
+    Without ``hours`` and ``max_flows`` this sends an empty body and returns
+    the 50 most-recent completed flows. With either, it pages through the
+    endpoint (``pageNumber`` / ``pageSize``), bounded by the last ``hours``
+    and capped at ``max_flows`` (default 5000), and passes ``search_text``
+    and ``direction`` as server-side pre-filters. The public wrappers apply
+    the full client-side filtering afterwards in both modes.
+
+    Paging stops at the first short or empty page. ``UniFiClient`` normalizes
+    responses to ``{"data": [...]}`` and drops the endpoint's ``has_next``,
+    so a full page is the only reliable "more to come" signal; an explicit
+    ``has_next: false`` is still honoured when a response carries it.
+    """
+    normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
+    endpoint = f"{settings.get_v2_api_path(normalized_site_id)}/traffic-flows"
+    if hours is None and max_flows is None:
+        return _extract_flows(await client.post(endpoint, json_data={}))
+
+    cap = max_flows or _DEFAULT_MAX_FLOWS
+    page_size = min(_PAGE_SIZE, cap)
+    body: dict[str, Any] = {"pageSize": page_size}
+    if hours is not None:
+        now_ms = int(datetime.now(UTC).timestamp() * 1000)
+        body["timestampFrom"] = now_ms - hours * 3_600_000
+        body["timestampTo"] = now_ms
+    if search_text:
+        body["search_text"] = search_text
+    if direction:
+        body["direction"] = [direction]
+
+    flows: list[dict[str, Any]] = []
+    page_number = 0
+    while len(flows) < cap:
+        response = await client.post(endpoint, json_data={**body, "pageNumber": page_number})
+        page = _extract_flows(response)
+        flows.extend(page)
+        if len(page) < page_size:
+            break
+        if isinstance(response, dict) and response.get("has_next") is False:
+            break
+        page_number += 1
+    return flows[:cap]
 
 
 def _parse_flow(raw: dict[str, Any]) -> TrafficFlow:
@@ -175,17 +246,29 @@ def _flow_matches(
 async def _get_filtered_flows(
     site_id: str,
     settings: Settings,
+    *,
+    hours: int | None = None,
+    max_flows: int | None = None,
     **filters: Any,
 ) -> list[TrafficFlow]:
-    """Fetch the latest 50 flows and apply client-side filters."""
+    """Fetch flows (latest 50, or a paged window) and apply client-side filters."""
     _ensure_local_api(settings)
+    _validate_window(hours, max_flows)
 
     async with UniFiClient(settings) as client:
         if not client.is_authenticated:
             await client.authenticate()
 
         try:
-            raw_flows = await _fetch_raw_flows(client, settings, site_id)
+            raw_flows = await _fetch_raw_flows(
+                client,
+                settings,
+                site_id,
+                hours=hours,
+                max_flows=max_flows,
+                search_text=filters.get("source_mac"),
+                direction=filters.get("direction"),
+            )
         except APIError:
             logger.exception(
                 sanitize_log_message(f"Failed to fetch traffic flows for site {site_id}")
@@ -228,12 +311,17 @@ async def get_traffic_flows(
     min_bytes: int | None = None,
     client_name_contains: str | None = None,
     limit: int | None = None,
+    hours: int | None = None,
+    max_flows: int | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve recent traffic flows from the UniFi controller.
 
-    Fetches up to 50 most-recent completed flows from the local v2 endpoint
-    and applies client-side filters. All filter parameters are optional; pass
-    any combination to narrow the result set.
+    By default fetches the 50 most-recent completed flows from the local v2
+    endpoint. Pass ``hours`` and/or ``max_flows`` to page through a longer
+    window instead; ``source_mac`` and ``direction`` are then also sent as
+    server-side pre-filters. Client-side filters apply in both modes. All
+    filter parameters are optional; pass any combination to narrow the
+    result set.
 
     Args:
         site_id: Site identifier
@@ -259,6 +347,10 @@ async def get_traffic_flows(
         min_bytes: Only include flows with at least this many total bytes
         client_name_contains: Substring match against source client_name
         limit: Cap on the number of returned flows (after filtering)
+        hours: Page through the flows completed in the last ``hours``
+            (at least 1) instead of the latest-50 snapshot
+        max_flows: Upper bound on flows fetched in paged mode, before
+            client-side filtering (1-50000, default 5000)
 
     Returns:
         List of flow dictionaries. Each dict has the full v2 schema —
@@ -268,6 +360,8 @@ async def get_traffic_flows(
     flows = await _get_filtered_flows(
         site_id,
         settings,
+        hours=hours,
+        max_flows=max_flows,
         source_mac=source_mac,
         source_ip=source_ip,
         source_zone_name=source_zone_name,
@@ -436,12 +530,16 @@ async def filter_traffic_flows(
     settings: Settings,
     filter_expression: str,
     limit: int | None = None,
+    hours: int | None = None,
+    max_flows: int | None = None,
 ) -> list[dict[str, Any]]:
     """Client-side filter by a simple ``key=value`` expression list.
 
     Accepts comma-separated ``key=value`` pairs, for example
     ``"protocol=UDP,destination_zone_name=External,min_bytes=1000"``. Any
-    key recognised by :func:`get_traffic_flows` may be used.
+    filter key recognised by :func:`get_traffic_flows` may be used.
+    ``hours`` and ``max_flows`` select the paged window as in
+    :func:`get_traffic_flows`.
     """
     site_id = validate_site_id(site_id)
     parsed: dict[str, Any] = {}
@@ -459,7 +557,9 @@ async def filter_traffic_flows(
         else:
             parsed[key] = value
 
-    return await get_traffic_flows(site_id, settings, limit=limit, **parsed)
+    return await get_traffic_flows(
+        site_id, settings, limit=limit, hours=hours, max_flows=max_flows, **parsed
+    )
 
 
 @read_tool
@@ -467,10 +567,18 @@ async def get_client_flow_aggregation(
     site_id: str,
     client_mac: str,
     settings: Settings,
+    hours: int | None = None,
+    max_flows: int | None = None,
 ) -> dict[str, Any]:
-    """Aggregate the current flow sample for a specific client MAC."""
+    """Aggregate the flow sample for a specific client MAC.
+
+    The sample is the latest-50 snapshot, or with ``hours`` / ``max_flows``
+    the paged window as in :func:`get_traffic_flows`.
+    """
     site_id = validate_site_id(site_id)
-    flows = await _get_filtered_flows(site_id, settings, source_mac=client_mac)
+    flows = await _get_filtered_flows(
+        site_id, settings, hours=hours, max_flows=max_flows, source_mac=client_mac
+    )
 
     if not flows:
         return ClientFlowAggregation(

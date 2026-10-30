@@ -474,6 +474,182 @@ class TestGetTrafficFlows:
 
 
 # --------------------------------------------------------------------------- #
+# Windowed (paged) fetch                                                      #
+# --------------------------------------------------------------------------- #
+
+
+def _page(flows: list[dict[str, Any]], page_number: int, has_next: bool) -> dict[str, Any]:
+    """A v2 ``traffic-flows`` page as the controller returns it with paging params."""
+    return {
+        "data": flows,
+        "has_next": has_next,
+        "or_more": has_next,
+        "page_number": page_number,
+        "total_element_count": len(flows),
+        "total_page_count": page_number + (2 if has_next else 1),
+    }
+
+
+def _flows(sample: list[dict[str, Any]], count: int, offset: int = 0) -> list[dict[str, Any]]:
+    """``count`` copies of the sample flows with distinct ids."""
+    return [{**sample[i % len(sample)], "id": f"flow-{offset + i}"} for i in range(count)]
+
+
+class TestWindowedFetch:
+    @pytest.mark.asyncio
+    async def test_hours_sends_time_window_and_paging_params(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(_page(sample_raw_flows, 0, has_next=False))
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_traffic_flows("default", mock_settings, hours=24)
+
+        assert len(result) == 3
+        client.post.assert_called_once()
+        body = client.post.call_args.kwargs["json_data"]
+        assert body["timestampTo"] - body["timestampFrom"] == 24 * 3_600_000
+        assert body["pageNumber"] == 0
+        assert body["pageSize"] == 500
+
+    @pytest.mark.asyncio
+    async def test_pages_on_the_normalized_client_response(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """``UniFiClient`` returns only ``{"data": [...]}`` and drops ``has_next``.
+
+        A full page must therefore lead to the next request, and the first
+        short page must end the loop.
+        """
+        client = _mock_client([])
+        client.post = AsyncMock(
+            side_effect=[
+                {"data": _flows(sample_raw_flows, 500)},
+                {"data": _flows(sample_raw_flows, 3, offset=500)},
+            ]
+        )
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_traffic_flows("default", mock_settings, hours=1)
+
+        assert [flow["id"] for flow in result] == [f"flow-{i}" for i in range(503)]
+        bodies = [call.kwargs["json_data"] for call in client.post.call_args_list]
+        assert [body["pageNumber"] for body in bodies] == [0, 1]
+        assert {body["pageSize"] for body in bodies} == {500}
+
+    @pytest.mark.asyncio
+    async def test_explicit_has_next_false_stops_paging(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(_page(_flows(sample_raw_flows, 10), 0, has_next=False))
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_traffic_flows("default", mock_settings, max_flows=10)
+
+        client.post.assert_called_once()
+        assert len(result) == 10
+
+    @pytest.mark.asyncio
+    async def test_max_flows_stops_paging_and_caps_the_result(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client([])
+        client.post = AsyncMock(return_value={"data": _flows(sample_raw_flows, 500)})
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_traffic_flows("default", mock_settings, max_flows=600)
+
+        # 500 per page: the second page passes the cap of 600, so no third request
+        assert client.post.call_count == 2
+        assert client.post.call_args.kwargs["json_data"]["pageSize"] == 500
+        assert "timestampFrom" not in client.post.call_args.kwargs["json_data"]
+        assert len(result) == 600
+
+    @pytest.mark.asyncio
+    async def test_windowed_mode_sends_server_side_prefilters(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(_page(sample_raw_flows, 0, has_next=False))
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_traffic_flows(
+                "default",
+                mock_settings,
+                source_mac="aa:bb:cc:dd:ee:02",
+                direction="outgoing",
+                hours=24,
+            )
+
+        body = client.post.call_args.kwargs["json_data"]
+        assert body["search_text"] == "aa:bb:cc:dd:ee:02"
+        assert body["direction"] == ["outgoing"]
+        # the client-side filter still applies: search_text also matches flows *to* the MAC
+        assert [flow["source"]["mac"] for flow in result] == ["aa:bb:cc:dd:ee:02"]
+
+    @pytest.mark.asyncio
+    async def test_default_mode_sends_no_prefilters(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(sample_raw_flows)
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            await tf.get_traffic_flows(
+                "default", mock_settings, source_mac="aa:bb:cc:dd:ee:02", direction="outgoing"
+            )
+
+        assert client.post.call_args.kwargs["json_data"] == {}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            ({"hours": 0}, "hours must be at least 1"),
+            ({"max_flows": 0}, "max_flows must be between 1 and 50000"),
+            ({"max_flows": 50_001}, "max_flows must be between 1 and 50000"),
+        ],
+    )
+    async def test_rejects_invalid_window(
+        self, mock_settings: MagicMock, kwargs: dict[str, int], message: str
+    ) -> None:
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = _mock_client([])
+            with pytest.raises(ValidationError, match=message):
+                await tf.get_traffic_flows("default", mock_settings, **kwargs)
+
+    @pytest.mark.asyncio
+    async def test_filter_traffic_flows_passes_the_window(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(_page(sample_raw_flows, 0, has_next=False))
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.filter_traffic_flows(
+                "default", mock_settings, "protocol=TCP", hours=6, max_flows=100
+            )
+
+        body = client.post.call_args.kwargs["json_data"]
+        assert body["timestampTo"] - body["timestampFrom"] == 6 * 3_600_000
+        assert body["pageSize"] == 100
+        assert {flow["protocol"] for flow in result} == {"TCP"}
+
+    @pytest.mark.asyncio
+    async def test_client_flow_aggregation_passes_the_window(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        client = _mock_client(_page(sample_raw_flows, 0, has_next=False))
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            MockClient.return_value = client
+            result = await tf.get_client_flow_aggregation(
+                "default", "aa:bb:cc:dd:ee:02", mock_settings, hours=48
+            )
+
+        body = client.post.call_args.kwargs["json_data"]
+        assert body["timestampTo"] - body["timestampFrom"] == 48 * 3_600_000
+        assert body["search_text"] == "aa:bb:cc:dd:ee:02"
+        assert result["sample_size"] == 1
+
+
+# --------------------------------------------------------------------------- #
 # Statistics / analytics                                                      #
 # --------------------------------------------------------------------------- #
 

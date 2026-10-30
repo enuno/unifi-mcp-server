@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Paged time-window fetch for the traffic-flow tools.** `get_traffic_flows`, `filter_traffic_flows` and `get_client_flow_aggregation` take optional `hours` and `max_flows` parameters. With either set, the tools page through the v2 `traffic-flows` endpoint with the web UI's own camelCase parameters (`pageNumber` / `pageSize` up to 500, `timestampFrom` / `timestampTo`) and send `source_mac` as `search_text` and `direction` as a server-side pre-filter; the client-side filters still run afterwards, because `search_text` also matches flows *to* the address. Verified live on a UDM Pro running UniFi Network 10.6.109: the endpoint pages through the full retention, where the previous call only ever saw the 50 newest flows of the whole site. Without the new parameters the request body stays `{}`, so default behaviour is unchanged.
+
 ### Fixed
 
 - **`list_protect_nvrs` returned an empty list on consoles with a Protect NVR.** `GET /proxy/protect/integration/v1/nvrs` returns a single NVR object, not a `{"data": [...]}` envelope, but the dict branch added in #248 treated every dict as an envelope, so `response.get("data", [])` yielded `[]`. `list_protect_nvrs` now treats a dict without a `data` list as a one-item list. The `ProtectNVR.model` field is also now populated from the response's `type` field (the real model name, e.g. `UNVR-PRO`), which the schema exposes as `modelKey`'s sibling — previously `model` was always `null`. (Fixes #270.)

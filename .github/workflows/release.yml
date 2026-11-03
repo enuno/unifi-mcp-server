@@ -144,7 +144,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: docker-meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -185,7 +185,7 @@ jobs:
       # <version>-fleet; the Helm chart and Ansible playbook use it.
       - name: Extract metadata for the fleet image
         id: docker-meta-fleet
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |

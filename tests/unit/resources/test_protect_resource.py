@@ -74,6 +74,19 @@ class TestProtectResource:
         assert result == []
 
     @pytest.mark.asyncio
+    async def test_list_nvrs_single_object_response(self, mock_settings, mock_client):
+        # GET /v1/nvrs returns a single NVR object, not an envelope or array.
+        with patch("src.resources.protect.ProtectClient", return_value=mock_client):
+            mock_client.get = AsyncMock(
+                return_value={"id": "nvr-1", "name": "Main NVR", "type": "UNVR-PRO"}
+            )
+            result = await ProtectResource(mock_settings).list_nvrs()
+
+        assert len(result) == 1
+        assert result[0].id == "nvr-1"
+        assert result[0].model == "UNVR-PRO"
+
+    @pytest.mark.asyncio
     async def test_get_nvr_empty_returns_none(self, mock_settings, mock_client):
         with patch("src.resources.protect.ProtectClient", return_value=mock_client):
             mock_client.get = AsyncMock(return_value={"data": {}})

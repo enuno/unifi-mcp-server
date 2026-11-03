@@ -32,7 +32,13 @@ async def list_protect_nvrs(settings: Settings) -> dict[str, Any]:
         count = len(data)
         total_count = count
     elif isinstance(response, dict):
-        data = response.get("data", [])
+        if isinstance(response.get("data"), list):
+            # Envelope form: {"data": [...], "count": N, "totalCount": M}
+            data = response["data"]
+        else:
+            # The /v1/nvrs endpoint returns a single NVR object, not an
+            # envelope, so a dict without a "data" list is one NVR.
+            data = [response]
         count = response.get("count", len(data))
         total_count = response.get("totalCount", len(data))
     else:

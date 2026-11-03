@@ -21,7 +21,15 @@ class ProtectResource:
             await client.authenticate()
             response = await client.get(self.settings.get_protect_integration_path("nvrs"))
 
-        data = response.get("data", []) if isinstance(response, dict) else []
+        if isinstance(response, dict):
+            if isinstance(response.get("data"), list):
+                # Envelope form: {"data": [...], ...}
+                data = response["data"]
+            else:
+                # GET /v1/nvrs returns a single NVR object, not an envelope
+                data = [response]
+        else:
+            data = []
         return [ProtectNVR.model_validate(item) for item in data]
 
     async def get_nvr(self, nvr_id: str) -> ProtectNVR | None:

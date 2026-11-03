@@ -96,6 +96,43 @@ async def test_list_protect_nvrs_top_level_array(mock_settings, mock_client):
 
 
 @pytest.mark.asyncio
+async def test_list_protect_nvrs_single_object_response(mock_settings, mock_client):
+    """GET /v1/nvrs returns a single NVR object, not an envelope or array."""
+    mock_response = {
+        "id": "nvr-1",
+        "name": "Main NVR",
+        "type": "UNVR-PRO",
+        "guid": "nvr-guid-1",
+        "mac": "00:00:00:00:00:00",
+        "modelKey": "nvr",
+        "armMode": {"status": "armed"},
+        "doorbellSettings": {},
+    }
+    mock_client.get = AsyncMock(return_value=mock_response)
+
+    with patch("src.tools.protect_nvr.ProtectClient", return_value=mock_client):
+        result = await list_protect_nvrs(mock_settings)
+
+    assert result["count"] == 1
+    assert result["totalCount"] == 1
+    assert len(result["data"]) == 1
+    assert result["data"][0]["id"] == "nvr-1"
+    assert result["data"][0]["model"] == "UNVR-PRO"
+
+
+@pytest.mark.asyncio
+async def test_list_protect_nvrs_envelope_with_empty_data_list(mock_settings, mock_client):
+    """A dict envelope whose data is an empty list is not mistaken for a single NVR."""
+    mock_client.get = AsyncMock(return_value={"data": [], "count": 0, "totalCount": 0})
+
+    with patch("src.tools.protect_nvr.ProtectClient", return_value=mock_client):
+        result = await list_protect_nvrs(mock_settings)
+
+    assert result["count"] == 0
+    assert result["data"] == []
+
+
+@pytest.mark.asyncio
 async def test_list_protect_nvrs_unexpected_response_raises(mock_settings, mock_client):
     mock_client.get = AsyncMock(return_value=None)
 

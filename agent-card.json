@@ -10077,7 +10077,7 @@
       }
     },
     {
-      "description": "Aggregate statistics over the current flow sample.\n\nThe result describes the rolling 50-flow snapshot (optionally narrowed\nby the same client-side filters as :func:`get_traffic_flows`). There is\nno \"time range\" \u2014 the v2 endpoint does not support historical windows.",
+      "description": "Aggregate statistics over the current flow sample.\n\nThe result describes the rolling snapshot of completed flows (optionally\nnarrowed by the same client-side filters as :func:`get_traffic_flows`).\nThis tool has no time-window parameter; use :func:`get_traffic_flows`\nwith ``hours`` / ``max_flows`` for a windowed sample.",
       "examples": [
         {
           "arguments": {
@@ -10172,7 +10172,7 @@
       }
     },
     {
-      "description": "Historical trends \u2014 **not supported** on the v2 endpoint.\n\nThe v2 ``traffic-flows`` endpoint returns a rolling snapshot of the 50\nmost-recent completed flows; there is no historical query capability.\nFor aggregated time-series over longer windows, use the ``stat/report/*``\nendpoints via other MCP tools (e.g. client bandwidth history).",
+      "description": "Historical trends \u2014 **not supported** on the v2 endpoint.\n\nThe v2 ``traffic-flows`` endpoint returns raw completed flow records\nand exposes no aggregation or interval buckets, so there is no trend\ntime-series to read. For aggregated time-series over longer windows,\nuse the ``stat/report/*`` endpoints via other MCP tools (e.g. client\nbandwidth history). To page a window of raw flow records instead, pass\n``hours`` / ``max_flows`` to :func:`get_traffic_flows`.",
       "examples": [
         {
           "arguments": {
@@ -21358,7 +21358,7 @@
       }
     },
     {
-      "description": "Streaming \u2014 **not supported** on the v2 endpoint.\n\nWith the hard 50-flow cap the endpoint can't be used as a streaming\nsource \u2014 fast networks roll through that window in well under a second.\nUse :func:`get_traffic_flows` on a poll schedule instead.",
+      "description": "Streaming \u2014 **not supported** on the v2 endpoint.\n\nThe v2 ``traffic-flows`` endpoint has no persistent connection and no\nserver-push mechanism, so it cannot deliver a live stream; a polling\nclient is the only option. The paged fetch (``hours`` / ``max_flows``)\ncovers a window of *completed* flows, not the live tail.\nUse :func:`get_traffic_flows` on a poll schedule instead.",
       "examples": [
         {
           "arguments": {

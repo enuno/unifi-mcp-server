@@ -398,9 +398,10 @@ async def get_flow_statistics(
 ) -> dict[str, Any]:
     """Aggregate statistics over the current flow sample.
 
-    The result describes the rolling 50-flow snapshot (optionally narrowed
-    by the same client-side filters as :func:`get_traffic_flows`). There is
-    no "time range" — the v2 endpoint does not support historical windows.
+    The result describes the rolling snapshot of completed flows (optionally
+    narrowed by the same client-side filters as :func:`get_traffic_flows`).
+    This tool has no time-window parameter; use :func:`get_traffic_flows`
+    with ``hours`` / ``max_flows`` for a windowed sample.
     """
     site_id = validate_site_id(site_id)
     flows = await _get_filtered_flows(
@@ -840,16 +841,19 @@ async def get_flow_trends(
 ) -> list[dict[str, Any]]:
     """Historical trends — **not supported** on the v2 endpoint.
 
-    The v2 ``traffic-flows`` endpoint returns a rolling snapshot of the 50
-    most-recent completed flows; there is no historical query capability.
-    For aggregated time-series over longer windows, use the ``stat/report/*``
-    endpoints via other MCP tools (e.g. client bandwidth history).
+    The v2 ``traffic-flows`` endpoint returns raw completed flow records
+    and exposes no aggregation or interval buckets, so there is no trend
+    time-series to read. For aggregated time-series over longer windows,
+    use the ``stat/report/*`` endpoints via other MCP tools (e.g. client
+    bandwidth history). To page a window of raw flow records instead, pass
+    ``hours`` / ``max_flows`` to :func:`get_traffic_flows`.
     """
     site_id = validate_site_id(site_id)
     raise NotImplementedError(
         "get_flow_trends is not supported: the v2 traffic-flows endpoint "
-        "does not expose historical time-series data. Use stat/report-based "
-        "tools for bandwidth trends."
+        "returns individual flow records with no aggregation or interval "
+        "buckets, so it exposes no historical time-series data. Use "
+        "stat/report-based tools for bandwidth trends."
     )
 
 
@@ -862,15 +866,17 @@ async def stream_traffic_flows(
 ) -> Any:
     """Streaming — **not supported** on the v2 endpoint.
 
-    With the hard 50-flow cap the endpoint can't be used as a streaming
-    source — fast networks roll through that window in well under a second.
+    The v2 ``traffic-flows`` endpoint has no persistent connection and no
+    server-push mechanism, so it cannot deliver a live stream; a polling
+    client is the only option. The paged fetch (``hours`` / ``max_flows``)
+    covers a window of *completed* flows, not the live tail.
     Use :func:`get_traffic_flows` on a poll schedule instead.
     """
     site_id = validate_site_id(site_id)
     raise NotImplementedError(
         "stream_traffic_flows is not supported: the v2 traffic-flows endpoint "
-        "caps responses at 50 flows with no pagination, so a streaming view "
-        "drops flows on busy networks. Poll get_traffic_flows instead."
+        "has no persistent connection and no server-push mechanism, so it "
+        "cannot deliver a live stream. Poll get_traffic_flows instead."
     )
 
 

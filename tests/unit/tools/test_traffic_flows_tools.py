@@ -230,7 +230,7 @@ class TestLocalApiGate:
 
     @pytest.mark.asyncio
     async def test_stream_traffic_flows_raises(self, mock_settings: MagicMock) -> None:
-        with pytest.raises(NotImplementedError, match="50 flows with no pagination"):
+        with pytest.raises(NotImplementedError, match="no persistent connection"):
             await tf.stream_traffic_flows("default", mock_settings)
 
     @pytest.mark.asyncio

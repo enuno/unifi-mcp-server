@@ -121,13 +121,14 @@ class TrafficFlow(BaseModel):
 class FlowStatistics(BaseModel):
     """Aggregated statistics over a sample of traffic flows.
 
-    The v2 endpoint returns up to 50 most-recent flows per call, so these
-    aggregates describe the rolling snapshot, not a time range.
+    The statistics are computed over the default rolling snapshot of the
+    50 most-recent completed flows, so they describe that snapshot rather
+    than a time range.
     """
 
     site_id: str = Field(..., description="Site identifier")
     sample_size: int = Field(
-        0, description="Number of flows aggregated (capped at 50 per API call)"
+        0, description="Number of flows aggregated (the rolling snapshot holds 50)"
     )
     total_flows: int = Field(0, description="Total flow records seen")
     total_bytes: int = Field(0, description="Total bytes across all flows in the sample")
@@ -243,7 +244,7 @@ class FlowRisk(BaseModel):
 
 
 class FlowStreamUpdate(BaseModel):
-    """Stub — streaming is no longer supported (50-flow rolling cap)."""
+    """Stub — streaming is not supported by the v2 endpoint."""
 
     update_type: Literal["new", "update", "closed"] = Field(..., description="Update type")
     flow: TrafficFlow = Field(..., description="Flow data")

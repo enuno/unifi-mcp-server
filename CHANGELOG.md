@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`list_protect_nvrs` returned an empty list on consoles with a Protect NVR.** `GET /proxy/protect/integration/v1/nvrs` returns a single NVR object, not a `{"data": [...]}` envelope, but the dict branch added in #248 treated every dict as an envelope, so `response.get("data", [])` yielded `[]`. `list_protect_nvrs` now treats a dict without a `data` list as a one-item list. The `ProtectNVR.model` field is also now populated from the response's `type` field (the real model name, e.g. `UNVR-PRO`), which the schema exposes as `modelKey`'s sibling — previously `model` was always `null`. (Fixes #270.)
+
 ## [0.7.0] - 2026-10-29
 
 ### Added

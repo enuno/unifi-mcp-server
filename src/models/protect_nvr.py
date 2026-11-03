@@ -8,7 +8,7 @@ class ProtectNVR(BaseModel):
 
     id: str = Field(..., description="NVR identifier")
     name: str = Field(..., description="NVR name")
-    model: str | None = Field(None, description="NVR model")
+    model: str | None = Field(None, validation_alias="type", description="NVR model name")
     state: str | None = Field(None, description="NVR state")
     host: str | None = Field(None, description="NVR host")
     version: str | None = Field(None, alias="firmwareVersion", description="Firmware version")

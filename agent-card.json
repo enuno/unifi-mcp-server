@@ -8453,7 +8453,7 @@
       }
     },
     {
-      "description": "Client-side filter by a simple ``key=value`` expression list.\n\nAccepts comma-separated ``key=value`` pairs, for example\n``\"protocol=UDP,destination_zone_name=External,min_bytes=1000\"``. Any\nkey recognised by :func:`get_traffic_flows` may be used.",
+      "description": "Client-side filter by a simple ``key=value`` expression list.\n\nAccepts comma-separated ``key=value`` pairs, for example\n``\"protocol=UDP,destination_zone_name=External,min_bytes=1000\"``. Any\nfilter key recognised by :func:`get_traffic_flows` may be used.\n``hours`` and ``max_flows`` select the paged window as in\n:func:`get_traffic_flows`.",
       "examples": [
         {
           "arguments": {
@@ -8481,7 +8481,29 @@
           "filter_expression": {
             "type": "string"
           },
+          "hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_flows": {
             "anyOf": [
               {
                 "type": "integer"
@@ -9235,7 +9257,7 @@
       }
     },
     {
-      "description": "Aggregate the current flow sample for a specific client MAC.",
+      "description": "Aggregate the flow sample for a specific client MAC.\n\nThe sample is the latest-50 snapshot, or with ``hours`` / ``max_flows``\nthe paged window as in :func:`get_traffic_flows`.",
       "examples": [
         {
           "arguments": {
@@ -9262,6 +9284,28 @@
             ],
             "default": null,
             "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "max_flows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "site_id": {
             "type": "string"
@@ -13073,7 +13117,7 @@
       }
     },
     {
-      "description": "Retrieve recent traffic flows from the UniFi controller.\n\nFetches up to 50 most-recent completed flows from the local v2 endpoint\nand applies client-side filters. All filter parameters are optional; pass\nany combination to narrow the result set.",
+      "description": "Retrieve recent traffic flows from the UniFi controller.\n\nBy default fetches the 50 most-recent completed flows from the local v2\nendpoint. Pass ``hours`` and/or ``max_flows`` to page through a longer\nwindow instead; ``source_mac`` and ``direction`` are then also sent as\nserver-side pre-filters. Client-side filters apply in both modes. All\nfilter parameters are optional; pass any combination to narrow the\nresult set.",
       "examples": [
         {
           "arguments": {
@@ -13181,6 +13225,18 @@
             "default": null,
             "description": "Filter by flow direction (\"outgoing\", \"incoming\")"
           },
+          "hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Page through the flows completed in the last ``hours``\n(at least 1) instead of the latest-50 snapshot"
+          },
           "limit": {
             "anyOf": [
               {
@@ -13192,6 +13248,18 @@
             ],
             "default": null,
             "description": "Cap on the number of returned flows (after filtering)"
+          },
+          "max_flows": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Upper bound on flows fetched in paged mode, before\nclient-side filtering (1-50000, default 5000)"
           },
           "min_bytes": {
             "anyOf": [

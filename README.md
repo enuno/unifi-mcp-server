@@ -18,7 +18,7 @@
   [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
   [![Documentation](https://img.shields.io/badge/docs-UniFi%20MCP-0D9373)](https://docs.hashgrid.net/)
   [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-6E56CF)](https://deepwiki.com/enuno/unifi-mcp-server)
-  
+
 
 </p>
 

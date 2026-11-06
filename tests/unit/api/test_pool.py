@@ -261,3 +261,10 @@ async def test_closing_a_pooled_client_twice_never_closes_the_shared_connection(
 
     pool.release.assert_called_once_with(connection)
     connection.client.aclose.assert_not_called()
+
+
+def test_server_name_shapes_the_connection(monkeypatch: pytest.MonkeyPatch):
+    pool = ClientPool()
+    plain = pool.acquire(_settings(monkeypatch))
+    named = pool.acquire(_settings(monkeypatch, UNIFI_LOCAL_TLS_SERVER_NAME="unifi.local"))
+    assert plain is not named

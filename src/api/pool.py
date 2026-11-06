@@ -32,7 +32,7 @@ import httpx
 from ..config import Settings
 from ..utils.exceptions import NetworkError
 from ..utils.logger import get_logger
-from .tls import httpx_verify
+from .tls import httpx_verify, tls_event_hooks
 
 logger = get_logger(__name__)
 
@@ -178,6 +178,7 @@ def connection_key(settings: Settings) -> str:
         settings.base_url,
         api_key_hash,
         str(settings.verify_ssl),
+        str(settings.tls_server_name),
         str(settings.request_timeout),
     )
     return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
@@ -260,6 +261,7 @@ class ClientPool:
                     headers=settings.get_headers(),
                     timeout=settings.request_timeout,
                     verify=httpx_verify(settings.verify_ssl),
+                    event_hooks=tls_event_hooks(settings.tls_server_name),
                     follow_redirects=False,
                     transport=self._transport,
                 ),

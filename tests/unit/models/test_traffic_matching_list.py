@@ -160,3 +160,25 @@ class TestTrafficMatchingListCreate:
             TrafficMatchingListCreate.model_validate(
                 {"type": "PORTS", "name": "Web", "items": [{"type": "SUBNET", "value": "10/8"}]}
             )
+
+    def test_dump_omits_the_unused_value_fields(self):
+        """The API rejects an unused field as an unknown property.
+
+        Verified live: a PORTS item dumped with its null ``start``/``stop``
+        made the controller answer "Unknown request body property
+        '$.items[0].start'", so the create payload must exclude them.
+        """
+        create = TrafficMatchingListCreate.model_validate(
+            {"type": "PORTS", "name": "Web", "items": ["80"]}
+        )
+        dumped = create.model_dump(exclude_none=True)
+        assert dumped["items"] == [{"type": "PORT_NUMBER", "value": 80}]
+        assert "start" not in dumped["items"][0]
+        assert "stop" not in dumped["items"][0]
+
+    def test_dump_emits_the_item_type_as_a_plain_string(self):
+        create = TrafficMatchingListCreate.model_validate(
+            {"type": "PORTS", "name": "Web", "items": ["80"]}
+        )
+        dumped = create.model_dump(exclude_none=True)
+        assert dumped["items"][0]["type"] == "PORT_NUMBER"

@@ -62,7 +62,10 @@ async def list_traffic_matching_lists(
                 f"Retrieved {len(paginated)} traffic matching lists for site '{site_id}'"
             )
         )
-        return [TrafficMatchingList(**lst).model_dump() for lst in paginated]
+        return [
+            TrafficMatchingList(**lst).model_dump(mode="json", exclude_none=True)
+            for lst in paginated
+        ]
 
 
 @read_tool
@@ -105,7 +108,7 @@ async def get_traffic_matching_list(
             raise ResourceNotFoundError("traffic_matching_list", list_id)
 
         logger.info(sanitize_log_message(f"Retrieved traffic matching list {list_id}"))
-        return TrafficMatchingList(**list_data).model_dump()
+        return TrafficMatchingList(**list_data).model_dump(mode="json", exclude_none=True)
 
 
 @write_tool
@@ -186,7 +189,10 @@ async def create_traffic_matching_list(
             site_id=site_id,
             dry_run=True,
         )
-        return {"dry_run": True, "would_create": create_data.model_dump()}
+        return {
+            "dry_run": True,
+            "would_create": create_data.model_dump(mode="json", exclude_none=True),
+        }
 
     try:
         async with UniFiClient(settings) as client:
@@ -196,9 +202,12 @@ async def create_traffic_matching_list(
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists"
             )
+            # exclude_none: an item carries either `value` or `start`/`stop`,
+            # and the API rejects the unused one as an unknown property
+            # ("Unknown request body property '$.items[0].start'").
             response = await client.post(
                 endpoint,
-                json_data=create_data.model_dump(),
+                json_data=create_data.model_dump(mode="json", exclude_none=True),
             )
             created_list: dict[str, Any] = (
                 response if isinstance(response, list) else response.get("data", response)

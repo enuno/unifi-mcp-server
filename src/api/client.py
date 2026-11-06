@@ -836,7 +836,7 @@ class UniFiClient:
 
         Note:
             This method downloads the actual backup file content.
-            For local API: /proxy/network/data/backup/{filename}
+            For local API: /proxy/network/dl/autobackup/{filename}
         """
         site_id = await self.resolve_site_id(site_id)
         backup_filename = validate_backup_filename(backup_filename)
@@ -844,7 +844,21 @@ class UniFiClient:
 
         # For local API
         if self.settings.api_type == APIType.LOCAL:
-            endpoint = f"/proxy/network/data/backup/{safe_name}"
+            # UniFi OS consoles serve backup files from the /dl/ tree, one
+            # directory per kind: automatic backups live in dl/autobackup/
+            # and manual ones in dl/backup/. The old /data/backup/ path
+            # 404s for every backup on a console (issue #281). Verified live
+            # against a UniFi OS console running Network 10.6.109:
+            # GET /proxy/network/dl/autobackup/{filename} returned the
+            # autobackup with the exact size list-backups reports, and
+            # GET /proxy/network/dl/backup/{filename} returned a manual
+            # backup of 7.3 MB, while /proxy/network/data/backup/{filename}
+            # answered 404 for both. The console's own cmd/backup response
+            # names the same tree: {"url": "/dl/backup/10.6.109.unf"}.
+            if backup_filename.startswith("autobackup_"):
+                endpoint = f"/proxy/network/dl/autobackup/{safe_name}"
+            else:
+                endpoint = f"/proxy/network/dl/backup/{safe_name}"
         else:
             # Cloud API
             endpoint = f"/ea/sites/{site_id}/backups/{safe_name}/download"

@@ -17,6 +17,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.device_lookup import find_device
 from ..utils.tool_kind import read_tool, write_tool
 
 # Radio identifiers: UniFi uses "ng" for 2.4GHz, "na" for 5GHz, "6e" for 6GHz
@@ -417,10 +418,7 @@ async def get_ap_radio_config(
             response if isinstance(response, list) else response.get("data", [])
         )
 
-        device = next(
-            (d for d in all_devices if d.get("_id") == device_id or d.get("mac") == device_id),
-            None,
-        )
+        device = find_device(all_devices, device_id)
 
         if not device:
             raise ResourceNotFoundError("device", device_id)
@@ -580,10 +578,7 @@ async def set_ap_radio_channel(
                 response if isinstance(response, list) else response.get("data", [])
             )
 
-            stat_device = next(
-                (d for d in all_devices if d.get("_id") == device_id or d.get("mac") == device_id),
-                None,
-            )
+            stat_device = find_device(all_devices, device_id)
 
             if not stat_device:
                 raise ResourceNotFoundError("device", device_id)
@@ -771,10 +766,7 @@ async def force_provision_device(
             if mac is None:
                 response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
                 devices = response if isinstance(response, list) else response.get("data", [])
-                found = next(
-                    (d for d in devices if isinstance(d, dict) and d.get("_id") == device_id),
-                    None,
-                )
+                found = find_device(devices, device_id)
                 if not found:
                     raise ResourceNotFoundError("device", device_id)
                 mac = validate_mac_address(found.get("mac", ""))
@@ -892,15 +884,7 @@ async def set_ap_min_rssi(
 
             response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
             devices = response if isinstance(response, list) else response.get("data", [])
-            stat_device = next(
-                (
-                    d
-                    for d in devices
-                    if isinstance(d, dict)
-                    and (d.get("_id") == device_id or d.get("mac") == device_id)
-                ),
-                None,
-            )
+            stat_device = find_device(devices, device_id)
             if not stat_device:
                 raise ResourceNotFoundError("device", device_id)
             resolved_id = stat_device["_id"]

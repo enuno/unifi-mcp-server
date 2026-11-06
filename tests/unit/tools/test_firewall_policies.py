@@ -1296,6 +1296,128 @@ class TestCreateFirewallPolicy:
             mock_client.post.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_create_firewall_policy_omits_create_allow_respond_by_default(
+        self, local_settings: Settings
+    ) -> None:
+        """An unspecified create_allow_respond must not reach the API.
+
+        Regression (issue #283): the tool defaulted the field to true, and
+        the API rejects a paired RESPOND rule for some zone pairs ("Firewall
+        policy create respond traffic not allowed") — a custom zone to the
+        Gateway zone. Leaving the field out lets the controller decide.
+        """
+        from src.tools.firewall_policies import create_firewall_policy
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.post.return_value = {
+                "_id": "new-id",
+                "name": "Test",
+                "action": "ALLOW",
+                "source": {"zone_id": "zone-internal", "matching_target": "ANY"},
+                "destination": {"zone_id": "zone-gateway", "matching_target": "ANY"},
+            }
+
+            await create_firewall_policy(
+                name="Test",
+                action="ALLOW",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )
+
+            body = mock_client.post.call_args.kwargs["json_data"]
+            assert "create_allow_respond" not in body
+
+    @pytest.mark.asyncio
+    async def test_create_firewall_policy_dry_run_omits_create_allow_respond(
+        self, local_settings: Settings
+    ) -> None:
+        """The dry-run preview shows the payload that would be sent."""
+        from src.tools.firewall_policies import create_firewall_policy
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+
+            result = await create_firewall_policy(
+                name="Test",
+                action="ALLOW",
+                site_id="default",
+                settings=local_settings,
+                dry_run=True,
+            )
+
+            assert "create_allow_respond" not in result["policy"]
+
+    @pytest.mark.asyncio
+    async def test_create_firewall_policy_sends_explicit_create_allow_respond(
+        self, local_settings: Settings
+    ) -> None:
+        """An explicit value is still sent, true or false."""
+        from src.tools.firewall_policies import create_firewall_policy
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.post.return_value = {
+                "_id": "new-id",
+                "name": "Test",
+                "action": "ALLOW",
+                "source": {"zone_id": "zone-internal", "matching_target": "ANY"},
+                "destination": {"zone_id": "zone-gateway", "matching_target": "ANY"},
+            }
+
+            await create_firewall_policy(
+                name="Test",
+                action="ALLOW",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+                create_allow_respond=True,
+            )
+
+            body = mock_client.post.call_args.kwargs["json_data"]
+            assert body["create_allow_respond"] is True
+
+    @pytest.mark.asyncio
+    async def test_create_firewall_policy_block_sends_create_allow_respond_false(
+        self, local_settings: Settings
+    ) -> None:
+        """BLOCK rules carry the field explicitly false; the API rejects it true."""
+        from src.tools.firewall_policies import create_firewall_policy
+
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.post.return_value = {
+                "_id": "new-id",
+                "name": "Test",
+                "action": "ALLOW",
+                "source": {"zone_id": "zone-internal", "matching_target": "ANY"},
+                "destination": {"zone_id": "zone-gateway", "matching_target": "ANY"},
+            }
+
+            await create_firewall_policy(
+                name="Test",
+                action="BLOCK",
+                site_id="default",
+                settings=local_settings,
+                confirm=True,
+            )
+
+            body = mock_client.post.call_args.kwargs["json_data"]
+            assert body["create_allow_respond"] is False
+
+    @pytest.mark.asyncio
     async def test_create_firewall_policy_api_error(self, local_settings: Settings) -> None:
         """Test error handling when API returns an error."""
         from src.tools.firewall_policies import create_firewall_policy

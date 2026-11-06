@@ -2107,6 +2107,29 @@ Create a new traffic matching list on a site.
 | `name` | string | Yes (non-empty) |
 | `items` | array | Yes (non-empty) |
 
+**Item shape (issue #282).** Each entry is an object carrying a `type`
+discriminator, not a bare string — the API rejects a string with "Missing
+`$.items[0].type` value". The MCP tools accept plain values (`"80"`,
+`"192.168.3.0/24"`) and map them onto the right object for the list type,
+or accept the objects directly:
+
+| List type | Item types | Value fields |
+|------------|------------|--------------|
+| `PORTS` | `PORT_NUMBER`, `PORT_NUMBER_RANGE` | `value`, or `start`/`stop` |
+| `IPV4_ADDRESSES` | `IP_ADDRESS`, `IP_ADDRESS_RANGE`, `SUBNET` | `value`, or `start`/`stop` |
+| `IPV6_ADDRESSES` | `IP_ADDRESS`, `SUBNET` | `value` |
+
+```json
+{
+  "type": "PORTS",
+  "name": "Common Web Ports",
+  "items": [
+    {"type": "PORT_NUMBER", "value": 80},
+    {"type": "PORT_NUMBER", "value": 443}
+  ]
+}
+```
+
 ### Get Traffic Matching List ✅
 
 Get an existing traffic matching list on a site.
@@ -2680,6 +2703,20 @@ Create a new backup of the specified type.
 ```
 
 **Note**: Network backups complete in under 30 seconds, system backups may take 1-3 minutes.
+
+**Note (verified live, issue #281)**: on a UniFi OS console the `cmd/backup`
+response carries a `url` naming the console's own `/dl/` tree, not the
+`/data/backup/` path shown above:
+
+```json
+{"meta": {"rc": "ok"}, "data": [{"url": "/dl/backup/10.6.109.unf"}]}
+```
+
+The backup file is served from `/proxy/network/dl/backup/{filename}`, and
+an automatic backup from `/proxy/network/dl/autobackup/{filename}`. A
+manual backup is named for the version it was taken from (`10.6.109.unf`),
+not the `backup_YYYY-MM-DD_HH-MM-SS.unf` pattern shown above. The
+`/proxy/network/data/backup/{filename}` path answers 404 for both.
 
 ---
 

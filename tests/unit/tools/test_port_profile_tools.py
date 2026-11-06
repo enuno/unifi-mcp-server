@@ -581,6 +581,89 @@ async def test_get_device_port_overrides_success(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_get_device_port_overrides_accepts_integration_uuid(mock_settings):
+    """The integration UUID from list_devices_by_type must resolve.
+
+    Regression (issue #284): list_devices_by_type returns the Integration
+    API's UUID, but this tool matched only the legacy _id and the MAC, so
+    the very ID the listing handed out was rejected with "device not
+    found". The UUID is the device's external_id in stat/device.
+    """
+    mock_response = {
+        "data": [
+            {
+                "_id": "689d9f9ef4061b1ea839a6ec",
+                "external_id": "f1364b54-bdb9-34f8-9f87-35da273426f6",
+                "name": "Switch-24",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "model": "USW-24-PoE",
+                "port_overrides": [{"port_idx": 1, "portconf_id": "pp1"}],
+                "port_table": [{"port_idx": 1, "up": True}],
+            }
+        ]
+    }
+    client = _make_client(get_return=mock_response)
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await get_device_port_overrides(
+            "default", "f1364b54-bdb9-34f8-9f87-35da273426f6", mock_settings
+        )
+
+    assert result["device_id"] == "689d9f9ef4061b1ea839a6ec"
+    assert result["name"] == "Switch-24"
+    assert len(result["port_overrides"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_set_device_port_overrides_accepts_integration_uuid(mock_settings):
+    """The write path resolves the integration UUID too."""
+    mock_response = {
+        "data": [
+            {
+                "_id": "689d9f9ef4061b1ea839a6ec",
+                "external_id": "f1364b54-bdb9-34f8-9f87-35da273426f6",
+                "name": "Switch-24",
+                "mac": "aa:bb:cc:dd:ee:ff",
+                "model": "USW-24-PoE",
+                "port_overrides": [],
+                "port_table": [],
+            }
+        ]
+    }
+    client = _make_client(
+        get_return=mock_response,
+        put_return={
+            "data": [
+                {
+                    "_id": "689d9f9ef4061b1ea839a6ec",
+                    "external_id": "f1364b54-bdb9-34f8-9f87-35da273426f6",
+                    "name": "Switch-24",
+                    "mac": "aa:bb:cc:dd:ee:ff",
+                    "model": "USW-24-PoE",
+                    "port_overrides": [{"port_idx": 3, "name": "New"}],
+                    "port_table": [],
+                }
+            ]
+        },
+    )
+
+    with patch.object(port_profiles_module, "UniFiClient", return_value=client):
+        result = await set_device_port_overrides(
+            "default",
+            "f1364b54-bdb9-34f8-9f87-35da273426f6",
+            [{"port_idx": 3, "name": "New"}],
+            mock_settings,
+            confirm=True,
+        )
+
+    assert result["device_id"] == "689d9f9ef4061b1ea839a6ec"
+    assert len(result["port_overrides"]) == 1
+    # The write goes to the legacy device route, keyed by the resolved _id.
+    put_url = client.put.call_args[0][0]
+    assert "rest/device/689d9f9ef4061b1ea839a6ec" in put_url
+
+
+@pytest.mark.asyncio
 async def test_get_device_port_overrides_no_overrides(mock_settings):
     """Test device with no port overrides."""
     mock_response = {

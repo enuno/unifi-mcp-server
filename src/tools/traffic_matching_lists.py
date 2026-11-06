@@ -4,7 +4,11 @@ from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
-from ..models.traffic_matching_list import TrafficMatchingList, TrafficMatchingListCreate
+from ..models.traffic_matching_list import (
+    TrafficMatchingList,
+    TrafficMatchingListCreate,
+    normalize_list_items,
+)
 from ..utils import (
     ResourceNotFoundError,
     ValidationError,
@@ -109,18 +113,23 @@ async def create_traffic_matching_list(
     site_id: str,
     list_type: str,
     name: str,
-    items: list[str],
+    items: list[str | dict[str, Any]],
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a new traffic matching list.
 
+    Items may be plain values (``"80"``, ``"192.168.3.0/24"``) or the
+    API's own object shape (``{"type": "PORT_NUMBER", "value": 80}``).
+    Plain values are mapped onto the object shape the list type calls
+    for: a port for ``PORTS``, and an address or CIDR for the IP lists.
+
     Args:
         site_id: Site identifier
         list_type: List type (PORTS, IPV4_ADDRESSES, IPV6_ADDRESSES)
         name: List name
-        items: List items (ports, IPs, etc.)
+        items: List items (ports, IPs, etc.), as values or API-shaped objects
         settings: Application settings
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't create
@@ -145,8 +154,17 @@ async def create_traffic_matching_list(
     if not items or len(items) == 0:
         raise ValidationError("Items list cannot be empty")
 
+    # Map items onto the API's object shape ({type, value}) — the API
+    # rejects a bare string with "Missing $.items[0].type value".
+    try:
+        normalized_items = normalize_list_items(list_type, items)
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
+
     # Build list data
-    create_data = TrafficMatchingListCreate(type=list_type, name=name, items=items)
+    create_data = TrafficMatchingListCreate.model_validate(
+        {"type": list_type, "name": name, "items": normalized_items}
+    )
 
     parameters = {
         "site_id": site_id,
@@ -216,7 +234,7 @@ async def update_traffic_matching_list(
     settings: Settings,
     list_type: str | None = None,
     name: str | None = None,
-    items: list[str] | None = None,
+    items: list[str | dict[str, Any]] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -228,7 +246,7 @@ async def update_traffic_matching_list(
         settings: Application settings
         list_type: New list type
         name: New list name
-        items: New list items
+        items: New list items, as values or API-shaped objects
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't update
 
@@ -302,7 +320,16 @@ async def update_traffic_matching_list(
             if name is not None:
                 update_data["name"] = name
             if items is not None:
-                update_data["items"] = items
+                # Map items onto the API's object shape ({type, value}).
+                effective_type = update_data.get("type") or list_type
+                if not isinstance(effective_type, str):
+                    raise ValidationError(
+                        "Cannot determine the list type for the items; pass list_type"
+                    )
+                try:
+                    update_data["items"] = normalize_list_items(effective_type, items)
+                except ValueError as e:
+                    raise ValidationError(str(e)) from e
 
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists/{list_id}"

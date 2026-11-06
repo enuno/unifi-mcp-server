@@ -857,6 +857,57 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
+    async def test_download_backup_uses_the_dl_autobackup_path(self, mock_settings_local):
+        """Autobackups are served from /dl/autobackup/ on a UniFi OS console.
+
+        Regression (issue #281): the old path /proxy/network/data/backup/
+        404s for every backup on a console, so download_backup failed for
+        the automatic backups list-backups reports. Verified live against a
+        UniFi OS console on Network 10.6.109.
+        """
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+        filename = "autobackup_10.6.109_20261105_0515_1793514600049.unf"
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"\xe4}Z\x01backup-bytes"
+
+            with patch.object(client.client, "get", new_callable=AsyncMock) as mock_get:
+                mock_get.return_value = mock_response
+                content = await client.download_backup("default", filename)
+
+        assert content == b"\xe4}Z\x01backup-bytes"
+        url = mock_get.call_args[0][0]
+        assert f"/proxy/network/dl/autobackup/{filename}" in url
+        assert "/data/backup/" not in url
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_backup_uses_the_dl_backup_path_for_manual_backups(
+        self, mock_settings_local
+    ):
+        """A manually created backup is served from /dl/backup/."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+        filename = "backup_2026-11-06_12-34-56.unf"
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"manual-backup"
+
+            with patch.object(client.client, "get", new_callable=AsyncMock) as mock_get:
+                mock_get.return_value = mock_response
+                content = await client.download_backup("default", filename)
+
+        assert content == b"manual-backup"
+        url = mock_get.call_args[0][0]
+        assert f"/proxy/network/dl/backup/{filename}" in url
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_get_restore_status_returns_not_supported(self, mock_settings):
         """get_restore_status returns a not_supported status (endpoint not in UniFi API)."""
         client = UniFiClient(mock_settings)

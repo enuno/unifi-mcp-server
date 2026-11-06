@@ -718,10 +718,19 @@ async def create_firewall_policy(
             # if either is omitted. Default to an always-on rule.
             #
             # create_allow_respond must be False for BLOCK rules — the API
-            # rejects BLOCK + respond-traffic enabled. Auto-set when the
-            # caller doesn't specify.
+            # rejects BLOCK + respond-traffic enabled, so send it
+            # explicitly there.
+            #
+            # For every other action, leave the field out of the payload
+            # when the caller did not ask for it (issue #283). The API
+            # rejects a paired RESPOND rule for some zone pairs — a custom
+            # zone to the Gateway zone answers "Firewall policy create
+            # respond traffic not allowed" — so defaulting the field to
+            # true failed the create for those pairs. Omitting it lets the
+            # controller apply its own default, which is what the tool's
+            # `None` default always meant.
             if create_allow_respond is None:
-                resolved_allow_respond = action_upper != "BLOCK"
+                resolved_allow_respond = False if action_upper == "BLOCK" else None
             else:
                 resolved_allow_respond = create_allow_respond
 

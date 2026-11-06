@@ -97,6 +97,49 @@ class TestNormalizeListItems:
                 [{"type": "IP_ADDRESS_RANGE", "start": "2001:db8::1", "stop": "2001:db8::10"}],
             )
 
+    def test_ipv6_range_scalar_is_rejected(self):
+        """A plain value must not convert into a type the list rejects.
+
+        An IPv6 list has no range type, so "2001:db8::1-2001:db8::10" must
+        not become an IP_ADDRESS_RANGE. The object form is rejected above;
+        the scalar form has to be rejected the same way.
+        """
+        with pytest.raises(ValueError, match="not valid"):
+            normalize_list_items("IPV6_ADDRESSES", ["2001:db8::1-2001:db8::10"])
+
+    def test_ipv6_address_scalar_is_accepted(self):
+        assert normalize_list_items("IPV6_ADDRESSES", ["2001:db8::1"]) == [
+            {"type": "IP_ADDRESS", "value": "2001:db8::1"}
+        ]
+
+    def test_port_out_of_range_is_rejected(self):
+        """The API types a port as 1..65535."""
+        with pytest.raises(ValueError, match="between 1 and 65535"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": 70000}])
+
+    def test_port_zero_is_rejected(self):
+        with pytest.raises(ValueError, match="between 1 and 65535"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": 0}])
+
+    def test_non_numeric_port_object_is_rejected(self):
+        with pytest.raises(ValueError, match="must be an integer"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "http"}])
+
+    def test_port_range_out_of_range_is_rejected(self):
+        with pytest.raises(ValueError, match="between 1 and 65535"):
+            normalize_list_items(
+                "PORTS", [{"type": "PORT_NUMBER_RANGE", "start": 80, "stop": 70000}]
+            )
+
+    def test_boolean_port_is_rejected(self):
+        with pytest.raises(ValueError, match="must be an integer"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": True}])
+
+    def test_valid_port_boundaries_are_accepted(self):
+        assert normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": 65535}]) == [
+            {"type": "PORT_NUMBER", "value": 65535}
+        ]
+
     def test_non_scalar_item_is_rejected(self):
         with pytest.raises(ValueError, match="Invalid list item"):
             normalize_list_items("PORTS", [None])

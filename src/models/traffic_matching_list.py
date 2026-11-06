@@ -157,12 +157,9 @@ def normalize_list_items(
     normalized: list[dict[str, Any]] = []
     for item in items:
         if isinstance(item, dict):
+            _check_port_values(item)
             parsed = TrafficMatchingListItem.model_validate(item)
-            if parsed.type.value not in allowed:
-                raise ValueError(
-                    f"Item type '{parsed.type.value}' is not valid for a "
-                    f"'{list_type}' list (allowed: {sorted(allowed)})"
-                )
+            _check_item_type_allowed(parsed.type.value, list_type, allowed)
             normalized.append(parsed.model_dump(exclude_none=True))
             continue
         if isinstance(item, bool) or not isinstance(item, str | int):
@@ -171,9 +168,64 @@ def normalize_list_items(
             built = _port_item(item)
         else:
             built = _address_item(item)
+        _check_port_values(built)
         parsed = TrafficMatchingListItem.model_validate(built)
+        # A plain value can convert to a type the list does not take — an
+        # IPv6 list has no range type, so "2001:db8::1-2001:db8::10" must
+        # not become an IP_ADDRESS_RANGE. Both input forms enforce the
+        # same restriction.
+        _check_item_type_allowed(parsed.type.value, list_type, allowed)
         normalized.append(parsed.model_dump(exclude_none=True))
     return normalized
+
+
+def _check_port_values(item: dict[str, Any]) -> None:
+    """Enforce the port constraints the API documents.
+
+    The Integration API spec types a port as an integer from 1 through
+    65535. The check runs on the raw value, before the model coerces it:
+    Pydantic would turn ``True`` into ``1`` and a numeric string into an
+    int, hiding both from a later check.
+
+    Args:
+        item: An item object, as the caller or the mapping produced it
+
+    Raises:
+        ValueError: If a port is not an integer in range
+    """
+    item_type = item.get("type")
+    item_type = getattr(item_type, "value", item_type)
+    if item_type not in (
+        TrafficMatchingItemType.PORT_NUMBER.value,
+        TrafficMatchingItemType.PORT_NUMBER_RANGE.value,
+    ):
+        return
+    for label in ("value", "start", "stop"):
+        if label not in item or item[label] is None:
+            continue
+        number = item[label]
+        if isinstance(number, bool) or not isinstance(number, int):
+            raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
+        if not 1 <= number <= 65535:
+            raise ValueError(f"{item_type} {label} must be between 1 and 65535, got {number}")
+
+
+def _check_item_type_allowed(item_type: str, list_type: str, allowed: set[str]) -> None:
+    """Raise when an item type is not valid for the list type.
+
+    Args:
+        item_type: The item's type discriminator
+        list_type: The list's type
+        allowed: The item types the list type accepts
+
+    Raises:
+        ValueError: If the item type is not allowed for the list type
+    """
+    if item_type not in allowed:
+        raise ValueError(
+            f"Item type '{item_type}' is not valid for a '{list_type}' list "
+            f"(allowed: {sorted(allowed)})"
+        )
 
 
 class TrafficMatchingList(BaseModel):

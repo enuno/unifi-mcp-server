@@ -23,7 +23,7 @@ from ..utils import (
     validate_backup_filename,
 )
 from .pool import AuthState, active_pool
-from .tls import httpx_verify
+from .tls import httpx_verify, tls_event_hooks
 
 
 class RateLimiter:
@@ -102,6 +102,7 @@ class UniFiClient:
             headers=settings.get_headers(),
             timeout=settings.request_timeout,
             verify=httpx_verify(settings.verify_ssl),
+            event_hooks=tls_event_hooks(settings.tls_server_name),
             follow_redirects=False,  # Prevent HTTP redirects that might downgrade protocol
         )
 

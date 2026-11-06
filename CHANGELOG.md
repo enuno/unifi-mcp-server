@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`UNIFI_LOCAL_TLS_SERVER_NAME` checks the console's certificate against a name other than `UNIFI_LOCAL_HOST`.** The certificate UniFi OS generates for itself names `unifi.local`, `localhost` and `127.0.0.1`, not the console's LAN address, so with `UNIFI_LOCAL_HOST` set to that address the name check failed even with the right `UNIFI_LOCAL_CA_FILE`. Set `UNIFI_LOCAL_TLS_SERVER_NAME=unifi.local` and the client sends that name as SNI and checks the certificate against it, while still connecting to `UNIFI_LOCAL_HOST`. It applies only to a local controller with verification on, and a startup warning says when `UNIFI_LOCAL_VERIFY_SSL=false` makes it ignored.
+
+### Fixed
+
+- **`UNIFI_LOCAL_CA_FILE` accepts a UniFi OS console's own certificate on Python 3.13 and later.** Python 3.13 made `ssl.create_default_context` strict (`VERIFY_X509_STRICT`), and its RFC 5280 profile checks reject the certificate UniFi OS generates for itself, whose Key Usage includes keyCertSign without Basic Constraints, as "invalid CA certificate". The CA-file context now leaves strict mode off. The file is still the only trust anchor, and the chain, signature, validity dates and name are still checked.
+
 ## [0.8.0] - 2026-11-03
 
 ### Added

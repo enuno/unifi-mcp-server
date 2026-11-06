@@ -175,6 +175,16 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_LOCAL_CA_FILE",
     )
 
+    local_tls_server_name: str | None = Field(
+        default=None,
+        description=(
+            "Name to check the local controller's certificate against, and send as "
+            "SNI, when it is not UNIFI_LOCAL_HOST. UniFi OS's own certificate names "
+            "unifi.local, not the console's address."
+        ),
+        validation_alias="UNIFI_LOCAL_TLS_SERVER_NAME",
+    )
+
     # Site Configuration
     default_site: str = Field(
         default="default",
@@ -672,6 +682,7 @@ class Settings(BaseSettings):
         "audit_siem_ca_file",
         "audit_siem_buffer_dir",
         "local_ca_file",
+        "local_tls_server_name",
         "audit_retention_days",
         "audit_archive_dir",
         "audit_log_rotate_mb",
@@ -846,6 +857,19 @@ class Settings(BaseSettings):
             return False
         return self.local_ca_file or True
 
+    @property
+    def tls_server_name(self) -> str | None:
+        """Get the name the local controller's certificate is checked against.
+
+        Returns:
+            ``UNIFI_LOCAL_TLS_SERVER_NAME`` for a local controller with
+            verification on, else ``None`` (check the URL's host). Pass it
+            through :func:`src.api.tls.tls_event_hooks` before handing it to httpx.
+        """
+        if self.api_type in (APIType.CLOUD_V1, APIType.CLOUD_EA) or not self.local_verify_ssl:
+            return None
+        return self.local_tls_server_name
+
     def tls_warnings(self, controller: str | None = None) -> list[str]:
         """Return the warnings to log about the local controller's TLS settings.
 
@@ -872,6 +896,11 @@ class Settings(BaseSettings):
         if self.local_ca_file:
             warnings.append(
                 "UNIFI_LOCAL_CA_FILE is set but ignored because UNIFI_LOCAL_VERIFY_SSL=false."
+            )
+        if self.local_tls_server_name:
+            warnings.append(
+                "UNIFI_LOCAL_TLS_SERVER_NAME is set but ignored because "
+                "UNIFI_LOCAL_VERIFY_SSL=false."
             )
         return warnings
 

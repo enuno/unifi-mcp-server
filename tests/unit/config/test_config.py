@@ -603,6 +603,32 @@ class TestLocalTLSSettings:
         assert settings.verify_ssl is False
         assert any("ignored" in w for w in settings.tls_warnings())
 
+    def test_no_server_name_by_default(self, local_env):
+        assert Settings().tls_server_name is None
+
+    def test_server_name_is_checked_when_verifying(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_TLS_SERVER_NAME", "unifi.local")
+        settings = Settings()
+        assert settings.tls_server_name == "unifi.local"
+        assert settings.tls_warnings() == []
+
+    def test_blank_server_name_is_unset(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_TLS_SERVER_NAME", "")
+        assert Settings().tls_server_name is None
+
+    def test_verification_off_ignores_the_server_name_and_says_so(self, local_env):
+        local_env.setenv("UNIFI_LOCAL_VERIFY_SSL", "false")
+        local_env.setenv("UNIFI_LOCAL_TLS_SERVER_NAME", "unifi.local")
+        settings = Settings()
+        assert settings.tls_server_name is None
+        assert any("UNIFI_LOCAL_TLS_SERVER_NAME" in w for w in settings.tls_warnings())
+
+    def test_cloud_ignores_the_server_name(self, monkeypatch: pytest.MonkeyPatch):
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        monkeypatch.setenv("UNIFI_LOCAL_TLS_SERVER_NAME", "unifi.local")
+        assert Settings().tls_server_name is None
+
     def test_cloud_always_verifies_and_never_warns(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setenv("UNIFI_API_KEY", "test-key")
         monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")

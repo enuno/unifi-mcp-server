@@ -191,6 +191,11 @@ class TestNormalizeListItems:
             with pytest.raises(ValueError, match="must be an integer"):
                 normalize_list_items("PORTS", [value])
 
+    def test_a_port_that_is_not_a_number_is_rejected(self):
+        """A port that is a number of the wrong kind is refused."""
+        with pytest.raises(ValueError, match="must be an integer"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": 80.5}])
+
     def test_a_range_written_unusually_is_rejected(self):
         with pytest.raises(ValueError, match="must be two ports"):
             normalize_list_items("PORTS", ["8000-8_0"])
@@ -276,6 +281,49 @@ class TestTrafficMatchingListModel:
             {"_id": "tml-7", "type": "PORTS", "name": "Web", "items": ["70000"]}
         )
         assert tml.items[0].value == 70000
+
+    def test_a_value_that_is_not_a_port_still_reads(self):
+        """A value the controller sends is reported as it stands.
+
+        A hyphen only means a range when both sides are ports, so a value
+        like "80-90x" is one value and not a range built from its halves.
+        """
+        tml = TrafficMatchingList.model_validate(
+            {"_id": "tml-8", "type": "PORTS", "name": "Web", "items": ["80-90x"]}
+        )
+        assert tml.items[0].value == "80-90x"
+        assert tml.items[0].start is None
+        assert tml.items[0].stop is None
+
+    def test_an_item_that_is_not_a_value_is_reported(self):
+        """An item that is neither an object nor a value is the model's problem.
+
+        The read path cannot map it, so the payload is left as the
+        controller sent it and the validation below reports it.
+        """
+        with pytest.raises(ValidationError):
+            TrafficMatchingList.model_validate(
+                {"_id": "tml-9", "type": "PORTS", "name": "Web", "items": [None]}
+            )
+
+    def test_a_list_of_mixed_shapes_reads(self):
+        """An object and a plain value in one list are both mapped."""
+        tml = TrafficMatchingList.model_validate(
+            {
+                "_id": "tml-10",
+                "type": "PORTS",
+                "name": "Web",
+                "items": [{"type": "PORT_NUMBER", "value": 443}, "80"],
+            }
+        )
+        assert [item.value for item in tml.items] == [443, 80]
+
+    def test_an_empty_list_reads(self):
+        """A list with no items is a list like any other."""
+        tml = TrafficMatchingList.model_validate(
+            {"_id": "tml-11", "type": "PORTS", "name": "Empty", "items": []}
+        )
+        assert tml.items == []
 
     def test_a_port_sent_as_a_string_reads_as_a_number(self):
         """A controller that answers with "80" must not break the next write.

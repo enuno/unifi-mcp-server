@@ -191,6 +191,25 @@ class TestTrafficMatchingListModel:
         )
         assert tml.items[0].value == "192.168.3.0/24"
 
+    def test_reads_plain_values(self):
+        """A controller that still answers with bare values is readable."""
+        tml = TrafficMatchingList.model_validate(
+            {"_id": "tml-3", "type": "PORTS", "name": "Web", "items": ["80", "443"]}
+        )
+        assert [i.value for i in tml.items] == [80, 443]
+
+    def test_unreadable_plain_values_are_reported(self):
+        """A bare value that is not a port cannot be read.
+
+        The read path leaves the controller's payload alone when it cannot
+        map it, so the item validation below is what reports the problem.
+        """
+        with pytest.raises(ValidationError) as excinfo:
+            TrafficMatchingList.model_validate(
+                {"_id": "tml-4", "type": "PORTS", "name": "Web", "items": ["http"]}
+            )
+        assert "items" in str(excinfo.value)
+
 
 class TestTrafficMatchingListCreate:
     def test_accepts_plain_strings(self):

@@ -371,6 +371,32 @@ async def test_update_traffic_matching_list_sends_object_items(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_create_traffic_matching_list_rejects_bad_items(mock_settings):
+    """An item the list type cannot take is refused before any request."""
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(ValidationError, match="not valid"):
+                await create_traffic_matching_list(
+                    "default",
+                    "IPV6_ADDRESSES",
+                    "Web",
+                    ["2001:db8::1-2001:db8::10"],
+                    mock_settings,
+                    confirm=True,
+                )
+
+            mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_update_traffic_matching_list_rejects_bad_items(mock_settings):
     """An item the list type cannot take is refused before any request."""
     mock_get_response = {

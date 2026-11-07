@@ -242,6 +242,18 @@ class TestTrafficMatchingListModel:
         )
         assert tml.items[0].value == 80
 
+    def test_an_extra_field_on_an_item_is_ignored(self):
+        """A controller that adds a field to an item must still be readable."""
+        tml = TrafficMatchingList.model_validate(
+            {
+                "_id": "tml-6",
+                "type": "PORTS",
+                "name": "Web",
+                "items": [{"type": "PORT_NUMBER", "value": 80, "comment": "web"}],
+            }
+        )
+        assert tml.items[0].value == 80
+
 
 class TestTrafficMatchingListCreate:
     def test_accepts_plain_strings(self):

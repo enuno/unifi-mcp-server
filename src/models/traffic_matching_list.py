@@ -70,7 +70,9 @@ class TrafficMatchingListItem(BaseModel):
     types use ``value``, the range types use ``start`` and ``stop``.
     """
 
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    # Extra fields are ignored, as in the sibling list model: an item the
+    # controller adds a field to must still be readable.
+    model_config = ConfigDict(populate_by_name=True)
 
     type: TrafficMatchingItemType = Field(..., description="Item type")
     value: str | int | None = Field(

@@ -21,6 +21,7 @@ List type                    Item types (``type`` discriminator)
 onto the right object shape for the list's type.
 """
 
+import ipaddress
 from enum import Enum
 from typing import Any
 
@@ -142,16 +143,30 @@ def _port_item(value: str | int) -> dict[str, Any]:
     return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": int(text)}
 
 
+def _is_ip_address(text: str) -> bool:
+    """Whether ``text`` is an IP address the stdlib can parse."""
+    try:
+        ipaddress.ip_address(text.strip())
+    except ValueError:
+        return False
+    return True
+
+
 def _address_item(value: str | int) -> dict[str, Any]:
     """Build the item object for an IPV4_ADDRESSES/IPV6_ADDRESSES entry."""
     text = str(value).strip()
     if "-" in text:
         start, _, stop = text.partition("-")
-        return {
-            "type": TrafficMatchingItemType.IP_ADDRESS_RANGE.value,
-            "start": start.strip(),
-            "stop": stop.strip(),
-        }
+        # A hyphen only means a range when both sides are addresses.
+        # "not-an-ip" is not a range with the ends "not" and "an-ip"; it
+        # is a value the controller will reject, and the caller is better
+        # served by that message than by a range built from the halves.
+        if _is_ip_address(start) and _is_ip_address(stop):
+            return {
+                "type": TrafficMatchingItemType.IP_ADDRESS_RANGE.value,
+                "start": start.strip(),
+                "stop": stop.strip(),
+            }
     item_type = (
         TrafficMatchingItemType.SUBNET.value
         if "/" in text
@@ -356,6 +371,8 @@ class TrafficMatchingListUpdate(BaseModel):
 
     type: TrafficMatchingListType | None = Field(None, description="List type")
     name: str | None = Field(None, description="List name", min_length=1, max_length=128)
-    items: list[TrafficMatchingListItem] | None = Field(None, description="List items")
+    items: list[TrafficMatchingListItem] | None = Field(
+        None, description="List items", min_length=1
+    )
 
     model_config = ConfigDict(use_enum_values=True)

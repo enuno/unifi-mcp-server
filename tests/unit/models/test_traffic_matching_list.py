@@ -95,6 +95,17 @@ class TestNormalizeListItems:
             {"type": "IP_ADDRESS_RANGE", "start": "10.0.0.1", "stop": "10.0.0.10"}
         ]
 
+    def test_a_hyphen_that_is_not_a_range_stays_one_value(self):
+        """A hyphen only means a range when both sides are addresses.
+
+        "not-an-ip" is not a range with the ends "not" and "an-ip"; it is
+        a value the controller rejects, and the caller is better served by
+        that message than by a range built from the halves.
+        """
+        assert normalize_list_items("IPV4_ADDRESSES", ["not-an-ip"]) == [
+            {"type": "IP_ADDRESS", "value": "not-an-ip"}
+        ]
+
     def test_objects_pass_through(self):
         items = [{"type": "PORT_NUMBER", "value": 53}]
         assert normalize_list_items("PORTS", items) == items

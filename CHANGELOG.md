@@ -25,9 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **A traffic matching list's dry run previews the body the call would send.** The preview now carries the type, name and normalized items, instead of the arguments it was handed, and the items are checked before the preview is built: a dry run accepted an item the real call refuses, so a preview could show an update that was never going to be accepted. The list is read first to fill in the type and name the update would carry, which is what `update_firewall_policy` already does.
+- **A traffic matching list's dry run previews the body the call would send.** The preview now carries the type, name and normalized items, instead of the arguments it was handed, and the items are checked before the preview is built: a dry run accepted an item the real call refuses, so a preview could show an update that was never going to be accepted. The dry run still returns before the controller client is opened — no request may reach the controller on a dry run — so a field the caller did not set is reported as null, meaning it is kept as the list has it. Without a list type the items are checked against every type, and the preview reports them as they were given.
 
-- **The traffic matching list read path no longer enforces the write path's constraints.** The values belong to the controller, and a controller that reports a port outside the documented range must still be readable; the read reports what the controller holds. The write path is unchanged: a port outside 1 through 65535 is still refused before it is sent.
+- **The traffic matching list read path no longer enforces the write path's constraints.** The values belong to the controller, and a controller that reports a port outside the documented range must still be readable; the read reports what the controller holds. The write path is unchanged, and it now holds the list's own items to the same constraints when an update sends them back, so an item the API would refuse is caught with a message that names the list rather than by the controller's rejection.
 
 - **A port is written as plain ASCII digits.** `int()` also accepts `"8_0"` and `"+80"`, and `str.isdigit()` also accepts the full-width `"８０"`; none is a port the API documents, and none may reach the controller.
 

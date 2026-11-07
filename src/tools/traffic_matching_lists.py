@@ -280,6 +280,31 @@ async def update_traffic_matching_list(
     if items is not None and len(items) == 0:
         raise ValidationError("Items list cannot be empty")
 
+    # The items are checked here, before the dry run returns: a preview
+    # must not accept what the real call refuses. Without a list type
+    # the items are checked against every type, and if none of them
+    # takes them the real call would fail too.
+    preview_items: list[Any] | None = None
+    if items is not None:
+        if list_type is not None:
+            try:
+                preview_items = normalize_list_items(list_type, items)
+            except ValueError as e:
+                raise ValidationError(str(e)) from e
+        else:
+            for candidate in ("PORTS", "IPV4_ADDRESSES", "IPV6_ADDRESSES"):
+                try:
+                    normalize_list_items(candidate, items)
+                except ValueError:
+                    continue
+                break
+            else:
+                raise ValidationError(
+                    "The items are not valid for any list type; "
+                    "pass list_type to have them checked against it"
+                )
+            preview_items = items
+
     parameters = {
         "site_id": site_id,
         "list_id": list_id,
@@ -287,6 +312,32 @@ async def update_traffic_matching_list(
         "name": name,
         "items_count": len(items) if items else None,
     }
+
+    if dry_run:
+        # The dry run returns before the client is opened: no request may
+        # reach the controller on a dry run (AGENTS.md). A field the
+        # caller did not set is kept as the list has it, and is reported
+        # as null.
+        logger.info(
+            sanitize_log_message(
+                f"DRY RUN: Would update traffic matching list '{list_id}' in site '{site_id}'"
+            )
+        )
+        log_audit(
+            operation="update_traffic_matching_list",
+            parameters=parameters,
+            result="dry_run",
+            site_id=site_id,
+            dry_run=True,
+        )
+        return {
+            "dry_run": True,
+            "would_update": {
+                "type": list_type,
+                "name": name,
+                "items": preview_items,
+            },
+        }
 
     try:
         async with UniFiClient(settings) as client:
@@ -322,37 +373,28 @@ async def update_traffic_matching_list(
                 except ValueError as e:
                     raise ValidationError(str(e)) from e
             else:
-                update_items = [
-                    item.model_dump(mode="json", exclude_none=True) for item in existing.items
-                ]
+                # The list's own items are sent back, and they are held
+                # to the same constraints as any other write: the read
+                # path reports what the controller has, the write path
+                # only sends what the API accepts.
+                try:
+                    update_items = normalize_list_items(
+                        effective_type,
+                        [
+                            item.model_dump(mode="json", exclude_none=True)
+                            for item in existing.items
+                        ],
+                    )
+                except ValueError as e:
+                    raise ValidationError(
+                        f"The items of list '{list_id}' cannot be sent back: {e}"
+                    ) from e
 
             update_data: dict[str, Any] = {
                 "type": effective_type,
                 "name": name if name is not None else existing.name,
                 "items": update_items,
             }
-
-            if dry_run:
-                # The preview is the body the call would send, so it is
-                # built after the items are normalized and checked: a
-                # dry run must not accept what the real call refuses.
-                logger.info(
-                    sanitize_log_message(
-                        f"DRY RUN: Would update traffic matching list '{list_id}' "
-                        f"in site '{site_id}'"
-                    )
-                )
-                log_audit(
-                    operation="update_traffic_matching_list",
-                    parameters=parameters,
-                    result="dry_run",
-                    site_id=site_id,
-                    dry_run=True,
-                )
-                return {
-                    "dry_run": True,
-                    "would_update": update_data,
-                }
 
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists/{list_id}"

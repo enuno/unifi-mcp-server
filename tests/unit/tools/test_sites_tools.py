@@ -211,7 +211,9 @@ class TestListSites:
         with patch("src.tools.sites.UniFiClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client.__aenter__ = AsyncMock(side_effect=Exception("Connection Error"))
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             with pytest.raises(Exception) as exc_info:
@@ -257,7 +259,9 @@ class TestGetSiteStatistics:
                 side_effect=[devices_response, clients_response, networks_response]
             )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)
@@ -294,7 +298,9 @@ class TestGetSiteStatistics:
                 side_effect=[devices_response, clients_response, networks_response]
             )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)
@@ -318,7 +324,9 @@ class TestGetSiteStatistics:
                 side_effect=[devices_response, clients_response, networks_response]
             )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)
@@ -340,7 +348,9 @@ class TestGetSiteStatistics:
                 side_effect=[devices_response, clients_response, networks_response]
             )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)
@@ -354,7 +364,9 @@ class TestGetSiteStatistics:
             mock_client.authenticate = AsyncMock()
             mock_client.get = AsyncMock(side_effect=[[], [], []])
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)
@@ -379,7 +391,9 @@ class TestGetSiteStatistics:
                 side_effect=[devices_response, clients_response, networks_response]
             )
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await get_site_statistics("default", mock_settings)

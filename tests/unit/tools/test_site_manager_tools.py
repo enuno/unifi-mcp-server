@@ -80,7 +80,7 @@ async def test_list_all_sites_aggregated_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_all_sites_aggregated(mock_settings)
@@ -101,7 +101,7 @@ async def test_list_all_sites_aggregated_empty(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_all_sites_aggregated(mock_settings)
@@ -135,7 +135,7 @@ async def test_list_all_sites_aggregated_alternate_response_format(mock_settings
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_all_sites_aggregated(mock_settings)
@@ -168,7 +168,7 @@ async def test_get_internet_health_all_sites(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_internet_health = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_internet_health(mock_settings)
@@ -199,7 +199,7 @@ async def test_get_internet_health_specific_site(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_internet_health = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_internet_health(mock_settings, site_id="site-1")
@@ -228,7 +228,7 @@ async def test_get_internet_health_degraded(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_internet_health = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_internet_health(mock_settings)
@@ -269,7 +269,7 @@ async def test_get_site_health_summary_specific_site(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_site_health = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_site_health_summary(mock_settings, site_id="site-1")
@@ -312,7 +312,7 @@ async def test_get_site_health_summary_all_sites(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_site_health = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_site_health_summary(mock_settings)
@@ -383,7 +383,7 @@ async def test_get_cross_site_statistics_success(mock_settings):
         mock_client.list_sites = AsyncMock(return_value=mock_sites_response)
         mock_client.get_site_health = AsyncMock(return_value=mock_health_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_cross_site_statistics(mock_settings)
@@ -409,7 +409,7 @@ async def test_get_cross_site_statistics_empty(mock_settings):
         mock_client.list_sites = AsyncMock(return_value=mock_sites_response)
         mock_client.get_site_health = AsyncMock(return_value=mock_health_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_cross_site_statistics(mock_settings)
@@ -464,7 +464,7 @@ async def test_list_vantage_points_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_vantage_points = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_vantage_points(mock_settings)
@@ -486,7 +486,7 @@ async def test_list_vantage_points_empty(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_vantage_points = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_vantage_points(mock_settings)
@@ -521,7 +521,7 @@ async def test_list_vantage_points_with_inactive(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_vantage_points = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_vantage_points(mock_settings)
@@ -556,7 +556,7 @@ async def test_list_vantage_points_list_format(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_vantage_points = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_vantage_points(mock_settings)
@@ -593,7 +593,7 @@ async def test_get_site_inventory_specific_site(mock_settings):
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_site_inventory(mock_settings, site_id="site-1")
@@ -645,7 +645,7 @@ async def test_get_site_inventory_all_sites(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_site_inventory(mock_settings)
@@ -691,7 +691,7 @@ async def test_get_site_inventory_empty_devices(mock_settings):
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_site_inventory(mock_settings, site_id="site-1")
@@ -771,7 +771,7 @@ async def test_compare_site_performance_success(mock_settings):
         mock_client.get_site_health = AsyncMock(return_value=mock_health_response)
         mock_client.get_internet_health = AsyncMock(return_value=mock_internet_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await compare_site_performance(mock_settings)
@@ -795,7 +795,7 @@ async def test_compare_site_performance_empty(mock_settings):
         mock_client.get_site_health = AsyncMock(return_value=mock_health_response)
         mock_client.get_internet_health = AsyncMock(return_value=mock_internet_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await compare_site_performance(mock_settings)
@@ -842,7 +842,7 @@ async def test_compare_site_performance_single_site(mock_settings):
         mock_client.get_site_health = AsyncMock(return_value=mock_health_response)
         mock_client.get_internet_health = AsyncMock(return_value=mock_internet_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await compare_site_performance(mock_settings)
@@ -883,7 +883,7 @@ async def test_search_across_sites_device(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await search_across_sites(mock_settings, query="living", search_type="device")
@@ -917,7 +917,7 @@ async def test_search_across_sites_all(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await search_across_sites(mock_settings, query="test", search_type="all")
@@ -946,7 +946,7 @@ async def test_search_across_sites_no_results(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await search_across_sites(mock_settings, query="nonexistent", search_type="device")
@@ -990,7 +990,7 @@ async def test_search_across_sites_mac_address(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sites = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await search_across_sites(
@@ -1028,7 +1028,7 @@ async def test_get_isp_metrics_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_isp_metrics = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_isp_metrics(mock_settings, "site-1")
@@ -1063,7 +1063,7 @@ async def test_query_isp_metrics_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.query_isp_metrics = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await query_isp_metrics(
@@ -1098,7 +1098,7 @@ async def test_query_isp_metrics_single_dict_return(mock_settings):
         mock_client = AsyncMock()
         mock_client.query_isp_metrics = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await query_isp_metrics(mock_settings, site_id="site-1")
@@ -1140,7 +1140,7 @@ async def test_list_sdwan_configs_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_sdwan_configs = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_sdwan_configs(mock_settings)
@@ -1174,7 +1174,7 @@ async def test_get_sdwan_config_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_sdwan_config = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_sdwan_config(mock_settings, "config-1")
@@ -1204,7 +1204,7 @@ async def test_get_sdwan_config_status_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_sdwan_config_status = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_sdwan_config_status(mock_settings, "config-1")
@@ -1245,7 +1245,7 @@ async def test_list_hosts_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.list_hosts = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_hosts(mock_settings)
@@ -1279,7 +1279,7 @@ async def test_get_host_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_host = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_host(mock_settings, "host-1")
@@ -1314,7 +1314,7 @@ async def test_get_version_control_success(mock_settings):
         mock_client = AsyncMock()
         mock_client.get_version_control = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_version_control(mock_settings)

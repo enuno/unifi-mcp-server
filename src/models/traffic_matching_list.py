@@ -101,7 +101,7 @@ class TrafficMatchingListItem(BaseModel):
         values = dict(data)
         for label in ("value", "start", "stop"):
             number = values.get(label)
-            if isinstance(number, str) and number.strip().isdigit():
+            if isinstance(number, str) and number.strip().isdecimal():
                 values[label] = int(number.strip())
         return values
 
@@ -236,7 +236,7 @@ def _check_port_values(item: dict[str, Any]) -> None:
             # A port the caller wrote as a number in a string is read as
             # the number it is; the item model coerces it.
             text = number.strip()
-            if not text.isdigit():
+            if not text.isdecimal():
                 raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
             number = int(text)
         elif not isinstance(number, int):

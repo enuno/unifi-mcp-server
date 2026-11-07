@@ -164,6 +164,11 @@ class TestNormalizeListItems:
         with pytest.raises(ValueError, match="between 1 and 65535"):
             normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "70000"}])
 
+    def test_a_non_decimal_digit_string_is_rejected(self):
+        """A superscript is a digit but not a number int() accepts."""
+        with pytest.raises(ValueError, match="must be an integer"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "²"}])
+
     def test_non_scalar_item_is_rejected(self):
         with pytest.raises(ValueError, match="Invalid list item"):
             normalize_list_items("PORTS", [None])

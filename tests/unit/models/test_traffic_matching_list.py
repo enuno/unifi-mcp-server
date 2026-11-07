@@ -31,6 +31,13 @@ class TestTrafficMatchingListItem:
         assert item.start == 8000
         assert item.stop == 8080
 
+    def test_single_value_type_rejects_start_and_stop(self):
+        """A single-value type carries no range fields."""
+        with pytest.raises(ValidationError, match="does not take 'start' or 'stop'"):
+            TrafficMatchingListItem.model_validate(
+                {"type": "PORT_NUMBER", "value": 80, "start": 80}
+            )
+
     def test_subnet(self):
         item = TrafficMatchingListItem.model_validate({"type": "SUBNET", "value": "192.168.3.0/24"})
         assert item.value == "192.168.3.0/24"
@@ -57,6 +64,13 @@ class TestTrafficMatchingListItem:
 class TestNormalizeListItems:
     def test_port_string_becomes_a_port_number(self):
         assert normalize_list_items("PORTS", ["80", "443"]) == [
+            {"type": "PORT_NUMBER", "value": 80},
+            {"type": "PORT_NUMBER", "value": 443},
+        ]
+
+    def test_integer_port_becomes_a_port_number(self):
+        """A port may arrive as an integer rather than a string."""
+        assert normalize_list_items("PORTS", [80, 443]) == [
             {"type": "PORT_NUMBER", "value": 80},
             {"type": "PORT_NUMBER", "value": 443},
         ]

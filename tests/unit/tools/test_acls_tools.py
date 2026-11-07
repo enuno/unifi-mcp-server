@@ -75,7 +75,7 @@ async def test_list_acl_rules_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_acl_rules("default", mock_settings)
@@ -108,7 +108,7 @@ async def test_list_acl_rules_with_filter(mock_settings):
         mock_client.is_authenticated = True
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_acl_rules("default", mock_settings, filter_expr="action==deny")
@@ -140,7 +140,7 @@ async def test_list_acl_rules_pagination(mock_settings):
         mock_client.is_authenticated = True
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_acl_rules("default", mock_settings, limit=10, offset=4)
@@ -161,7 +161,7 @@ async def test_list_acl_rules_empty(mock_settings):
         mock_client.is_authenticated = True
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_acl_rules("default", mock_settings)
@@ -196,7 +196,7 @@ async def test_get_acl_rule_success(mock_settings):
         mock_client.authenticate = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_acl_rule("default", "acl-1", mock_settings)
@@ -224,7 +224,7 @@ async def test_get_acl_rule_direct_response(mock_settings):
         mock_client.is_authenticated = True
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_acl_rule("default", "acl-1", mock_settings)
@@ -253,7 +253,9 @@ async def test_create_acl_rule_success(mock_settings):
             mock_client.authenticate = AsyncMock()
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await create_acl_rule(
@@ -276,7 +278,7 @@ async def test_create_acl_rule_dry_run(mock_settings):
         mock_client = _prepare_client(AsyncMock())
         mock_client.is_authenticated = True
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         # Legacy source/destination/port kwargs are accepted but silently
@@ -340,7 +342,9 @@ async def test_create_acl_rule_legacy_params_ignored(mock_settings):
             mock_client.is_authenticated = True
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await create_acl_rule(
@@ -392,7 +396,9 @@ async def test_update_acl_rule_success(mock_settings):
             mock_client.is_authenticated = True
             mock_client.put = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await update_acl_rule(
@@ -415,7 +421,7 @@ async def test_update_acl_rule_dry_run(mock_settings):
         mock_client = _prepare_client(AsyncMock())
         mock_client.is_authenticated = True
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await update_acl_rule(
@@ -467,7 +473,9 @@ async def test_update_acl_rule_partial_fields(mock_settings):
             mock_client.is_authenticated = True
             mock_client.put = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await update_acl_rule(
@@ -493,7 +501,9 @@ async def test_delete_acl_rule_success(mock_settings):
             mock_client.authenticate = AsyncMock()
             mock_client.delete = AsyncMock(return_value={})
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await delete_acl_rule(
@@ -516,7 +526,7 @@ async def test_delete_acl_rule_dry_run(mock_settings):
         mock_client = AsyncMock()
         mock_client.is_authenticated = True
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await delete_acl_rule(

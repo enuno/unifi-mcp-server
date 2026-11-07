@@ -7,6 +7,8 @@ from ..config import Settings
 from ..models import Device, IntegrationDevice
 from ..utils import (
     APIError,
+    AuthenticationError,
+    NetworkError,
     ResourceNotFoundError,
     ValidationError,
     audit_action,
@@ -67,30 +69,10 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
         is_mac = True
     logger = get_logger(__name__, settings.log_level)
 
-    def _norm_mac(value: str) -> str:
-        return value.lower().replace(":", "")
-
     async with UniFiClient(settings) as client:
         await client.authenticate()
 
         resolved_site_id = await client.resolve_site_id(site_id)
-
-        async def _integration_devices() -> list[dict[str, Any]]:
-            devices: list[dict[str, Any]] = []
-            offset = 0
-            while True:
-                response = await client.get(
-                    settings.get_integration_path(f"sites/{resolved_site_id}/devices"),
-                    params={"offset": offset, "limit": 100},
-                )
-                batch = response if isinstance(response, list) else response.get("data", [])
-                if not batch:
-                    break
-                devices.extend(batch)
-                if len(batch) < 100:
-                    break
-                offset += len(batch)
-            return devices
 
         # Fast path: direct detail lookup. Only meaningful for UUID/ObjectId
         # identifiers; a MAC is never a valid detail-route segment.
@@ -120,7 +102,7 @@ async def get_device_details(site_id: str, device_id: str, settings: Settings) -
                     )
                 )
 
-        devices = await _integration_devices()
+        devices = await _list_integration_devices(client, settings, site_id)
 
         # Legacy ObjectId resolution: integration records carry no ``_id``, so
         # map the ObjectId to a MAC through the legacy stats list and match on
@@ -218,6 +200,74 @@ _INTEGRATION_PAGE_SIZE = 100
 _TYPE_FEATURES = {"uap": "accessPoint", "usw": "switching"}
 
 
+def _norm_mac(value: str) -> str:
+    """A MAC address without its separators, in lower case.
+
+    The formats are the ones ``validate_mac_address`` accepts: colon,
+    dash or dot separated, or plain.
+    """
+    return value.strip().lower().replace(":", "").replace("-", "").replace(".", "")
+
+
+async def _fill_missing_device_ids(
+    client: UniFiClient,
+    settings: Settings,
+    site_id: str,
+    devices: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fill in the device ids the controller left out of the list.
+
+    Ubiquiti's specification has the integration device overview carrying
+    an ``id``, but a console on Network 10.6.109 answers the list without
+    one, and the record then fails the model's validation. The legacy
+    stats list reports the same device under its legacy ObjectId and its
+    MAC, so the id is taken from there and matched on the MAC.
+
+    Args:
+        client: Authenticated UniFi client
+        settings: Application settings
+        site_id: Site identifier, as the caller named it (the legacy
+            stats route is addressed by the site's name, not its UUID)
+        devices: Device records from the integration API
+
+    Returns:
+        The records, each with an id where one could be found
+    """
+    logger = get_logger(__name__, settings.log_level)
+    try:
+        response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
+    except (APIError, AuthenticationError, NetworkError) as e:
+        # Best-effort by design, as in topology's _fetch_legacy_stats: the
+        # enrichment is optional, and AuthenticationError is not an APIError
+        # subclass, so a controller that refuses this route with 401/403
+        # must degrade to the records it did give rather than fail the call.
+        logger.debug(sanitize_log_message(f"No legacy device list: {e}"))
+        return devices
+
+    legacy = response if isinstance(response, list) else response.get("data", [])
+    by_mac: dict[str, str] = {}
+    for item in legacy:
+        if not isinstance(item, dict):
+            continue
+        mac = item.get("mac")
+        legacy_id = item.get("_id")
+        if isinstance(mac, str) and isinstance(legacy_id, str) and legacy_id:
+            by_mac[_norm_mac(mac)] = legacy_id
+
+    filled: list[dict[str, Any]] = []
+    for device in devices:
+        if device.get("id"):
+            filled.append(device)
+            continue
+        mac = device.get("macAddress") or device.get("mac")
+        legacy_id = by_mac.get(_norm_mac(mac)) if isinstance(mac, str) else None
+        if legacy_id:
+            filled.append({**device, "id": legacy_id})
+        else:
+            filled.append(device)
+    return filled
+
+
 async def _list_integration_devices(
     client: UniFiClient, settings: Settings, site_id: str
 ) -> list[dict[str, Any]]:
@@ -250,6 +300,8 @@ async def _list_integration_devices(
         if len(batch) < _INTEGRATION_PAGE_SIZE:
             break
         offset += len(batch)
+    if any(not d.get("id") for d in devices):
+        devices = await _fill_missing_device_ids(client, settings, site_id, devices)
     return devices
 
 

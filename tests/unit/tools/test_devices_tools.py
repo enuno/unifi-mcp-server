@@ -13,7 +13,12 @@ from src.tools.devices import (
     list_pending_devices,
     search_devices,
 )
-from src.utils.exceptions import ResourceNotFoundError, ValidationError
+from src.utils.exceptions import (
+    APIError,
+    AuthenticationError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 
 
 @pytest.fixture
@@ -306,6 +311,186 @@ class TestListDevicesByType:
             result = await list_devices_by_type("site-1", "uap", mock_settings)
 
             assert [d["id"] for d in result] == ["ap-1", "ap-2"]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_without_an_id(self, mock_settings):
+        """A controller that leaves the id out of the list is answered anyway.
+
+        Ubiquiti's specification has the id in the device overview, but a
+        console on Network 10.6.109 answers the list without one, and the
+        record used to fail the model's validation.
+        """
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "8c:30:66:9c:9b:46"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    {"data": [{"_id": DEVICE_ID_1, "mac": "8c:30:66:9c:9b:46"}]},
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["id"] == DEVICE_ID_1
+            assert result[0]["name"] == "AP-1"
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_does_not_read_the_legacy_list_unless_it_must(
+        self, mock_settings
+    ):
+        """The legacy list is only read when a record has no id."""
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [make_listed_device("ap-1")]})
+            mock_client_class.return_value = mock_client
+
+            await list_devices_by_type("site-1", "uap", mock_settings)
+
+            mock_client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_fills_only_the_records_that_need_it(self, mock_settings):
+        """A record that already has an id keeps it."""
+        with_id = make_listed_device("ap-1", "AP-1")
+        without_id = make_listed_device("ap-2", "AP-2")
+        without_id.pop("id")
+        without_id["macAddress"] = "8c:30:66:9c:9b:46"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [with_id, without_id]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [with_id, without_id]},
+                    {"data": [{"_id": DEVICE_ID_1, "mac": "8c:30:66:9c:9b:46"}]},
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert [d["id"] for d in result] == ["ap-1", DEVICE_ID_1]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_keeps_a_record_the_legacy_list_does_not_match(
+        self, mock_settings
+    ):
+        """A device the legacy list does not know is still returned."""
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "8c:30:66:9c:9b:46"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    {"data": [{"_id": DEVICE_ID_2, "mac": "00:11:22:33:44:55"}]},
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "AP-1"
+            assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_skips_junk_in_the_legacy_list(self, mock_settings):
+        """A legacy list that is not made of records is tolerated."""
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "8c:30:66:9c:9b:46"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    {"data": ["junk", {"mac": "8c:30:66:9c:9b:46"}]},
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "AP-1"
+            assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_survives_a_legacy_list_that_cannot_be_read(
+        self, mock_settings
+    ):
+        """A record with no id and no legacy list is still returned."""
+        listed = make_listed_device("ap-1")
+        listed.pop("id")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    APIError("stat/device is not readable"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "Test Device"
+            assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_survives_a_legacy_list_that_refuses_the_key(
+        self, mock_settings
+    ):
+        """The enrichment is optional: a 401 on it must not fail the call.
+
+        AuthenticationError is not an APIError subclass, and a controller
+        may answer the legacy route with 401/403 while the integration
+        API works fine.
+        """
+        listed = make_listed_device("ap-1")
+        listed.pop("id")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    AuthenticationError("stat/device refused the API key"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "Test Device"
+            assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_get_device_details_by_mac_survives_a_refused_legacy_list(self, mock_settings):
+        """A MAC lookup must not need the legacy list to succeed."""
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "aa:bb:cc:dd:ee:ff"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    AuthenticationError("stat/device refused the API key"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await get_device_details("site-1", "aa:bb:cc:dd:ee:ff", mock_settings)
+
+            assert result["name"] == "AP-1"
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_case_insensitive(self, mock_settings):

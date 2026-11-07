@@ -2819,14 +2819,16 @@ print(f"Checksum: {result['checksum']}")
 
 Permanently delete a backup file from controller storage.
 
-- **Method:** `DELETE`
-- **Endpoint:** `/api/backup/delete-backup`
+- **Method:** `POST`
+- **Endpoint:** `/proxy/network/api/s/{site}/cmd/backup` with `{"cmd": "delete-backup", "filename": "..."}` (local) — `/ea/sites/{site}/backups/{filename}` (cloud)
 - **MCP Tool:** `delete_backup()`
 - **Implementation:** v0.2.0 Phase 4 (86% coverage)
 - **Requires:** `confirm=true`
 - **Supports:** `dry_run=true`
 
 **Warning**: This operation cannot be undone. Ensure backup is downloaded or unnecessary before deletion.
+
+**Verified live** on a UniFi OS console (Network 10.6.109): the command is recognised — a wrong payload key answers `400 api.err.Invalid`, an unknown filename answers `404 api.err.NotFound` — and the server reports the backup it cannot find. The route the tool used before, `DELETE /proxy/network/api/backup/delete-backup/{filename}`, answers `401 api.err.NoSiteContext` on a console: it needs a site context it never carried. A console-level manual backup is not in the Network application's backup manager, so the console's own backup API (`/api/backup/*`, which answers `401` to the Network API key) is the only surface that reaches it.
 
 ---
 

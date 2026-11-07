@@ -35,10 +35,15 @@ class IntegrationDevice(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    id: str = Field(
-        ...,
+    id: str | None = Field(
+        None,
         validation_alias=AliasChoices("id", "_id"),
-        description="Device UUID (accepts the legacy ``_id`` key as well)",
+        description=(
+            "Device identifier: the integration UUID, or the legacy ObjectId "
+            "where a controller reports one in its place. A console on "
+            "Network 10.6.109 leaves the id out of the device list, and the "
+            "server fills it from the legacy stats list."
+        ),
     )
     mac_address: str | None = Field(None, alias="macAddress", description="Device MAC address")
     ip_address: str | None = Field(None, alias="ipAddress", description="Device IP address")

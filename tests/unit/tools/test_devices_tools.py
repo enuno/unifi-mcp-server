@@ -13,7 +13,7 @@ from src.tools.devices import (
     list_pending_devices,
     search_devices,
 )
-from src.utils.exceptions import ResourceNotFoundError, ValidationError
+from src.utils.exceptions import APIError, ResourceNotFoundError, ValidationError
 
 
 @pytest.fixture
@@ -306,6 +306,69 @@ class TestListDevicesByType:
             result = await list_devices_by_type("site-1", "uap", mock_settings)
 
             assert [d["id"] for d in result] == ["ap-1", "ap-2"]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_without_an_id(self, mock_settings):
+        """A controller that leaves the id out of the list is answered anyway.
+
+        Ubiquiti's specification has the id in the device overview, but a
+        console on Network 10.6.109 answers the list without one, and the
+        record used to fail the model's validation.
+        """
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "8c:30:66:9c:9b:46"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    {"data": [{"_id": DEVICE_ID_1, "mac": "8c:30:66:9c:9b:46"}]},
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["id"] == DEVICE_ID_1
+            assert result[0]["name"] == "AP-1"
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_does_not_read_the_legacy_list_unless_it_must(
+        self, mock_settings
+    ):
+        """The legacy list is only read when a record has no id."""
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [make_listed_device("ap-1")]})
+            mock_client_class.return_value = mock_client
+
+            await list_devices_by_type("site-1", "uap", mock_settings)
+
+            mock_client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_survives_a_legacy_list_that_cannot_be_read(
+        self, mock_settings
+    ):
+        """A record with no id and no legacy list is still returned."""
+        listed = make_listed_device("ap-1")
+        listed.pop("id")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    APIError("stat/device is not readable"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "Test Device"
+            assert "id" not in result[0]
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_case_insensitive(self, mock_settings):

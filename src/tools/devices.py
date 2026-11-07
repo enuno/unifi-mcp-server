@@ -7,6 +7,8 @@ from ..config import Settings
 from ..models import Device, IntegrationDevice
 from ..utils import (
     APIError,
+    AuthenticationError,
+    NetworkError,
     ResourceNotFoundError,
     ValidationError,
     audit_action,
@@ -234,8 +236,12 @@ async def _fill_missing_device_ids(
     logger = get_logger(__name__, settings.log_level)
     try:
         response = await client.get(settings.get_site_api_path(site_id, "stat/device"))
-    except (ResourceNotFoundError, APIError) as e:
-        logger.debug(sanitize_log_message(f"Could not read the legacy device list: {e}"))
+    except (APIError, AuthenticationError, NetworkError) as e:
+        # Best-effort by design, as in topology's _fetch_legacy_stats: the
+        # enrichment is optional, and AuthenticationError is not an APIError
+        # subclass, so a controller that refuses this route with 401/403
+        # must degrade to the records it did give rather than fail the call.
+        logger.debug(sanitize_log_message(f"No legacy device list: {e}"))
         return devices
 
     legacy = response if isinstance(response, list) else response.get("data", [])

@@ -13,7 +13,12 @@ from src.tools.devices import (
     list_pending_devices,
     search_devices,
 )
-from src.utils.exceptions import APIError, ResourceNotFoundError, ValidationError
+from src.utils.exceptions import (
+    APIError,
+    AuthenticationError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 
 
 @pytest.fixture
@@ -369,6 +374,55 @@ class TestListDevicesByType:
 
             assert result[0]["name"] == "Test Device"
             assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_list_devices_by_type_survives_a_legacy_list_that_refuses_the_key(
+        self, mock_settings
+    ):
+        """The enrichment is optional: a 401 on it must not fail the call.
+
+        AuthenticationError is not an APIError subclass, and a controller
+        may answer the legacy route with 401/403 while the integration
+        API works fine.
+        """
+        listed = make_listed_device("ap-1")
+        listed.pop("id")
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    AuthenticationError("stat/device refused the API key"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await list_devices_by_type("site-1", "uap", mock_settings)
+
+            assert result[0]["name"] == "Test Device"
+            assert "id" not in result[0]
+
+    @pytest.mark.asyncio
+    async def test_get_device_details_by_mac_survives_a_refused_legacy_list(self, mock_settings):
+        """A MAC lookup must not need the legacy list to succeed."""
+        listed = make_listed_device("ap-1", "AP-1")
+        listed.pop("id")
+        listed["macAddress"] = "aa:bb:cc:dd:ee:ff"
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client = create_mock_client({"data": [listed]})
+            mock_client.get = AsyncMock(
+                side_effect=[
+                    {"data": [listed]},
+                    AuthenticationError("stat/device refused the API key"),
+                ]
+            )
+            mock_client_class.return_value = mock_client
+
+            result = await get_device_details("site-1", "aa:bb:cc:dd:ee:ff", mock_settings)
+
+            assert result["name"] == "AP-1"
 
     @pytest.mark.asyncio
     async def test_list_devices_by_type_case_insensitive(self, mock_settings):

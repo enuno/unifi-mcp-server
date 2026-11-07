@@ -4,7 +4,11 @@ from typing import Any
 
 from ..api import UniFiClient
 from ..config import Settings
-from ..models.traffic_matching_list import TrafficMatchingList, TrafficMatchingListCreate
+from ..models.traffic_matching_list import (
+    TrafficMatchingList,
+    TrafficMatchingListCreate,
+    normalize_list_items,
+)
 from ..utils import (
     ResourceNotFoundError,
     ValidationError,
@@ -58,7 +62,10 @@ async def list_traffic_matching_lists(
                 f"Retrieved {len(paginated)} traffic matching lists for site '{site_id}'"
             )
         )
-        return [TrafficMatchingList(**lst).model_dump() for lst in paginated]
+        return [
+            TrafficMatchingList(**lst).model_dump(mode="json", exclude_none=True)
+            for lst in paginated
+        ]
 
 
 @read_tool
@@ -101,7 +108,7 @@ async def get_traffic_matching_list(
             raise ResourceNotFoundError("traffic_matching_list", list_id)
 
         logger.info(sanitize_log_message(f"Retrieved traffic matching list {list_id}"))
-        return TrafficMatchingList(**list_data).model_dump()
+        return TrafficMatchingList(**list_data).model_dump(mode="json", exclude_none=True)
 
 
 @write_tool
@@ -109,18 +116,23 @@ async def create_traffic_matching_list(
     site_id: str,
     list_type: str,
     name: str,
-    items: list[str],
+    items: list[str | dict[str, Any]],
     settings: Settings,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
     """Create a new traffic matching list.
 
+    Items may be plain values (``"80"``, ``"192.168.3.0/24"``) or the
+    API's own object shape (``{"type": "PORT_NUMBER", "value": 80}``).
+    Plain values are mapped onto the object shape the list type calls
+    for: a port for ``PORTS``, and an address or CIDR for the IP lists.
+
     Args:
         site_id: Site identifier
         list_type: List type (PORTS, IPV4_ADDRESSES, IPV6_ADDRESSES)
         name: List name
-        items: List items (ports, IPs, etc.)
+        items: List items (ports, IPs, etc.), as values or API-shaped objects
         settings: Application settings
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't create
@@ -145,8 +157,17 @@ async def create_traffic_matching_list(
     if not items or len(items) == 0:
         raise ValidationError("Items list cannot be empty")
 
+    # Map items onto the API's object shape ({type, value}) — the API
+    # rejects a bare string with "Missing $.items[0].type value".
+    try:
+        normalized_items = normalize_list_items(list_type, items)
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
+
     # Build list data
-    create_data = TrafficMatchingListCreate(type=list_type, name=name, items=items)
+    create_data = TrafficMatchingListCreate.model_validate(
+        {"type": list_type, "name": name, "items": normalized_items}
+    )
 
     parameters = {
         "site_id": site_id,
@@ -168,7 +189,10 @@ async def create_traffic_matching_list(
             site_id=site_id,
             dry_run=True,
         )
-        return {"dry_run": True, "would_create": create_data.model_dump()}
+        return {
+            "dry_run": True,
+            "would_create": create_data.model_dump(mode="json", exclude_none=True),
+        }
 
     try:
         async with UniFiClient(settings) as client:
@@ -178,9 +202,12 @@ async def create_traffic_matching_list(
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists"
             )
+            # exclude_none: an item carries either `value` or `start`/`stop`,
+            # and the API rejects the unused one as an unknown property
+            # ("Unknown request body property '$.items[0].start'").
             response = await client.post(
                 endpoint,
-                json_data=create_data.model_dump(),
+                json_data=create_data.model_dump(mode="json", exclude_none=True),
             )
             created_list: dict[str, Any] = (
                 response if isinstance(response, list) else response.get("data", response)
@@ -216,7 +243,7 @@ async def update_traffic_matching_list(
     settings: Settings,
     list_type: str | None = None,
     name: str | None = None,
-    items: list[str] | None = None,
+    items: list[str | dict[str, Any]] | None = None,
     confirm: bool | str = False,
     dry_run: bool | str = False,
 ) -> dict[str, Any]:
@@ -228,7 +255,7 @@ async def update_traffic_matching_list(
         settings: Application settings
         list_type: New list type
         name: New list name
-        items: New list items
+        items: New list items, as values or API-shaped objects
         confirm: Confirmation flag (must be True to execute)
         dry_run: If True, validate but don't update
 
@@ -294,15 +321,31 @@ async def update_traffic_matching_list(
             if not existing_list:
                 raise ResourceNotFoundError("traffic_matching_list", list_id)
 
-            # Build update data
-            update_data = existing_list.copy()
+            # The API accepts type, name and items on a write and rejects
+            # anything else ("Unknown request body property '$.id'"), so
+            # the body is built from those three rather than copied from
+            # the list the controller returned.
+            existing = TrafficMatchingList.model_validate(existing_list)
+            effective_type = list_type or existing.type
+            if not isinstance(effective_type, str):
+                raise ValidationError("Cannot determine the list type for the list")
 
-            if list_type is not None:
-                update_data["type"] = list_type
-            if name is not None:
-                update_data["name"] = name
             if items is not None:
-                update_data["items"] = items
+                # Map items onto the API's object shape ({type, value}).
+                try:
+                    update_items = normalize_list_items(effective_type, items)
+                except ValueError as e:
+                    raise ValidationError(str(e)) from e
+            else:
+                update_items = [
+                    item.model_dump(mode="json", exclude_none=True) for item in existing.items
+                ]
+
+            update_data: dict[str, Any] = {
+                "type": effective_type,
+                "name": name if name is not None else existing.name,
+                "items": update_items,
+            }
 
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists/{list_id}"

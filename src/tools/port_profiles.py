@@ -18,6 +18,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.device_lookup import find_device
 from ..utils.tool_kind import read_tool, write_tool
 
 # Current controllers drive tagged VLAN handling from tagged_vlan_mgmt and
@@ -607,11 +608,8 @@ async def get_device_port_overrides(
             response if isinstance(response, list) else response.get("data", [])
         )
 
-        # Filter by _id or MAC address
-        device = next(
-            (d for d in all_devices if d.get("_id") == device_id or d.get("mac") == device_id),
-            None,
-        )
+        # Filter by legacy _id, integration UUID (external_id) or MAC.
+        device = find_device(all_devices, device_id)
 
         if not device:
             raise ResourceNotFoundError("device", device_id)
@@ -719,10 +717,8 @@ async def set_device_port_overrides(
                 response if isinstance(response, list) else response.get("data", [])
             )
 
-            device = next(
-                (d for d in all_devices if d.get("_id") == device_id or d.get("mac") == device_id),
-                None,
-            )
+            # Filter by legacy _id, integration UUID (external_id) or MAC.
+            device = find_device(all_devices, device_id)
 
             if not device:
                 raise ResourceNotFoundError("device", device_id)

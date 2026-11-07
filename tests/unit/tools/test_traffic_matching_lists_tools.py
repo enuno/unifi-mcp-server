@@ -62,7 +62,7 @@ async def test_list_traffic_matching_lists_success(mock_settings):
         mock_client.resolve_site_id = AsyncMock(return_value="default")
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_traffic_matching_lists("default", mock_settings)
@@ -90,7 +90,7 @@ async def test_list_traffic_matching_lists_pagination(mock_settings):
         mock_client.resolve_site_id = AsyncMock(return_value="default")
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_traffic_matching_lists("default", mock_settings, limit=5, offset=2)
@@ -110,7 +110,7 @@ async def test_list_traffic_matching_lists_empty(mock_settings):
         mock_client.resolve_site_id = AsyncMock(return_value="default")
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await list_traffic_matching_lists("default", mock_settings)
@@ -136,7 +136,7 @@ async def test_get_traffic_matching_list_success(mock_settings):
         mock_client.resolve_site_id = AsyncMock(return_value="default")
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_traffic_matching_list("default", "tml-1", mock_settings)
@@ -161,7 +161,7 @@ async def test_get_traffic_matching_list_direct_response(mock_settings):
         mock_client.resolve_site_id = AsyncMock(return_value="default")
         mock_client.get = AsyncMock(return_value=mock_response)
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock()
+        mock_client.__aexit__ = AsyncMock(return_value=False)  # a truthy value would swallow errors
         mock_client_class.return_value = mock_client
 
         result = await get_traffic_matching_list("default", "tml-1", mock_settings)
@@ -203,7 +203,9 @@ async def test_create_traffic_matching_list_success(mock_settings):
             mock_client.resolve_site_id = AsyncMock(return_value="default")
             mock_client.post = AsyncMock(return_value=mock_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await create_traffic_matching_list(
@@ -218,6 +220,19 @@ async def test_create_traffic_matching_list_success(mock_settings):
             assert result["_id"] == "tml-new"
             assert result["name"] == "New Port List"
             mock_client.post.assert_called_once()
+
+            # The payload carries the API's item objects, and only the
+            # fields an item uses — the controller rejects an unused one
+            # ("Unknown request body property '$.items[0].start'").
+            body = mock_client.post.call_args.kwargs["json_data"]
+            assert body["items"] == [
+                {"type": "PORT_NUMBER", "value": 22},
+                {"type": "PORT_NUMBER", "value": 80},
+                {"type": "PORT_NUMBER", "value": 443},
+            ]
+            for item in body["items"]:
+                assert "start" not in item
+                assert "stop" not in item
 
 
 @pytest.mark.asyncio
@@ -306,7 +321,9 @@ async def test_update_traffic_matching_list_success(mock_settings):
             mock_client.get = AsyncMock(return_value=mock_get_response)
             mock_client.put = AsyncMock(return_value=mock_put_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await update_traffic_matching_list(
@@ -320,6 +337,156 @@ async def test_update_traffic_matching_list_success(mock_settings):
 
             assert result["name"] == "New Name"
             mock_client.put.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_update_traffic_matching_list_sends_object_items(mock_settings):
+    """The update payload carries the API's object shape, not bare strings."""
+    mock_get_response = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Old Name",
+            "items": [{"type": "PORT_NUMBER", "value": 80}],
+        }
+    }
+    mock_put_response = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Old Name",
+            "items": [{"type": "PORT_NUMBER", "value": 443}],
+        }
+    }
+
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.put = AsyncMock(return_value=mock_put_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            await update_traffic_matching_list(
+                "default",
+                "tml-1",
+                mock_settings,
+                items=["443"],
+                confirm=True,
+            )
+
+            body = mock_client.put.call_args.kwargs["json_data"]
+            assert body["items"] == [{"type": "PORT_NUMBER", "value": 443}]
+
+
+@pytest.mark.asyncio
+async def test_update_traffic_matching_list_sends_only_writable_fields(mock_settings):
+    """The body carries type, name and items — and nothing else.
+
+    The controller rejects a body that repeats the list it read:
+    "Unknown request body property '$.id'".
+    """
+    mock_get_response = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Old Name",
+            "items": [{"type": "PORT_NUMBER", "value": 80}],
+            "site_id": "default",
+        }
+    }
+    mock_put_response = {"data": dict(mock_get_response["data"])}
+
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.put = AsyncMock(return_value=mock_put_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            await update_traffic_matching_list(
+                "default",
+                "tml-1",
+                mock_settings,
+                name="New Name",
+                confirm=True,
+            )
+
+            body = mock_client.put.call_args.kwargs["json_data"]
+            assert set(body) == {"type", "name", "items"}
+            assert body["type"] == "PORTS"
+            assert body["name"] == "New Name"
+            assert body["items"] == [{"type": "PORT_NUMBER", "value": 80}]
+
+
+@pytest.mark.asyncio
+async def test_create_traffic_matching_list_rejects_bad_items(mock_settings):
+    """An item the list type cannot take is refused before any request."""
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(ValidationError, match="not valid"):
+                await create_traffic_matching_list(
+                    "default",
+                    "IPV6_ADDRESSES",
+                    "Web",
+                    ["2001:db8::1-2001:db8::10"],
+                    mock_settings,
+                    confirm=True,
+                )
+
+            mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_traffic_matching_list_rejects_bad_items(mock_settings):
+    """An item the list type cannot take is refused before any request."""
+    mock_get_response = {
+        "data": {
+            "_id": "tml-1",
+            "type": "IPV6_ADDRESSES",
+            "name": "Old Name",
+            "items": [{"type": "IP_ADDRESS", "value": "2001:db8::1"}],
+        }
+    }
+
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(ValidationError, match="not valid"):
+                await update_traffic_matching_list(
+                    "default",
+                    "tml-1",
+                    mock_settings,
+                    items=["2001:db8::1-2001:db8::10"],
+                    confirm=True,
+                )
+
+            mock_client.put.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -417,7 +584,9 @@ async def test_delete_traffic_matching_list_success(mock_settings):
             mock_client.get = AsyncMock(return_value=mock_get_response)
             mock_client.delete = AsyncMock(return_value=mock_delete_response)
             mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock()
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
             mock_client_class.return_value = mock_client
 
             result = await delete_traffic_matching_list(

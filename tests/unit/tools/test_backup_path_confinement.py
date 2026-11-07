@@ -104,7 +104,9 @@ async def test_client_download_backup_encodes_filename(monkeypatch) -> None:
         await client.client.aclose()
 
     assert content == b"backup-bytes"
-    assert seen["url"].endswith("/proxy/network/data/backup/backup_2025-01-29.unf")
+    # Manual backups live in the /dl/backup/ tree on a UniFi OS console
+    # (issue #281); the old /data/backup/ path 404s for every backup.
+    assert seen["url"].endswith("/proxy/network/dl/backup/backup_2025-01-29.unf")
 
 
 # --------------------------------------------------------------------------- #

@@ -6083,7 +6083,7 @@
       }
     },
     {
-      "description": "Create a new traffic matching list.",
+      "description": "Create a new traffic matching list.\n\nItems may be plain values (``\"80\"``, ``\"192.168.3.0/24\"``) or the\nAPI's own object shape (``{\"type\": \"PORT_NUMBER\", \"value\": 80}``).\nPlain values are mapped onto the object shape the list type calls\nfor: a port for ``PORTS``, and an address or CIDR for the IP lists.",
       "examples": [
         {
           "arguments": {
@@ -6139,9 +6139,17 @@
             "description": "If True, validate but don't create"
           },
           "items": {
-            "description": "List items (ports, IPs, etc.)",
+            "description": "List items (ports, IPs, etc.), as values or API-shaped objects",
             "items": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              ]
             },
             "type": "array"
           },
@@ -27109,7 +27117,15 @@
             "anyOf": [
               {
                 "items": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    }
+                  ]
                 },
                 "type": "array"
               },
@@ -27118,7 +27134,7 @@
               }
             ],
             "default": null,
-            "description": "New list items"
+            "description": "New list items, as values or API-shaped objects"
           },
           "list_id": {
             "description": "Traffic matching list ID",

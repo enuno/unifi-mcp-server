@@ -18,6 +18,7 @@ from ..utils import (
     validate_mac_address,
     validate_site_id,
 )
+from ..utils.device_lookup import find_device
 from ..utils.tool_kind import read_tool, write_tool
 
 
@@ -187,22 +188,25 @@ async def get_device_statistics(site_id: str, device_id: str, settings: Settings
         response = await client.get(f"/ea/sites/{site_id}/devices")
         devices_data = response.get("data", []) if isinstance(response, dict) else response
 
-        for device_data in devices_data:
-            if device_data.get("_id") == device_id:
-                # Extract statistics
-                stats = {
-                    "device_id": device_id,
-                    "uptime": device_data.get("uptime", 0),
-                    "cpu": device_data.get("cpu"),
-                    "mem": device_data.get("mem"),
-                    "tx_bytes": device_data.get("tx_bytes", 0),
-                    "rx_bytes": device_data.get("rx_bytes", 0),
-                    "bytes": device_data.get("bytes", 0),
-                    "state": device_data.get("state"),
-                    "uplink_depth": device_data.get("uplink_depth"),
-                }
-                logger.info(sanitize_log_message(f"Retrieved statistics for device {device_id}"))
-                return stats
+        # The listing reports the device under its integration UUID, its
+        # legacy ObjectId or its MAC, and the caller may pass any of
+        # them; the shared resolver accepts all three.
+        device_data = find_device(devices_data, device_id)
+        if device_data:
+            # Extract statistics
+            stats = {
+                "device_id": device_id,
+                "uptime": device_data.get("uptime", 0),
+                "cpu": device_data.get("cpu"),
+                "mem": device_data.get("mem"),
+                "tx_bytes": device_data.get("tx_bytes", 0),
+                "rx_bytes": device_data.get("rx_bytes", 0),
+                "bytes": device_data.get("bytes", 0),
+                "state": device_data.get("state"),
+                "uplink_depth": device_data.get("uplink_depth"),
+            }
+            logger.info(sanitize_log_message(f"Retrieved statistics for device {device_id}"))
+            return stats
 
         raise ResourceNotFoundError("device", device_id)
 

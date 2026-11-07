@@ -180,6 +180,36 @@ class TestNormalizeListItems:
         with pytest.raises(ValueError, match="must be an integer"):
             normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "²"}])
 
+    def test_a_port_written_unusually_is_rejected(self):
+        """Only plain ASCII digits are a port number.
+
+        ``int()`` accepts ``"8_0"`` and ``"+80"``, and ``str.isdigit()``
+        accepts the full-width ``"８０"``; none is a port the API
+        documents, and none may reach the controller.
+        """
+        for value in ["8_0", "+80", "８０"]:
+            with pytest.raises(ValueError, match="must be an integer"):
+                normalize_list_items("PORTS", [value])
+
+    def test_a_range_written_unusually_is_rejected(self):
+        with pytest.raises(ValueError, match="must be two ports"):
+            normalize_list_items("PORTS", ["8000-8_0"])
+
+    def test_a_bare_string_is_not_a_list_of_items(self):
+        """A string is a sequence of characters.
+
+        Iterating one turns "443" into the ports 4, 4 and 3.
+        """
+        with pytest.raises(ValueError, match="must be a list"):
+            normalize_list_items("PORTS", "443")  # type: ignore[arg-type]
+
+    def test_the_scalar_and_the_object_path_agree(self):
+        """The plain value and the object form map to the same item."""
+        from_scalar = normalize_list_items("PORTS", ["80"])
+        from_object = normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "80"}])
+        assert from_scalar == from_object
+        assert from_scalar == [{"type": "PORT_NUMBER", "value": 80}]
+
     def test_non_scalar_item_is_rejected(self):
         with pytest.raises(ValueError, match="Invalid list item"):
             normalize_list_items("PORTS", [None])
@@ -224,17 +254,28 @@ class TestTrafficMatchingListModel:
         )
         assert [i.value for i in tml.items] == [80, 443]
 
-    def test_unreadable_plain_values_are_reported(self):
-        """A bare value that is not a port cannot be read.
+    def test_unreadable_plain_values_are_reported_as_they_stand(self):
+        """A bare value that is not a port is the controller's own data.
 
-        The read path leaves the controller's payload alone when it cannot
-        map it, so the item validation below is what reports the problem.
+        The read path reports what the controller holds rather than
+        refusing the whole list over one entry, so the value comes back
+        as it was sent.
         """
-        with pytest.raises(ValidationError) as excinfo:
-            TrafficMatchingList.model_validate(
-                {"_id": "tml-4", "type": "PORTS", "name": "Web", "items": ["http"]}
-            )
-        assert "items" in str(excinfo.value)
+        tml = TrafficMatchingList.model_validate(
+            {"_id": "tml-4", "type": "PORTS", "name": "Web", "items": ["http"]}
+        )
+        assert tml.items[0].value == "http"
+
+    def test_a_port_outside_the_range_still_reads(self):
+        """The read path does not enforce the write path's constraints.
+
+        The values belong to the controller; a controller that reports a
+        port outside the documented range must still be readable.
+        """
+        tml = TrafficMatchingList.model_validate(
+            {"_id": "tml-7", "type": "PORTS", "name": "Web", "items": ["70000"]}
+        )
+        assert tml.items[0].value == 70000
 
     def test_a_port_sent_as_a_string_reads_as_a_number(self):
         """A controller that answers with "80" must not break the next write.
@@ -302,7 +343,7 @@ class TestTrafficMatchingListCreate:
         create = TrafficMatchingListCreate.model_validate(
             {"type": "PORTS", "name": "Web", "items": ["80"]}
         )
-        dumped = create.model_dump(exclude_none=True)
+        dumped = create.model_dump(mode="json", exclude_none=True)
         assert dumped["items"] == [{"type": "PORT_NUMBER", "value": 80}]
         assert "start" not in dumped["items"][0]
         assert "stop" not in dumped["items"][0]
@@ -311,5 +352,8 @@ class TestTrafficMatchingListCreate:
         create = TrafficMatchingListCreate.model_validate(
             {"type": "PORTS", "name": "Web", "items": ["80"]}
         )
-        dumped = create.model_dump(exclude_none=True)
+        # The tool sends mode="json"; assert on that, not on a python-mode
+        # dump where the enum member compares equal to its own value.
+        dumped = create.model_dump(mode="json", exclude_none=True)
         assert dumped["items"][0]["type"] == "PORT_NUMBER"
+        assert type(dumped["items"][0]["type"]) is str

@@ -491,18 +491,82 @@ async def test_update_traffic_matching_list_rejects_bad_items(mock_settings):
 
 @pytest.mark.asyncio
 async def test_update_traffic_matching_list_dry_run(mock_settings):
-    with patch("src.tools.traffic_matching_lists.log_audit"):
-        result = await update_traffic_matching_list(
-            "default",
-            "tml-1",
-            mock_settings,
-            name="Updated Name",
-            confirm=True,
-            dry_run=True,
-        )
+    """The preview is the body the call would send.
 
-        assert result["dry_run"] is True
-        assert result["would_update"]["name"] == "Updated Name"
+    The list is read first, so the preview shows the type and name the
+    update would carry, and the normalized items.
+    """
+    existing = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Web Ports",
+            "items": [{"type": "PORT_NUMBER", "value": 80}],
+        }
+    }
+
+    with patch("src.tools.traffic_matching_lists.log_audit"):
+        with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.resolve_site_id = AsyncMock(return_value="default")
+            mock_client.get = AsyncMock(return_value=existing)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = mock_client
+
+            result = await update_traffic_matching_list(
+                "default",
+                "tml-1",
+                mock_settings,
+                name="Updated Name",
+                items=["443"],
+                confirm=True,
+                dry_run=True,
+            )
+
+            assert result["dry_run"] is True
+            assert result["would_update"]["name"] == "Updated Name"
+            assert result["would_update"]["type"] == "PORTS"
+            assert result["would_update"]["items"] == [{"type": "PORT_NUMBER", "value": 443}]
+            mock_client.put.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_traffic_matching_list_dry_run_rejects_what_the_write_rejects(
+    mock_settings,
+):
+    """A dry run must not accept items the real call refuses."""
+    existing = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Web Ports",
+            "items": [{"type": "PORT_NUMBER", "value": 80}],
+        }
+    }
+
+    with patch("src.tools.traffic_matching_lists.log_audit"):
+        with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.resolve_site_id = AsyncMock(return_value="default")
+            mock_client.get = AsyncMock(return_value=existing)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client_class.return_value = mock_client
+
+            with pytest.raises(ValidationError):
+                await update_traffic_matching_list(
+                    "default",
+                    "tml-1",
+                    mock_settings,
+                    items=["70000"],
+                    confirm=True,
+                    dry_run=True,
+                )
+
+            mock_client.put.assert_not_called()
 
 
 @pytest.mark.asyncio

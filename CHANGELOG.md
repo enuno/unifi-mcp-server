@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`UNIFI_LOCAL_CA_FILE` accepts a UniFi OS console's own certificate on Python 3.13 and later.** Python 3.13 made `ssl.create_default_context` strict (`VERIFY_X509_STRICT`), and its RFC 5280 profile checks reject the certificate UniFi OS generates for itself, whose Key Usage includes keyCertSign without Basic Constraints, as "invalid CA certificate". The CA-file context now leaves strict mode off. The file is still the only trust anchor, and the chain, signature, validity dates and name are still checked.
 
+### Changed
+
+- **A traffic matching list's dry run previews the body the call would send.** The preview now carries the type, name and normalized items, instead of the arguments it was handed, and the items are checked before the preview is built: a dry run accepted an item the real call refuses, so a preview could show an update that was never going to be accepted. The list is read first to fill in the type and name the update would carry, which is what `update_firewall_policy` already does.
+
+- **The traffic matching list read path no longer enforces the write path's constraints.** The values belong to the controller, and a controller that reports a port outside the documented range must still be readable; the read reports what the controller holds. The write path is unchanged: a port outside 1 through 65535 is still refused before it is sent.
+
+- **A port is written as plain ASCII digits.** `int()` also accepts `"8_0"` and `"+80"`, and `str.isdigit()` also accepts the full-width `"８０"`; none is a port the API documents, and none may reach the controller.
+
+- **A MAC address resolves in any of the common formats.** The shared device lookup compares the address without its separators, so `aabbccddeeff`, `aa:bb:cc:dd:ee:ff` and `AA-BB-CC-DD-EE-FF` find the same device — the formats the server's own `validate_mac_address` already accepts.
+
+- **`get_device_statistics` accepts the identifier the device listings hand out.** The listing reports a device under its integration UUID, but the tool matched the legacy ObjectId only, so the very ID the listing returned was refused with "device not found".
+
 ## [0.8.0] - 2026-11-03
 
 ### Added

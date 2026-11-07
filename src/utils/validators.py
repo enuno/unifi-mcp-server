@@ -351,10 +351,11 @@ def validate_backup_filename(backup_filename: str) -> str:
     """Validate a controller backup filename before it is used in a path.
 
     The filename is interpolated into a controller request path
-    (``/proxy/network/data/backup/{filename}``). Without validation, path
-    separators and ``..`` segments let a caller retarget the authenticated
-    GET at any controller route, and the bytes returned can then be written
-    to disk. Allow only a single, plain path component.
+    (``/proxy/network/dl/autobackup/{filename}`` for an autobackup and
+    ``/proxy/network/dl/backup/{filename}`` for a manual one). Without
+    validation, path separators and ``..`` segments let a caller retarget
+    the authenticated GET at any controller route, and the bytes returned
+    can then be written to disk. Allow only a single, plain path component.
 
     Args:
         backup_filename: Backup filename supplied by the caller

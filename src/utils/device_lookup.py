@@ -17,10 +17,24 @@ across ``device_control.py`` and ``port_profiles.py``; they all share the
 same blind spot, so they share one helper.
 """
 
+import re
 from typing import Any
 
 # Keys a caller may pass a device identifier under.
 _DEVICE_ID_KEYS = ("_id", "external_id", "id")
+
+# Separators a MAC address may be written with.
+_MAC_SEPARATORS = re.compile(r"[:\-.]")
+
+
+def _norm_mac(value: str) -> str:
+    """A MAC address without its separators, in lower case.
+
+    ``aabbccddeeff``, ``aa:bb:cc:dd:ee:ff`` and ``AA-BB-CC-DD-EE-FF``
+    are the same address, and the server's own ``validate_mac_address``
+    accepts all three.
+    """
+    return _MAC_SEPARATORS.sub("", value.strip().lower())
 
 
 def find_device(
@@ -32,7 +46,7 @@ def find_device(
     Args:
         devices: Device records from ``stat/device``
         device_id: Identifier to look for — legacy ObjectId, integration
-            UUID, or MAC address
+            UUID, or MAC address in any of the common formats
 
     Returns:
         The matching device record, or ``None`` when nothing matches
@@ -40,6 +54,7 @@ def find_device(
     if not device_id:
         return None
     needle = device_id.strip().lower()
+    needle_mac = _norm_mac(needle)
     for device in devices:
         if not isinstance(device, dict):
             continue
@@ -48,8 +63,9 @@ def find_device(
             if isinstance(value, str) and value.lower() == needle:
                 return device
         mac = device.get("mac")
-        if isinstance(mac, str) and mac.lower() == needle:
-            return device
+        if isinstance(mac, str):
+            if mac.lower() == needle or _norm_mac(mac) == needle_mac:
+                return device
     return None
 
 

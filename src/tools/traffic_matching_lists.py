@@ -288,21 +288,6 @@ async def update_traffic_matching_list(
         "items_count": len(items) if items else None,
     }
 
-    if dry_run:
-        logger.info(
-            sanitize_log_message(
-                f"DRY RUN: Would update traffic matching list '{list_id}' in site '{site_id}'"
-            )
-        )
-        log_audit(
-            operation="update_traffic_matching_list",
-            parameters=parameters,
-            result="dry_run",
-            site_id=site_id,
-            dry_run=True,
-        )
-        return {"dry_run": True, "would_update": parameters}
-
     try:
         async with UniFiClient(settings) as client:
             await client.authenticate()
@@ -346,6 +331,28 @@ async def update_traffic_matching_list(
                 "name": name if name is not None else existing.name,
                 "items": update_items,
             }
+
+            if dry_run:
+                # The preview is the body the call would send, so it is
+                # built after the items are normalized and checked: a
+                # dry run must not accept what the real call refuses.
+                logger.info(
+                    sanitize_log_message(
+                        f"DRY RUN: Would update traffic matching list '{list_id}' "
+                        f"in site '{site_id}'"
+                    )
+                )
+                log_audit(
+                    operation="update_traffic_matching_list",
+                    parameters=parameters,
+                    result="dry_run",
+                    site_id=site_id,
+                    dry_run=True,
+                )
+                return {
+                    "dry_run": True,
+                    "would_update": update_data,
+                }
 
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists/{list_id}"

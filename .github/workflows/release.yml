@@ -154,7 +154,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build Docker image (local — no push yet)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -172,7 +172,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Push Docker image (only if Trivy passed)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -196,7 +196,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build the fleet image (local — no push yet)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: false
@@ -215,7 +215,7 @@ jobs:
           severity: HIGH,CRITICAL
 
       - name: Push the fleet image (only if Trivy passed)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

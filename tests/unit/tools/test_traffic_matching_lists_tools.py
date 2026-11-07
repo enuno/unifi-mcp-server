@@ -221,6 +221,19 @@ async def test_create_traffic_matching_list_success(mock_settings):
             assert result["name"] == "New Port List"
             mock_client.post.assert_called_once()
 
+            # The payload carries the API's item objects, and only the
+            # fields an item uses — the controller rejects an unused one
+            # ("Unknown request body property '$.items[0].start'").
+            body = mock_client.post.call_args.kwargs["json_data"]
+            assert body["items"] == [
+                {"type": "PORT_NUMBER", "value": 22},
+                {"type": "PORT_NUMBER", "value": 80},
+                {"type": "PORT_NUMBER", "value": 443},
+            ]
+            for item in body["items"]:
+                assert "start" not in item
+                assert "stop" not in item
+
 
 @pytest.mark.asyncio
 async def test_create_traffic_matching_list_dry_run(mock_settings):

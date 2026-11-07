@@ -965,6 +965,21 @@ class TestUniFiClientBackupMethods:
         await client.close()
 
     @pytest.mark.asyncio
+    async def test_delete_backup_uses_the_cloud_route(self, mock_settings):
+        """The cloud API keeps its own route."""
+        client = UniFiClient(mock_settings)
+        filename = "backup_2026-11-06_12-34-56.unf"
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="site-uuid")):
+            with patch.object(client, "delete", new_callable=AsyncMock) as mock_delete:
+                mock_delete.return_value = {"meta": {"rc": "ok"}}
+                await client.delete_backup("default", filename)
+
+        endpoint = mock_delete.call_args[0][0]
+        assert endpoint == "/ea/sites/site-uuid/backups/backup_2026-11-06_12-34-56.unf"
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_get_restore_status_returns_not_supported(self, mock_settings):
         """get_restore_status returns a not_supported status (endpoint not in UniFi API)."""
         client = UniFiClient(mock_settings)

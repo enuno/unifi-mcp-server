@@ -321,24 +321,31 @@ async def update_traffic_matching_list(
             if not existing_list:
                 raise ResourceNotFoundError("traffic_matching_list", list_id)
 
-            # Build update data
-            update_data = existing_list.copy()
+            # The API accepts type, name and items on a write and rejects
+            # anything else ("Unknown request body property '$.id'"), so
+            # the body is built from those three rather than copied from
+            # the list the controller returned.
+            existing = TrafficMatchingList.model_validate(existing_list)
+            effective_type = list_type or existing.type
+            if not isinstance(effective_type, str):
+                raise ValidationError("Cannot determine the list type for the list")
 
-            if list_type is not None:
-                update_data["type"] = list_type
-            if name is not None:
-                update_data["name"] = name
             if items is not None:
                 # Map items onto the API's object shape ({type, value}).
-                effective_type = update_data.get("type") or list_type
-                if not isinstance(effective_type, str):
-                    raise ValidationError(
-                        "Cannot determine the list type for the items; pass list_type"
-                    )
                 try:
-                    update_data["items"] = normalize_list_items(effective_type, items)
+                    update_items = normalize_list_items(effective_type, items)
                 except ValueError as e:
                     raise ValidationError(str(e)) from e
+            else:
+                update_items = [
+                    item.model_dump(mode="json", exclude_none=True) for item in existing.items
+                ]
+
+            update_data: dict[str, Any] = {
+                "type": effective_type,
+                "name": name if name is not None else existing.name,
+                "items": update_items,
+            }
 
             endpoint = settings.get_integration_path(
                 f"sites/{resolved_site_id}/traffic-matching-lists/{list_id}"

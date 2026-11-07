@@ -384,6 +384,51 @@ async def test_update_traffic_matching_list_sends_object_items(mock_settings):
 
 
 @pytest.mark.asyncio
+async def test_update_traffic_matching_list_sends_only_writable_fields(mock_settings):
+    """The body carries type, name and items — and nothing else.
+
+    The controller rejects a body that repeats the list it read:
+    "Unknown request body property '$.id'".
+    """
+    mock_get_response = {
+        "data": {
+            "_id": "tml-1",
+            "type": "PORTS",
+            "name": "Old Name",
+            "items": [{"type": "PORT_NUMBER", "value": 80}],
+            "site_id": "default",
+        }
+    }
+    mock_put_response = {"data": dict(mock_get_response["data"])}
+
+    with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:
+        with patch("src.tools.traffic_matching_lists.log_audit"):
+            mock_client = AsyncMock()
+            mock_client.authenticate = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_get_response)
+            mock_client.put = AsyncMock(return_value=mock_put_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(
+                return_value=False
+            )  # a truthy value would swallow errors
+            mock_client_class.return_value = mock_client
+
+            await update_traffic_matching_list(
+                "default",
+                "tml-1",
+                mock_settings,
+                name="New Name",
+                confirm=True,
+            )
+
+            body = mock_client.put.call_args.kwargs["json_data"]
+            assert set(body) == {"type", "name", "items"}
+            assert body["type"] == "PORTS"
+            assert body["name"] == "New Name"
+            assert body["items"] == [{"type": "PORT_NUMBER", "value": 80}]
+
+
+@pytest.mark.asyncio
 async def test_create_traffic_matching_list_rejects_bad_items(mock_settings):
     """An item the list type cannot take is refused before any request."""
     with patch("src.tools.traffic_matching_lists.UniFiClient") as mock_client_class:

@@ -23,6 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`UNIFI_LOCAL_CA_FILE` accepts a UniFi OS console's own certificate on Python 3.13 and later.** Python 3.13 made `ssl.create_default_context` strict (`VERIFY_X509_STRICT`), and its RFC 5280 profile checks reject the certificate UniFi OS generates for itself, whose Key Usage includes keyCertSign without Basic Constraints, as "invalid CA certificate". The CA-file context now leaves strict mode off. The file is still the only trust anchor, and the chain, signature, validity dates and name are still checked.
 
+### Changed
+
+- **A traffic matching list's dry run previews the body the call would send.** The preview now carries the type, name and normalized items, instead of the arguments it was handed, and the items are checked before the preview is built: a dry run accepted an item the real call refuses, so a preview could show an update that was never going to be accepted. The dry run still returns before the controller client is opened — no request may reach the controller on a dry run — so a field the caller did not set is reported as null, meaning it is kept as the list has it. Without a list type the items are checked against every type, and the preview reports them as they were given.
+
+- **The traffic matching list read path no longer enforces the write path's constraints.** The values belong to the controller, and a controller that reports a port outside the documented range must still be readable; the read reports what the controller holds. The write path is unchanged, and it now holds the list's own items to the same constraints when an update sends them back, so an item the API would refuse is caught with a message that names the list rather than by the controller's rejection.
+
+- **A port is written as plain ASCII digits.** `int()` also accepts `"8_0"` and `"+80"`, and `str.isdigit()` also accepts the full-width `"８０"`; none is a port the API documents, and none may reach the controller.
+
+- **A MAC address resolves in any of the common formats.** The shared device lookup compares the address without its separators, so `aabbccddeeff`, `aa:bb:cc:dd:ee:ff` and `AA-BB-CC-DD-EE-FF` find the same device — the formats the server's own `validate_mac_address` already accepts.
+
+- **`get_device_statistics` accepts the identifier the device listings hand out.** The listing reports a device under its integration UUID, but the tool matched the legacy ObjectId only, so the very ID the listing returned was refused with "device not found".
+
 ## [0.8.0] - 2026-11-03
 
 ### Added

@@ -104,8 +104,10 @@ class TrafficMatchingListItem(BaseModel):
         values = dict(data)
         for label in ("value", "start", "stop"):
             number = values.get(label)
-            if isinstance(number, str) and number.strip().isdecimal():
-                values[label] = int(number.strip())
+            if isinstance(number, str):
+                stripped = number.strip()
+                if stripped.isascii() and stripped.isdecimal():
+                    values[label] = int(stripped)
         return values
 
     @model_validator(mode="after")
@@ -128,19 +130,50 @@ class TrafficMatchingListItem(BaseModel):
         return self
 
 
-def _port_item(value: str | int) -> dict[str, Any]:
-    """Build the item object for a PORTS list entry."""
-    if isinstance(value, int):
+def _parse_port_text(text: str) -> int | None:
+    """A port written as a number in a string, or ``None``.
+
+    Only ASCII decimal digits count. ``int()`` would also accept ``"8_0"``
+    and ``"+80"``, and ``str.isdigit()`` also accepts the full-width
+    ``"８０"``; none of those is a port number the API documents.
+    """
+    stripped = text.strip()
+    if not stripped.isascii() or not stripped.isdecimal():
+        return None
+    return int(stripped)
+
+
+def _port_item(value: str | int, *, strict: bool = True) -> dict[str, Any]:
+    """Build the item object for a PORTS list entry.
+
+    Args:
+        value: The port, as a number or as a number in a string
+        strict: Whether a value that is not a port is an error. The read
+            path is not strict: a controller's own data is reported as
+            it stands rather than refused.
+    """
+    if isinstance(value, int) and not isinstance(value, bool):
         return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": value}
     text = str(value).strip()
     if "-" in text:
         start, _, stop = text.partition("-")
-        return {
-            "type": TrafficMatchingItemType.PORT_NUMBER_RANGE.value,
-            "start": int(start.strip()),
-            "stop": int(stop.strip()),
-        }
-    return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": int(text)}
+        first = _parse_port_text(start)
+        last = _parse_port_text(stop)
+        if first is not None and last is not None:
+            return {
+                "type": TrafficMatchingItemType.PORT_NUMBER_RANGE.value,
+                "start": first,
+                "stop": last,
+            }
+        if strict:
+            raise ValueError(f"PORT_NUMBER range must be two ports, got {value!r}")
+        return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": text}
+    number = _parse_port_text(text)
+    if number is None:
+        if strict:
+            raise ValueError(f"PORT_NUMBER value must be an integer, got {value!r}")
+        return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": text}
+    return {"type": TrafficMatchingItemType.PORT_NUMBER.value, "value": number}
 
 
 def _is_ip_address(text: str) -> bool:
@@ -178,6 +211,8 @@ def _address_item(value: str | int) -> dict[str, Any]:
 def normalize_list_items(
     list_type: str,
     items: list[Any],
+    *,
+    enforce_constraints: bool = True,
 ) -> list[dict[str, Any]]:
     """Turn caller-supplied items into the API's item objects.
 
@@ -189,6 +224,10 @@ def normalize_list_items(
     Args:
         list_type: ``PORTS``, ``IPV4_ADDRESSES`` or ``IPV6_ADDRESSES``
         items: Item values, as strings or as API-shaped objects
+        enforce_constraints: Whether the API's constraints are enforced.
+            The write path enforces them; the read path does not, because
+            the values belong to the controller and are reported as they
+            stand rather than refused.
 
     Returns:
         List of API-shaped item objects
@@ -196,29 +235,37 @@ def normalize_list_items(
     Raises:
         ValueError: If an item is malformed or not valid for the list type
     """
+    if isinstance(items, str) or not isinstance(items, list):
+        # A string is a sequence of characters, and iterating one would
+        # turn "443" into the ports 4, 4 and 3.
+        raise ValueError(f"items must be a list of values or objects, got {type(items).__name__}")
     allowed = LIST_TYPE_ITEM_TYPES.get(list_type, set())
     normalized: list[dict[str, Any]] = []
     for item in items:
         if isinstance(item, dict):
-            _check_port_values(item)
+            if enforce_constraints:
+                _check_port_values(item)
             parsed = TrafficMatchingListItem.model_validate(item)
-            _check_item_type_allowed(parsed.type.value, list_type, allowed)
-            normalized.append(parsed.model_dump(exclude_none=True))
+            if enforce_constraints:
+                _check_item_type_allowed(parsed.type.value, list_type, allowed)
+            normalized.append(parsed.model_dump(mode="json", exclude_none=True))
             continue
         if isinstance(item, bool) or not isinstance(item, str | int):
             raise ValueError(f"Invalid list item: {item!r}")
         if list_type == TrafficMatchingListType.PORTS.value:
-            built = _port_item(item)
+            built = _port_item(item, strict=enforce_constraints)
         else:
             built = _address_item(item)
-        _check_port_values(built)
+        if enforce_constraints:
+            _check_port_values(built)
         parsed = TrafficMatchingListItem.model_validate(built)
         # A plain value can convert to a type the list does not take — an
         # IPv6 list has no range type, so "2001:db8::1-2001:db8::10" must
         # not become an IP_ADDRESS_RANGE. Both input forms enforce the
         # same restriction.
-        _check_item_type_allowed(parsed.type.value, list_type, allowed)
-        normalized.append(parsed.model_dump(exclude_none=True))
+        if enforce_constraints:
+            _check_item_type_allowed(parsed.type.value, list_type, allowed)
+        normalized.append(parsed.model_dump(mode="json", exclude_none=True))
     return normalized
 
 
@@ -253,7 +300,7 @@ def _check_port_values(item: dict[str, Any]) -> None:
             # A port the caller wrote as a number in a string is read as
             # the number it is; the item model coerces it.
             text = number.strip()
-            if not text.isdecimal():
+            if not text.isascii() or not text.isdecimal():
                 raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
             number = int(text)
         elif not isinstance(number, int):
@@ -325,7 +372,13 @@ class TrafficMatchingList(BaseModel):
         if isinstance(list_type, str) and isinstance(items, list) and items:
             if any(not isinstance(item, dict) for item in items):
                 try:
-                    values["items"] = normalize_list_items(list_type, items)
+                    # The read path does not enforce the API's
+                    # constraints: the values are the controller's own,
+                    # and a controller that reports a port outside the
+                    # documented range must still be readable.
+                    values["items"] = normalize_list_items(
+                        list_type, items, enforce_constraints=False
+                    )
                 except ValueError:
                     # Leave the payload as the controller sent it; the
                     # validation below reports the problem.

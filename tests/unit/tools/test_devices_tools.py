@@ -238,6 +238,32 @@ class TestGetDeviceStatistics:
             assert result["device_id"] == DEVICE_ID_2
 
     @pytest.mark.asyncio
+    async def test_get_device_statistics_by_integration_uuid(self, mock_settings):
+        """The listing reports the device under its integration UUID.
+
+        The tool used to match the legacy ObjectId only, so the UUID the
+        listing handed out was refused by the tool that consumes it.
+        """
+        device = {
+            "id": "f1364b54-bdb9-34f8-9f87-35da273426f6",
+            "external_id": "f1364b54-bdb9-34f8-9f87-35da273426f6",
+            "name": "Home AP",
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "uptime": 86400,
+        }
+        mock_response = {"data": [device]}
+
+        with patch("src.tools.devices.UniFiClient") as mock_client_class:
+            mock_client_class.return_value = create_mock_client(mock_response)
+
+            result = await get_device_statistics(
+                "site-1", "f1364b54-bdb9-34f8-9f87-35da273426f6", mock_settings
+            )
+
+            assert result["device_id"] == "f1364b54-bdb9-34f8-9f87-35da273426f6"
+            assert result["uptime"] == 86400
+
+    @pytest.mark.asyncio
     async def test_get_device_statistics_not_found(self, mock_settings):
         mock_response = {"data": [make_device(DEVICE_ID_1)]}
 

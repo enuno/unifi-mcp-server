@@ -52,6 +52,20 @@ def test_match_is_case_insensitive():
     assert find_device(DEVICES, "AA:BB:CC:DD:EE:FF") is DEVICES[1]
 
 
+def test_finds_by_mac_in_any_common_format():
+    """The server's own validate_mac_address accepts these formats."""
+    for mac in [
+        "aa:bb:cc:dd:ee:ff",
+        "AA:BB:CC:DD:EE:FF",
+        "aa-bb-cc-dd-ee-ff",
+        "aa.bb.cc.dd.ee.ff",
+        "aabbccddeeff",
+        "AABBCCDDEEFF",
+        " aa:bb:cc:dd:ee:ff ",
+    ]:
+        assert find_device(DEVICES, mac) is DEVICES[1], mac
+
+
 def test_unknown_id_returns_none():
     assert find_device(DEVICES, "00000000-0000-0000-0000-000000000000") is None
 

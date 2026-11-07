@@ -2734,17 +2734,19 @@ Retrieve metadata for all available backup files.
 ```json
 [
   {
-    "backup_id": "backup_20260124_123456",
-    "filename": "backup_2026-01-24_12-34-56.unf",
-    "backup_type": "NETWORK",
-    "created_at": "2026-01-24T12:34:56Z",
-    "size_bytes": 8456192,
-    "version": "10.6.106",
-    "is_valid": true,
-    "cloud_synced": true
+    "filename": "autobackup_10.6.109_20261101_0630_1793514600049.unf",
+    "time": 1793514600049,
+    "size": 113808,
+    "version": "10.6.109",
+    "cat": null,
+    "datetime": "2026-11-01 06:30"
   }
 ]
 ```
+
+**Note (verified live)**: this is the shape a UniFi OS console answers
+with. The entries carry no per-item URL, so the download path is built
+from the filename — see [Download Backup](#download-backup).
 
 ---
 
@@ -2772,9 +2774,23 @@ Retrieve detailed information about a specific backup.
 Download a backup file to local storage.
 
 - **Method:** `GET`
-- **Endpoint:** `/api/backup/download/{filename}`
+- **Endpoint:** `/proxy/network/dl/autobackup/{filename}` (automatic backup) or `/proxy/network/dl/backup/{filename}` (manual backup)
 - **MCP Tool:** `download_backup()`
 - **Implementation:** v0.2.0 Phase 4 (86% coverage)
+
+**Note (verified live, issue #281)**: a UniFi OS console serves backup
+files from its `/dl/` tree, one directory per kind. The filename goes in
+the path verbatim, and the directory follows the kind of backup:
+
+| Backup | Path |
+|--------|------|
+| Automatic (`autobackup_*.unf`) | `/proxy/network/dl/autobackup/{filename}` |
+| Manual (`<version>.unf`, e.g. `10.6.109.unf`) | `/proxy/network/dl/backup/{filename}` |
+
+The `/api/backup/download/{filename}` route below is the legacy Network
+Application Server surface, not the console's; on a console it does not
+answer. The console's own `cmd/backup` response names the same tree
+(`{"url": "/dl/backup/10.6.109.unf"}`).
 
 **Parameters:**
 
@@ -2789,7 +2805,7 @@ Download a backup file to local storage.
 ```python
 result = await download_backup(
     site_id="default",
-    backup_filename="backup_2026-01-24.unf",
+    backup_filename="autobackup_10.6.109_20261101_0630_1793514600049.unf",
     output_path="unifi_backup.unf",
     settings=settings
 )

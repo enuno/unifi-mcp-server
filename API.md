@@ -3854,14 +3854,18 @@ Create a backup of the UniFi controller configuration.
 ```json
 {
   "backup_id": "backup_20250129_153045",
-  "filename": "backup_2025-01-29_15-30-45.unf",
-  "download_url": "/data/backup/backup_2025-01-29_15-30-45.unf",
+  "filename": "autobackup_10.6.109_20251101_0630_1793514600049.unf",
+  "download_url": "/proxy/network/dl/autobackup/autobackup_10.6.109_20251101_0630_1793514600049.unf",
   "backup_type": "network",
   "created_at": "2025-01-29T15:30:45Z",
   "retention_days": 30,
   "status": "completed"
 }
 ```
+
+**Note**: a UniFi OS console serves backup files from its `/dl/` tree —
+automatic backups from `dl/autobackup/`, manual ones from `dl/backup/`.
+See [Download Backup](docs/UNIFI_API.md#download-backup).
 
 **Example:**
 

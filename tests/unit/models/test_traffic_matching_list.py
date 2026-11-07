@@ -154,6 +154,16 @@ class TestNormalizeListItems:
             {"type": "PORT_NUMBER", "value": 65535}
         ]
 
+    def test_a_numeric_port_string_is_read_as_a_number(self):
+        """A port written as a number in a string is the number it is."""
+        assert normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "80"}]) == [
+            {"type": "PORT_NUMBER", "value": 80}
+        ]
+
+    def test_a_numeric_port_string_out_of_range_is_rejected(self):
+        with pytest.raises(ValueError, match="between 1 and 65535"):
+            normalize_list_items("PORTS", [{"type": "PORT_NUMBER", "value": "70000"}])
+
     def test_non_scalar_item_is_rejected(self):
         with pytest.raises(ValueError, match="Invalid list item"):
             normalize_list_items("PORTS", [None])
@@ -209,6 +219,23 @@ class TestTrafficMatchingListModel:
                 {"_id": "tml-4", "type": "PORTS", "name": "Web", "items": ["http"]}
             )
         assert "items" in str(excinfo.value)
+
+    def test_a_port_sent_as_a_string_reads_as_a_number(self):
+        """A controller that answers with "80" must not break the next write.
+
+        Reading a list and feeding its items back to update is a normal
+        sequence; if the port stayed a string, that write would be
+        rejected as a non-integer.
+        """
+        tml = TrafficMatchingList.model_validate(
+            {
+                "_id": "tml-5",
+                "type": "PORTS",
+                "name": "Web",
+                "items": [{"type": "PORT_NUMBER", "value": "80"}],
+            }
+        )
+        assert tml.items[0].value == 80
 
 
 class TestTrafficMatchingListCreate:

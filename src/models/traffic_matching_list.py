@@ -79,6 +79,32 @@ class TrafficMatchingListItem(BaseModel):
     start: str | int | None = Field(None, description="First value of a range")
     stop: str | int | None = Field(None, description="Last value of a range")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_numeric_port(cls, data: Any) -> Any:
+        """Read a port sent as a number in a string as the number it is.
+
+        The API types a port as an integer, but a controller that answers
+        with ``"80"`` must not leave the server holding a value it then
+        refuses to send back: the item would read as a string and the
+        next write of it would be rejected as a non-integer.
+        """
+        if not isinstance(data, dict):
+            return data
+        item_type = data.get("type")
+        item_type = getattr(item_type, "value", item_type)
+        if item_type not in (
+            TrafficMatchingItemType.PORT_NUMBER.value,
+            TrafficMatchingItemType.PORT_NUMBER_RANGE.value,
+        ):
+            return data
+        values = dict(data)
+        for label in ("value", "start", "stop"):
+            number = values.get(label)
+            if isinstance(number, str) and number.strip().isdigit():
+                values[label] = int(number.strip())
+        return values
+
     @model_validator(mode="after")
     def _check_value_fields(self) -> "TrafficMatchingListItem":
         """Reject an item whose fields do not match its type."""
@@ -204,7 +230,16 @@ def _check_port_values(item: dict[str, Any]) -> None:
         if label not in item or item[label] is None:
             continue
         number = item[label]
-        if isinstance(number, bool) or not isinstance(number, int):
+        if isinstance(number, bool):
+            raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
+        if isinstance(number, str):
+            # A port the caller wrote as a number in a string is read as
+            # the number it is; the item model coerces it.
+            text = number.strip()
+            if not text.isdigit():
+                raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
+            number = int(text)
+        elif not isinstance(number, int):
             raise ValueError(f"{item_type} {label} must be an integer, got {number!r}")
         if not 1 <= number <= 65535:
             raise ValueError(f"{item_type} {label} must be between 1 and 65535, got {number}")

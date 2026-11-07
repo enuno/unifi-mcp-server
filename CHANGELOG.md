@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`UNIFI_LOCAL_CA_FILE` accepts a UniFi OS console's own certificate on Python 3.13 and later.** Python 3.13 made `ssl.create_default_context` strict (`VERIFY_X509_STRICT`), and its RFC 5280 profile checks reject the certificate UniFi OS generates for itself, whose Key Usage includes keyCertSign without Basic Constraints, as "invalid CA certificate". The CA-file context now leaves strict mode off. The file is still the only trust anchor, and the chain, signature, validity dates and name are still checked.
 
+### Fixed
+
+- **`delete_backup` now reaches the controller's backup manager.** The tool sent `DELETE /proxy/network/api/backup/delete-backup/{filename}`, which a UniFi OS console answers with `401 api.err.NoSiteContext`: the route needs a site context it never carried. The deletion is now the command the same manager answers for listing the backups — `POST /proxy/network/api/s/{site}/cmd/backup` with `{"cmd": "delete-backup", "filename": ...}` — which is recognised by the console (a wrong payload key answers `400 api.err.Invalid`, an unknown filename `404 api.err.NotFound`). A backup the controller does not know is reported by name. A console-level manual backup is not in the Network application's backup manager, so the console's own backup API — which answers `401` to the Network API key — is the only surface that reaches it.
+
 ### Changed
 
 - **A traffic matching list's dry run previews the body the call would send.** The preview now carries the type, name and normalized items, instead of the arguments it was handed, and the items are checked before the preview is built: a dry run accepted an item the real call refuses, so a preview could show an update that was never going to be accepted. The dry run still returns before the controller client is opened — no request may reach the controller on a dry run — so a field the caller did not set is reported as null, meaning it is kept as the list has it. Without a list type the items are checked against every type, and the preview reports them as they were given.

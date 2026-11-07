@@ -15,6 +15,7 @@ from src.utils.exceptions import (
     NetworkError,
     RateLimitError,
     ResourceNotFoundError,
+    ValidationError,
 )
 
 
@@ -905,6 +906,62 @@ class TestUniFiClientBackupMethods:
         assert content == b"manual-backup"
         url = mock_get.call_args[0][0]
         assert f"/proxy/network/dl/backup/{filename}" in url
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_delete_backup_uses_the_backup_command(self, mock_settings_local):
+        """A backup is deleted by the command that lists the backups.
+
+        The old route, DELETE /proxy/network/api/backup/delete-backup/{filename},
+        answered api.err.NoSiteContext on a UniFi OS console: it needs a site
+        context it never carried.
+        """
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+        filename = "autobackup_10.6.109_20261105_0515_1793514600049.unf"
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(client, "post", new_callable=AsyncMock) as mock_post:
+                mock_post.return_value = {"meta": {"rc": "ok"}, "data": []}
+                result = await client.delete_backup("default", filename)
+
+        assert result["meta"]["rc"] == "ok"
+        endpoint = mock_post.call_args[0][0]
+        payload = mock_post.call_args.kwargs["json_data"]
+        assert endpoint == "/proxy/network/api/s/default/cmd/backup"
+        assert payload == {"cmd": "delete-backup", "filename": filename}
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_delete_backup_names_the_backup_it_cannot_find(self, mock_settings_local):
+        """A backup the controller does not know is named in the error."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+        filename = "autobackup_gone.unf"
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with patch.object(
+                client,
+                "post",
+                new_callable=AsyncMock,
+                side_effect=ResourceNotFoundError("resource", "/endpoint"),
+            ):
+                with pytest.raises(ResourceNotFoundError) as excinfo:
+                    await client.delete_backup("default", filename)
+
+        assert filename in str(excinfo.value)
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_delete_backup_refuses_a_path_in_the_filename(self, mock_settings_local):
+        """The filename is checked before it reaches the controller."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"default": "default"}
+
+        with patch.object(client, "resolve_site_id", new=AsyncMock(return_value="default")):
+            with pytest.raises(ValidationError):
+                await client.delete_backup("default", "../../etc/passwd")
+
         await client.close()
 
     @pytest.mark.asyncio

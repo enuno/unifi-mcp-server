@@ -876,29 +876,41 @@ class UniFiClient:
         site_id: str,
         backup_filename: str,
     ) -> dict[str, Any]:
-        """Delete a specific backup file.
+        """Delete a backup file.
 
         Args:
             site_id: Site identifier
             backup_filename: Backup filename to delete
 
         Returns:
-            Deletion confirmation response
+            The controller's response to the delete command
 
         Note:
-            For local API: DELETE /proxy/network/api/backup/delete-backup/{filename}
+            For local API: POST /proxy/network/api/s/{site}/cmd/backup
+            with body {"cmd": "delete-backup", "filename": ...}
+
+            The previous route, DELETE /proxy/network/api/backup/delete-backup/{filename},
+            answered api.err.NoSiteContext on a UniFi OS console: that route
+            needs a site context it never carried. The delete command is the
+            one the backup manager that lists the backups already answers.
         """
         site_id = await self.resolve_site_id(site_id)
         backup_filename = validate_backup_filename(backup_filename)
-        safe_name = quote(backup_filename, safe="")
 
-        # For local API
         if self.settings.api_type == APIType.LOCAL:
-            endpoint = f"/proxy/network/api/backup/delete-backup/{safe_name}"
-        else:
-            # Cloud API
-            endpoint = f"/ea/sites/{site_id}/backups/{safe_name}"
+            # Use site name (e.g., "default") not UUID for local API
+            site_name = self._site_uuid_to_name.get(site_id, site_id)
+            endpoint = f"/proxy/network/api/s/{site_name}/cmd/backup"
+            payload = {"cmd": "delete-backup", "filename": backup_filename}
+            try:
+                return await self.post(endpoint, json_data=payload)
+            except ResourceNotFoundError as e:
+                # Name the backup rather than the route it did not find.
+                raise ResourceNotFoundError("backup", backup_filename) from e
 
+        # Cloud API
+        safe_name = quote(backup_filename, safe="")
+        endpoint = f"/ea/sites/{site_id}/backups/{safe_name}"
         return await self.delete(endpoint)
 
     async def restore_backup(

@@ -1,3 +1,3 @@
 """UniFi MCP Server - Model Context Protocol server for UniFi Network API."""
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"

@@ -96,7 +96,12 @@ jobs:
         uses: codecov/codecov-action@v7
         if: matrix.python-version == '3.11'
         with:
-          file: ./coverage.xml
+          # v5 dropped the singular `file` input, so v7 ignores it with an
+          # "Unexpected input(s) 'file'" warning and falls back to searching the
+          # whole workspace. `files` plus `disable_search` keeps the upload
+          # pinned to the one report pytest writes.
+          files: ./coverage.xml
+          disable_search: true
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false

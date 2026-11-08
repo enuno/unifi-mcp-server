@@ -10,7 +10,8 @@ This roadmap is synchronized with `DEVELOPMENT_PLAN.md` and reflects the current
 - Phase 5a: Protect v7 expansion (39 new operations: arm profiles/alarm control, sirens, speakers, fobs, relays, bridges, link stations, alarm hubs, users, POS ingestion)
 - Phase 6: new API domains — Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0
 - Phase 7: deployment automation (done) — Ansible playbook for Docker hosts (single or clustered), Helm chart for Kubernetes, and agent setup prompts for server-only, single-server fleet and clustered installs
-- Phase 5+ follow-on: Access expansion — **blocked** (no official Access spec published as of 2026-09-26)
+- Phase 8 (active, revision basis `311fce7`, reconciled 2026-11-08): Network 11 live-controller N1–N4 and endpoint discovery remain open. `DEVELOPMENT_PLAN.md` §4.9 adds the eight PDF/dashboard gap categories without renumbering the existing phases; SD-WAN config/status reads already exist and are undergoing official-path/model repair, while policy parity remains open. Classic standalone target support is not established by the rival's claimed direct mode.
+- Phase 5+ follow-on: Access expansion — **blocked** (no official Access spec published as of 2026-10-27)
 
 ## How to use this roadmap
 

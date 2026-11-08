@@ -1120,21 +1120,7 @@ async def test_list_sdwan_configs_success(mock_settings):
     """Test successful retrieval of SD-WAN configurations."""
     from src.tools.site_manager import list_sdwan_configs
 
-    mock_response = {
-        "data": [
-            {
-                "config_id": "config-1",
-                "name": "Hub-Spoke Config",
-                "topology_type": "hub-spoke",
-                "hub_site_ids": ["site-1"],
-                "spoke_site_ids": ["site-2", "site-3"],
-                "failover_enabled": True,
-                "created_at": "2026-01-01T00:00:00Z",
-                "updated_at": "2026-02-01T00:00:00Z",
-                "status": "active",
-            }
-        ]
-    }
+    mock_response = {"data": [{"id": "config-1", "name": "Hub-Spoke Config", "type": "sdwan-hbsp"}]}
 
     with patch("src.tools.site_manager.SiteManagerClient") as mock_client_class:
         mock_client = AsyncMock()
@@ -1146,8 +1132,8 @@ async def test_list_sdwan_configs_success(mock_settings):
         result = await list_sdwan_configs(mock_settings)
 
         assert len(result) == 1
-        assert result[0]["config_id"] == "config-1"
-        assert result[0]["topology_type"] == "hub-spoke"
+        assert result[0]["id"] == "config-1"
+        assert result[0]["type"] == "sdwan-hbsp"
         mock_client.list_sdwan_configs.assert_called_once()
 
 
@@ -1158,15 +1144,13 @@ async def test_get_sdwan_config_success(mock_settings):
 
     mock_response = {
         "data": {
-            "config_id": "config-1",
+            "id": "config-1",
             "name": "Hub-Spoke Config",
-            "topology_type": "hub-spoke",
-            "hub_site_ids": ["site-1"],
-            "spoke_site_ids": ["site-2"],
-            "failover_enabled": True,
-            "created_at": "2026-01-01T00:00:00Z",
-            "updated_at": "2026-02-01T00:00:00Z",
-            "status": "active",
+            "type": "sdwan-hbsp",
+            "variant": "single",
+            "settings": {"spokeToHubRouting": "geo"},
+            "hubs": [{"siteId": "site-1", "routes": []}],
+            "spokes": [{"siteId": "site-2", "primaryWan": "WAN"}],
         }
     }
 
@@ -1179,8 +1163,8 @@ async def test_get_sdwan_config_success(mock_settings):
 
         result = await get_sdwan_config(mock_settings, "config-1")
 
-        assert result["config_id"] == "config-1"
-        assert result["name"] == "Hub-Spoke Config"
+        assert result["id"] == "config-1"
+        assert result["settings"]["spokeToHubRouting"] == "geo"
         mock_client.get_sdwan_config.assert_called_once_with("config-1")
 
 
@@ -1191,12 +1175,13 @@ async def test_get_sdwan_config_status_success(mock_settings):
 
     mock_response = {
         "data": {
-            "config_id": "config-1",
-            "deployment_status": "deployed",
-            "sites_deployed": 3,
-            "sites_total": 3,
-            "last_deployment_at": "2026-02-15T10:00:00Z",
-            "error_message": None,
+            "id": "",
+            "fingerprint": "abc",
+            "generateStatus": "OK",
+            "errors": [],
+            "warnings": [],
+            "hubs": [{"siteId": "site-1", "applyStatus": "ok"}],
+            "spokes": [{"siteId": "site-2", "applyStatus": "ok", "connections": []}],
         }
     }
 
@@ -1209,9 +1194,9 @@ async def test_get_sdwan_config_status_success(mock_settings):
 
         result = await get_sdwan_config_status(mock_settings, "config-1")
 
-        assert result["config_id"] == "config-1"
-        assert result["deployment_status"] == "deployed"
-        assert result["sites_deployed"] == 3
+        assert result["id"] == ""
+        assert result["generateStatus"] == "OK"
+        assert result["spokes"][0]["connections"] == []
         mock_client.get_sdwan_config_status.assert_called_once_with("config-1")
 
 

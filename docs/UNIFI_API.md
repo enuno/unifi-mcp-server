@@ -4046,6 +4046,8 @@ curl -L -g "https://api.ui.com/v1/isp-metrics/{type}/query" \-H "Accept: applica
 
 ### List SD-WAN Configs
 
+**Implementation reconciliation (2026-11-08, `311fce7`):** The official Site Manager v1.0.0 OpenAPI at https://developer.ui.com/site-manager/v1.0.0/openapi.json defines GET `/v1/sd-wan-configs`, GET `/v1/sd-wan-configs/{id}`, and GET `/v1/sd-wan-configs/{id}/status` against `https://api.ui.com`. The repository client formerly used `/v1/sdwan/configs`, while this document already had the official paths. The list returns `{data: [{id, name, type}], httpStatusCode, traceId}` and declares no pagination. Detail includes settings/hubs/spokes; status includes generation/application and tunnel records, not a single fabricated deployment health. This is config/status read coverage only, not typed destination/performance policy support or policy authoring. Local mocks do not prove account-level interoperability.
+
 Endpoints combined into Ansible Modules for customized workflows.
 
 **Example:**

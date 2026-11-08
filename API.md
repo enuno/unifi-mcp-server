@@ -1821,7 +1821,7 @@ List all SD-WAN configurations across your organization.
 **Parameters:** None
 
 **Returns:**
-List of SD-WAN configurations with topology type, hub/spoke sites, and status.
+List of `{id, name, type}` summaries from `GET https://api.ui.com/v1/sd-wan-configs`. The v1.0.0 SD-WAN list has no pagination parameters. An empty list is different from a 404/401/403/error, which is not converted to empty success.
 
 **Example:**
 
@@ -1833,17 +1833,7 @@ result = await mcp.call_tool("list_sdwan_configs", {})
 
 ```json
 [
-  {
-    "config_id": "sdwan-001",
-    "name": "Primary Hub-Spoke",
-    "topology_type": "hub-spoke",
-    "hub_site_ids": ["site-hub"],
-    "spoke_site_ids": ["site-001", "site-002", "site-003"],
-    "failover_enabled": true,
-    "status": "active",
-    "created_at": "2026-01-01T00:00:00Z",
-    "updated_at": "2026-02-01T00:00:00Z"
-  }
+  {"id": "9304163b-680d-4de8-a7a0-7617e328911d", "name": "SD-WAN test", "type": "sdwan-hbsp"}
 ]
 ```
 
@@ -1856,7 +1846,7 @@ Get detailed SD-WAN configuration by ID.
 - `config_id` (string, required): Configuration identifier
 
 **Returns:**
-Detailed SD-WAN configuration including topology, sites, and failover settings.
+Detailed upstream `data` object from `GET /v1/sd-wan-configs/{id}`: `id`, `name`, `type`, `variant`, `settings`, `hubs`, `spokes` and unrecognized fields are preserved. This is not a typed Site Manager destination/performance-policy resource. A null/malformed detail response is an error, not a fabricated config.
 
 **Example:**
 
@@ -1875,7 +1865,7 @@ Get SD-WAN configuration deployment status.
 - `config_id` (string, required): Configuration identifier
 
 **Returns:**
-Deployment status including sites deployed, total sites, and any errors.
+The upstream `data` object from `GET /v1/sd-wan-configs/{id}/status`, including generation/apply states, per-hub/spoke warnings/errors, WAN state and connection/tunnel records. The documented `generateStatus` values are `OK`, `GENERATING`, `GENERATE_FAILED`; site `applyStatus` values are `ok`, `creating`, `updating`, `removing`, `createFailed`, `updateFailed`, `removeFailed`. Deployment/apply state is not a tunnel-health inference. Null/malformed known status fields are errors; unknown extension fields are preserved. This read-only Site Manager surface requires `UNIFI_SITE_MANAGER_ENABLED=true` and a valid cloud API key; it is registered with the `site_manager` module in full and `system` profiles across local/cloud modes, subject to RBAC and fleet routing. It is not a standalone controller endpoint.
 
 **Example:**
 
@@ -1889,12 +1879,13 @@ result = await mcp.call_tool("get_sdwan_config_status", {
 
 ```json
 {
-  "config_id": "sdwan-001",
-  "deployment_status": "deployed",
-  "sites_deployed": 4,
-  "sites_total": 4,
-  "last_deployment_at": "2026-02-15T10:30:00Z",
-  "error_message": null
+  "id": "",
+  "fingerprint": "example-fingerprint",
+  "generateStatus": "OK",
+  "errors": [],
+  "warnings": [],
+  "hubs": [{"siteId": "site-hub", "applyStatus": "ok", "primaryWanStatus": {"latency": 1, "internetIssues": []}}],
+  "spokes": [{"siteId": "site-spoke", "applyStatus": "ok", "connections": [{"hubId": "hub-1", "tunnels": [{"spokeWanId": "WAN", "hubWanId": "WAN", "status": "connected"}]}]}]
 }
 ```
 

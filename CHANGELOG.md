@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ### Added
 
 - **`UNIFI_LOCAL_TLS_SERVER_NAME` checks the console's certificate against a name other than `UNIFI_LOCAL_HOST`.** The certificate UniFi OS generates for itself names `unifi.local`, `localhost` and `127.0.0.1`, not the console's LAN address, so with `UNIFI_LOCAL_HOST` set to that address the name check failed even with the right `UNIFI_LOCAL_CA_FILE`. Set `UNIFI_LOCAL_TLS_SERVER_NAME=unifi.local` and the client sends that name as SNI and checks the certificate against it, while still connecting to `UNIFI_LOCAL_HOST`. It applies only to a local controller with verification on, and a startup warning says when `UNIFI_LOCAL_VERIFY_SSL=false` makes it ignored.

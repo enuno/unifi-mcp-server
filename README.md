@@ -19,7 +19,6 @@
   [![Documentation](https://img.shields.io/badge/docs-UniFi%20MCP-0D9373)](https://docs.hashgrid.net/)
   [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-6E56CF)](https://deepwiki.com/enuno/unifi-mcp-server)
 
-
 </p>
 
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
@@ -65,7 +64,7 @@ Set `UNIFI_API_TYPE` to choose how the server reaches UniFi.
 | `cloud-ea` | UniFi's Early Access cloud API | Sites and aggregate statistics; no per-device control or configuration |
 | `cloud-v1` | UniFi's stable v1 cloud API | Sites and aggregate statistics; no per-device control or configuration |
 
-The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.ui.com` and are registered in every mode. Set `UNIFI_SITE_MANAGER_ENABLED=true` to use them. In `local` mode the server registers 343 tools; in either cloud mode, 71.
+The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.ui.com` and are registered in every mode. Set `UNIFI_SITE_MANAGER_ENABLED=true` to use Site Manager tools; actual exposure also depends on the selected profile. The existing Site Manager SD-WAN config list/detail/status reads use the official v1.0.0 `/v1/sd-wan-configs` paths after the 2026-11-08 reconciliation; this does not implement typed destination/performance steering policies, policy writes, or prove live account interoperability (see [API.md](API.md) and [the gap reconciliation](docs/COMPETITOR_GAP_RECONCILIATION.md)).
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 

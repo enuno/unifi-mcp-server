@@ -1,8 +1,8 @@
 # UniFi MCP Server — Active TODO
 
-**Last Updated:** 2026-10-10
-**Current Codebase:** 343 MCP tools registered in local mode across 60 tool modules; 3,152 unit tests passing; 93% line coverage
-**Current Posture:** Phase 3 complete; Phase 4 active; Phase 5 partially started (A2A, profiles, read-only mode, audit hardening)
+**Last Reconciled:** 2026-11-08 at `311fce7714bbda5d77b581a381c4e19feacdeb8a` (`pyproject.toml` version 0.8.0)
+**Prior Receipts:** 343 tools / 60 modules / 3,152 tests passing / 93% coverage are historical, not a current count or test result.
+**Current Posture:** Phases 0–7 have shipped deliverables; Phase 8 Network 11 live verification N1–N4 and other discovery items remain open. See `DEVELOPMENT_PLAN.md` §4.9 for the eight-category addendum.
 
 This TODO mirrors `DEVELOPMENT_PLAN.md` and tracks the work that is still open in the repo.
 
@@ -82,16 +82,16 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Add append-only audit logging (wrapper-level coverage, HMAC hash chain with `python -m src.utils.audit_verify`, the append-only Postgres store, SIEM export with chain-head anchors (`UNIFI_AUDIT_SIEM_TARGETS`, fleet Phase 5b), and retention: `python -m src.fleet.cli audit-retention` for Postgres, `UNIFI_AUDIT_LOG_ROTATE_MB` plus `python -m src.utils.audit_retention` for the JSONL file (fleet Phase 5c); `docs/FLEET_SCALING_PLAN.md` §3.7)
 - [x] Add Prometheus metrics endpoint (`UNIFI_METRICS_ENABLED`: `GET /metrics` on network transports, behind the same bearer token as `/mcp`)
 - [x] Add A2A agent card and manifest (`src/a2a/`, `agent-card.json`, served behind bearer auth)
-- [ ] Add webhook event bus with Redis pub/sub (partial: `src/webhooks/` receiver with signature verification; no Redis fan-out)
+- [x] Add webhook event bus with Redis pub/sub (`src/fleet/bus.py`, `src/webhooks/receiver.py`; see `DEVELOPMENT_PLAN.md:121,318`).
 - [ ] Add tool exposure modes for network, protect, access, talk, drive, and read-only sessions (partial: `UNIFI_PROFILE` supports network, devices, security, system, minimal, protect; `UNIFI_READ_ONLY` done; access, talk, drive pending)
 - [ ] Research and map the Access API
 - [ ] Implement Access API tools once the endpoint map is confirmed
 
-### Phase 7 — Deployment automation (done except a molecule test, `DEVELOPMENT_PLAN.md` Phase 7)
+### Phase 7 — Deployment automation (historically shipped; `DEVELOPMENT_PLAN.md` Phase 7)
 
 - [x] Ansible playbook (`deploy/ansible/`) installing the server, Redis and Postgres with Docker, for a single server or a multi-server / clustered inventory with nginx in front; each component optional, secrets from Ansible Vault, migrations run once, least-privilege runtime role, retention cron; syntax-checked in CI
 - [x] Unauthenticated `GET /healthz` liveness endpoint for load balancers and container health checks
-- [ ] Molecule (or equivalent) test for the playbook in CI (a converge-and-idempotence run on a Docker-in-Docker host; today CI runs `--syntax-check` and `tests/unit/test_deploy.py`)
+- [x] Molecule converge-and-idempotence test for the playbook (`deploy/ansible/molecule/default/`; historical CI evidence in `DEVELOPMENT_PLAN.md` Phase 7; fresh run not claimed).
 - [x] Helm chart (`deploy/helm/unifi-mcp/`) for Kubernetes: server and worker Deployments, `/healthz` probes, a ServiceMonitor with the bearer token, Redis/Postgres as external endpoints, secrets from an existing Secret, migration Job, retention CronJob
 - [x] `-fleet` image variant (the fleet extras) published by the release workflow
 - [x] `helm lint` / `helm template`, kubeconform and a kind smoke test (fleet mode against a throwaway Postgres) in CI
@@ -99,6 +99,27 @@ Keep the live backlog actionable and phase-aligned so operators and contributors
 - [x] Agent setup prompt: MCP server with a single Redis and Postgres
 - [x] Agent setup prompt: full clustered environment (replicas, workers, Redis and Postgres on a data host, load balancer, SIEM export); HA Redis and Postgres are left to managed services
 - [x] Test that the playbook, chart and compose files set the same environment variables (`tests/unit/test_deploy.py`)
+
+---
+
+## Phase 8 eight-category backlog (SPEC.md §8; DEVELOPMENT_PLAN.md §4.9)
+
+Revision basis 311fce7, reconciled 2026-11-08. `[x]` means source exists or historical work is reconciled, not that a controller was tested. The external dashboard's eight gaps remain eight categories; compound items have subtasks without changing the denominator. `docs/COMPETITOR_GAP_RECONCILIATION.md` holds the evidence table and discovery requests.
+
+- [x] CG-8a Source implemented: existing `list_sdwan_configs`, `get_sdwan_config`, `get_sdwan_config_status` (#292); initial PDF's absence claim corrected. Local request/response repair has red regression witnesses and 115 focused passing tests. The final full-suite attempt was not green (an unrelated Redis rate-limit wall-clock bound failed under suite load; its module passed alone); independent review and live verification are separate below.
+- [ ] CG-8b Independent reviewer made two read-only passes: first found top-level malformed success, stale examples and synthetic tests; second found nested malformed success and invalid `applyStatus` casing. Both sets have local repairs and focused tests; final independent post-repair review remains pending. Check mode/profile exposure and fleet isolation separately; do not treat self-review as independent (#292).
+- [ ] CG-8c Live-verify list/detail/status with a feature-enabled Site Manager read-only account; record exact URL/status, null/empty/error envelopes and sanitized hub/spoke tunnel semantics. Blocked on credentials; mocks passing do not close this task (#292).
+- [ ] CG-8d Discover policy fields for destination routing, performance steering, hub priority, WAN priority and thresholds; typed read support only after versioned schema/observations. Authoring blocked on upstream mutation surface and separate approval (#292).
+- [ ] CG-6a / CG-1a Discover AP radio and console capture lifecycle/limits on approved hardware with sanitized metadata; blocked on endpoint evidence and explicit capture authorization (#293). No PCAP in repo.
+- [ ] CG-1b Separately discover NetFlow/sFlow/IPFIX exporter, supported devices and collector contract; blocked on upstream/device evidence; export activation not approved (#293).
+- [ ] CG-7a Discover UPS inventory/battery/health surface and self-test/schedule separately; blocked on model/firmware evidence (#293).
+- [ ] CG-7b Discover UPS unit cycle/off, destructive-tier dry-run/audit/recovery requirements; no live power test or action without target approval (#293).
+- [x] CG-2a Documentation-only: classic standalone target compatibility distinguished from Network 11 migration and X-API-KEY/path-family endpoint coverage (`docs/NETWORK_11_COMPATIBILITY.md`, `docs/COMPETITOR_GAP_RECONCILIATION.md`). Explicit operator metadata is not autodetection; no runtime compatibility claim (#293 adjacent).
+- [ ] CG-2b Verify standalone X-API-KEY and legacy/v2/Integration paths on approved classic instance; blocked on credentials/hardware; retain unknown where detection is inconclusive. Network 11 N1–N4 live follow-up remains open independently.
+- [ ] CG-3 Matter: review next official Network/version-local spec and approved UI evidence; blocked on upstream surface (#293).
+- [ ] CG-4 Thread: separately review border-router/node surface, sharing IoT discovery where safe; blocked on upstream surface (#293).
+- [ ] CG-5 Time Machine: discover historical topology endpoint and retention semantics; local snapshots are not feature parity; blocked on upstream surface (#293).
+- [ ] Preserve #290 bulk client/alarm filtering and #291 URL-sourced Network Lists as separate open work; neither is closed by this matrix.
 
 ---
 

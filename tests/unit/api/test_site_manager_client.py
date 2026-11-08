@@ -250,9 +250,10 @@ class TestEndpoints:
                 "/v1/isp/metrics",
                 {"site_id": "s1", "start_time": "2026-01-01T00:00:00Z"},
             ),
-            (lambda c: c.list_sdwan_configs(), "/v1/sdwan/configs", {}),
-            (lambda c: c.get_sdwan_config("c1"), "/v1/sdwan/configs/c1", {}),
-            (lambda c: c.get_sdwan_config_status("c1"), "/v1/sdwan/configs/c1/status", {}),
+            # Contract deliberately corrected to Site Manager v1.0.0 OpenAPI (2026-11-08).
+            (lambda c: c.list_sdwan_configs(), "/v1/sd-wan-configs", {}),
+            (lambda c: c.get_sdwan_config("c1"), "/v1/sd-wan-configs/c1", {}),
+            (lambda c: c.get_sdwan_config_status("c1"), "/v1/sd-wan-configs/c1/status", {}),
             (lambda c: c.list_hosts(), "/v1/hosts", {}),
             (lambda c: c.list_hosts(limit=5), "/v1/hosts", {"limit": "5"}),
             (lambda c: c.get_host("h1"), "/v1/hosts/h1", {}),

@@ -297,7 +297,7 @@ class SiteManagerClient:
         Returns:
             Response with SD-WAN configurations list
         """
-        return await self._get_object("sdwan/configs")
+        return await self._get_object("sd-wan-configs")
 
     async def get_sdwan_config(self, config_id: str) -> JSONBody:
         """Get SD-WAN configuration by ID.
@@ -308,7 +308,7 @@ class SiteManagerClient:
         Returns:
             SD-WAN configuration data
         """
-        return await self._get_object(f"sdwan/configs/{config_id}")
+        return await self._get_object(f"sd-wan-configs/{config_id}")
 
     async def get_sdwan_config_status(self, config_id: str) -> JSONBody:
         """Get SD-WAN configuration deployment status.
@@ -319,7 +319,7 @@ class SiteManagerClient:
         Returns:
             SD-WAN configuration status data
         """
-        return await self._get_object(f"sdwan/configs/{config_id}/status")
+        return await self._get_object(f"sd-wan-configs/{config_id}/status")
 
     # Host Management endpoints (added 2026-02-16)
     async def list_hosts(self, limit: int | None = None, offset: int | None = None) -> JSONBody:

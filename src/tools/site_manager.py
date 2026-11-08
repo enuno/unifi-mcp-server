@@ -3,6 +3,8 @@
 from functools import wraps
 from typing import Any, cast
 
+from pydantic import BaseModel, ValidationError
+
 from ..api.site_manager_client import SiteManagerClient
 from ..config import Settings
 from ..models.site_manager import (
@@ -20,8 +22,9 @@ from ..models.site_manager import (
     VersionControl,
 )
 from ..utils import get_logger, sanitize_log_message
-from ..utils.exceptions import ResourceNotFoundError
+from ..utils.exceptions import APIError, ResourceNotFoundError
 from ..utils.tool_kind import read_tool
+from ..utils.validators import validate_path_segment
 
 logger = get_logger(__name__)
 
@@ -645,6 +648,34 @@ async def query_isp_metrics(
 
 
 # SD-WAN Configuration Tools (added 2026-02-16)
+def _sdwan_object(data: Any, label: str, *, status: bool = False) -> dict[str, Any]:
+    """Reject non-contract objects while preserving optional nested/unknown fields."""
+    if not isinstance(data, dict) or not isinstance(data.get("id"), str):
+        raise APIError(f"Unexpected SD-WAN {label} response")
+    if status:
+        if not (
+            isinstance(data.get("generateStatus"), str)
+            or isinstance(data.get("hubs"), list)
+            or isinstance(data.get("spokes"), list)
+        ):
+            raise APIError(f"Unexpected SD-WAN {label} response")
+    elif not (
+        data["id"].strip()
+        and isinstance(data.get("name"), str)
+        and isinstance(data.get("type"), str)
+    ):
+        raise APIError(f"Unexpected SD-WAN {label} response")
+    return data
+
+
+def _sdwan_validate(model: type[BaseModel], data: dict[str, Any], label: str) -> dict[str, Any]:
+    """Present upstream schema drift as a bounded API failure, not a successful result."""
+    try:
+        return model.model_validate(data).model_dump(exclude_unset=True)
+    except ValidationError as exc:
+        raise APIError(f"Unexpected SD-WAN {label} response") from exc
+
+
 @read_tool
 @require_site_manager
 async def list_sdwan_configs(settings: Settings) -> list[dict[str, Any]]:
@@ -658,22 +689,18 @@ async def list_sdwan_configs(settings: Settings) -> list[dict[str, Any]]:
     """
     async with SiteManagerClient(settings) as client:
         logger.info("Retrieving SD-WAN configurations")
-
-        try:
-            response = await client.list_sdwan_configs()
-            data = (
-                response
-                if isinstance(response, list)
-                else response.get("data", response.get("configs", []))
+        response = await client.list_sdwan_configs()
+        data = response if isinstance(response, list) else response.get("data")
+        if not isinstance(data, list):
+            raise APIError("Unexpected SD-WAN configuration list response")
+        return [
+            _sdwan_validate(
+                SDWANConfig,
+                _sdwan_object(item, "configuration list item"),
+                "configuration list item",
             )
-
-            if isinstance(data, list):
-                return [SDWANConfig(**config).model_dump() for config in data]
-            else:
-                return []
-        except ResourceNotFoundError:
-            logger.warning("sdwan/configs endpoint not available on this Site Manager API")
-            return []
+            for item in data
+        ]
 
 
 @read_tool
@@ -688,17 +715,16 @@ async def get_sdwan_config(settings: Settings, config_id: str) -> dict[str, Any]
     Returns:
         SD-WAN configuration details
     """
+    config_id = validate_path_segment(config_id, "config_id")
     async with SiteManagerClient(settings) as client:
         logger.info(sanitize_log_message(f"Retrieving SD-WAN configuration: {config_id}"))
-
         response = await client.get_sdwan_config(config_id)
-        if isinstance(response, list):
-            data = response[0] if response else {}
-        else:
-            _raw = response.get("data", response)
-            data = _raw[0] if isinstance(_raw, list) else _raw
-
-        return SDWANConfig(**data).model_dump()
+        data = response.get("data") if isinstance(response, dict) else None
+        if not isinstance(data, dict):
+            raise APIError("Unexpected SD-WAN configuration detail response")
+        return _sdwan_validate(
+            SDWANConfig, _sdwan_object(data, "configuration detail"), "configuration detail"
+        )
 
 
 @read_tool
@@ -713,17 +739,18 @@ async def get_sdwan_config_status(settings: Settings, config_id: str) -> dict[st
     Returns:
         SD-WAN configuration deployment status
     """
+    config_id = validate_path_segment(config_id, "config_id")
     async with SiteManagerClient(settings) as client:
         logger.info(sanitize_log_message(f"Retrieving SD-WAN configuration status: {config_id}"))
-
         response = await client.get_sdwan_config_status(config_id)
-        if isinstance(response, list):
-            data = response[0] if response else {}
-        else:
-            _raw = response.get("data", response)
-            data = _raw[0] if isinstance(_raw, list) else _raw
-
-        return SDWANConfigStatus(**data).model_dump()
+        data = response.get("data") if isinstance(response, dict) else None
+        if not isinstance(data, dict):
+            raise APIError("Unexpected SD-WAN configuration status response")
+        return _sdwan_validate(
+            SDWANConfigStatus,
+            _sdwan_object(data, "configuration status", status=True),
+            "configuration status",
+        )
 
 
 # Host Management Tools (added 2026-02-16)

@@ -1,7 +1,7 @@
 # UniFi MCP Server Specification
 
-Version: 0.4 planning baseline
-Source of truth: `~/INTEGRATION/Unifi-Evolution.md`
+Version: reconciled 2026-11-08 against `311fce7714bbda5d77b581a381c4e19feacdeb8a` (`pyproject.toml` version 0.8.0).
+Historical input: `~/INTEGRATION/Unifi-Evolution.md` (not present at reconciliation; not the sole practical source of truth). Current requirements are grounded in this repository's code, tests, `DEVELOPMENT_PLAN.md`, `docs/UNIFI_API.md`, the dated matrix at `/home/elvis/inbox/UniFi competitor-to-gap matrix.pdf`, and the official Site Manager v1.0.0 OpenAPI. See `docs/COMPETITOR_GAP_RECONCILIATION.md` for source-scoped evidence.
 
 ## 1. Purpose
 
@@ -24,13 +24,12 @@ The specification emphasizes four outcomes:
 
 ## 3. Current baseline
 
-Implemented baseline, as reflected in the existing repository and roadmap:
+Implemented baseline at the cited revision, subject to live-controller verification:
 
-- UniFi Network coverage is broad and production usable.
-- Site Manager support exists in partial form.
-- Cloud Connector proxy tools bridge some cross-product access.
-- Traffic flow tools have known v2 limitations and should remain documented as such.
-- Protect native support is the next major domain gap.
+- Network and Protect tool families are registered (`src/main.py:580-846`); Protect writes still need hardware validation (`DEVELOPMENT_PLAN.md:108`).
+- Site Manager has three SD-WAN config/status read tools (`src/tools/site_manager.py:647-726`), not typed Site Manager policy authoring. The 2026-11-08 reconciliation identified wrong client paths and synthetic response models; the local repair is tracked separately from live interoperability.
+- Fleet routing, tool tiers, read-only mode, audit and selective cache exist (`src/tool_registry.py:308-459`); endpoint availability still depends on mode, profile, service setting and per-controller credentials.
+- Traffic flow history/streaming and Network 11 live compatibility remain open (`DEVELOPMENT_PLAN.md:115-123,478-549`).
 
 ## 4. Target capability model
 
@@ -205,3 +204,20 @@ The roadmap is considered aligned when:
 - Dry-run, RBAC, audit, and metrics are documented and covered.
 - README, API, UNIFI_API, and roadmap docs tell the same story.
 - A new contributor can understand scope and safety model from the docs alone.
+
+## 8. Eight-category competitor-gap contract (2026-11-08)
+
+The eight category IDs below preserve the PDF/dashboard denominator (the external 2026-11-07 snapshot claimed 6 covered / 13 partial / 8 gaps; the dashboard's generation inputs were not available in this checkout). Subitems are not new categories. These are proposed capabilities until the acceptance evidence exists. The PDF describes competitors' *claimed/documented* support, never a live-controller test. See `docs/COMPETITOR_GAP_RECONCILIATION.md` for the dated evidence and discovery package.
+
+| ID | Required outcome and explicit exclusion | Prerequisites / acceptance evidence |
+|---|---|---|
+| CG-1 console capture + flow export | Distinct packet-capture job/artifact lifecycle and NetFlow/sFlow/IPFIX exporter/collector management; built-in flow records, `reportFlowEnabled`, DPI and port mirroring are not substitutes. | Verified controller/version/protocol, scoped endpoint and permission evidence; limits, privacy/retention, dry-run/confirmation/audit for start/export; no activation without target/destination approval. |
+| CG-2 classic standalone target | Truthfully report deployment-target compatibility separately from legacy/v2/Integration endpoint coverage and Network 11 migration. Unknown remains unknown. | Prove X-API-KEY auth and each path family on a specific standalone version; explicit operator metadata is not auto-detection. No session/password auth, prefix stripping, TLS weakening, automatic migration or upgrade. |
+| CG-3 Matter | Read-only typed device identity/visibility if a supported surface is documented or observed. | Network version, model, schema, scope and permission; no speculative pairing or handling of pairing codes. |
+| CG-4 Thread | Read-only typed nodes/border-router topology if a surface exists. | Same discovery as Matter plus Thread-specific topology semantics; no raw-field-as-support shortcut. |
+| CG-5 Time Machine Topology | Expose Ubiquiti historical topology only with a versioned history endpoint and semantics. | Timestamp/range, retention and access evidence; locally stored snapshots are a separate, non-parity proposal. |
+| CG-6 AP radio capture | Approved capture start/status/stop/download/cleanup with radio/interface/filter and bounded duration, bytes, concurrency and storage. | Version/device permissions, async lifecycle, timeout/cancel/recovery and sanitized evidence; RF spectrum scan is not PCAP. No start/PCAP transfer without separate approval. |
+| CG-7 UPS | Separate inventory/battery/health reads, self-test execution, scheduling, unit cycle and unit off. | Exact UPS model/firmware/permissions and endpoint evidence; destructive cycle/off require explicit target confirmation, dry-run with zero requests, fail-closed audit and recovery plan. PDU and PoE are not UPS. |
+| CG-8 Site Manager SD-WAN | Repair existing config list/detail and deployment-status reads; separately establish typed policy *visibility* for destination routing, performance steering, hub selection, WAN priority and loss/latency/jitter thresholds. Policy authoring is a later independently authorized design. | Official v1.0.0 complete URLs, API-key scope, envelopes, optional/unknown fields, 401/403/404/429/error handling, registration across modes/profiles, fleet isolation and live account validation. `applyStatus` is not tunnel health; untyped settings/routes or local Traffic Routes are not policy parity. No guessed mutation path or removed Traffic Route writes. |
+
+For every category, acceptance distinguishes source implemented, tests passing, independent review, and live verification. Missing API credentials/hardware block live validation but not offline regression tests or documentation. Endpoint absence must not be inferred from auth, transport or certificate failures. Discovery uses the existing quarterly spec-drift process (`DEVELOPMENT_PLAN.md` §2.3 and §8), not a new watcher. Any mutating implementation retains `confirm`, real no-request dry-run, risk tier, RBAC and fail-closed audit; sensitive artifacts and secrets never enter this repository. Local mocks cannot establish device interoperability.

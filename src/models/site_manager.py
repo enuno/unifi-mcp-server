@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SiteHealthSummary(BaseModel):
@@ -134,34 +134,62 @@ class ISPMetrics(BaseModel):
 
 
 class SDWANConfig(BaseModel):
-    """SD-WAN configuration from Site Manager API."""
+    """Site Manager SD-WAN summary/detail; preserve version-specific nested data.
 
-    config_id: str = Field(..., description="Configuration identifier")
-    name: str = Field(..., description="Configuration name")
-    topology_type: Literal["hub-spoke", "mesh", "point-to-point"] = Field(
-        ..., description="SD-WAN topology type"
-    )
-    hub_site_ids: list[str] = Field(default_factory=list, description="Hub site identifiers")
-    spoke_site_ids: list[str] = Field(default_factory=list, description="Spoke site identifiers")
-    failover_enabled: bool = Field(False, description="Failover configuration enabled")
-    created_at: str = Field(..., description="Creation timestamp (ISO)")
-    updated_at: str = Field(..., description="Last update timestamp (ISO)")
-    status: Literal["active", "inactive", "pending"] = Field(
-        ..., description="Configuration status"
-    )
+    The v1.0.0 list supplies id/name/type only. Detail includes settings, hubs
+    and spokes; those nested values are not a typed steering-policy contract.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    name: str
+    type: str
+    settings: dict[str, object] | None = None
+    hubs: list[dict[str, object]] | None = None
+    spokes: list[dict[str, object]] | None = None
+
+
+class SDWANStatusConnection(BaseModel):
+    """Known connection shape; keep documented tunnel extensions intact."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tunnels: list[dict[str, object]] | None = None
+
+
+class SDWANStatusSite(BaseModel):
+    """Hub/spoke status with independently validated apply and tunnel state."""
+
+    model_config = ConfigDict(extra="allow")
+
+    applyStatus: (
+        Literal[
+            "ok", "creating", "updating", "removing", "createFailed", "updateFailed", "removeFailed"
+        ]
+        | None
+    ) = None
+    connections: list[SDWANStatusConnection] | None = None
+    primaryWanStatus: dict[str, object] | None = None
+    secondaryWanStatus: dict[str, object] | None = None
 
 
 class SDWANConfigStatus(BaseModel):
-    """SD-WAN configuration deployment status."""
+    """Site Manager deployment/generation status, not an inferred health score.
 
-    config_id: str = Field(..., description="Configuration identifier")
-    deployment_status: Literal["deployed", "deploying", "failed", "pending"] = Field(
-        ..., description="Deployment status"
-    )
-    sites_deployed: int = Field(0, description="Number of sites successfully deployed")
-    sites_total: int = Field(0, description="Total number of sites in configuration")
-    last_deployment_at: str | None = Field(None, description="Last deployment timestamp (ISO)")
-    error_message: str | None = Field(None, description="Error message if deployment failed")
+    The upstream response contains hub/spoke apply states and tunnel records;
+    preserve them, including future fields, without inventing healthy defaults.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    fingerprint: str | None = None
+    generateStatus: Literal["OK", "GENERATING", "GENERATE_FAILED"] | None = None
+    hubs: list[SDWANStatusSite] | None = None
+    spokes: list[SDWANStatusSite] | None = None
+    errors: list[object] | None = None
+    warnings: list[object] | None = None
 
 
 class Host(BaseModel):

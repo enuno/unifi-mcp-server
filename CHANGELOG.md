@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Security Scanning no longer fails a clean scan because GitHub dropped the artifact upload.** The weekly run on 2026-11-09 scanned clean (Bandit, CodeQL, pip-audit, secrets, Trivy) then died on `actions/upload-artifact` with `Failed to FinalizeArtifact: Unable to make request: ECONNRESET` after the zip had already reached blob storage. Report uploads now continue on that class of error; the scan step remains the gate.
+
 ## [0.9.0] - 2026-11-08
 
 ### Added

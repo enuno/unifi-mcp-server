@@ -76,6 +76,7 @@ jobs:
       - name: Upload pip-audit report
         uses: actions/upload-artifact@v7
         if: always() && hashFiles('pip-audit-report.json') != ''
+        continue-on-error: true  # Artifact finalize blips must not fail a clean scan
         with:
           name: pip-audit-report
           path: pip-audit-report.json
@@ -169,9 +170,11 @@ jobs:
       - name: Upload Bandit report
         uses: actions/upload-artifact@v7
         if: always()
+        continue-on-error: true  # Scan above is the gate; FinalizeArtifact ECONNRESET is not
         with:
           name: bandit-full-report
           path: bandit-report.json
+          if-no-files-found: warn
 
   trivy-scan:
     name: Trivy Security Scanner
@@ -192,6 +195,7 @@ jobs:
       - name: Upload Trivy results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v4
         if: always()
+        continue-on-error: true  # Report-only; a Security-tab upload blip must not fail the workflow
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -207,9 +211,11 @@ jobs:
       - name: Upload Trivy JSON report
         uses: actions/upload-artifact@v7
         if: always()
+        continue-on-error: true  # Report-only; artifact finalize blips must not fail the workflow
         with:
           name: trivy-report
           path: trivy-report.json
+          if-no-files-found: warn
 
   docker-scan:
     name: Docker Image Security Scan

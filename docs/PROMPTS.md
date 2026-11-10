@@ -108,6 +108,24 @@ prompts are served by the same `/mcp` endpoint the tools use.
 
 ## Prompt catalog
 
+### `inventory_topology_review` (EV-04)
+
+Bounded, read-only local-site inventory and explicit uplink review. Requires
+both `collect_inventory_topology` and `get_network_topology` to be registered;
+it is hidden in cloud, mixed and fleet configurations and profiles without
+these dependencies. Required argument: `site_id`. Optional `focus` is
+untrusted caller text, not an instruction to run commands or bypass policy.
+Use `prompts/get` to retrieve the workflow; retrieval itself makes no
+controller calls and cannot authorize a scan or configuration change. The
+workflow recommends the bounded collector first, labels observed versus
+inferred/missing/conflicting relationships and reports unknown freshness and
+non-atomic collection. Do not interpret a missing link as disconnection.
+
+Example MCP arguments: `{"site_id": "default", "focus": "uplink gaps"}`.
+See [API.md](../API.md#bounded-inventory-evidence-ev-03) for collection limits
+and the additive evidence schema. Existing resources are unchanged.
+
+
 Every prompt name is stable snake_case. Arguments marked required must be
 supplied; the others may be omitted, and the rendered text states the default
 that applies.

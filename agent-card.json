@@ -57,7 +57,7 @@
       "For destructive skills, supply confirm=true and optional dry_run=true for preview."
     ],
     "readOnly": false,
-    "readToolCount": 204,
+    "readToolCount": 205,
     "resourceCount": 6,
     "resources": [
       {
@@ -1094,7 +1094,7 @@
         "toolName": "health_check"
       }
     ],
-    "toolCount": 343,
+    "toolCount": 344,
     "toolsManifestUrl": "/a2a/discover",
     "writeToolCount": 90
   },
@@ -2099,6 +2099,62 @@
         "type": "object"
       },
       "name": "cancel_device_migration",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Collect bounded, minimized inventory and explicit uplink evidence.\n\nOnly a single environment-backed local controller is supported. The tool\nperforms two Integration API reads concurrently, with a capped page size,\npage count and cooperative deadline (cleanup may extend elapsed time).\nIt does not enrich every device, infer\nmissing links, perform scans or write controller state. A full-page final\nresponse remains conservatively marked truncated, even if it was exact.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "collect_inventory_topology"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "max_pages": {
+            "default": 2,
+            "description": "Maximum pages per section (1\u20135)",
+            "type": "integer"
+          },
+          "max_records": {
+            "default": 50,
+            "description": "Records per page and section (1\u2013100)",
+            "type": "integer"
+          },
+          "site_id": {
+            "description": "Site name or UUID, resolved on the configured controller",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 20,
+            "description": "Cooperative collection budget (1\u201330 seconds)",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "collect_inventory_topology",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"

@@ -106,14 +106,18 @@ A skill keeps tool guidance out of context until needed. `UNIFI_PROFILE` goes fu
 
 | Profile | Modules | Tools |
 |---|---|---|
-| `network` | channel_planning, client_management, clients, dhcp_reservations, dns_management, network_config, networks, vouchers, wans, wifi | 48 |
-| `devices` | device_control, device_migration, devices, diagnostics, mac_tags, port_profiles, switching, topology | 53 |
-| `security` | acls, content_filtering, firewall, firewall_groups, firewall_policies, firewall_zones, port_forwarding, site_vpn, vpn | 47 |
-| `system` | application, backups, connector, dpi, dpi_tools, events, integration_api, the Protect modules, qos, radius, reference_data, site_manager, sites, traffic_flows, traffic_matching_lists | 182 |
-| `protect` | the 15 `protect_*` modules | 75 |
-| `mobility` / `innerspace` / `carrier` | one module each (cloud APIs, every mode) | 12 / 10 / 15 |
-| `minimal` | clients, devices, sites | 19 |
-| *(unset or `all`)* | every module for the API type | 343 local, 71 cloud |
+| `network` | channel_planning, client_management, clients, dhcp_reservations, dns_management, network_config, networks, vouchers, wans, wifi | runtime discovery |
+| `devices` | device_control, device_migration, devices, diagnostics, inventory_evidence (single local controller only), mac_tags, port_profiles, switching, topology | runtime discovery |
+| `security` | acls, content_filtering, firewall, firewall_groups, firewall_policies, firewall_zones, port_forwarding, site_vpn, vpn | runtime discovery |
+| `system` | application, backups, connector, dpi, dpi_tools, events, integration_api, the Protect modules, qos, radius, reference_data, site_manager, sites, traffic_flows, traffic_matching_lists | runtime discovery |
+| `protect` | the `protect_*` modules | runtime discovery |
+| `mobility` / `innerspace` / `carrier` | cloud API modules | runtime discovery |
+| `minimal` | clients, devices, sites | runtime discovery |
+| *(unset or `all`)* | eligible modules for the API type and controller configuration | runtime discovery |
+
+Counts vary by API mode and controller configuration. Use `tools/list` for the
+active server; [agent-card.json](../agent-card.json) is generated for the
+pinned default local configuration, not a universal capability inventory.
 
 An unknown profile logs a warning and loads every module. To expose only non-mutating tools in any profile, set `UNIFI_READ_ONLY=true`.
 

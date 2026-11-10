@@ -15,6 +15,8 @@ from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastmcp import Client
+from fastmcp.server.auth import AccessToken
 
 _LOCAL_ENV = {
     "UNIFI_API_KEY": "test-key",  # pragma: allowlist secret
@@ -410,7 +412,12 @@ class TestMixedModeModuleSelection:
         mixed_modules = set(mixed._TOOL_MODULES)
         local = _reload_main()
 
-        assert mixed_modules == set(local._TOOL_MODULES)
+        # EV-03 is deliberately unavailable until fleet/mixed scope and
+        # authorization isolation are implemented; all prior modules remain.
+        assert {module.__name__ for module in set(local._TOOL_MODULES) - mixed_modules} == {
+            "src.tools.inventory_evidence"
+        }
+        assert mixed_modules - set(local._TOOL_MODULES) == set()
 
 
 class TestMainEntryPoint:
@@ -586,6 +593,83 @@ class TestToolModuleSets:
             name: owners[name] for name in duplicates - self._KNOWN_DUPLICATES
         }
         assert "list_protect_device_updates" not in duplicates
+
+
+class TestInventoryEvidenceMCP:
+    @pytest.mark.asyncio
+    async def test_discovery_follows_local_mode_and_profile(self) -> None:
+        for overrides, exposed in (
+            ({}, True),
+            ({"UNIFI_PROFILE": "devices"}, True),
+            ({"UNIFI_PROFILE": "network"}, False),
+            ({"UNIFI_API_TYPE": "cloud-v1"}, False),
+            ({"UNIFI_API_TYPE": "cloud-ea", "UNIFI_MIXED_MODE": "true"}, False),
+        ):
+            mod = _reload_main(**overrides)
+            async with Client(mod.mcp) as mcp_client:
+                names = {tool.name for tool in await mcp_client.list_tools()}
+                prompts = {prompt.name for prompt in await mcp_client.list_prompts()}
+            assert ("collect_inventory_topology" in names) is exposed
+            assert ("inventory_topology_review" in prompts) is exposed
+
+    @pytest.mark.asyncio
+    async def test_tool_call_serializes_evidence_without_live_io(self) -> None:
+        mod = _reload_main()
+        fake = MagicMock()
+        fake.__aenter__ = AsyncMock(return_value=fake)
+        fake.__aexit__ = AsyncMock(return_value=False)
+        fake.authenticate = AsyncMock()
+        fake.resolve_site_id = AsyncMock(return_value="123e4567-e89b-12d3-a456-426614174000")
+        fake.get = AsyncMock(return_value={"data": []})
+        with patch.object(mod.inventory_evidence_tools, "UniFiClient", return_value=fake):
+            async with Client(mod.mcp) as mcp_client:
+                result = await mcp_client.call_tool(
+                    "collect_inventory_topology", {"site_id": "default", "max_records": 10}
+                )
+        assert not result.is_error
+        assert result.structured_content["schema_version"] == "1"
+        assert result.structured_content["sections"]["devices"]["status"] == "empty"
+        assert fake.get.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_other_controller_cannot_fall_back_to_default(self) -> None:
+        mod = _reload_main()
+        with patch.object(mod.inventory_evidence_tools, "UniFiClient") as ctor:
+            async with Client(mod.mcp) as mcp_client:
+                result = await mcp_client.call_tool(
+                    "collect_inventory_topology",
+                    {"site_id": "default", "controller": "other"},
+                    raise_on_error=False,
+                )
+        assert result.is_error
+        ctor.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_module_scoped_token_cannot_read_inventory(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mod = _reload_main()
+        token = AccessToken(
+            token="umcp_test",  # noqa: S106
+            client_id="offline",
+            scopes=[],
+            claims={
+                "token_id": "offline",
+                "name": "offline",
+                "role": "viewer",
+                "allow_modules": ["devices"],
+            },
+        )
+        monkeypatch.setattr("src.access.get_access_token", lambda: token)
+        with patch.object(mod.inventory_evidence_tools, "UniFiClient") as ctor:
+            async with Client(mod.mcp) as mcp_client:
+                result = await mcp_client.call_tool(
+                    "collect_inventory_topology",
+                    {"site_id": "default"},
+                    raise_on_error=False,
+                )
+        assert result.is_error
+        ctor.assert_not_called()
 
 
 def teardown_module() -> None:

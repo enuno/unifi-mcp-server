@@ -116,8 +116,10 @@ class TestMixedModeSurface:
     def test_mixed_mode_matches_the_local_mode_module_set(
         self, mixed: dict, local_only: dict
     ) -> None:
-        """Mixed mode registers the same modules local mode always has."""
-        assert mixed["modules"] == local_only["modules"]
+        """Mixed mode retains existing tools but excludes isolated EV-03 reads."""
+        assert mixed["modules"] + 1 == local_only["modules"]
+        assert set(local_only["tools"]) - set(mixed["tools"]) == {"collect_inventory_topology"}
+        assert set(mixed["tools"]) - set(local_only["tools"]) == set()
 
     def test_mixed_mode_needs_no_base_local_host(self, mixed: dict) -> None:
         """The gateways come from the registry, so the base stays cloud-shaped.

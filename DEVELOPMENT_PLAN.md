@@ -641,3 +641,78 @@ New documents introduced by the roadmap:
 The development plan is not complete until documentation and implementation tell the same story. When a new capability is added, update the spec, roadmap, endpoint docs, and test strategy in the same change set.
 
 The same rule applies to release support: a compatibility claim is only as good as the evidence behind it. The Network 11 position in §2.4 and §3.3 must be re-checked against each UniFi Network release — Ubiquiti publishes no Integration API changelog, so a release that changes the surface shows up as a live-controller observation, not as a notification. Each gap recorded in §3.3 carries either a status or a re-check trigger, and none may be promoted to "supported" without the evidence named in the Phase 8 exit criteria.
+
+## 9. Evidence-backed context expansion (EV series, after Phase 8)
+
+Input: `~/inbox/unifi-mcp-improvement.md`, a source-inspection report at `445ec3691d48d3c1113f205e3e256f48aa829e46`, not live or independent evidence. The local `main`, `origin/main` tracking ref, and this feature worktree HEAD matched that commit at the start of this work; no remote freshness check was performed. Relevant code and tests were inspected rather than treating the report as authority. This section appends IDs without renumbering the existing CG/N/phase work. SPEC §9 defines invariants; TODO tracks execution. Local tests, independent review, approved lab checks and live/deployment validation are distinct gates.
+
+### Decision record
+
+| Report recommendation | Decision and evidence/boundary |
+|---|---|
+| Add a separate capability manifest (T1) | Accepted with modification (EV-01): tool registry, prompt registry and generated agent card already derive availability; reconcile stale prose and test discovery instead of a second maintained registry. |
+| Replace all resource strings with structured JSON (T2/T3) | Rejected as a silent breaking change; accept additive versioned evidence (EV-02/03). Existing text URIs remain byte-contract compatible. Expensive, parameter-rich collection is a read-only tool, not a controller-URI template without routing/auth. |
+| Fleet/mixed controller resource URIs (F1/F2) | Deferred: current resources use process-wide settings; a URI parameter supplies neither routing nor authorization. EV-03 starts with one environment controller only and rejects DB/mixed modes until scope isolation is independently reviewed. |
+| Inventory/topology prompt and bounded collection (T2/T3) | Accepted with modification (EV-02/03/04): reuse the client resolver and integration read paths, no unbounded topology wrapper or claims of atomicity. Explicit links only; source observation time/freshness unknown when absent. |
+| Security audit/incident prompts (T4/T5) | Accepted for milestone 2 (EV-05/06), not evidence that reachability or complete telemetry exists. |
+| Baseline and drift storage (T6) | Deferred (EV-07) pending persistence owner, retention, redaction, canonicalization and authorization; do not add migrations merely for a resource. |
+| Plan-only scan prompt (T7) | Accepted with modification (EV-08); execution rejected in this scope. Future executor needs explicit target/privilege/exclusion/cancel/budget policy and separate approval. |
+| Approval-bound change planning (T8) | Deferred (EV-09) pending ownership of policy revision, expiry, replay protection, exact diff and state reconciliation; existing confirm/dry-run is not an approval object. |
+| Operations review and verification records (T9) | Deferred (EV-10) pending durable owner and scheduling boundary; MCP reads never schedule jobs. T10 independent review/lab remains a mandatory gate, not a feature claimed complete. |
+
+### Dependency-aware milestones
+
+| ID / priority / milestone | Scope and non-goals; dependencies / likely areas | Acceptance and required local tests; status |
+|---|---|---|
+| EV-01 P0 / M1 | Reconcile tool/prompt/resource advertising from live registries; `CLAUDE.md`, `README.md`, `docs/SKILLS.md`, `docs/PROMPTS.md`, generated card. No second registry. | Locally verified: reference counts removed, generated card and drift tests passed. Independent source review completed; live profile verification pending. |
+| EV-02 P0 / M1 | Typed, additive envelope in `src/models/evidence.py`; provenance, status, freshness, completeness, bounds, redaction. No rewrite of legacy resources. | Locally verified model and mocked minimization tests; independent source review completed. Unknown source time remains unknown; no live semantics proven. |
+| EV-03 P0 / M1 | Bounded local-only inventory/topology via `src/tools/`; existing UniFiClient/site resolver; no fleet/mixed resource URI, scans, writes or durable records. | Full offline suite passed (7,435 tests; 95.96% coverage); independent source review confirmed prior P1 repairs under the cooperative deadline. Strict bound remains EV-11; fleet/mixed routing deferred, lab pending. |
+| EV-04 P0 / M1 | `inventory_topology_review` in `src/prompts/catalog.py`; reference docs and generated card. Depends on EV-03 registration. | Locally verified prompt availability, validation and pure FastMCP retrieval; independent source review completed. Lab gate pending. |
+| EV-05 P1 / M2 | Security-configuration audit prompt; use existing firewall/ACL/VPN tools, no reachability claim. | Mock/prompt tests separate configuration from observed traffic; planned. |
+| EV-06 P1 / M2 | Evidence-led incident prompt; depends on EV-02, bounded event/flow semantics. No packet capture. | Time-window/coverage and missing/failed source tests; planned. |
+| EV-07 P1 / M3 | Baseline/drift design then implementation; storage owner and retention approval, scope policy, canonicalization, redaction. No migration yet. | Explicit ownership decision, compare added/removed/changed/unknown tests before drift prompt; deferred. |
+| EV-08 P1 / M4 | Planning-only scan contract; external executor/approval boundary. No active scanner. | Validate allowlist, exclusions, rate, duration, cancellation and no-execution tests; planned after EV-02. |
+| EV-09 P1 / M5 | Exact-target change-plan binding, state fingerprint, expiry, replay, outcome reconciliation; separate authorization for execution. | Negative binding/stale/replay/ambiguous-result tests and independent security review; deferred. |
+| EV-10 P2 / M6 | Operational review, durable verification ownership and approved lab gate; no background schedule on resource reads. | Independent source review, SDK protocol tests, lab controller validation and deployment approval recorded separately; deferred. |
+| EV-11 P1 / M1 follow-up | Decide strict hard-deadline semantics versus draining/cancelling in-flight reads; existing cooperative timer cannot force a non-cooperative cleanup to finish on time. No detached reads or new execution privileges. | Offline cancellation-delay test, explicit failure semantics, independent architecture/security review and lab timing test before any strict-SLA claim; blocked pending design. |
+
+The server owns code/MCP contracts; noesis-ansible owns provisioning, noesis-command-and-control owns operator interfaces/policy, noesis-agent-stack owns orchestration/approval contracts. These are handoffs only: this work changes none of those repositories. Milestone 1 does not imply a deployable or live-verified release. No report recommendation authorizes a controller read, scan, mutation or external push.
+
+Local EV-01–04 evidence: focused MCP/profile/resource/prompt/model/tool/fleet-tier
+run passed 298 tests on an offline documentation-address fixture; `make lint`
+and `make typecheck` passed. A broader unit run reached 1,710 passes but
+stopped on two mixed-mode tests whose old equality assumption conflicted with
+the deliberate EV-03 isolation. Those assertions were changed to require
+preservation of every old tool and exclusion of only the new read; targeted
+rerun passed. Independent review then found a real device-list shape with no
+`id`, a pre-collection deadline gap and a reference-doc schema mismatch. The
+first two have targeted regression tests and local repairs; the documentation
+now locates `source` per section. The revised focused suite, independent
+post-repair review, lab and broad-suite gates must be recorded separately;
+no controller observation is claimed from these local results.
+
+Subsequent full offline unit + coverage run (before review repairs): 7,429
+passed, coverage 95.94% against the 80% gate, one existing Starlette/httpx
+deprecation warning. Independent review of that revision failed on two P1
+findings: ID normalization could misattribute an uplink, and slow cancellation
+could overrun the stated deadline. Exact-ID matching now has a red-before-green
+regression test. Slow cancellation now fails closed rather than returning late
+evidence, but cannot guarantee strict wall-clock completion while also draining
+the reads; EV-11 is an explicit gate. Four offline FastMCP discovery/call and
+authorization tests cover mode/profile exposure, serialized read results,
+other-controller refusal and module-scoped denial. No lab or deployment proof.
+
+After regenerating `agent-card.json` from the updated tool docstring, the
+final offline unit/coverage run passed 7,435 tests, 95.96% coverage, with one
+Starlette/httpx deprecation warning. `make lint`, `make typecheck`, `make
+security` and `git diff --check` passed on the modified source before that
+run. The reviewer's two P1 findings were not acceptance: exact-ID matching
+and slow-cancel fail-closed behavior require fresh independent re-review.
+Strict wall-clock completion remains EV-11, not a claim for EV-03.
+
+A subsequent independent read-only review matched the source hashes and ran
+29 focused offline tests (44 deselected). It confirmed the two earlier P1
+repairs within the documented cooperative contract, found no new blocker in
+mode/profile discovery, wrapper authorization, prompt purity or resource
+compatibility, and retained EV-11 as a P1 hard-deadline design gap. This is
+review evidence, not lab interoperability or a release approval.

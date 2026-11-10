@@ -12,6 +12,7 @@
   "block_flow_source_ip": "destructive",
   "bulk_delete_vouchers": "destructive",
   "cancel_device_migration": "write",
+  "collect_inventory_topology": "read",
   "compare_site_performance": "read",
   "configure_guest_portal": "write",
   "configure_smart_queue": "write",

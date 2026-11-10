@@ -40,7 +40,10 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 
 ## Features
 
-343 tools in local mode, from 60 modules.
+Tool exposure varies by API mode, profile and controller configuration. The
+generated [agent card](agent-card.json) describes the pinned default local
+profile; runtime discovery (`tools/list`, `prompts/list`, `resources/list`) is
+authoritative for the active server configuration.
 
 - **Network:** clients (search, block, reconnect), networks and VLANs, WiFi SSIDs, DHCP reservations, DNS, WAN, guest vouchers, QoS profiles and traffic routes, DPI statistics, traffic flows.
 - **Devices:** inventory, adoption, restart, locate, upgrade, radio settings, port profiles and per-port overrides, switching and stacks, topology export (JSON, GraphML, DOT), diagnostics, WiFi channel planning.
@@ -49,7 +52,7 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 - **Cloud:** Site Manager (hosts, sites, cross-site statistics), the connector proxy, Mobility workspaces and devices, InnerSpace floor plans and inventory, Carrier Fabric subscribers and service plans.
 - **Operations:** sites, backups (create, schedule, download, restore), events, multi-site aggregation, device migration between sites.
 - **Fleet mode** (optional, with Postgres and Redis): many controllers behind one server, a controller registry with encrypted credentials, server-issued tokens with roles, a shared read cache, several replicas and background workers, and `fleet_*` tools that read across controllers. See [MULTI_CONTROLLER.md](MULTI_CONTROLLER.md) and [docs/FLEET_SCALING_PLAN.md](docs/FLEET_SCALING_PLAN.md).
-- **Native prompts:** eight parameterised UniFi operational workflows (health check, client connectivity, WiFi performance, device investigation, firewall review, change planning, Protect health, fleet summary) exposed through the standard `prompts/list` and `prompts/get` operations. See [docs/PROMPTS.md](docs/PROMPTS.md).
+- **Native prompts:** capability-gated operational workflows, including a bounded, read-only inventory/topology review for a single local controller, exposed through `prompts/list` and `prompts/get`. See [docs/PROMPTS.md](docs/PROMPTS.md).
 - **Safety:** every mutating tool needs `confirm=True` and supports `dry_run=True`, plus read-only and dry-run server modes, role-based access over risk tiers, and a hash-chained audit log (see [below](#tool-profiles-and-safety-controls)).
 - **A2A discovery and delegation:** an agent card built from the live tool registry, served at `/a2a/agent-card` and `/.well-known/agent-card.json`, plus a capability manifest and a delegation endpoint that runs a registered tool under the server's own role, confirmation and audit controls. See [A2A.md](A2A.md).
 - **Observability:** Prometheus `/metrics`, `/healthz`, SIEM export of audit records, optional Redis caching, webhooks with HMAC verification.

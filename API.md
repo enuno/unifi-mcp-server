@@ -3333,6 +3333,49 @@ result = await mcp.call_tool("filter_traffic_flows", {
 
 Retrieve and visualize your complete network topology including devices, clients, and their interconnections.
 
+#### Bounded inventory evidence (EV-03)
+
+`collect_inventory_topology(site_id, max_records=50, max_pages=2,
+timeout_seconds=20)` is a read-only MCP tool for the single environment-backed
+local controller (default and devices profiles). It is unavailable in cloud,
+fleet and mixed modes; no `controller_id` or arbitrary endpoint argument is
+accepted. Values are restricted to 1–100 records/page, 1–5 pages/section,
+and 1–30 seconds for both sections combined. A final full page is reported
+as truncated because the next page was not fetched. The tool resolves the
+site on the configured controller and reads only Integration API device and
+client lists, with at most two simultaneous requests. The deadline also covers
+authentication and site resolution; if either expires the call fails without
+an inventory response. In-flight reads are cancelled and drained before client
+closure. A slow or cancellation-resistant upstream may extend elapsed time
+beyond the budget; a slow drain fails closed instead of returning late
+evidence. This is a cooperative deadline, not a hard real-time guarantee.
+An authorization error aborts the entire call. No
+write, scan or background job occurs.
+
+```python
+evidence = await mcp.call_tool("collect_inventory_topology", {
+    "site_id": "default", "max_records": 25, "max_pages": 2,
+    "timeout_seconds": 15,
+})
+```
+
+The JSON-compatible result has `schema_version: "1"`, `scope.site_id`,
+`collection_started_at`, `collection_completed_at`, `freshness: "unknown"`,
+`completeness`, per-section `source: "integration.v1"` and `status`/`count`/
+`pages`/`truncated`/`reason`, allowlisted `data.devices` (`id`, coarse
+`state`) and `data.clients` (ephemeral `ref` only), `relationships`
+(`source`, `target`, `kind: "uplink"`, `basis: "observed"`), `warnings`,
+and `redaction`. Device `id` and client `ref` are ephemeral per-collection
+references, not stable lookup identifiers; use only to join links in this
+result. A device-list row lacking an identity is retained under an ephemeral
+reference but marks that section partial (`missing_identity`); no link to it
+is asserted. Client names, MAC/IP addresses and raw API payloads are excluded.
+Source observation timestamps are `null` unless verifiable;
+collection time does not establish freshness. `empty` means a successful
+empty list, not a failed fetch. The two lists are not an atomic snapshot.
+Unsupported, unavailable, failed, partial and truncated results are distinct.
+Existing `unifi://` resource URIs and string outputs remain unchanged.
+
 **Available Tools:**
 
 - `get_network_topology`: Retrieve complete topology graph

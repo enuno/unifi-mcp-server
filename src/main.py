@@ -60,6 +60,7 @@ from .tools import firewall_policies as firewall_policies_tools
 from .tools import firewall_zones as firewall_zones_tools
 from .tools import innerspace as innerspace_tools
 from .tools import integration_api as integration_api_tools
+from .tools import inventory_evidence as inventory_evidence_tools
 from .tools import mac_tags as mac_tags_tools
 from .tools import mobility as mobility_tools
 from .tools import network_config as network_config_tools
@@ -643,6 +644,12 @@ _LOCAL_TOOL_MODULES = [
     wifi_tools,
 ]
 
+# EV-03 uses a single environment-backed local controller only. Never expose
+# its structured collection through the fleet/mixed registry until scope and
+# authorization isolation have a separately reviewed implementation.
+if settings.api_type == APIType.LOCAL and not settings.database_url and not settings.mixed_mode:
+    _LOCAL_TOOL_MODULES.append(inventory_evidence_tools)
+
 # ---------------------------------------------------------------------------
 # Profile-based module filtering (UNIFI_PROFILE env var)
 #
@@ -673,6 +680,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         port_profile_tools,
         switching_tools,
         topology_tools,
+        inventory_evidence_tools,
     ],
     "security": [
         acls_tools,

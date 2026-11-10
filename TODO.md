@@ -123,6 +123,24 @@ Revision basis 311fce7, reconciled 2026-11-08. `[x]` means source exists or hist
 
 ---
 
+## Evidence-backed context expansion (SPEC §9; DEVELOPMENT_PLAN §9)
+
+The EV series is separate from the existing CG backlog. Source, local tests, independent review, lab and live validation are independent statuses; `in progress` below is not acceptance.
+
+- [x] EV-01 P0/M1 — locally verified registry-derived tool/prompt/agent-card checks; stale counts removed from `CLAUDE.md`, `README.md` and `docs/SKILLS.md`, card regenerated. The tool-builder skill retains a default-local count because its registry guard requires it; source and developer copies synchronized. No second registry. Independent source review completed; live profile verification pending.
+- [x] EV-02 P0/M1 — locally verified schema-v1 evidence model with section status, unknown freshness, completeness validation and allowlisted payload; `tests/unit/models/test_evidence.py`. No legacy resource migration. Independent source review completed; live semantics unverified.
+- [x] EV-03 P0/M1 — locally verified bounded single-controller inventory/topology read tool using `UniFiClient`/site resolver; mock tests cover invalid scope, empty/partial/failure/auth, pagination/truncation/repeat, missing device IDs, cooperative deadline/cancellation, minimized payload/no writes. Independent post-repair review found and then rechecked the exact-ID link repair and fail-closed slow cancellation: both resolved within the cooperative contract; EV-11 remains open for a strict elapsed-time bound. Offline FastMCP tests verify profile/mode discovery, serialization, other-controller refusal and module-scope denial. Final full offline suite: 7,435 passed, 95.96% coverage. Fleet/mixed routing and approved lab verification remain deferred/pending.
+- [x] EV-04 P0/M1 — locally verified capability-gated `inventory_topology_review`; argument/injection framing, pure FastMCP retrieval, reference docs and agent card. Independent source review completed; approved lab verification pending.
+- [ ] EV-05 P1/M2 — configuration audit prompt from existing read tools; distinguish configuration from reachability, test unsupported/partial evidence. Planned; prompt catalog/tests.
+- [ ] EV-06 P1/M2 — incident review prompt with actual telemetry coverage and time semantics. Planned; prompt catalog/tests; depends on EV-02.
+- [ ] EV-07 P1/M3 — decide baseline owner, retention, authorization and redaction before persistence/canonical comparison. Deferred; no migration approved.
+- [ ] EV-08 P1/M4 — typed plan-only scan scope/exclusion/budget contract; tests must prove no executor. Planned; no active scan approved.
+- [ ] EV-09 P1/M5 — exact-diff approval binding and outcome-reconciliation design with expiry/replay/state tests. Deferred; no execution approval.
+- [ ] EV-10 P2/M6 — operations/verification ownership, independent source review, approved lab protocol and later deployment/live gates. Deferred; no schedule from MCP reads.
+- [ ] EV-11 P1/M1 follow-up — blocked on a design for strict hard wall-clock expiry without leaving controller reads running; prototype an isolation/cancellation owner and independently review it. The second independent review confirmed current cooperative cancellation can overrun during cleanup, although late evidence fails closed. Do not advertise a hard bound or attempt live operation/fleet routing in this task.
+
+Cross-repository handoffs only: server contracts here; provisioning in noesis-ansible, operator UI/policy in noesis-command-and-control, orchestration/approval in noesis-agent-stack. Do not edit these sibling repos in this work.
+
 ## Ongoing maintenance
 
 - [ ] Keep `README.md` aligned with the current codebase

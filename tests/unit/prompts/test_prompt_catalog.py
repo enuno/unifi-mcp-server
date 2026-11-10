@@ -89,6 +89,7 @@ class TestCatalogInvariants:
             "plan_network_change",
             "protect_health_check",
             "fleet_health_summary",
+            "inventory_topology_review",
         )
         for name in PROMPT_NAMES:
             assert name.islower()

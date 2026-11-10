@@ -6,10 +6,10 @@ Project-specific instructions for AI coding assistants working on the UniFi MCP 
 
 The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the UniFi Network, Protect and Site Manager APIs as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface.
 
-- **Version**: v0.6.3 (`pyproject.toml`; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
+- **Version**: see `pyproject.toml` (authoritative; see `DEVELOPMENT_PLAN.md` §5 for release-versioning notes)
 - **Python**: 3.11+
 - **Framework**: FastMCP, with httpx for HTTP and Pydantic v2 for models
-- **Size**: 343 tools in local mode and 71 in cloud mode, from 60 tool modules in `src/tools/`. Over 3,500 unit tests; the CI coverage gate is 80% (`pyproject.toml`), and total coverage is about 94%.
+- **Size**: mode- and profile-dependent. Use runtime MCP discovery and the generated default-local `agent-card.json` rather than hard-coded counts. The CI coverage gate is defined in `pyproject.toml`; do not rely on historical coverage percentages.
 
 ## Before Starting Work
 
@@ -71,9 +71,9 @@ The UniFi MCP Server is a Model Context Protocol (MCP) server that exposes the U
 
 | `UNIFI_API_TYPE` | Tools | Notes |
 |------------------|-------|-------|
-| `local` (recommended) | 343 | Gateway at `UNIFI_LOCAL_HOST`. Network, Protect, and the Phase 6 cloud APIs |
-| `cloud-v1` | 71 | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy, Mobility, InnerSpace, Carrier |
-| `cloud-ea` (the code default) | 71 | Early Access cloud API, same limits |
+| `local` (recommended) | runtime discovery | Gateway at `UNIFI_LOCAL_HOST`. Network, Protect, and the Phase 6 cloud APIs |
+| `cloud-v1` | runtime discovery | `https://api.ui.com`. Aggregate statistics, Site Manager, connector proxy, Mobility, InnerSpace, Carrier |
+| `cloud-ea` (the code default) | runtime discovery | Early Access cloud API, same limits |
 
 `UNIFI_READ_ONLY` removes every write tool, and `UNIFI_DRY_RUN` forces `dry_run` on. Some features need UniFi Network 9.0+, and some documented endpoints do not exist on all firmware. Check `docs/UNIFI_API.md` before you rely on one.
 

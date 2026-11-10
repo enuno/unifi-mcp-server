@@ -76,6 +76,7 @@ _MODULE_DOMAINS: dict[str, str] = {
     "firewall_zones": "security",
     "innerspace": "cloud",
     "integration_api": "cloud",
+    "inventory_evidence": "network",
     "mac_tags": "clients",
     "mobility": "cloud",
     "network_config": "network",

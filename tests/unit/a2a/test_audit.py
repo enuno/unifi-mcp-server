@@ -58,6 +58,18 @@ class TestAuditLoggerInit:
 
         assert instance.log_file == Path("logs") / "a2a-audit.jsonl"
 
+    def test_survives_a_directory_it_cannot_create(self, tmp_path: Path) -> None:
+        # An MCP client may start the server in a read-only directory
+        # (Claude Desktop on macOS uses "/"). A regular file standing where
+        # the directory should go fails mkdir the same way on any platform.
+        blocker = tmp_path / "blocker"
+        blocker.write_text("not a directory")
+
+        instance = AuditLogger(log_file=blocker / "logs" / "trail.jsonl")
+        instance.log_invocation(make_entry())
+
+        assert len(instance.get_audit_trail()) == 1
+
     def test_accepts_a_string_path(self, tmp_path: Path) -> None:
         instance = AuditLogger(log_file=str(tmp_path / "trail.jsonl"))
 

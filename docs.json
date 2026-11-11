@@ -94,6 +94,7 @@
             "icon": "plug",
             "pages": [
               "A2A",
+              "docs/PROMPTS",
               "WEBHOOK_SETUP"
             ]
           },

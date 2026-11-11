@@ -196,5 +196,5 @@ place it belongs.
   talking to.
 - Prefer `fleet_health` and the snapshot tools for inspection. Reserve
   `fleet_fanout` for the questions the snapshots cannot answer.
-- Read [unifi-safe-changes](unifi-safe-changes/SKILL.md) before making any
+- Read [unifi-safe-changes](../unifi-safe-changes/SKILL.md) before making any
   change through this surface.

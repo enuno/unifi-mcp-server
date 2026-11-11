@@ -10,8 +10,13 @@ AI agent can read and change UniFi infrastructure through one standard
 interface. It runs against a single controller or, in fleet mode, many.
 
 <Note>
-  Current release: **0.6.4**. 343 tools in local mode, from 60 modules.
+  Current release: **0.9.0**. See the [changelog](https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md) for release details.
 </Note>
+
+Version 0.9.0 adds certificate-name verification for local consoles and repairs
+Site Manager SD-WAN reads. The native MCP prompt workflows and mixed cloud/local
+fleet mode introduced in 0.7.0 are also available in this release. Their
+availability depends on the deployment's API mode, profile and settings.
 
 ## Quick start
 
@@ -71,7 +76,23 @@ Set `UNIFI_API_TYPE` to choose how the server reaches UniFi.
 | `cloud-ea` | UniFi's Early Access cloud API | Sites and aggregate statistics; no per-device control or configuration |
 
 Zone-based firewall, traffic flows, ACLs, device and client management, and
-Protect all require `local` mode.
+Protect require a local controller. In a cloud-first fleet with local gateways,
+set `UNIFI_MIXED_MODE=true` to register the union of cloud and local tools;
+route calls to a named controller. See [mixed-mode deployment](/API#connecting-to-the-cloud-api-and-local-gateways-together)
+for the requirements and limitations.
+
+## Native MCP prompts
+
+The server offers operational workflows through `prompts/list` and
+`prompts/get`, including health checks, client and WiFi troubleshooting,
+device investigations, firewall review and change planning. Retrieving a
+prompt returns guidance; it does not contact a controller, execute a tool or
+authorize a write. A tools-only MCP client will not display prompts.
+
+<Card title="Prompt catalog" icon="list-check" href="/docs/PROMPTS">
+See the workflow names, required arguments and availability by API mode and
+profile.
+</Card>
 
 ## Capability domains
 

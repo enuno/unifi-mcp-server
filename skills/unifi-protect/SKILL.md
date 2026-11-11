@@ -139,7 +139,7 @@ These take `confirm=True`:
 | `create_protect_live_view` | Create a live view |
 
 Read the device before changing it, preview with `dry_run=True`, then
-apply. See [unifi-safe-changes](unifi-safe-changes/SKILL.md).
+apply. See [unifi-safe-changes](../unifi-safe-changes/SKILL.md).
 
 ## Output and alarm output
 

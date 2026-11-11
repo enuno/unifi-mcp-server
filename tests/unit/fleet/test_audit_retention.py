@@ -485,6 +485,15 @@ class TestCli:
 
         self._env(monkeypatch, tmp_path, database_url)
         monkeypatch.setenv("UNIFI_AUDIT_RETENTION_DAYS", "30")
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz: Any = None) -> datetime:
+                assert tz is UTC
+                return NOW
+
+        # The CLI uses the clock; keep its cutoff aligned with the dated records.
+        monkeypatch.setattr(retention, "datetime", FixedDateTime)
         await _fill(migrated_engine, A, [400, 300, 0])
 
         loop = asyncio.get_running_loop()

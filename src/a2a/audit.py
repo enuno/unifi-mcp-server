@@ -33,10 +33,25 @@ class AuditLogger:
     """Collect and export A2A audit logs."""
 
     def __init__(self, log_file: str | Path | None = None, log_level: str = "INFO") -> None:
-        """Resolve the audit log path and create its parent directory."""
+        """Resolve the audit log path and create its parent directory.
+
+        A directory that cannot be created is not fatal. The default path is
+        relative, and an MCP client picks the working directory of a stdio
+        server (Claude Desktop on macOS uses the read-only "/"). This runs at
+        import time, so raising here would stop the server from starting.
+        Entries are still kept in memory, and ``log_invocation`` reports each
+        write that fails.
+        """
         self.logger = get_logger(__name__, log_level)
         self.log_file = Path(log_file) if log_file else Path("logs") / "a2a-audit.jsonl"
-        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.logger.warning(
+                f"Cannot create the A2A audit log directory "
+                f"'{self.log_file.parent.absolute()}' ({exc}); "
+                "A2A audit entries are kept in memory only"
+            )
         self._lock = RLock()
         self._entries: list[AuditLog] = []
 

@@ -212,7 +212,9 @@ class TestRedisUnavailable:
 
         assert clients[0]._fallback is clients[1]._fallback is clients[2]._fallback
         stamps = await _burst(clients, LIMIT)
-        assert len([t for t in stamps if t < PERIOD * 0.5]) == LIMIT // 2
+        # A slow Redis connection refusal can delay every completion equally;
+        # measure the first fallback window from its first completed call.
+        assert len([t for t in stamps if t - stamps[0] < PERIOD * 0.4]) == LIMIT // 2
 
     def test_redis_configured_but_not_installed_keeps_the_full_budget(
         self, monkeypatch, redis_port

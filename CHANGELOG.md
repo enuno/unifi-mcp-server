@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`npx skills` (and similar package-skill installers) now see every skill, not just one.** Those installers read only a `SKILL.md` at the repository root; with one there, they installed just that file and silently ignored every folder under `skills/`, which held the rest of the operator and developer skills. The root-level overview moved to `skills/unifi-mcp-setup/SKILL.md`, alongside the others, so a package-skill install (or a manual `cp -r skills/<name>`) now reaches all of them. (#310)
+
 - **The server starts when its working directory is read-only.** The A2A audit logger is built at import time and created its default `logs/` directory relative to the working directory. Claude Desktop on macOS starts a stdio server in `/`, which is read-only, so `uvx unifi-mcp-server` died with `OSError: [Errno 30] Read-only file system: 'logs'` before answering `initialize`. A directory that cannot be created is now a startup warning: A2A audit entries stay in memory and each failed write is still reported. The tool audit log is unchanged, so with the default `UNIFI_AUDIT_FAIL_CLOSED` a write is still refused until `UNIFI_AUDIT_LOG_PATH` points at a writable absolute path.
 - **Security Scanning no longer fails a clean scan because GitHub dropped the artifact upload.** The weekly run on 2026-11-09 scanned clean (Bandit, CodeQL, pip-audit, secrets, Trivy) then died on `actions/upload-artifact` with `Failed to FinalizeArtifact: Unable to make request: ECONNRESET` after the zip had already reached blob storage. Report uploads now continue on that class of error; the scan step remains the gate.
 

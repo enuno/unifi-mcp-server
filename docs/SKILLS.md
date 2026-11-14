@@ -2,12 +2,12 @@
 
 Agent skills are Markdown files with YAML frontmatter (`name`, `description`) that an AI agent reads on demand. They tell the agent which UniFi tools exist, which API mode each needs, and how to use them safely, without keeping every tool definition in context.
 
-This repository ships two sets of skills in `skills/`, one folder per skill:
+The `skills/` directory holds all agent skills, one folder per skill.
 
 - **Operator skills** help an agent *use* a running UniFi MCP server.
 - **Developer skills** help a coding agent *change* this codebase.
 
-The root `SKILL.md` is a one-file overview of the whole server (setup, API modes, capability domains, example prompts).
+`skills/unifi-mcp-setup/` is a one-file overview of the whole server (setup, API modes, capability domains, example prompts). It used to live at the repository root as `SKILL.md`, but package-skill installers such as `npx skills` only install a root-level `SKILL.md` and ignore everything under `skills/`, which hid every other skill from those tools. It now lives alongside the rest, in `skills/unifi-mcp-setup/SKILL.md`.
 
 A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify serves it from there. It helps an agent maintain, validate and publish this site's documentation.
 
@@ -26,6 +26,7 @@ A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify se
 | `skills/unifi-channel-planning/` | Building a low-interference WiFi channel plan from neighbor scans |
 | `skills/unifi-discovery/` | Finding what a deployment exposes, and choosing between local, cloud and fleet mode |
 | `skills/unifi-safe-changes/` | The `confirm` and `dry_run` gates, the read-only and dry-run modes, what can break the network, and how to roll back |
+| `skills/unifi-mcp-setup/` | One-file overview of the whole server: install, env vars, API-mode feature matrix, `UNIFI_PROFILE` |
 
 ## Developer skills (changing the codebase)
 
@@ -70,8 +71,8 @@ cp -r skills/unifi-network skills/unifi-devices skills/unifi-security \
 # Or just one
 cp -r skills/unifi-security ~/.claude/skills/
 
-# The one-file overview, as a skill named "unifi"
-mkdir -p ~/.claude/skills/unifi && cp SKILL.md ~/.claude/skills/unifi/SKILL.md
+# The one-file overview, as a skill named "unifi-mcp-setup"
+cp -r skills/unifi-mcp-setup ~/.claude/skills/
 
 # Into another project instead of your home directory
 cp -r skills/unifi-network /path/to/project/.claude/skills/

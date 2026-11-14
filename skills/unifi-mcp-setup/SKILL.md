@@ -1,12 +1,13 @@
 ---
-name: unifi
+name: unifi-mcp-setup
 description: >
-  Manage UniFi network infrastructure via the UniFi MCP Server. Use this skill
-  for any task involving UniFi devices, clients, networks, VLANs, WiFi, firewall
-  rules, zone-based firewall, VPNs, traffic monitoring, backups, RADIUS, QoS,
-  DPI, port forwarding, ACLs, DHCP, DNS, or site management. Triggers when the
-  user mentions UniFi, Ubiquiti, network clients, APs, switches, gateways,
-  firewall policies, or traffic flows in a network management context.
+  Use when setting up, installing or configuring the UniFi MCP Server itself,
+  or as a broad fallback for a UniFi task when none of the narrower operator
+  skills fit. One-file overview of install methods, environment variables,
+  the API-mode feature matrix, UNIFI_PROFILE scoping and example prompts.
+  Triggers when the user mentions UniFi, Ubiquiti, network clients, APs,
+  switches, gateways, firewall policies, or traffic flows in a network
+  management context.
 triggers:
   - UniFi
   - Ubiquiti

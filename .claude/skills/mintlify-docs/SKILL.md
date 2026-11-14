@@ -87,9 +87,8 @@ Then read the site configuration:
 - `docs.json` — theme, brand colours, logo, the navigation tree, navbar,
   footer, redirects, SEO and integrations. This is the site's structure.
 - `.mintignore` — gitignore-style. It decides what is *not* published.
-- `.mintlify/skills/` — the agent skills the site serves. Five entries are
-  symlinks into `skills/`; `.mintlify/skills/unifi/SKILL.md` is a symlink to
-  the root `SKILL.md`; `.mintlify/skills/mintlify-docs/` is a real directory
+- `.mintlify/skills/` — the agent skills the site serves. All six entries are
+  symlinks into `skills/`; `.mintlify/skills/mintlify-docs/` is a real directory
   whose source of truth is its own `SKILL.md`.
 - `index.mdx` — the landing page. The only `.mdx` page in the repository.
 - Root-level `*.md` — `API.md`, `SPEC.md`, `SECURITY.md`, `ROADMAP.md`,

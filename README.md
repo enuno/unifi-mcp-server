@@ -169,6 +169,7 @@ The `skills/` directory holds agent skills: Markdown files an AI agent loads on 
 | [`unifi-security`](skills/unifi-security/SKILL.md) | Firewall rules and groups, zone-based firewall, ACLs, port forwarding, VPN |
 | [`unifi-system`](skills/unifi-system/SKILL.md) | Sites, backups, QoS, traffic flows, DPI, RADIUS, guest portal |
 | [`unifi-channel-planning`](skills/unifi-channel-planning/SKILL.md) | Low-interference WiFi channel plans from neighbor scans |
+| [`unifi-mcp-setup`](skills/unifi-mcp-setup/SKILL.md) | One-file overview of the whole server: install, env vars, API-mode matrix, `UNIFI_PROFILE` |
 
 **Changing this codebase (developer skills)**
 
@@ -196,9 +197,14 @@ cp -r skills/unifi-network skills/unifi-devices skills/unifi-security \
 # Or one skill
 cp -r skills/unifi-security ~/.claude/skills/
 
-# The one-file overview of the whole server, as a skill named "unifi"
-mkdir -p ~/.claude/skills/unifi && cp SKILL.md ~/.claude/skills/unifi/SKILL.md
+# The one-file overview of the whole server
+cp -r skills/unifi-mcp-setup ~/.claude/skills/
 ```
+
+Note: `npx skills` (and similar package-skill installers) only install a
+`SKILL.md` at the repository root, not the folders under `skills/`. Install
+individual skills with the `cp -r skills/<name>` commands above instead of
+relying on a root-level skill file.
 
 Other agents that read the same `SKILL.md` format take the same folders; copy them into that agent's skills directory (Codex, for example, reads `.agents/skills/`). To update, pull and copy again. Inside this repository the developer skills are already installed for Claude Code (`.claude/skills/`) and Codex (`.agents/skills/`).
 

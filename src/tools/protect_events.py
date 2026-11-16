@@ -6,8 +6,14 @@ from typing import Any
 
 from ..api import ProtectClient
 from ..config import Settings
-from ..models import ProtectAlarmWebhookResult, ProtectEventMessage
-from ..utils import get_logger, sanitize_log_message, validate_limit_offset, validate_path_segment
+from ..models import ProtectAlarmWebhookResult, ProtectEventMessage, ProtectModelUpdateMessage
+from ..utils import (
+    ValidationError,
+    get_logger,
+    sanitize_log_message,
+    validate_limit_offset,
+    validate_path_segment,
+)
 from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
@@ -84,6 +90,98 @@ async def list_protect_events(
         "count": len(events),
         "totalCount": total_count,
         "data": events,
+    }
+
+
+_ALLOWED_MODEL_KEYS = frozenset(
+    {
+        "nvr",
+        "camera",
+        "chime",
+        "light",
+        "viewer",
+        "speaker",
+        "bridge",
+        "sensor",
+        "siren",
+        "fob",
+        "relay",
+        "aiProcessor",
+        "aiPort",
+        "linkStation",
+        "event",
+        "externalArmProfile",
+    }
+)
+
+
+def _normalize_model_keys(model_keys: list[str] | str) -> list[str]:
+    if isinstance(model_keys, str):
+        keys = [part.strip() for part in model_keys.split(",") if part.strip()]
+    else:
+        keys = [str(part).strip() for part in model_keys if str(part).strip()]
+    if not keys:
+        raise ValidationError("model_keys is required")
+    unknown = sorted({key for key in keys if key not in _ALLOWED_MODEL_KEYS})
+    if unknown:
+        raise ValidationError(
+            "model_keys contains unsupported values "
+            f"{unknown}; allowed: {sorted(_ALLOWED_MODEL_KEYS)}"
+        )
+    # Preserve order while dropping duplicates.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for key in keys:
+        if key not in seen:
+            seen.add(key)
+            unique.append(key)
+    return unique
+
+
+@read_tool
+async def list_protect_model_updates(
+    settings: Settings,
+    model_keys: list[str] | str,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> dict[str, Any]:
+    """Get Protect model update messages for selected model keys.
+
+    Polls GET /v1/subscribe/updates (Protect 7.4.96). This is not the
+    devices or events websocket. Pass model keys such as camera, event,
+    or externalArmProfile.
+
+    Args:
+        settings: Application settings
+        model_keys: One or more Protect model keys, or a comma-separated string
+        limit: Maximum number of messages to return
+        offset: Number of messages to skip
+    """
+    logger = get_logger(__name__, settings.log_level)
+    keys = _normalize_model_keys(model_keys)
+    final_limit, final_offset = validate_limit_offset(limit, offset)
+
+    async with ProtectClient(settings) as client:
+        await client.authenticate()
+        response = await client.get(
+            settings.get_protect_integration_path("subscribe/updates"),
+            params={"modelKeys": ",".join(keys)},
+        )
+
+    updates_data = _extract_collection(response)
+    paginated = updates_data[final_offset : final_offset + final_limit]
+    updates = [
+        ProtectModelUpdateMessage.model_validate(item).model_dump(by_alias=True)
+        for item in paginated
+    ]
+    logger.info(sanitize_log_message(f"Retrieved {len(updates)} Protect model update messages"))
+    return {
+        "offset": final_offset,
+        "limit": final_limit,
+        "count": len(updates),
+        "totalCount": len(updates_data),
+        "modelKeys": keys,
+        "data": updates,
     }
 
 

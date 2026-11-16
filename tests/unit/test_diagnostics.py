@@ -692,3 +692,57 @@ class TestReviewFollowUps:
 
         client.post.assert_called_once()
         assert result["success"] is True
+
+
+class TestNetwork11StatisticsEngine:
+    @pytest.fixture
+    def local_settings(self):
+        settings = MagicMock()
+        settings.log_level = "INFO"
+        settings.get_v2_global_api_path = MagicMock(
+            side_effect=lambda endpoint: f"/proxy/network/v2/api/{endpoint.lstrip('/')}"
+        )
+        return settings
+
+    @pytest.mark.asyncio
+    async def test_get_statistics_source_modern_string(self, local_settings):
+        from src.tools.diagnostics import get_statistics_source
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value="MODERN")
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_statistics_source(local_settings)
+        client.get.assert_awaited_once_with("/proxy/network/v2/api/stats/source")
+        assert result == {"source": "MODERN"}
+
+    @pytest.mark.asyncio
+    async def test_get_recent_statistics_series(self, local_settings):
+        from src.tools.diagnostics import get_recent_statistics_series
+
+        client = create_mock_client()
+        client.get = AsyncMock(
+            return_value=[
+                {
+                    "siteId": "abc",
+                    "series": [{"timestamp": 1, "duration": 300000, "rxBytes": 10.0}],
+                }
+            ]
+        )
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_recent_statistics_series(
+                "abc", local_settings, schema="wanBySite", period="HOUR", end_ms=1_700_000_000_000
+            )
+        client.get.assert_awaited_once()
+        args, kwargs = client.get.await_args
+        assert args[0] == "/proxy/network/v2/api/stats/recent/series"
+        assert kwargs["params"]["schema"] == "wanBySite"
+        assert kwargs["params"]["period"] == "HOUR"
+        assert kwargs["params"]["filter"] == "siteId.eq('abc')"
+        assert result["data"][0]["siteId"] == "abc"
+
+    @pytest.mark.asyncio
+    async def test_rejects_bad_period(self, local_settings):
+        from src.tools.diagnostics import get_recent_statistics_series
+
+        with pytest.raises(ValidationError, match="period"):
+            await get_recent_statistics_series("abc", local_settings, period="MINUTE", end_ms=1)

@@ -139,3 +139,21 @@ async def test_list_protect_nvrs_unexpected_response_raises(mock_settings, mock_
     with patch("src.tools.protect_nvr.ProtectClient", return_value=mock_client):
         with pytest.raises(ValueError, match="Unexpected Protect inventory response type"):
             await list_protect_nvrs(mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_list_protect_nvrs_surfaces_external_alarm_flag(mock_settings, mock_client):
+    mock_client.get = AsyncMock(
+        return_value={
+            "id": "nvr-1",
+            "name": "Main NVR",
+            "type": "UNVR",
+            "featureFlags": {"useExternalAlarmManager": True},
+            "armMode": {"status": "disarmed"},
+        }
+    )
+    with patch("src.tools.protect_nvr.ProtectClient", return_value=mock_client):
+        result = await list_protect_nvrs(mock_settings)
+    flags = result["data"][0]["featureFlags"]
+    assert flags["useExternalAlarmManager"] is True
+    assert result["data"][0]["armMode"]["status"] == "disarmed"

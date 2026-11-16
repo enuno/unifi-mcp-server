@@ -8,6 +8,8 @@ returns far more than we model, and unknown fields must not break parsing.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -71,6 +73,26 @@ class ProtectArmSchedule(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
+class ProtectExternalArmProfile(_ProtectV7Base):
+    """External Alarm Manager arm profile (Protect 7.4.96)."""
+
+    title: str | None = Field(None, description="Profile title")
+    alarm_ids: list[str] | None = Field(None, description="Alarm IDs bound to this profile")
+    created_at: str | None = Field(None, description="Creation timestamp")
+    state: str | None = Field(
+        None,
+        description="Arm state: disarmed, arming, armed, breaching, or breached",
+    )
+    state_set_at: str | None = Field(None, description="When the current state was set")
+    state_promotion_due_at: str | None = Field(
+        None, description="When the current transitional state is due to promote"
+    )
+    activation_delay: int | None = Field(None, description="Arm delay in seconds")
+    deactivation_delay: int | None = Field(None, description="Disarm delay in seconds")
+    schedule: dict[str, Any] | None = Field(None, description="Weekly arm schedule")
+    has_pin: bool | None = Field(None, description="Whether a PIN is configured")
+
+
 class ProtectArmProfile(_ProtectV7Base):
     """UniFi Protect arm profile."""
 
@@ -121,6 +143,7 @@ __all__ = [
     "ProtectArmProfile",
     "ProtectArmSchedule",
     "ProtectBridge",
+    "ProtectExternalArmProfile",
     "ProtectFob",
     "ProtectLinkStation",
     "ProtectPosTransactionResult",

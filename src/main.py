@@ -72,6 +72,7 @@ from .tools import protect_bridges as protect_bridges_tools
 from .tools import protect_cameras as protect_cameras_tools
 from .tools import protect_devices as protect_devices_tools
 from .tools import protect_events as protect_events_tools
+from .tools import protect_external_arm as protect_external_arm_tools
 from .tools import protect_fobs as protect_fobs_tools
 from .tools import protect_link_stations as protect_link_stations_tools
 from .tools import protect_nvr as protect_nvr_tools
@@ -621,6 +622,7 @@ _LOCAL_TOOL_MODULES = [
     protect_nvr_tools,
     protect_sirens_tools,
     protect_alarm_tools,
+    protect_external_arm_tools,
     protect_alarm_hubs_tools,
     protect_bridges_tools,
     protect_fobs_tools,
@@ -705,6 +707,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_nvr_tools,
         protect_sirens_tools,
         protect_alarm_tools,
+        protect_external_arm_tools,
         protect_alarm_hubs_tools,
         protect_bridges_tools,
         protect_fobs_tools,
@@ -729,6 +732,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         protect_nvr_tools,
         protect_sirens_tools,
         protect_alarm_tools,
+        protect_external_arm_tools,
         protect_alarm_hubs_tools,
         protect_bridges_tools,
         protect_fobs_tools,

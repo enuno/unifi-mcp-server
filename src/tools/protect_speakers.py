@@ -198,3 +198,42 @@ async def test_protect_speaker_sound(
 
     logger.info(sanitize_log_message(f"Tested Protect speaker sound {speaker_id}"))
     return {"success": True, "speaker_id": speaker_id, "response": _extract_item(response)}
+
+
+@write_tool
+async def stop_protect_speaker_siren(
+    speaker_id: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Stop a siren playing on a UniFi Protect speaker.
+
+    POST /v1/speakers/{id}/stop-siren (Protect 7.4.96). Documented 204.
+    Mock-tested only; not live-verified.
+
+    Args:
+        speaker_id: Protect speaker identifier
+        settings: Application settings
+        confirm: Must be true to apply the change (required unless dry_run)
+        dry_run: Preview the change without applying it
+    """
+    validate_confirmation(confirm, "stop Protect speaker siren", dry_run)
+    logger = get_logger(__name__, settings.log_level)
+    speaker_id = _validate_speaker_id(speaker_id)
+
+    if coerce_bool(dry_run):
+        return {
+            "dry_run": True,
+            "operation": "stop_protect_speaker_siren",
+            "speaker_id": speaker_id,
+        }
+
+    async with ProtectClient(settings) as client:
+        await client.authenticate()
+        response = await client.post(
+            settings.get_protect_integration_path(f"speakers/{speaker_id}/stop-siren")
+        )
+
+    logger.info(sanitize_log_message(f"Stopped Protect speaker siren {speaker_id}"))
+    return {"success": True, "speaker_id": speaker_id, "response": _extract_item(response)}

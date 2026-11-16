@@ -95,3 +95,17 @@ async def test_list_protect_cameras_unexpected_response_raises(mock_settings, mo
     with patch("src.tools.protect_cameras.ProtectClient", return_value=mock_client):
         with pytest.raises(ValueError, match="Unexpected Protect inventory response type"):
             await list_protect_cameras(mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_get_protect_camera_surfaces_antiflicker(mock_settings, mock_client):
+    mock_client.get = AsyncMock(
+        return_value={
+            "id": "cam-1",
+            "name": "Front Door",
+            "videoMode": "antiFlicker",
+        }
+    )
+    with patch("src.tools.protect_cameras.ProtectClient", return_value=mock_client):
+        result = await get_protect_camera("cam-1", mock_settings)
+    assert result["videoMode"] == "antiFlicker"

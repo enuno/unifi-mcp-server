@@ -36,7 +36,7 @@
     ],
     "confirmUrl": "/a2a/confirm",
     "delegateUrl": "/a2a/delegate",
-    "destructiveToolCount": 49,
+    "destructiveToolCount": 52,
     "domains": [
       "network",
       "wireless",
@@ -57,7 +57,7 @@
       "For destructive skills, supply confirm=true and optional dry_run=true for preview."
     ],
     "readOnly": false,
-    "readToolCount": 204,
+    "readToolCount": 209,
     "resourceCount": 6,
     "resources": [
       {
@@ -788,6 +788,41 @@
       },
       {
         "confirmationLevel": "required",
+        "destructive": true,
+        "reason": "Destructive action: removing or resetting controller state.",
+        "sensitiveFields": [],
+        "toolName": "arm_protect_external_arm_profile"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "create_protect_external_arm_profile"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": true,
+        "reason": "Destructive action: removing or resetting controller state.",
+        "sensitiveFields": [],
+        "toolName": "delete_protect_external_arm_profile"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": true,
+        "reason": "Destructive action: removing or resetting controller state.",
+        "sensitiveFields": [],
+        "toolName": "disarm_protect_external_arm_profile"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "update_protect_external_arm_profile"
+      },
+      {
+        "confirmationLevel": "required",
         "destructive": false,
         "reason": "Mutating controller state requires explicit confirmation.",
         "sensitiveFields": [],
@@ -841,6 +876,13 @@
         "reason": "Mutating controller state requires explicit confirmation.",
         "sensitiveFields": [],
         "toolName": "update_protect_relay"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "stop_protect_speaker_siren"
       },
       {
         "confirmationLevel": "required",
@@ -1094,9 +1136,9 @@
         "toolName": "health_check"
       }
     ],
-    "toolCount": 343,
+    "toolCount": 354,
     "toolsManifestUrl": "/a2a/discover",
-    "writeToolCount": 90
+    "writeToolCount": 93
   },
   "name": "unifi-mcp-server",
   "preferredTransport": "HTTP+JSON",
@@ -1288,6 +1330,73 @@
         "type": "object"
       },
       "name": "adopt_device",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Arm an external Alarm Manager profile.\n\nThis changes the live security posture of the space. Confirm the\ntarget profile first. Mock-tested only; not live-verified.",
+      "examples": [
+        {
+          "arguments": {
+            "arm_profile_id": "example-id",
+            "confirm": true,
+            "dry_run": true
+          },
+          "tool": "arm_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "arm_profile_id": {
+            "description": "External arm profile identifier",
+            "type": "string"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          }
+        },
+        "required": [
+          "arm_profile_id"
+        ],
+        "type": "object"
+      },
+      "name": "arm_protect_external_arm_profile",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -5754,6 +5863,110 @@
       }
     },
     {
+      "description": "Create an external Alarm Manager arm profile.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "title": "example-title"
+          },
+          "tool": "create_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "activation_delay": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Arm delay in seconds (0-3600)"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "deactivation_delay": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Disarm delay in seconds (0-3600)"
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional weekly schedule object from the Protect 7.4.96 spec"
+          },
+          "title": {
+            "description": "Profile title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "name": "create_protect_external_arm_profile",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Create a Protect live view.",
       "examples": [
         {
@@ -7579,6 +7792,73 @@
       }
     },
     {
+      "description": "Delete an external Alarm Manager arm profile.",
+      "examples": [
+        {
+          "arguments": {
+            "arm_profile_id": "example-id",
+            "confirm": true,
+            "dry_run": true
+          },
+          "tool": "delete_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "arm_profile_id": {
+            "description": "External arm profile identifier",
+            "type": "string"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          }
+        },
+        "required": [
+          "arm_profile_id"
+        ],
+        "type": "object"
+      },
+      "name": "delete_protect_external_arm_profile",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Delete a RADIUS account.",
       "examples": [
         {
@@ -8064,6 +8344,73 @@
         "type": "object"
       },
       "name": "disable_protect_alarm",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Disarm an external Alarm Manager profile.\n\nThis changes the live security posture of the space. Mock-tested only;\nnot live-verified.",
+      "examples": [
+        {
+          "arguments": {
+            "arm_profile_id": "example-id",
+            "confirm": true,
+            "dry_run": true
+          },
+          "tool": "disarm_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "arm_profile_id": {
+            "description": "External arm profile identifier",
+            "type": "string"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          }
+        },
+        "required": [
+          "arm_profile_id"
+        ],
+        "type": "object"
+      },
+      "name": "disarm_protect_external_arm_profile",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -11587,6 +11934,47 @@
       }
     },
     {
+      "description": "Get a single UniFi Protect external arm profile.",
+      "examples": [
+        {
+          "arguments": {
+            "arm_profile_id": "example-id"
+          },
+          "tool": "get_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "arm_profile_id": {
+            "description": "External arm profile identifier",
+            "type": "string"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          }
+        },
+        "required": [
+          "arm_profile_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_protect_external_arm_profile",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Get a single UniFi Protect key fob.",
       "examples": [
         {
@@ -12307,6 +12695,87 @@
       }
     },
     {
+      "description": "Read recent Network 11 statistics series (MODERN engine).\n\nGET /proxy/network/v2/api/stats/recent/series. ``site_id`` is the\nclassic site ``_id`` used in the filter, not a path segment. HOUR and\nDAY return 5-minute buckets, WEEK hourly, MONTH 8-hour buckets.\nByte totals are additive per bucket. Local gateway only. Mock-tested;\nrival-documented against Network 11, not live-verified here.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "get_recent_statistics_series"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "end_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "End timestamp in milliseconds; defaults to now"
+          },
+          "period": {
+            "default": "HOUR",
+            "description": "HOUR, DAY, WEEK, or MONTH",
+            "type": "string"
+          },
+          "schema": {
+            "default": "wanBySite",
+            "description": "Statistics schema name (default wanBySite)",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Classic site identifier for the ``siteId.eq`` filter",
+            "type": "string"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Attribute names to project (default rxBytes, txBytes)"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_recent_statistics_series",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Get the status of an ongoing or completed restore operation.\n\nMonitor the progress of a restore operation initiated with restore_backup.\nCritical for tracking restore progress as controller may restart during restore.",
       "examples": [
         {
@@ -12876,6 +13345,40 @@
         "type": "object"
       },
       "name": "get_speed_test_status",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read the controller-wide Network 11 statistics engine source.\n\nGET /proxy/network/v2/api/stats/source. Network 10 reports LEGACY;\nNetwork 11 reports MODERN. This path is not site-scoped: a\n``/site/{id}/stats/source`` request 404s. Local gateway only.",
+      "examples": [
+        {
+          "arguments": {
+            "controller": null
+          },
+          "tool": "get_statistics_source"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          }
+        },
+        "type": "object"
+      },
+      "name": "get_statistics_source",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -17669,6 +18172,64 @@
       }
     },
     {
+      "description": "List UniFi Protect external Alarm Manager arm profiles.\n\nUse when ``nvr.featureFlags.useExternalAlarmManager`` is true. These\nprofiles are not the local ``arm-profiles`` family.",
+      "examples": [
+        {
+          "arguments": {
+            "limit": null
+          },
+          "tool": "list_protect_external_arm_profiles"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Maximum number of profiles to return"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of profiles to skip"
+          }
+        },
+        "type": "object"
+      },
+      "name": "list_protect_external_arm_profiles",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "List UniFi Protect key fobs.",
       "examples": [
         {
@@ -17887,6 +18448,81 @@
         "type": "object"
       },
       "name": "list_protect_live_views",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Get Protect model update messages for selected model keys.\n\nPolls GET /v1/subscribe/updates (Protect 7.4.96). This is not the\ndevices or events websocket. Pass model keys such as camera, event,\nor externalArmProfile.",
+      "examples": [
+        {
+          "arguments": {
+            "model_keys": "example-model_keys"
+          },
+          "tool": "list_protect_model_updates"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Maximum number of messages to return"
+          },
+          "model_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "One or more Protect model keys, or a comma-separated string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Number of messages to skip"
+          }
+        },
+        "required": [
+          "model_keys"
+        ],
+        "type": "object"
+      },
+      "name": "list_protect_model_updates",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -21360,6 +21996,73 @@
         "type": "object"
       },
       "name": "stop_protect_siren",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Stop a siren playing on a UniFi Protect speaker.\n\nPOST /v1/speakers/{id}/stop-siren (Protect 7.4.96). Documented 204.\nMock-tested only; not live-verified.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "speaker_id": "example-id"
+          },
+          "tool": "stop_protect_speaker_siren"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          },
+          "speaker_id": {
+            "description": "Protect speaker identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "speaker_id"
+        ],
+        "type": "object"
+      },
+      "name": "stop_protect_speaker_siren",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -25628,6 +26331,122 @@
         "type": "object"
       },
       "name": "update_protect_device",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Update an external Alarm Manager arm profile.\n\nOmitted fields are left unchanged. PIN values are never accepted.",
+      "examples": [
+        {
+          "arguments": {
+            "arm_profile_id": "example-id",
+            "confirm": true,
+            "dry_run": true
+          },
+          "tool": "update_protect_external_arm_profile"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "activation_delay": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Arm delay in seconds (0-3600)"
+          },
+          "arm_profile_id": {
+            "description": "External arm profile identifier",
+            "type": "string"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the change (required unless dry_run)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "deactivation_delay": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Disarm delay in seconds (0-3600)"
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the change without applying it"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Replacement weekly schedule"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "New title (cannot be cleared)"
+          }
+        },
+        "required": [
+          "arm_profile_id"
+        ],
+        "type": "object"
+      },
+      "name": "update_protect_external_arm_profile",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"

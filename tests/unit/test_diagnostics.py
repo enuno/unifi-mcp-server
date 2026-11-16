@@ -746,3 +746,78 @@ class TestNetwork11StatisticsEngine:
 
         with pytest.raises(ValidationError, match="period"):
             await get_recent_statistics_series("abc", local_settings, period="MINUTE", end_ms=1)
+
+    @pytest.mark.asyncio
+    async def test_get_statistics_source_from_dict(self, local_settings):
+        from src.tools.diagnostics import get_statistics_source
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value={"source": "legacy"})
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_statistics_source(local_settings)
+        assert result == {"source": "LEGACY"}
+
+    @pytest.mark.asyncio
+    async def test_get_statistics_source_nested_data(self, local_settings):
+        from src.tools.diagnostics import get_statistics_source
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value={"data": {"source": "MODERN"}})
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_statistics_source(local_settings)
+        assert result == {"source": "MODERN"}
+
+    @pytest.mark.asyncio
+    async def test_get_statistics_source_rejects_unknown(self, local_settings):
+        from src.tools.diagnostics import get_statistics_source
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value=123)
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            with pytest.raises(ValidationError, match="Unexpected statistics source"):
+                await get_statistics_source(local_settings)
+
+    @pytest.mark.asyncio
+    async def test_series_accepts_comma_values_and_envelope(self, local_settings):
+        from src.tools.diagnostics import get_recent_statistics_series
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value={"data": [{"siteId": "abc", "series": []}]})
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_recent_statistics_series(
+                "abc",
+                local_settings,
+                values="rxBytes,txBytes",
+                end_ms=1,
+            )
+        assert result["values"] == ["rxBytes", "txBytes"]
+        assert result["data"][0]["siteId"] == "abc"
+
+    @pytest.mark.asyncio
+    async def test_series_rejects_bad_inputs(self, local_settings):
+        from src.tools.diagnostics import get_recent_statistics_series
+
+        with pytest.raises(ValidationError, match="schema"):
+            await get_recent_statistics_series(
+                "abc", local_settings, schema="wan-by-site", end_ms=1
+            )
+        with pytest.raises(ValidationError, match="end_ms"):
+            await get_recent_statistics_series("abc", local_settings, end_ms=-1)
+        with pytest.raises(ValidationError, match="empty"):
+            await get_recent_statistics_series("abc", local_settings, values=[], end_ms=1)
+        with pytest.raises(ValidationError, match="unique"):
+            await get_recent_statistics_series(
+                "abc", local_settings, values=["rxBytes", "rxBytes"], end_ms=1
+            )
+        with pytest.raises(ValidationError, match="identifier"):
+            await get_recent_statistics_series("abc", local_settings, values=["rx bytes"], end_ms=1)
+
+    @pytest.mark.asyncio
+    async def test_series_empty_when_response_is_not_a_collection(self, local_settings):
+        from src.tools.diagnostics import get_recent_statistics_series
+
+        client = create_mock_client()
+        client.get = AsyncMock(return_value=None)
+        with patch("src.tools.diagnostics.UniFiClient", return_value=client):
+            result = await get_recent_statistics_series("abc", local_settings, end_ms=1)
+        assert result["data"] == []

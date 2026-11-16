@@ -177,3 +177,70 @@ async def test_delete_success(mock_settings, mock_client):
         result = await delete_protect_external_arm_profile("ext-1", mock_settings, confirm=True)
     mock_client.delete.assert_awaited_once_with("/integration/v1/external/arm-profiles/ext-1")
     assert result == {"success": True, "arm_profile_id": "ext-1"}
+
+
+@pytest.mark.asyncio
+async def test_list_accepts_a_bare_array(mock_settings, mock_client):
+    mock_client.get = AsyncMock(return_value=[{"id": "ext-1", "title": "Night", "state": "armed"}])
+    with patch("src.tools.protect_external_arm.ProtectClient", return_value=mock_client):
+        result = await list_protect_external_arm_profiles(mock_settings)
+    assert result["count"] == 1
+    assert result["data"][0]["id"] == "ext-1"
+
+
+@pytest.mark.asyncio
+async def test_empty_profile_id_is_rejected(mock_settings):
+    with pytest.raises(ValidationError, match="arm_profile_id"):
+        await get_protect_external_arm_profile("  ", mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_create_includes_schedule_and_deactivation_delay(mock_settings, mock_client):
+    mock_client.post = AsyncMock(return_value={"id": "ext-1", "title": "Night"})
+    schedule = {"sun": {"type": "intervals", "entries": []}}
+    with patch("src.tools.protect_external_arm.ProtectClient", return_value=mock_client):
+        await create_protect_external_arm_profile(
+            mock_settings,
+            title="Night",
+            deactivation_delay=10,
+            schedule=schedule,
+            confirm=True,
+        )
+    mock_client.post.assert_awaited_once_with(
+        "/integration/v1/external/arm-profiles",
+        json_data={"title": "Night", "deactivation_delay": 10, "schedule": schedule},
+    )
+
+
+@pytest.mark.asyncio
+async def test_update_sends_changed_fields(mock_settings, mock_client):
+    mock_client.patch = AsyncMock(return_value={"id": "ext-1", "title": "Day"})
+    with patch("src.tools.protect_external_arm.ProtectClient", return_value=mock_client):
+        result = await update_protect_external_arm_profile(
+            "ext-1",
+            mock_settings,
+            title="Day",
+            deactivation_delay=5,
+            schedule={"mon": {"type": "intervals", "entries": []}},
+            confirm=True,
+        )
+    mock_client.patch.assert_awaited_once()
+    args, kwargs = mock_client.patch.await_args
+    assert args[0] == "/integration/v1/external/arm-profiles/ext-1"
+    assert kwargs["json_data"]["title"] == "Day"
+    assert kwargs["json_data"]["deactivation_delay"] == 5
+    assert result["id"] == "ext-1"
+
+
+@pytest.mark.asyncio
+async def test_update_rejects_empty_title(mock_settings):
+    with pytest.raises(ValidationError, match="title"):
+        await update_protect_external_arm_profile("ext-1", mock_settings, title="  ", confirm=True)
+
+
+@pytest.mark.asyncio
+async def test_get_unwraps_data_envelope(mock_settings, mock_client):
+    mock_client.get = AsyncMock(return_value={"data": {"id": "ext-1", "title": "Night"}})
+    with patch("src.tools.protect_external_arm.ProtectClient", return_value=mock_client):
+        result = await get_protect_external_arm_profile("ext-1", mock_settings)
+    assert result["id"] == "ext-1"

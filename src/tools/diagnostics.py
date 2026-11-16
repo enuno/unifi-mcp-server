@@ -567,7 +567,6 @@ async def start_spectrum_scan(
 
 _STATS_PERIODS = frozenset({"HOUR", "DAY", "WEEK", "MONTH"})
 _STATS_IDENTIFIER_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{0,63}")
-_STATS_SITE_ID_RE = re.compile(r"[0-9A-Za-z-]{1,64}")
 _DEFAULT_STATS_VALUES = ("rxBytes", "txBytes")
 
 
@@ -632,9 +631,7 @@ async def get_recent_statistics_series(
         end_ms: End timestamp in milliseconds; defaults to now
         values: Attribute names to project (default rxBytes, txBytes)
     """
-    site_id = site_id.strip()
-    if not _STATS_SITE_ID_RE.fullmatch(site_id):
-        raise ValidationError("site_id must be a 1-64 character alphanumeric or hyphen identifier")
+    site_id = validate_site_id(site_id)
     period = period.strip().upper()
     if period not in _STATS_PERIODS:
         raise ValidationError(f"period must be one of {sorted(_STATS_PERIODS)}")

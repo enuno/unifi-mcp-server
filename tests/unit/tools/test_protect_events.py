@@ -132,3 +132,54 @@ async def test_send_protect_alarm_webhook_strips_whitespace(mock_settings, mock_
     mock_client.post.assert_awaited_once_with(
         "/integration/v1/alarm-manager/webhook/front-door.v2", json_data={}
     )
+
+
+@pytest.mark.asyncio
+async def test_list_protect_model_updates_sends_model_keys(mock_settings, mock_client):
+    mock_client.get = AsyncMock(
+        return_value={
+            "data": [{"id": "cam-1", "type": "update", "modelKey": "camera"}],
+        }
+    )
+    list_protect_model_updates = _tool("list_protect_model_updates")
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
+        result = await list_protect_model_updates(
+            mock_settings, model_keys=["camera", "event"], limit=10, offset=0
+        )
+    mock_client.get.assert_awaited_once_with(
+        "/integration/v1/subscribe/updates", params={"modelKeys": "camera,event"}
+    )
+    assert result["count"] == 1
+    assert result["modelKeys"] == ["camera", "event"]
+    assert result["data"][0]["modelKey"] == "camera"
+
+
+@pytest.mark.asyncio
+async def test_list_protect_model_updates_rejects_unknown_key(mock_settings, mock_client):
+    list_protect_model_updates = _tool("list_protect_model_updates")
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client) as mock_cls:
+        with pytest.raises(ValidationError, match="unsupported"):
+            await list_protect_model_updates(mock_settings, model_keys="not-a-model")
+    mock_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_list_protect_model_updates_accepts_comma_string(mock_settings, mock_client):
+    mock_client.get = AsyncMock(return_value=[{"id": "nvr-1", "type": "update", "modelKey": "nvr"}])
+    list_protect_model_updates = _tool("list_protect_model_updates")
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
+        result = await list_protect_model_updates(mock_settings, model_keys="nvr,nvr")
+    mock_client.get.assert_awaited_once_with(
+        "/integration/v1/subscribe/updates", params={"modelKeys": "nvr"}
+    )
+    assert result["modelKeys"] == ["nvr"]
+    assert result["data"][0]["id"] == "nvr-1"
+
+
+@pytest.mark.asyncio
+async def test_list_protect_model_updates_rejects_empty_keys(mock_settings, mock_client):
+    list_protect_model_updates = _tool("list_protect_model_updates")
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client) as mock_cls:
+        with pytest.raises(ValidationError, match="model_keys"):
+            await list_protect_model_updates(mock_settings, model_keys=["", "  "])
+    mock_cls.assert_not_called()

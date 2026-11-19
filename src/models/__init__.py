@@ -66,13 +66,15 @@ from .protect_event import (
     ProtectAlarmWebhookResult,
     ProtectDeviceUpdateMessage,
     ProtectEventMessage,
+    ProtectModelUpdateMessage,
 )
-from .protect_nvr import ProtectNVR
+from .protect_nvr import ProtectNVR, ProtectNvrFeatureFlags
 from .protect_v7 import (
     ProtectAlarmHub,
     ProtectArmProfile,
     ProtectArmSchedule,
     ProtectBridge,
+    ProtectExternalArmProfile,
     ProtectFob,
     ProtectLinkStation,
     ProtectPosTransactionResult,
@@ -177,11 +179,13 @@ __all__ = [
     "ProtectDeviceUpdateMessage",
     "ProtectEventMessage",
     "ProtectAlarmWebhookResult",
+    "ProtectModelUpdateMessage",
     "MobilityDevice",
     "MobilityDeviceClient",
     "MobilityWorkspace",
     "MobilityWorkspaceAdmin",
     "ProtectNVR",
+    "ProtectNvrFeatureFlags",
     "ProtectSiren",
     "ProtectSpeaker",
     "ProtectFob",
@@ -191,6 +195,7 @@ __all__ = [
     "ProtectAlarmHub",
     "ProtectArmProfile",
     "ProtectArmSchedule",
+    "ProtectExternalArmProfile",
     "ProtectUser",
     "ProtectUlpUser",
     "ProtectPosTransactionResult",

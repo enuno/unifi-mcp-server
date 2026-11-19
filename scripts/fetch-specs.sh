@@ -13,10 +13,10 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# Pinned spec baseline (last audited 2026-09-26; check https://developer.ui.com/llms.txt for current versions).
+# Pinned spec baseline (Protect 7.4.96 added 2026-11-16; check https://developer.ui.com/llms.txt for current versions).
 SERVICES=(
-  "network:10.6.106:scraped-api-spec-v10.6.106.json"
-  "protect:7.3.68:protect-api-spec-v7.3.68.json"
+  "network:11.0.97:scraped-api-spec-v11.0.97.json"
+  "protect:7.4.96:protect-api-spec-v7.4.96.json"
   "mobility:1.0.0:mobility-api-spec-v1.0.0.json"
   "innerspace:1.3.23:innerspace-api-spec-v1.3.23.json"
   "carrier-fabric:1.0.0:carrier-fabric-api-spec-v1.0.0.json"

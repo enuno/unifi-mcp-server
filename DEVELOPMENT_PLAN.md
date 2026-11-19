@@ -1,9 +1,9 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-11-08 reconciliation (revision basis `311fce7714bbda5d77b581a381c4e19feacdeb8a`; `pyproject.toml` 0.8.0)
+**Document Version:** 2026-11-16 competitor-gap close (revision basis local `feat/protect-7.4.96-gap-close`; prior reconciliation 2026-11-08 `311fce7714bbda5d77b581a381c4e19feacdeb8a`; `pyproject.toml` 0.9.0)
 **Historical Source Plan:** `~/INTEGRATION/Unifi-Evolution.md` (not present on this host at reconciliation; see `SPEC.md` and `docs/COMPETITOR_GAP_RECONCILIATION.md` for usable evidence)
 **Historical Repository Baseline:** 343 MCP tools / 60 modules / 3,152 passing tests / 93% coverage were earlier receipts, NOT a current run or current count; use the live registry and fresh checks below.
-**API Spec Baseline** (audited 2026-09-26, re-audited 2026-10-27 — see §2.3): UniFi Network **v11.0.97** (endpoint-stable since v10.6.106/v10.3.55), UniFi Protect **v7.3.70** (unchanged since v7.3.68), Site Manager v1.0.0; newly published (2026-09-26, unchanged on re-audit): Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
+**API Spec Baseline** (audited 2026-09-26, re-audited 2026-10-27, Protect pin refreshed 2026-11-16): UniFi Network **v11.0.97** (endpoint-stable since v10.6.106/v10.3.55), UniFi Protect **v7.4.96** (snapshot `scripts/protect-api-spec-v7.4.96.json`; v7.3.68/v7.3.70 retained for diffs), Site Manager v1.0.0; newly published (2026-09-26, unchanged on re-audit): Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)
 **Release Target Baseline** (audited 2026-10-22, §2.4): UniFi Network **v11.0.83** (requires UniFi OS **6.0.10+**) and UniFi OS **6** — compatible per released documentation, with two platform-level breaks and four items still pending live-controller verification
 **Current Phase:** Phase 8 in progress (Phases 0–7 complete; Phase 8's hardware-independent deliverables — the compatibility doc, USG-gating detection, N1's and N3's doc halves — landed 2026-10-27; N3's tool-output half landed 2026-10-29 with the `statistics_note` caveat, and the 10.6.109 live baselines for checklist steps 1–4 plus an early N1 answer were captured 2026-10-29 — `.analysis-reports/live-controller-10.6-baseline-2026-10-29/report.md`; the Network 11 "after" halves, step 5's UI capture, and N5's field name remain open)
 
@@ -567,6 +567,27 @@ Common execution contract: implementation owner = a branch-isolated developer; i
 | 7. CG-3 Matter, CG-4 Thread, CG-5 Time Machine watch (#293) | Inputs: quarterly Network/spec drift snapshots plus version-local docs; output: three separate backlog statuses and re-open triggers, with shared IoT discovery where useful. | No invented resource or local-history parity. Reopen only on published/observed versioned endpoint, schema and permission evidence. Existing spec-drift cadence is owner, not a new watcher. |
 
 No order serializes independent cheap documentation: slice 6 can run with slice 1. Review and test budgets are limited to available local tooling; hardware/credential blockers are explicit. Preserve issue #290 bulk client and alarm work, #291 URL-sourced list discovery, and Phase 8 N1–N11 independently; no issue is closed by a planning change.
+
+---
+
+## 4.10 Phase 8 addendum: 2026-11-15 competitor matrix (Protect 7.4.96 + Network 11 stats)
+
+Source: `~/inbox/unifi-competitor-gap-matrix-2026-11-15.md`. Elvis's coverage map is unchanged at 6 covered / 17 partial / 10 gaps until this addendum's code lands. Rival columns are claimed/documented, not live-verified. Close-next ranking from that matrix:
+
+| Rank | Item | This addendum |
+|---|---|---|
+| 1 | Protect external arm profiles | Implemented (mock-tested): `src/tools/protect_external_arm.py` against `/v1/external/arm-profiles`. Prerequisite NVR `featureFlags.useExternalAlarmManager` is now modelled. Arm/disarm/create/update/delete are not live-verified. |
+| 2 | Protect model additions (NVR featureFlags, sensor `isMountedIncorrectly`, camera `antiFlicker`) | Implemented (mock-tested). |
+| 3 | Protect `subscribe/updates` + speaker `stop-siren` | Implemented (mock-tested). Subscribe is a polling GET matching existing device/event subscribe tools, not a live websocket. |
+| 4 | Network 11 MODERN statistics engine | Implemented as local v2 reads (`get_statistics_source`, `get_recent_statistics_series`). Not in the Integration API 11.0.97 spec. Not live-verified. |
+| 5 | SD-WAN policy authoring | Still discovery. Both rivals match the read side; nobody authors typed policies. Issue #292. |
+| 6 | Standalone Network Application Server | Documentation/config parity only. No code in this addendum. |
+| 7 | OON objects | Rivals lead; not in this addendum. |
+| 8–14 | Capture, UPS, Live Flows, Matter/Thread/Topology, WiFi WAN, external lists, backups/ZBF/USG, 8.x docs | Discovery, watch, or leave as partials. Issues #290–#293. |
+
+Protect spec pin: `scripts/protect-api-spec-v7.4.96.json` (61 paths). New operations versus v7.3.70: `/v1/external/arm-profiles` family, `/v1/subscribe/updates`, `/v1/speakers/{id}/stop-siren`.
+
+Live-hardware verification of Protect 7.4.96 writes and Network 11 stats payloads remains open, same class as Phase 5a.
 
 ---
 

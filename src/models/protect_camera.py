@@ -27,5 +27,13 @@ class ProtectCamera(BaseModel):
     firmware_version: str | None = Field(
         None, alias="firmwareVersion", description="Camera firmware version"
     )
+    video_mode: str | None = Field(
+        None,
+        alias="videoMode",
+        description=(
+            "Current video mode (default, highFps, sport, slowShutter, "
+            "lprReflex, lprNoneReflex, antiFlicker)"
+        ),
+    )
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="allow")

@@ -125,6 +125,14 @@ class ProtectSensor(ProtectDevice):
     alarm_settings: ProtectSensorThresholdSettings | None = Field(
         None, alias="alarmSettings", description="Alarm configuration"
     )
+    is_mounted_incorrectly: bool | None = Field(
+        None,
+        alias="isMountedIncorrectly",
+        description=(
+            "Whether the sensor reports an incorrect mounting orientation; "
+            "null when the sensor cannot report orientation"
+        ),
+    )
 
 
 class ProtectChime(ProtectDevice):

@@ -88,6 +88,7 @@ _MODULE_DOMAINS: dict[str, str] = {
     "protect_cameras": "protect",
     "protect_devices": "protect",
     "protect_events": "protect",
+    "protect_external_arm": "protect",
     "protect_fobs": "protect",
     "protect_link_stations": "protect",
     "protect_nvr": "protect",

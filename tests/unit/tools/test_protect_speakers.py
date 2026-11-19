@@ -75,6 +75,7 @@ async def test_get_protect_speaker_success(mock_settings, mock_client):
 WRITES = [
     ("update_protect_speaker", {"speaker_id": "speaker-1", "name": "x"}),
     ("test_protect_speaker_sound", {"speaker_id": "speaker-1"}),
+    ("stop_protect_speaker_siren", {"speaker_id": "speaker-1"}),
 ]
 
 
@@ -193,3 +194,15 @@ async def test_test_sound_dry_run(mock_settings, mock_client):
 async def test_empty_speaker_id_rejected(mock_settings, mock_client):
     with pytest.raises(ValidationError):
         await get_protect_speaker("   ", mock_settings)
+
+
+@pytest.mark.asyncio
+async def test_stop_speaker_siren_success(mock_settings, mock_client):
+    mock_client.post = AsyncMock(return_value={})
+    with patch("src.tools.protect_speakers.ProtectClient", return_value=mock_client):
+        result = await protect_speakers.stop_protect_speaker_siren(
+            "speaker-1", mock_settings, confirm=True
+        )
+    mock_client.post.assert_awaited_once_with("/integration/v1/speakers/speaker-1/stop-siren")
+    assert result["success"] is True
+    assert result["speaker_id"] == "speaker-1"

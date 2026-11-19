@@ -25,3 +25,7 @@ Authoritative Site Manager v1.0.0 OpenAPI retrieved 2026-11-08: https://develope
 - Matter, Thread and Time Machine: recheck https://developer.ui.com/network/v11.0.97/openapi.json (Network 11.0.97 pinned in `scripts/scraped-api-spec-v11.0.97.json`) and version-local Integrations docs on each spec-drift cycle (`DEVELOPMENT_PLAN.md:125-140,619-623`); obtain sanitized UI evidence on approved hardware if public spec remains silent. Reopen only on a published resource or reproducible scoped endpoint with schema, auth and version evidence. Do not fabricate resources or infer support from unrecognized fields.
 
 No controller, capture, flow-export, routing, UPS or migration action is authorized by this record. Mock tests establish only local request/response handling. Independent review and live validation are separate gates.
+
+## 2026-11-16 close of ranked 2026-11-15 items
+
+Source matrix: `/home/elvis/inbox/unifi-competitor-gap-matrix-2026-11-15.md`. Code in this checkout now covers the four "worth closing" items as mock-tested tools against the published Protect 7.4.96 OpenAPI and the rival-documented Network 11 v2 stats paths. Nothing here was live-verified on a controller. SD-WAN authoring, OON, standalone-target detection, capture, UPS, Matter/Thread/Topology, and the remaining partials are unchanged.

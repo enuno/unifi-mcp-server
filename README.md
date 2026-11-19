@@ -40,7 +40,7 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 
 ## Features
 
-343 tools in local mode, from 60 modules.
+354 tools in local mode, from 61 modules.
 
 - **Network:** clients (search, block, reconnect), networks and VLANs, WiFi SSIDs, DHCP reservations, DNS, WAN, guest vouchers, QoS profiles and traffic routes, DPI statistics, traffic flows.
 - **Devices:** inventory, adoption, restart, locate, upgrade, radio settings, port profiles and per-port overrides, switching and stacks, topology export (JSON, GraphML, DOT), diagnostics, WiFi channel planning.

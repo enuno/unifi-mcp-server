@@ -1,5 +1,6 @@
 """Network diagnostics MCP tools."""
 
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -562,3 +563,128 @@ async def start_spectrum_scan(
         )
         logger.info(sanitize_log_message(f"Spectrum scan started on {ap_mac}"))
         return {"success": True, "ap_mac": ap_mac, "status": "scan started"}
+
+
+_STATS_PERIODS = frozenset({"HOUR", "DAY", "WEEK", "MONTH"})
+_STATS_IDENTIFIER_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{0,63}")
+_DEFAULT_STATS_VALUES = ("rxBytes", "txBytes")
+
+
+def _normalize_statistics_source(response: Any) -> str:
+    if isinstance(response, str):
+        source = response.strip().upper()
+    elif isinstance(response, dict):
+        raw = response.get("source", response.get("data", response))
+        if isinstance(raw, dict):
+            raw = raw.get("source", raw)
+        source = str(raw).strip().upper()
+    else:
+        source = str(response).strip().upper()
+    if source not in {"LEGACY", "MODERN"}:
+        raise ValidationError(f"Unexpected statistics source {source!r}; expected LEGACY or MODERN")
+    return source
+
+
+@read_tool
+async def get_statistics_source(settings: Settings) -> dict[str, Any]:
+    """Read the controller-wide Network 11 statistics engine source.
+
+    GET /proxy/network/v2/api/stats/source. Network 10 reports LEGACY;
+    Network 11 reports MODERN. This path is not site-scoped: a
+    ``/site/{id}/stats/source`` request 404s. Local gateway only.
+
+    Args:
+        settings: Application settings
+    """
+    logger = get_logger(__name__, settings.log_level)
+    path = settings.get_v2_global_api_path("stats/source")
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+        response = await client.get(path)
+    source = _normalize_statistics_source(response)
+    logger.info(sanitize_log_message(f"Statistics source is {source}"))
+    return {"source": source}
+
+
+@read_tool
+async def get_recent_statistics_series(
+    site_id: str,
+    settings: Settings,
+    schema: str = "wanBySite",
+    period: str = "HOUR",
+    end_ms: int | None = None,
+    values: list[str] | str | None = None,
+) -> dict[str, Any]:
+    """Read recent Network 11 statistics series (MODERN engine).
+
+    GET /proxy/network/v2/api/stats/recent/series. ``site_id`` is the
+    classic site ``_id`` used in the filter, not a path segment. HOUR and
+    DAY return 5-minute buckets, WEEK hourly, MONTH 8-hour buckets.
+    Byte totals are additive per bucket. Local gateway only. Mock-tested;
+    rival-documented against Network 11, not live-verified here.
+
+    Args:
+        site_id: Classic site identifier for the ``siteId.eq`` filter
+        settings: Application settings
+        schema: Statistics schema name (default wanBySite)
+        period: HOUR, DAY, WEEK, or MONTH
+        end_ms: End timestamp in milliseconds; defaults to now
+        values: Attribute names to project (default rxBytes, txBytes)
+    """
+    site_id = validate_site_id(site_id)
+    period = period.strip().upper()
+    if period not in _STATS_PERIODS:
+        raise ValidationError(f"period must be one of {sorted(_STATS_PERIODS)}")
+    if not isinstance(schema, str) or not _STATS_IDENTIFIER_RE.fullmatch(schema):
+        raise ValidationError("schema must be an identifier such as wanBySite")
+    if end_ms is None:
+        end_ms = int(time.time() * 1000)
+    if type(end_ms) is not int or end_ms < 0:
+        raise ValidationError("end_ms must be a nonnegative integer millisecond timestamp")
+    if values is None:
+        projected = list(_DEFAULT_STATS_VALUES)
+    elif isinstance(values, str):
+        projected = [part.strip() for part in values.split(",") if part.strip()]
+    else:
+        projected = [str(part).strip() for part in values if str(part).strip()]
+    if not projected:
+        raise ValidationError("values must not be empty")
+    if len(set(projected)) != len(projected):
+        raise ValidationError("values must contain unique identifiers")
+    if any(not _STATS_IDENTIFIER_RE.fullmatch(value) for value in projected):
+        raise ValidationError("each value must be an identifier such as rxBytes")
+
+    logger = get_logger(__name__, settings.log_level)
+    path = settings.get_v2_global_api_path("stats/recent/series")
+    params = {
+        "schema": schema,
+        "period": period,
+        "end": str(end_ms),
+        "filter": f"siteId.eq('{site_id}')",
+        "projection": f"values({','.join(projected)})",
+    }
+    async with UniFiClient(settings) as client:
+        await client.authenticate()
+        response = await client.get(path, params=params)
+
+    if isinstance(response, list):
+        series = response
+    elif isinstance(response, dict):
+        data = response.get("data", response)
+        series = data if isinstance(data, list) else [data]
+    else:
+        series = []
+
+    logger.info(
+        sanitize_log_message(
+            f"Retrieved {len(series)} statistics series for schema {schema} period {period}"
+        )
+    )
+    return {
+        "schema": schema,
+        "period": period,
+        "end_ms": end_ms,
+        "site_id": site_id,
+        "values": projected,
+        "data": series,
+    }

@@ -9,7 +9,7 @@ Protect tools talk to the Protect integration API on the local console. Read thi
 
 ## Module map
 
-15 modules, 71 functions, 71 registered tool names.
+16 modules, 80 functions, 80 registered tool names.
 
 | Module | Tools | Examples |
 |--------|-------|----------|
@@ -18,14 +18,15 @@ Protect tools talk to the Protect integration API on the local console. Read thi
 | `src/tools/protect_bridges.py` | 3 | `get_protect_bridge`, `update_protect_bridge` |
 | `src/tools/protect_cameras.py` | 2 | `list_protect_cameras`, `get_protect_camera` |
 | `src/tools/protect_devices.py` | 13 | `list_protect_devices`, `update_protect_light`, `get_protect_chime` |
-| `src/tools/protect_events.py` | 6 | `list_protect_events`, `send_protect_alarm_webhook` |
+| `src/tools/protect_events.py` | 7 | `list_protect_events`, `list_protect_model_updates`, `send_protect_alarm_webhook` |
+| `src/tools/protect_external_arm.py` | 7 | `list_protect_external_arm_profiles`, `arm_protect_external_arm_profile` |
 | `src/tools/protect_fobs.py` | 3 | `update_protect_fob` |
 | `src/tools/protect_link_stations.py` | 3 | `update_protect_link_station` |
 | `src/tools/protect_nvr.py` | 2 | `list_protect_nvrs`, `get_protect_nvr` |
 | `src/tools/protect_pos.py` | 1 | `ingest_pos_transaction` |
 | `src/tools/protect_relays.py` | 4 | `update_protect_relay`, `activate_protect_relay_output` |
 | `src/tools/protect_sirens.py` | 6 | `play_protect_siren`, `stop_protect_siren` |
-| `src/tools/protect_speakers.py` | 4 | `update_protect_speaker` |
+| `src/tools/protect_speakers.py` | 5 | `update_protect_speaker`, `stop_protect_speaker_siren` |
 | `src/tools/protect_users.py` | 4 | `list_protect_users`, `list_protect_ulp_users` |
 | `src/tools/protect_views.py` | 8 | `get_protect_meta_info`, `create_protect_live_view` |
 
@@ -95,9 +96,10 @@ Do not write audit code; the registry wrapper audits every mutating call. A tool
 
 ## Gotchas
 
-- The spec baseline is Protect v7.3.68 (`scripts/protect-api-spec-v7.3.68.json`). Check an endpoint there before you call it.
-- The Phase 5a write paths are tested against mocks only; nobody has verified them on hardware. Say so when you change one.
+- The spec baseline is Protect v7.4.96 (`scripts/protect-api-spec-v7.4.96.json`). Check an endpoint there before you call it. v7.3.68/v7.3.70 snapshots remain for diffs.
+- The Phase 5a write paths and the 7.4.96 external arm / speaker stop-siren writes are tested against mocks only; nobody has verified them on hardware. Say so when you change one.
 - `get_protect_arm_profile` calls a GET path that is not in the v7.3.68 spec, so it may return 404.
+- Read `nvr.featureFlags.useExternalAlarmManager` before choosing local `arm-profiles` versus `external/arm-profiles`.
 - `docs/UNIFI_API.md` still calls Protect v7 "planned" near its start, which contradicts its later Phase 5a section.
 
 ## Known defects (not fixed)

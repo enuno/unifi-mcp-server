@@ -111,3 +111,26 @@ class TestGetV2ApiPathIntegration:
         assert path.startswith("/proxy/network/v2/api/site/")
         parts = path.split("/")
         assert parts[-1] == "default"
+
+
+class TestGetV2GlobalApiPath:
+    @pytest.fixture
+    def local_settings(self, monkeypatch: pytest.MonkeyPatch) -> Settings:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "local")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+        return Settings()
+
+    def test_stats_source_path(self, local_settings: Settings) -> None:
+        assert (
+            local_settings.get_v2_global_api_path("stats/source")
+            == "/proxy/network/v2/api/stats/source"
+        )
+
+    def test_rejects_cloud(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "cloud-ea")
+        monkeypatch.delenv("UNIFI_LOCAL_HOST", raising=False)
+        settings = Settings()
+        with pytest.raises(NotImplementedError):
+            settings.get_v2_global_api_path("stats/source")

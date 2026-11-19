@@ -95,6 +95,8 @@ DESTRUCTIVE_TOOLS = frozenset(
         # Physical security posture.
         "disable_protect_alarm",
         "set_current_protect_arm_profile",
+        "arm_protect_external_arm_profile",
+        "disarm_protect_external_arm_profile",
         # Firewall policy: these decide which traffic is allowed, so a bad
         # change can open the network or lock the operator out. Admin only.
         "assign_network_to_zone",

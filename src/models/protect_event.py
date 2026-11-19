@@ -16,6 +16,16 @@ class ProtectDeviceUpdateMessage(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 
+class ProtectModelUpdateMessage(BaseModel):
+    """A model create/update/remove message from GET /v1/subscribe/updates."""
+
+    id: str | None = Field(None, description="Record identifier")
+    type: str | None = Field(None, description="Message type (add, update, or remove)")
+    model_key: str | None = Field(None, alias="modelKey", description="Protect model key")
+
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
 class ProtectEventMessage(BaseModel):
     """A Protect event message."""
 

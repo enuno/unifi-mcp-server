@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Protect 7.4.96 coverage for the ranked competitor gaps.** External Alarm Manager profiles (`list`/`get`/`create`/`update`/`delete`/`arm`/`disarm` on `/v1/external/arm-profiles`), `list_protect_model_updates` (`GET /v1/subscribe/updates` with `model_keys`), and `stop_protect_speaker_siren`. NVR reads now surface `featureFlags.useExternalAlarmManager` and `armMode`; sensors surface `isMountedIncorrectly`; cameras surface `videoMode` including `antiFlicker`. PIN-bearing keys are stripped from external-profile responses. Mock-tested against the published 7.4.96 spec; write paths and subscribe payloads are not live-verified.
+- **Network 11 MODERN statistics engine reads.** `get_statistics_source` and `get_recent_statistics_series` call the controller-wide v2 paths `/proxy/network/v2/api/stats/source` and `/stats/recent/series` (not the Integration API). Mock-tested; not live-verified on a Network 11 controller.
+
 ### Fixed
 
 - **`npx skills` (and similar package-skill installers) now see every skill, not just one.** Those installers read only a `SKILL.md` at the repository root; with one there, they installed just that file and silently ignored every folder under `skills/`, which held the rest of the operator and developer skills. The root-level overview moved to `skills/unifi-mcp-setup/SKILL.md`, alongside the others, so a package-skill install (or a manual `cp -r skills/<name>`) now reaches all of them. (#310)

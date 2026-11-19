@@ -110,6 +110,8 @@ Smart Queue, but a new route must be created in the console UI.
 | `list_dpi_applications` | Full list of recognized DPI applications |
 | `list_dpi_categories` | DPI application categories |
 | `list_countries` | Country codes for geo-based filtering |
+| `get_statistics_source` | Network 11 stats engine source (`LEGACY` or `MODERN`) |
+| `get_recent_statistics_series` | MODERN-engine recent series (`wanBySite`, HOUR/DAY/WEEK/MONTH) |
 
 ## RADIUS & Guest Portal
 

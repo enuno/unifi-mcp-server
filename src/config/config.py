@@ -1023,6 +1023,30 @@ class Settings(BaseSettings):
             )
         return f"/proxy/network/v2/api/site/{site_id}"
 
+    def get_v2_global_api_path(self, endpoint: str) -> str:
+        """Get a controller-wide v2 API path (not site-scoped).
+
+        Network 11 statistics live here (``stats/source``,
+        ``stats/recent/series``). These routes 404 if they are nested
+        under ``/site/{site_id}``.
+
+        Args:
+            endpoint: Path after ``/proxy/network/v2/api/``
+
+        Returns:
+            Complete endpoint path: /proxy/network/v2/api/{endpoint}
+
+        Raises:
+            NotImplementedError: If api_type is not LOCAL
+        """
+        if self.api_type != APIType.LOCAL:
+            raise NotImplementedError(
+                "v2 API is only available with local gateway access. "
+                "Set UNIFI_API_TYPE=local and configure UNIFI_LOCAL_HOST."
+            )
+        endpoint = endpoint.lstrip("/")
+        return f"/proxy/network/v2/api/{endpoint}"
+
     def get_headers(self) -> dict[str, str]:
         """Get HTTP headers for API requests.
 

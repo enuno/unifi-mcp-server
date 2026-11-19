@@ -2845,3 +2845,120 @@ class TestGetZonePolicyMatrix:
 
         with pytest.raises(NotImplementedError):
             await get_zone_policy_matrix("default", cloud_settings)
+
+
+class TestPortParameterSchema:
+    """Port parameters must reach MCP clients as a plain string type.
+
+    ``str | None`` renders as ``anyOf: [string, null]``. Some MCP clients
+    drop the ``anyOf`` and send ``53`` as a JSON number, which the string
+    field then rejects. A plain ``str`` with an empty default keeps the
+    type visible, and an empty string still means "not set".
+    """
+
+    @pytest.fixture
+    def local_settings(self, monkeypatch: pytest.MonkeyPatch) -> Settings:
+        monkeypatch.setenv("UNIFI_API_KEY", "test-api-key")
+        monkeypatch.setenv("UNIFI_API_TYPE", "local")
+        monkeypatch.setenv("UNIFI_LOCAL_HOST", "192.168.2.1")
+        return Settings()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("tool_name", ["create_firewall_policy", "update_firewall_policy"])
+    @pytest.mark.parametrize("param", ["source_port", "destination_port"])
+    async def test_port_schema_is_plain_string(
+        self, local_settings: Settings, tool_name: str, param: str
+    ) -> None:
+        from fastmcp import Client, FastMCP
+
+        import src.tools.firewall_policies as module
+        from src.tool_registry import register_module_tools
+
+        mcp = FastMCP("port-schema-test")
+        register_module_tools(mcp, module, local_settings, include=[tool_name])
+        async with Client(mcp) as client:
+            tools = {t.name: t for t in await client.list_tools()}
+
+        prop = tools[tool_name].inputSchema["properties"][param]
+        assert prop.get("type") == "string"
+        assert "anyOf" not in prop
+        assert prop.get("default") == ""
+
+    @pytest.mark.asyncio
+    async def test_empty_port_means_not_set(self, local_settings: Settings) -> None:
+        from src.tools.firewall_policies import _zone_cache, create_firewall_policy
+
+        _zone_cache["default"] = {"z1": "z1", "z2": "z2"}
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.post.return_value = {
+                "_id": "p1",
+                "name": "Any",
+                "action": "ALLOW",
+                "enabled": True,
+                "protocol": "all",
+                "schedule": {"mode": "ALWAYS"},
+                "source": {"zone_id": "z1", "matching_target": "ANY"},
+                "destination": {"zone_id": "z2", "matching_target": "ANY"},
+            }
+            try:
+                await create_firewall_policy(
+                    name="Any",
+                    action="ALLOW",
+                    site_id="default",
+                    settings=local_settings,
+                    source_zone_id="z1",
+                    destination_zone_id="z2",
+                    source_port="",
+                    destination_port="",
+                    confirm=True,
+                )
+            finally:
+                _zone_cache.pop("default", None)
+
+            body = mock_client.post.call_args[1]["json_data"]
+            assert body["destination"]["port_matching_type"] == "ANY"
+            assert "port" not in body["destination"]
+            assert body["source"]["port_matching_type"] == "ANY"
+            assert "port" not in body["source"]
+
+    @pytest.mark.asyncio
+    async def test_port_with_whitespace_is_trimmed(self, local_settings: Settings) -> None:
+        from src.tools.firewall_policies import _zone_cache, create_firewall_policy
+
+        _zone_cache["default"] = {"z1": "z1", "z2": "z2"}
+        with patch("src.tools.firewall_policies.UniFiClient") as MockClient:
+            mock_client = AsyncMock()
+            mock_client._site_uuid_to_name = {}
+            MockClient.return_value.__aenter__.return_value = mock_client
+            mock_client.is_authenticated = True
+            mock_client.post.return_value = {
+                "_id": "p1",
+                "name": "DNS",
+                "action": "ALLOW",
+                "enabled": True,
+                "protocol": "udp",
+                "schedule": {"mode": "ALWAYS"},
+                "source": {"zone_id": "z1", "matching_target": "ANY"},
+                "destination": {"zone_id": "z2", "matching_target": "ANY"},
+            }
+            try:
+                await create_firewall_policy(
+                    name="DNS",
+                    action="ALLOW",
+                    site_id="default",
+                    settings=local_settings,
+                    source_zone_id="z1",
+                    destination_zone_id="z2",
+                    protocol="udp",
+                    destination_port=" 53 ",
+                    confirm=True,
+                )
+            finally:
+                _zone_cache.pop("default", None)
+
+            body = mock_client.post.call_args[1]["json_data"]
+            assert body["destination"]["port"] == "53"

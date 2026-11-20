@@ -139,6 +139,20 @@ def _build_match_target(
     return target
 
 
+def _normalize_port(port: str | None) -> str | None:
+    """Turn a port tool argument into the value the API expects.
+
+    The port parameters are typed as a plain ``str`` with an empty default
+    (not ``str | None``) so the JSON schema shows ``type: string`` without an
+    ``anyOf``; some MCP clients drop the ``anyOf`` and then send the port as a
+    number. An empty or blank string therefore means "not set".
+    """
+    if port is None:
+        return None
+    stripped = port.strip()
+    return stripped or None
+
+
 def _collect_port_overrides(
     *,
     port: str | None,
@@ -516,8 +530,8 @@ async def create_firewall_policy(
     destination_zone_id: str | None = None,
     source_matching_target: str = "ANY",
     destination_matching_target: str = "ANY",
-    source_port: str | None = None,
-    destination_port: str | None = None,
+    source_port: str = "",
+    destination_port: str = "",
     source_port_group_id: str | None = None,
     destination_port_group_id: str | None = None,
     source_port_matching_type: str | None = None,
@@ -622,6 +636,8 @@ async def create_firewall_policy(
     """
     site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
+    source_port_value = _normalize_port(source_port)
+    destination_port_value = _normalize_port(destination_port)
 
     valid_actions = ["ALLOW", "BLOCK"]
     action_upper = action.upper()
@@ -691,7 +707,7 @@ async def create_firewall_policy(
             source_config = _build_match_target(
                 zone_id=resolved_source_zone,
                 matching_target=source_matching_target,
-                port=source_port,
+                port=source_port_value,
                 port_group_id=source_port_group_id,
                 port_matching_type=source_port_matching_type,
                 match_opposite_ports=source_match_opposite_ports,
@@ -703,7 +719,7 @@ async def create_firewall_policy(
             destination_config = _build_match_target(
                 zone_id=resolved_destination_zone,
                 matching_target=destination_matching_target,
-                port=destination_port,
+                port=destination_port_value,
                 port_group_id=destination_port_group_id,
                 port_matching_type=destination_port_matching_type,
                 match_opposite_ports=destination_match_opposite_ports,
@@ -819,8 +835,8 @@ async def update_firewall_policy(
     description: str | None = None,
     source_zone_id: str | None = None,
     destination_zone_id: str | None = None,
-    source_port: str | None = None,
-    destination_port: str | None = None,
+    source_port: str = "",
+    destination_port: str = "",
     source_port_group_id: str | None = None,
     destination_port_group_id: str | None = None,
     source_port_matching_type: str | None = None,
@@ -920,6 +936,8 @@ async def update_firewall_policy(
     if settings is None:
         raise ValueError("settings is required")
     _ensure_local_api(settings)
+    source_port_value = _normalize_port(source_port)
+    destination_port_value = _normalize_port(destination_port)
 
     confirm_bool = coerce_bool(confirm)
     dry_run_bool = coerce_bool(dry_run)
@@ -1000,13 +1018,13 @@ async def update_firewall_policy(
     # Validate / collect port overrides; these merge into the source and
     # destination sub-dicts inside the policy, not as top-level fields.
     source_port_overrides: dict[str, Any] | None = _collect_port_overrides(
-        port=source_port,
+        port=source_port_value,
         port_group_id=source_port_group_id,
         port_matching_type=source_port_matching_type,
         match_opposite_ports=source_match_opposite_ports,
     )
     destination_port_overrides: dict[str, Any] | None = _collect_port_overrides(
-        port=destination_port,
+        port=destination_port_value,
         port_group_id=destination_port_group_id,
         port_matching_type=destination_port_matching_type,
         match_opposite_ports=destination_match_opposite_ports,

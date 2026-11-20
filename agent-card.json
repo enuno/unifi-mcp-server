@@ -4441,16 +4441,9 @@
             "description": "List of destination network IDs."
           },
           "destination_port": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Destination port \u2014 same format as source_port.\nImplies ``destination_port_matching_type=SPECIFIC``."
+            "default": "",
+            "description": "Destination port \u2014 same format as source_port.\nImplies ``destination_port_matching_type=SPECIFIC``.",
+            "type": "string"
           },
           "destination_port_group_id": {
             "anyOf": [
@@ -4646,16 +4639,9 @@
             "description": "List of source network (VLAN) internal IDs.\nAuto-sets ``source_matching_target=NETWORK``."
           },
           "source_port": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Source port \u2014 single port \"53\" or range \"9000-9010\".\nImplies ``source_port_matching_type=SPECIFIC``."
+            "default": "",
+            "description": "Source port \u2014 single port \"53\" or range \"9000-9010\".\nImplies ``source_port_matching_type=SPECIFIC``.",
+            "type": "string"
           },
           "source_port_group_id": {
             "anyOf": [
@@ -24073,16 +24059,9 @@
             "description": "Replace destination network ID list"
           },
           "destination_port": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Destination port \u2014 same format as source_port."
+            "default": "",
+            "description": "Destination port \u2014 same format as source_port.",
+            "type": "string"
           },
           "destination_port_group_id": {
             "anyOf": [
@@ -24319,16 +24298,9 @@
             "description": "Replace source network ID list"
           },
           "source_port": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Source port \u2014 single port \"53\" or range \"9000-9010\".\nAuto-sets ``source_port_matching_type=SPECIFIC``."
+            "default": "",
+            "description": "Source port \u2014 single port \"53\" or range \"9000-9010\".\nAuto-sets ``source_port_matching_type=SPECIFIC``.",
+            "type": "string"
           },
           "source_port_group_id": {
             "anyOf": [

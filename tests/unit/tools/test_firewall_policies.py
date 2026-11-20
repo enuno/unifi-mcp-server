@@ -2871,8 +2871,8 @@ class TestPortParameterSchema:
     ) -> None:
         from fastmcp import Client, FastMCP
 
-        import src.tools.firewall_policies as module
         from src.tool_registry import register_module_tools
+        from src.tools import firewall_policies as module
 
         mcp = FastMCP("port-schema-test")
         register_module_tools(mcp, module, local_settings, include=[tool_name])

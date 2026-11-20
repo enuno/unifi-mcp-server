@@ -2884,6 +2884,13 @@ class TestPortParameterSchema:
         assert "anyOf" not in prop
         assert prop.get("default") == ""
 
+    def test_normalize_port_none_and_value(self) -> None:
+        from src.tools.firewall_policies import _normalize_port
+
+        assert _normalize_port(None) is None
+        assert _normalize_port("53") == "53"
+        assert _normalize_port("") is None
+
     @pytest.mark.asyncio
     async def test_empty_port_means_not_set(self, local_settings: Settings) -> None:
         from src.tools.firewall_policies import _zone_cache, create_firewall_policy

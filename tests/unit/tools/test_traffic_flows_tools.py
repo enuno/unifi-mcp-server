@@ -18,7 +18,7 @@ import pytest
 
 from src.config import Settings
 from src.tools import traffic_flows as tf
-from src.utils.exceptions import ResourceNotFoundError, ValidationError
+from src.utils.exceptions import APIError, ResourceNotFoundError, ValidationError
 
 
 @pytest.fixture
@@ -1121,3 +1121,45 @@ class TestGetTrafficFlowDetailsEnveloped:
             MockClient.return_value = client
             result = await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
         assert result["id"] == "flow-2"
+
+
+class TestGetTrafficFlowDetailsSafety:
+    """The flow id must not be able to redirect the request."""
+
+    @pytest.mark.asyncio
+    async def test_a_traversing_flow_id_is_refused(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            MockClient.return_value = client
+            with pytest.raises(ValidationError):
+                await tf.get_traffic_flow_details(
+                    "default", "../../other-site/known-flow", mock_settings
+                )
+        client.get.assert_not_awaited()
+        client.post.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_query_flow_id_is_refused(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            MockClient.return_value = client
+            with pytest.raises(ValidationError):
+                await tf.get_traffic_flow_details("default", "flow-1?x=1", mock_settings)
+        client.get.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_server_error_propagates_instead_of_looking_absent(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """A 500 is not "no such flow" - it must not fall back to the scan."""
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            client.get = AsyncMock(side_effect=APIError("boom"))
+            MockClient.return_value = client
+            with pytest.raises(APIError):
+                await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
+        client.post.assert_not_awaited()

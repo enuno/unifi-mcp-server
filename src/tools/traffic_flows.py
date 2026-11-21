@@ -64,6 +64,7 @@ from ..utils import (
     validate_site_id,
 )
 from ..utils.tool_kind import read_tool, write_tool
+from ..utils.validators import validate_path_segment
 
 logger = get_logger(__name__)
 
@@ -128,7 +129,10 @@ async def _fetch_raw_flow_by_id(
     endpoint = f"{settings.get_v2_api_path(normalized_site_id)}/traffic-flows/{flow_id}"
     try:
         response = await client.get(endpoint)
-    except (APIError, ResourceNotFoundError):
+    except ResourceNotFoundError:
+        # Only the controller's 404 means "no such flow". ResourceNotFoundError
+        # subclasses APIError, so catching APIError here would swallow 5xx,
+        # 429 and auth failures and report them as a missing flow.
         return None
     if not isinstance(response, dict):
         return None
@@ -495,6 +499,10 @@ async def get_traffic_flow_details(
     Raises :class:`ResourceNotFoundError` if the controller has no such flow.
     """
     site_id = validate_site_id(site_id)
+    # The id becomes a path segment in the lookup URL, so it is validated as
+    # one: a value containing "/" or ".." would otherwise redirect the request
+    # to another endpoint on the same controller.
+    flow_id = validate_path_segment(flow_id, "flow_id")
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:

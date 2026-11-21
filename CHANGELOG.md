@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Protect external arm profile list pagination and ID handling (coverage item 28).** The pinned Protect 7.4.96 specification defines `/v1/external/arm-profiles` with **no query parameters** and a bare-array response, so the `limit`/`offset` forwarded as query parameters were never honoured and the tool always returned the entire collection. It now requests the whole collection and applies the window locally, reporting `totalCount` for the collection size and `count` for the page size. External-profile IDs are additionally validated as a single path segment before interpolation, so an ID containing `/`, `..`, a space or a query character is rejected instead of retargeting the request. Both defects were raised by the Codex review of #316; #319 fixed the third. Regression-tested at tool and client level, including proof that the new tests fail against the previous implementation.
 - **Clear-text logging of private identifiers in the API client**: `UniFiClient`
   no longer interpolates endpoints, request URLs or site identifiers into its
   diagnostic log messages. This extends the convention already documented in

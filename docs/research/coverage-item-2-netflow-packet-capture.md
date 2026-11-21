@@ -214,10 +214,74 @@ Verified: every route exists and is reachable with API-key auth; the required
 start fields; that a lower duration bound is enforced; the status response
 shape; and the stop/download error codes when nothing is running.
 
-**Not verified:** a successful capture lifecycle. No capture was started on
-the production gateway, so success-path response bodies, the artifact format,
-retention, and the `/txt` rendering are unconfirmed — `/txt` answered `406`
-under every `Accept` header tried while no capture existed.
+### Live capture run — the full lifecycle, executed
+
+A complete capture was run on the local console (Network application
+`10.6.111`, gateway `udm` / `UDMA69B`), against the **Home Lab network**
+(VLAN 3) with a 30-second duration.
+
+| Step | Call | Observed |
+|---|---|---|
+| 1 | `POST …/pcap-start` | `200`, empty body `{}` |
+| 2 | `GET …/pcap-status/{mac}` | `"CAPTURING"` at t+10/20/30/40s |
+| 3 | `GET …/pcap-status/{mac}` | `"READY_TO_DOWNLOAD"` at t+50/60/70s |
+| 4 | `POST …/pcap-stop/{mac}` | `400 api.err.NotCapturingDevice` — **correct**: the capture had already finished on its own |
+| 5 | `GET …/pcap-get/{mac}` | `200`, `application/gzip`, 626,941 bytes |
+
+So the status enum is `NOT_FOUND` → `CAPTURING` → `READY_TO_DOWNLOAD`, and
+`pcap-stop` on a finished capture is refused with `NotCapturingDevice`.
+
+#### The artefact is a gzip-compressed tar, not a bare pcap
+
+The downloaded bytes begin `1f 8b 08` — gzip — and untar them to a single
+member `br3.pcap` (1,362,337 bytes). The inner file is a valid pcap:
+
+- magic `d4c3b2a1`, **pcap version 2.4**, link type 1 (Ethernet), snaplen 128
+- **12,916 packets**, parsed to the exact end of the file (no trailing bytes)
+- independently cross-checked with `tcpdump -r`, which reports the same
+  link-type and packet count
+
+The tool's returned SHA-256 matches a recomputation over the file on disk, and
+the file is written mode `0600`.
+
+#### The `/txt` rendering is content-negotiated — a real defect this run found
+
+`pcap-get/{mac}/txt` answered `406 Not Acceptable` on the first attempt. Probing
+the route with each `Accept` header separately isolated the cause:
+
+| `Accept` | Status |
+|---|---|
+| `text/plain` | **200**, `text/plain;charset=UTF-8`, 1,976,425 bytes |
+| `*/*` | 406 |
+| `application/json` | 406 |
+| `text/csv` | 406 |
+| `application/x-tar` | 406 |
+| `application/gzip` | 406 |
+| `application/octet-stream` | 406 |
+
+The route serves the console's own **tcpdump-style text dump**, framed as
+`===== BEGIN br3.pcap =====` … `===== END br3.pcap =====`, and it refuses every
+media type except `text/plain`. The tool as first implemented sent no `Accept`
+header at all, so httpx defaulted to `*/*` and the text variant could never
+have succeeded. `download_bytes` now takes an optional `accept`, and the tool
+sends `text/plain` for the text variant and nothing for the binary route.
+
+Re-running the fixed tool against the live console returned 1,976,424 bytes
+with a SHA-256, written mode `0600`. The text dump contains **12,916**
+timestamped packet lines — the same count as the binary capture — and its first
+and last packet timestamps match the binary file's.
+
+The 406 seen earlier was therefore **not** evidence that `/txt` was
+unavailable; it was evidence of a missing request header. That distinction is
+the whole result of this run.
+
+#### Still not verified
+
+- **Retention**: how long the console keeps the finished capture, and whether
+  the artefact is removed after the download, was not measured.
+- The capture was taken on one network of one site. Other networks, `WIRELESS`
+  traffic type, and the AP-radio variant (coverage item 24) remain unexercised.
+
 
 ## 3. Official API coverage check
 
@@ -236,14 +300,17 @@ rejected, and the legacy `get`/`set` pair above is used instead.
 |---|---|---|
 | NetFlow read | Implemented | Live-verified |
 | NetFlow write | Implemented, read-modify-write | Live-verified incl. merge + validation |
-| Capture start/status/stop | Implemented | Routes + required fields live-confirmed; success path not |
-| Capture download | Implemented, confined `0600` write | Route live-confirmed; success path and `/txt` not |
+| Capture start/status/stop | Implemented | Full lifecycle live-run: `CAPTURING` → `READY_TO_DOWNLOAD` |
+| Capture download | Implemented, confined `0600` write | Live: gzip tar holding a valid 12,916-packet pcap; SHA-256 verified |
+| Capture `/txt` rendering | Implemented, content-negotiated | Live: needs `Accept: text/plain`; 12,916 packet lines |
 | Cloud Connector | Explicitly unsupported | No route found |
 | AP-radio capture | Deferred to Item 24 | Shared route found; AP semantics out of scope |
 
-Item 2 should be recorded as **implemented — NetFlow live-verified, capture
-lifecycle needs live verification**. It should not be promoted to fully
-verified coverage.
+Item 2 should be recorded as **covered**, with the retention behaviour and the
+AP-radio variant noted as out of scope. The capture lifecycle, the artefact
+format and the `/txt` rendering have all now been exercised against live
+hardware; the `/txt` route additionally yielded a real defect, which is
+fixed and regression-tested.
 
 ## Sources
 
@@ -268,4 +335,8 @@ verified coverage.
   - `83447.7aa1a0c38a350a707bc4.js` — `44bfc31177996c99688114fb65e3f1a47a954f17fe00e54f4dc45b56cce9f2e3`
 - NetFlow configuration writes were executed and reverted as far as the API
   permits; the irreducible residue is disclosed above.
-- No packet capture was started, stopped, or downloaded on live hardware.
+- One packet capture **was** started, and its artefact downloaded, during the
+  live run described in section 2. It was a 30-second capture of the Home Lab
+  network (VLAN 3) on the local console. The capture files live in a scratch
+  directory outside the repository and are not committed; they contain private
+  traffic and should be deleted by the operator.

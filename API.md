@@ -103,7 +103,7 @@ Configure the MCP server using environment variables:
 | `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
 | `UNIFI_MIXED_MODE` | Expose the cloud **and** local tool modules together, for a fleet whose registry holds both cloud controllers and local gateways. Without it the exposed modules follow the single `UNIFI_API_TYPE`, so local-only tools are missing on a cloud-typed server even when a local gateway is registered. Needs no `UNIFI_LOCAL_HOST`: the gateways come from the registry. See [Connecting to the cloud API and local gateways together](#connecting-to-the-cloud-api-and-local-gateways-together) | No | `false` |
 | `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
-| `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
+| `UNIFI_LOCAL_PORT` | Local gateway port. `443` for a UniFi OS appliance (Dream Machine, Cloud Key); `11443` for UniFi OS Server 5.1.15+; `8443` for a legacy self-hosted Network Application Server — see [Which console port to point at](#which-console-port-to-point-at) for the caveats | No | `443` |
 | `UNIFI_LOCAL_VERIFY_SSL` | Verify the local gateway's TLS certificate. Setting `false` logs a startup warning; prefer `UNIFI_LOCAL_CA_FILE` for self-signed certs | No | `true` |
 | `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) to verify the local gateway with, in place of the default roots. Checked at startup. Can be the console's own self-signed certificate | No | - |
 | `UNIFI_LOCAL_TLS_SERVER_NAME` | Name to check the local gateway's certificate against, and send as SNI, when it is not `UNIFI_LOCAL_HOST`. UniFi OS's own certificate names `unifi.local`, not the console's address | No | - |
@@ -220,6 +220,68 @@ UNIFI_API_KEY=<key>
 The API key lives in the environment. Tool modules follow `UNIFI_API_TYPE`:
 `local` registers the cloud **and** local modules, a cloud type registers only
 the cloud ones.
+
+#### Which console port to point at
+
+`UNIFI_LOCAL_HOST` and `UNIFI_LOCAL_PORT` must address the console's **API**,
+and the port depends on what is running the console. `base_url` is always
+`https://{host}:{port}` — this server never speaks plain HTTP to a controller.
+
+| Deployment | Console API | `UNIFI_LOCAL_PORT` |
+|---|---|---|
+| UniFi OS appliance (Dream Machine, Cloud Key) | `https://<console>/` | `443` (the default) |
+| UniFi OS Server 5.1.15 or later (Linux) | `https://<host>:11443/` | `11443` |
+| UniFi OS Server before 5.1.15 | `https://<host>:8443/` | `8443` |
+| Legacy self-hosted Network Application Server | `https://<host>:8443/` | `8443` — **caveat below** |
+
+**Caveat on the legacy row.** The port is the Network Application Server's
+real console port, but this server's request paths target UniFi OS:
+`/proxy/network/...`, the v2 routes and the Integration API, all built by
+`Settings.get_integration_path()` and `UniFiClient._translate_endpoint()`.
+Interoperability with a classic standalone server is **unverified** — the
+`X-API-KEY` authentication and those path families were designed against UniFi
+OS. A 401/403 or a TLS failure against a classic server does not establish
+that an endpoint is absent; keep capability unknown and see
+`docs/NETWORK_11_COMPATIBILITY.md`.
+
+Ports that are **not** the API, and will not work if you point at them:
+
+- **8444** — the captive/secure portal. Ubiquiti's self-hosting guide states
+  that captive portals are served on `8444`, changed from `8843` on the Network
+  Server.
+- **11084** — an internal port. UniFi OS Server 5.1.15 restricted it to
+  loopback access on Linux, so it does not answer from another host at all.
+- **8080** — device inform ("Device and application communication"), not the
+  console API.
+- **8843** — hotspot portal redirection (HTTPS) on the Network Server.
+
+Two related notes:
+
+- **8443 was removed as an external port by UniFi OS Server 5.1.15** ("Removed
+  unused external port 8443"), which is why a current UniFi OS Server needs
+  `11443`. Ubiquiti's Required Ports Reference still lists `8443` as
+  "Application GUI/API (on UniFi Console)", because that table covers UniFi
+  deployments generally, including the legacy Network Application Server and
+  UniFi OS appliances.
+- **Port 28082** is separate and not needed for this server: it carries
+  device packet capture and support-file downloads, so the *devices* must
+  reach it, not the MCP server.
+
+**TLS to a UniFi OS console needs two settings, not one.** The console
+presents its own certificate, which names `unifi.local` rather than the
+console's address. `UNIFI_LOCAL_CA_FILE` establishes **trust** (the console's
+CA); `UNIFI_LOCAL_TLS_SERVER_NAME` sets the **name that is checked** (and
+sent as SNI). They are not alternatives — `src/api/tls.py` keeps certificate
+verification and name verification both on — so connecting to a self-signed
+console by IP needs **both**:
+
+```env
+UNIFI_LOCAL_CA_FILE=/path/to/unifi-console-ca.pem
+UNIFI_LOCAL_TLS_SERVER_NAME=unifi.local
+```
+
+Setting only the name does not establish trust, and setting only the CA file
+leaves the hostname mismatch in place. See `UNIFI_LOCAL_VERIFY_SSL` above.
 
 ### 2. Several controllers, from Postgres (fleet mode)
 
@@ -2884,11 +2946,19 @@ byte size and SHA-256 rather than packet contents.
 - `dry_run` (boolean, optional)
 
 > **Verification status.** NetFlow read, write, merge behaviour and validation
-> were exercised live. The capture routes were confirmed live only in their
-> error paths — unknown device, no running capture, no capture file — because
-> starting a real capture on a production gateway was out of scope. A
-> successful capture lifecycle, and the `/txt` rendering in particular, are
-> **not** live-verified; `/txt` answered `406` with no capture present.
+> were exercised live. The complete capture lifecycle was then run live on a
+> local console (Network application `10.6.111`, gateway `udm`): start →
+> `CAPTURING` → `READY_TO_DOWNLOAD` → download, over a 30-second capture of
+> the Home Lab network. The downloaded artefact is a **gzip-compressed tar
+> archive** holding a `br3.pcap` file, which parses as pcap v2.4 / Ethernet
+> with 12,916 packets (cross-checked with `tcpdump`), and the tool's returned
+> SHA-256 matches the file on disk.
+>
+> The `/txt` rendering is the console's own tcpdump-style text dump. It is
+> **content-negotiated**: the console answers `406 Not Acceptable` unless the
+> request asks for `text/plain`, so the tool sends that `Accept` header for
+> the text variant and none for the binary route. The text dump was verified
+> live and carries the same 12,916 packets as the binary capture.
 
 ### DPI (Deep Packet Inspection) Statistics
 

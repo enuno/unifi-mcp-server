@@ -139,7 +139,7 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 |---|---|---|
 | `UNIFI_API_KEY` | UniFi API key (required) | — |
 | `UNIFI_API_TYPE` | `local`, `cloud-ea` or `cloud-v1` | `cloud-ea` |
-| `UNIFI_LOCAL_HOST` / `UNIFI_LOCAL_PORT` | Console address in `local` mode | — / `443` |
+| `UNIFI_LOCAL_HOST` / `UNIFI_LOCAL_PORT` | Console address in `local` mode. The port depends on the deployment: `443` for a UniFi OS appliance, `11443` for UniFi OS Server 5.1.15+, `8443` for a legacy Network Application Server (whose support is unverified — see API.md, "Which console port to point at") | — / `443` |
 | `UNIFI_LOCAL_VERIFY_SSL` | Verify the console's TLS certificate. `false` logs a warning at startup | `true` |
 | `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) for a self-signed console, instead of turning verification off. Can be the console's own certificate | — |
 | `UNIFI_LOCAL_TLS_SERVER_NAME` | Name the console's certificate is checked against, when it is not `UNIFI_LOCAL_HOST`: `unifi.local` for UniFi OS's own certificate | — |

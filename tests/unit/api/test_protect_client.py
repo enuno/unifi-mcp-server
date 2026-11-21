@@ -272,6 +272,38 @@ class TestProtectClientHttp:
             await client.get("cameras")
 
 
+class TestProtectClientSpecQueryParams:
+    """Client-level guards for routes the pinned spec defines without params.
+
+    The Protect 7.4.96 spec declares no query parameters for the external
+    arm-profile routes and returns a bare array, so a client that appends
+    `limit`/`offset` sends parameters the console will not honour. The client
+    must pass query parameters through only when a caller supplies them.
+    """
+
+    @pytest.mark.asyncio
+    async def test_get_omits_query_params_when_none_are_supplied(self, mock_settings):
+        seen, handler = _recorder(json=[{"id": "ext-1"}])
+        client = _mock_transport_client(mock_settings, handler)
+
+        result = await client.get("/v1/external/arm-profiles")
+
+        assert result == [{"id": "ext-1"}]
+        assert str(seen[0].url) == "https://api.ui.com/v1/external/arm-profiles"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_get_still_passes_caller_params_when_given(self, mock_settings):
+        """The client stays generic: an explicit caller param is still sent."""
+        seen, handler = _recorder(json=[])
+        client = _mock_transport_client(mock_settings, handler)
+
+        await client.get("/v1/external/arm-profiles", params={"limit": 5})
+
+        assert "limit=5" in str(seen[0].url)
+        await client.close()
+
+
 class TestProtectClientWebSocket:
     @pytest.mark.asyncio
     async def test_websocket_url_uses_wss_for_real_local_settings(self):

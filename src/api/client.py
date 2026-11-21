@@ -260,7 +260,7 @@ class UniFiClient:
 
         # If not recognized, return as-is and log warning
         self.logger.warning(
-            "Endpoint does not match known translation patterns; " "passing it through unchanged"
+            "Endpoint does not match known translation patterns; passing it through"
         )
         return endpoint
 

@@ -858,6 +858,38 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
+    async def test_translate_endpoint_passes_through_unrecognised_paths(
+        self, mock_settings_local, caplog
+    ):
+        """The no-match fall-through returns the endpoint and names no identifier."""
+        import logging
+
+        client = UniFiClient(mock_settings_local)
+        odd = "/some/unknown/route/aa:bb:cc:dd:ee:ff"
+
+        with caplog.at_level(logging.DEBUG):
+            assert client._translate_endpoint(odd) == odd
+
+        assert "does not match known translation patterns" in caplog.text
+        assert "aa:bb:cc:dd:ee:ff" not in caplog.text
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_endpoint_prefixes_integration_and_v1_paths(self, mock_settings_local):
+        client = UniFiClient(mock_settings_local)
+        assert (
+            client._translate_endpoint("/integration/v1/sites")
+            == "/proxy/network/integration/v1/sites"
+        )
+        assert client._translate_endpoint("/v1/devices") == "/proxy/network/v1/devices"
+        # An already-local path is returned untouched.
+        assert (
+            client._translate_endpoint("/proxy/network/api/s/default/stat/device")
+            == "/proxy/network/api/s/default/stat/device"
+        )
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_endpoint_logging_never_emits_a_mac_in_clear_text(
         self, mock_settings_local, caplog
     ):

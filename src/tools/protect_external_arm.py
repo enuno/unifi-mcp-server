@@ -14,7 +14,13 @@ from typing import Any
 from ..api import ProtectClient
 from ..config import Settings
 from ..models import ProtectExternalArmProfile
-from ..utils import ValidationError, get_logger, sanitize_log_message, validate_limit_offset
+from ..utils import (
+    ValidationError,
+    get_logger,
+    sanitize_log_message,
+    validate_limit_offset,
+    validate_path_segment,
+)
 from ..utils.tool_kind import read_tool, write_tool
 from ..utils.validators import coerce_bool, validate_confirmation
 
@@ -23,10 +29,25 @@ _MAX_DELAY_SECONDS = 3600
 
 
 def _validate_profile_id(arm_profile_id: str) -> str:
-    arm_profile_id = arm_profile_id.strip()
-    if not arm_profile_id:
-        raise ValidationError("arm_profile_id is required")
-    return arm_profile_id
+    """Validate an external arm profile ID before it is interpolated into a path.
+
+    The pinned Protect 7.4.96 specification constrains the ``{id}`` path
+    parameter to ``^[0-9A-Za-z-]+$`` with a 64-character maximum. This applies
+    the repository's standard path-segment validator, the same one the sibling
+    Protect tools use for their own path parameters. It rejects ``/``, ``..``
+    and query characters, so a caller-supplied ID cannot retarget the request
+    at another route.
+
+    Args:
+        arm_profile_id: External arm profile identifier supplied by the caller
+
+    Returns:
+        The stripped, validated identifier
+
+    Raises:
+        ValidationError: If the identifier is empty or is not a plain path segment
+    """
+    return validate_path_segment(arm_profile_id, "arm_profile_id")
 
 
 def _validate_delay(delay: int, label: str) -> int:
@@ -85,6 +106,12 @@ async def list_protect_external_arm_profiles(
     Use when ``nvr.featureFlags.useExternalAlarmManager`` is true. These
     profiles are not the local ``arm-profiles`` family.
 
+    The Protect 7.4.96 specification defines this route with no query
+    parameters and a bare-array response, so the console applies no
+    server-side window. ``limit`` and ``offset`` are therefore applied to the
+    returned collection locally, and ``totalCount`` reports the size of the
+    whole collection while ``count`` reports the size of this page.
+
     Args:
         settings: Application settings
         limit: Maximum number of profiles to return
@@ -95,22 +122,29 @@ async def list_protect_external_arm_profiles(
 
     async with ProtectClient(settings) as client:
         await client.authenticate()
+        # The pinned Protect 7.4.96 specification declares no query parameters
+        # for this route and defines its 200 response as a bare array, so the
+        # console applies no server-side window and `limit`/`offset` sent as
+        # query parameters are never honoured. Request the whole collection and
+        # page it here. Forwarding the parameters as well would page twice and
+        # silently drop rows whenever a console does honour them.
         response = await client.get(
             settings.get_protect_integration_path("external/arm-profiles"),
-            params={"limit": final_limit, "offset": final_offset},
         )
 
     data = _extract_collection(response)
     profiles = [_serialize_profile(item) for item in data]
-    total_count = response.get("totalCount", len(data)) if isinstance(response, dict) else len(data)
-    count = response.get("count", len(data)) if isinstance(response, dict) else len(data)
-    logger.info(sanitize_log_message(f"Listed {len(profiles)} Protect external arm profiles"))
+    total_count = len(profiles)
+    page = profiles[final_offset : final_offset + final_limit]
+    logger.info(
+        sanitize_log_message(f"Listed {len(page)} of {total_count} Protect external arm profiles")
+    )
     return {
         "offset": final_offset,
         "limit": final_limit,
-        "count": count,
+        "count": len(page),
         "totalCount": total_count,
-        "data": profiles,
+        "data": page,
     }
 
 

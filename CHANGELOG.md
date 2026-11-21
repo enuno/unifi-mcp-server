@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Coverage item 22 evidence: external Network Lists are a negative finding.**
+  The external-URL source field of traffic matching lists does not exist in the
+  documented surface. The Network 11.0.97 Integration API specification carries
+  only `name`, `type` and `items` on the create, update and read schemas, with
+  no property whose name contains `url`, `source` or `external`; no
+  traffic-matching-list module exists in the controller's UI bundle; and the
+  live console reports zero traffic matching lists. No model or tool change is
+  made, because inventing a field would be inventing an endpoint. Evidence
+  record in `docs/research/coverage-item-22-external-network-lists.md`.
 - **Coverage item 14 evidence: the `platform_compat` scope limit.** The brief
   asked whether any signal can extend `platform_compat` to cloud or unsynced
   controllers. It cannot, and the limit is in **collection**, not analysis: the

@@ -26,6 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeps certificate and name verification both on. Port `28082` is called out
   as a device-side path for packet capture and support-file downloads, which
   this server does not use. Documentation only; no behaviour change.
+- **Phase 3 live verification plans (coverage items 28-30, 12, 13, 16).** The
+  items that need hardware this project does not have now have executable
+  plans rather than a note that they are blocked. Two documents: a Protect
+  7.4.96 checklist covering external arm profile CRUD, arm/disarm, the
+  204-on-delete normalisation, the `/v1/subscribe/updates` WebSocket upgrade
+  and its four stop reasons, and the stop-siren 204; and a Network 11 upgrade
+  protocol covering the statistics engine's empty-history and MODERN series,
+  the Zone-Based Firewall legacy-write rejections, and the site-UID claim,
+  written as the "after" half against the 10.6.109 baseline already recorded
+  in `.analysis-reports/`. Each step names the expected response and the
+  baseline capture to compare against. No behaviour claim is made: the plans
+  are prepared, not executed.
 - **Console NetFlow export configuration and gateway packet capture (coverage item 2).** Six direct-local-console tools: `get_netflow_export_config` and `update_netflow_export_config` against the private `get/setting/netflow` and `set/setting/netflow` routes, plus `start_gateway_packet_capture`, `get_gateway_packet_capture_status`, `stop_gateway_packet_capture` and `download_gateway_packet_capture` against the site-scoped `pcap-start` / `pcap-status` / `pcap-stop` / `pcap-get` v2 routes. Neither surface exists in the official Integration API, so both reject Cloud Connector mode explicitly. The NetFlow write is a read-modify-write that reads the record back, because the controller **merges** the payload instead of replacing it and no route can clear a key once written. Capture downloads are confirmation-gated, confined to `UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR`, opened without following symlinks and written mode `0600`, returning path/size/SHA-256 rather than packet data. Routes, verbs, required fields and validation ranges were verified live against Network 10.6.111; the capture routes were confirmed only in their error paths, so a successful capture lifecycle — and the `/txt` rendering, which answered `406` with no capture present — is **not** live-verified. Evidence record in `docs/research/coverage-item-2-netflow-packet-capture.md`.
 - **Protect 7.4.96 coverage for the ranked competitor gaps.** External Alarm Manager profiles (`list`/`get`/`create`/`update`/`delete`/`arm`/`disarm` on `/v1/external/arm-profiles`), `list_protect_model_updates` (a bounded WebSocket sample from `/v1/subscribe/updates` with `model_keys`), and `stop_protect_speaker_siren`. NVR reads now surface `featureFlags.useExternalAlarmManager` and `armMode`; sensors surface `isMountedIncorrectly`; cameras surface `videoMode` including `antiFlicker`. PIN-bearing keys are stripped from external-profile responses. Mock-tested against the published 7.4.96 spec; write paths and WebSocket behavior are not live-verified.
 - **Network 11 MODERN statistics engine reads.** `get_statistics_source` and `get_recent_statistics_series` call the controller-wide v2 paths `/proxy/network/v2/api/stats/source` and `/stats/recent/series` (not the Integration API). Mock-tested; not live-verified on a Network 11 controller.

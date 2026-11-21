@@ -727,6 +727,44 @@ Each enabled controller's last health check: `ok`, `degraded` (failing), `down` 
 
 **Network 11 / UniFi OS 6 platform compatibility.** A controller with a USG gateway anywhere in its synced device inventory carries a `platform_compat` field: `{"network_11_capable": false, "reason": "..."}`. USG support ends at Network 10.6, so that site has no Network 11 target at all (DEVELOPMENT_PLAN.md §4 Phase 8, Fix 6). `platform_compat` is **absent** — not `null`, not `true` — on every other controller, including cloud controllers (the worker never inventories them) and any local controller the worker has not yet synced; absence means "no USG-gating signal found", not an affirmative "compatible" result. There is no corresponding field for the other platform break (a classic, self-hosted Network Application Server): the Integration API's `/v1/info` has no host-type field, so it cannot be auto-detected — label that controller instead (e.g. `deployment=classic-server`) and filter `fleet_health`/`fleet_sites` on the `labels` parameter. See `docs/NETWORK_11_COMPATIBILITY.md` for the full compatibility matrix.
 
+**Labelling a classic-server controller.** The convention is
+`deployment=classic-server`. Set it when registering the controller, or change
+it later with `update_controller`; both take a `labels` mapping that
+**replaces** the controller's labels wholesale, so pass the whole set you want
+to keep, not just the new key.
+
+```python
+# on registration
+await mcp.call_tool(
+    "register_controller",
+    {"name": "lab-1", "api_type": "local", "local_host": "10.0.0.5",
+     "labels": {"deployment": "classic-server", "region": "west"},
+     "confirm": True},
+)
+
+# on an existing controller
+await mcp.call_tool(
+    "update_controller",
+    {"name": "lab-1", "labels": {"deployment": "classic-server"}, "confirm": True},
+)
+```
+
+Then filter on it. `fleet_health` and `fleet_sites` both take a `labels`
+mapping and match a controller only when it carries **all** of the given
+labels, and `fleet_health` echoes each controller's labels in its
+`controllers` entry, so the label is visible in the output as well as usable
+as a filter.
+
+```python
+await mcp.call_tool("fleet_health", {"labels": {"deployment": "classic-server"}})
+await mcp.call_tool("fleet_sites", {"labels": {"deployment": "classic-server"}})
+```
+
+A label is operator-provided metadata: it records that you know the deployment
+type. It is not proof that the server interoperates with a classic host, and a
+failed 401/403 or TLS connection does not establish that an endpoint is absent
+— keep capability unknown.
+
 ```json
 {
   "controllers": [

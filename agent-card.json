@@ -8489,7 +8489,7 @@
       }
     },
     {
-      "description": "Download a completed gateway capture into a confined local directory.\n\nCaptures can contain credentials and private traffic. Files are therefore\nwritten with mode ``0600`` under ``UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR``;\nany directory component supplied in ``output_path`` is discarded.\n\nThe ``/txt`` rendering selected by ``text_format`` is taken from the\nNetwork UI's own download helper but is not live-verified: with no capture\npresent the console answered ``406``, so its success path is unconfirmed.",
+      "description": "Download a completed gateway capture into a confined local directory.\n\nCaptures can contain credentials and private traffic. Files are therefore\nwritten with mode ``0600`` under ``UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR``;\nany directory component supplied in ``output_path`` is discarded.\n\nThe ``/txt`` rendering selected by ``text_format`` is the console's own\ntcpdump-style text dump. It is content-negotiated: the console answers\n``406 Not Acceptable`` unless the request asks for ``text/plain``, so the\ntool sends that ``Accept`` header for the text variant. The binary route\nneeds no ``Accept`` header and is served as a gzip-compressed tar archive\nholding the ``.pcap`` file.",
       "examples": [
         {
           "arguments": {

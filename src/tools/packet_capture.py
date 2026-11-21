@@ -208,9 +208,12 @@ async def download_gateway_packet_capture(
     written with mode ``0600`` under ``UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR``;
     any directory component supplied in ``output_path`` is discarded.
 
-    The ``/txt`` rendering selected by ``text_format`` is taken from the
-    Network UI's own download helper but is not live-verified: with no capture
-    present the console answered ``406``, so its success path is unconfirmed.
+    The ``/txt`` rendering selected by ``text_format`` is the console's own
+    tcpdump-style text dump. It is content-negotiated: the console answers
+    ``406 Not Acceptable`` unless the request asks for ``text/plain``, so the
+    tool sends that ``Accept`` header for the text variant. The binary route
+    needs no ``Accept`` header and is served as a gzip-compressed tar archive
+    holding the ``.pcap`` file.
 
     Args:
         site_id: Network site short name, such as ``default``.
@@ -242,7 +245,12 @@ async def download_gateway_packet_capture(
         }
     async with UniFiClient(settings) as client:
         await client.authenticate()
-        content = await client.download_bytes(endpoint)
+        # The console content-negotiates the text rendering: it answers
+        # 406 Not Acceptable unless the request names "text/plain". The
+        # binary route needs no Accept header at all.
+        content = await client.download_bytes(
+            endpoint, accept="text/plain" if text_format else None
+        )
     _write_capture(destination, content)
     return {
         "site_id": site_id,

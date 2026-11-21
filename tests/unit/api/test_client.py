@@ -928,10 +928,49 @@ class TestUniFiClientBackupMethods:
             content = await client.download_bytes("/proxy/network/v2/api/site/default/pcap-get/mac")
 
         request.assert_awaited_once_with(
-            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac"
+            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac",
+            headers=None,
         )
         response.raise_for_status.assert_called_once_with()
         assert content == b"capture"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_sends_no_accept_header_by_default(self, mock_settings_local):
+        """The binary capture route is not content-negotiated."""
+        client = UniFiClient(mock_settings_local)
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = MagicMock(content=b"capture")
+            await client.download_bytes("/proxy/network/v2/api/site/default/pcap-get/mac")
+
+        request.assert_awaited_once_with(
+            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac",
+            headers=None,
+        )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_sends_the_requested_accept_header(self, mock_settings_local):
+        """A content-negotiated route needs the media type named explicitly.
+
+        The console answers 406 Not Acceptable for the text rendering unless
+        the request asks for text/plain.
+        """
+        client = UniFiClient(mock_settings_local)
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = MagicMock(content=b"===== BEGIN br3.pcap =====\n")
+            content = await client.download_bytes(
+                "/proxy/network/v2/api/site/default/pcap-get/mac/txt",
+                accept="text/plain",
+            )
+
+        request.assert_awaited_once_with(
+            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac/txt",
+            headers={"Accept": "text/plain"},
+        )
+        assert content.startswith(b"===== BEGIN")
         await client.close()
 
     @pytest.mark.asyncio

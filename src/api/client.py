@@ -873,7 +873,7 @@ class UniFiClient:
 
         return response.content
 
-    async def download_bytes(self, endpoint: str) -> bytes:
+    async def download_bytes(self, endpoint: str, accept: str | None = None) -> bytes:
         """Download binary content from an authenticated controller path.
 
         Routed through :meth:`_translate_endpoint` so a caller holding a site
@@ -881,12 +881,17 @@ class UniFiClient:
 
         Args:
             endpoint: Absolute API path on the configured controller origin.
+            accept: Value for the ``Accept`` header. Some capture routes are
+                content-negotiated: the console answers ``406 Not Acceptable``
+                unless the request names the media type it wants, and sends no
+                ``Accept`` header of its own on the client's behalf.
 
         Returns:
             Raw response content.
         """
         full_url = f"{self.settings.base_url}{self._translate_endpoint(endpoint)}"
-        response = await self.client.get(full_url)
+        headers = {"Accept": accept} if accept else None
+        response = await self.client.get(full_url, headers=headers)
         response.raise_for_status()
         return response.content
 

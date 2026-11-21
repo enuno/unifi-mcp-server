@@ -2837,11 +2837,19 @@ byte size and SHA-256 rather than packet contents.
 - `dry_run` (boolean, optional)
 
 > **Verification status.** NetFlow read, write, merge behaviour and validation
-> were exercised live. The capture routes were confirmed live only in their
-> error paths — unknown device, no running capture, no capture file — because
-> starting a real capture on a production gateway was out of scope. A
-> successful capture lifecycle, and the `/txt` rendering in particular, are
-> **not** live-verified; `/txt` answered `406` with no capture present.
+> were exercised live. The complete capture lifecycle was then run live on a
+> local console (Network application `10.6.111`, gateway `udm`): start →
+> `CAPTURING` → `READY_TO_DOWNLOAD` → download, over a 30-second capture of
+> the Home Lab network. The downloaded artefact is a **gzip-compressed tar
+> archive** holding a `br3.pcap` file, which parses as pcap v2.4 / Ethernet
+> with 12,916 packets (cross-checked with `tcpdump`), and the tool's returned
+> SHA-256 matches the file on disk.
+>
+> The `/txt` rendering is the console's own tcpdump-style text dump. It is
+> **content-negotiated**: the console answers `406 Not Acceptable` unless the
+> request asks for `text/plain`, so the tool sends that `Accept` header for
+> the text variant and none for the binary route. The text dump was verified
+> live and carries the same 12,916 packets as the binary capture.
 
 ### DPI (Deep Packet Inspection) Statistics
 

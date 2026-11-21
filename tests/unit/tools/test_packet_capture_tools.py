@@ -30,6 +30,9 @@ def _client(client_class, **responses):
     client.authenticate = AsyncMock()
     for method, response in responses.items():
         setattr(client, method, AsyncMock(return_value=response))
+    # download_bytes is awaited, so it needs an awaitable AsyncMock rather than
+    # the plain return_value form used for the other methods.
+    client.download_bytes = AsyncMock(return_value=responses.get("download_bytes", b""))
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     client_class.return_value = client
@@ -144,7 +147,7 @@ async def test_download_gateway_packet_capture_writes_private_file(settings, tmp
         )
 
     client.download_bytes.assert_awaited_once_with(
-        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff"
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff", accept=None
     )
     destination = tmp_path / "capture.tar.gz"
     assert destination.read_bytes() == content
@@ -167,7 +170,8 @@ async def test_download_gateway_packet_capture_supports_text_format(settings):
         )
 
     client.download_bytes.assert_awaited_once_with(
-        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff/txt"
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff/txt",
+        accept="text/plain",
     )
 
 
@@ -255,3 +259,44 @@ def test_capture_destination_allows_a_symlinked_download_dir(settings, tmp_path)
 
     dest = _resolve_capture_destination("c.tar.gz", settings)
     assert dest.parent == real.resolve()
+
+
+async def test_text_download_requests_text_plain(settings, tmp_path):
+    """Regression: the /txt route is content-negotiated and needs Accept: text/plain.
+
+    The console answers 406 Not Acceptable for the text rendering unless the
+    request names the media type. Without this header the download fails.
+    """
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, download_bytes=b"===== BEGIN br3.pcap =====\n")
+        await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "capture.txt",
+            settings,
+            text_format=True,
+            confirm=True,
+        )
+
+    client.download_bytes.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff/txt",
+        accept="text/plain",
+    )
+
+
+async def test_binary_download_sends_no_accept_header(settings, tmp_path):
+    """The binary route is not content-negotiated and needs no Accept header."""
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, download_bytes=b"\x1f\x8b\x08\x00binary")
+        await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "capture.pcap",
+            settings,
+            confirm=True,
+        )
+
+    client.download_bytes.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff",
+        accept=None,
+    )

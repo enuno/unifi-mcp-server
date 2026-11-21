@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `/txt` packet-capture rendering now works.** The console
+  content-negotiates that route: it answers `406 Not Acceptable` for every
+  media type except `text/plain`. The capture tool sent no `Accept` header at
+  all, so httpx defaulted to `*/*` and the text variant could never have
+  succeeded. `UniFiClient.download_bytes` now takes an optional `accept`, and
+  the tool sends `text/plain` for the text variant and none for the binary
+  route. Found by running a complete capture end-to-end against a live
+  console (Network 10.6.111): start → `CAPTURING` → `READY_TO_DOWNLOAD` →
+  download, where the artefact is a gzip-compressed tar holding a valid
+  12,916-packet pcap, and the `/txt` dump carries the same 12,916 packets.
 - **Clear-text logging of private identifiers in the API client**: `UniFiClient`
   no longer interpolates endpoints, request URLs or site identifiers into its
   diagnostic log messages. This extends the convention already documented in

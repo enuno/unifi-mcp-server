@@ -64,6 +64,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `/txt` packet-capture rendering now works.** The console
+  content-negotiates that route: it answers `406 Not Acceptable` for every
+  media type except `text/plain`. The capture tool sent no `Accept` header at
+  all, so httpx defaulted to `*/*` and the text variant could never have
+  succeeded. `UniFiClient.download_bytes` now takes an optional `accept`, and
+  the tool sends `text/plain` for the text variant and none for the binary
+  route. Found by running a complete capture end-to-end against a live
+  console (Network 10.6.111): start → `CAPTURING` → `READY_TO_DOWNLOAD` →
+  download, where the artefact is a gzip-compressed tar holding a valid
+  12,916-packet pcap, and the `/txt` dump carries the same 12,916 packets.
 - **Protect external arm profile list pagination and ID handling (coverage item 28).** The pinned Protect 7.4.96 specification defines `/v1/external/arm-profiles` with **no query parameters** and a bare-array response, so the `limit`/`offset` forwarded as query parameters were never honoured and the tool always returned the entire collection. It now requests the whole collection and applies the window locally, reporting `totalCount` for the collection size and `count` for the page size. External-profile IDs are additionally validated as a single path segment before interpolation, so an ID containing `/`, `..`, a space or a query character is rejected instead of retargeting the request. Both defects were raised by the Codex review of #316; #319 fixed the third. Regression-tested at tool and client level, including proof that the new tests fail against the previous implementation.
 - **Clear-text logging of private identifiers in the API client**: `UniFiClient`
   no longer interpolates endpoints, request URLs or site identifiers into its

@@ -20,6 +20,7 @@ from ..utils import (
     ResourceNotFoundError,
     get_logger,
     log_api_request,
+    sanitize_log_message,
     validate_backup_filename,
 )
 from .pool import AuthState, active_pool
@@ -182,7 +183,7 @@ class UniFiClient:
             # Translate UUID to site name if we have the mapping
             site_name = self._site_uuid_to_name.get(site_id, site_id)
             if site_id != site_name:
-                self.logger.debug(f"Translated site ID: {site_id} -> {site_name}")
+                self.logger.debug("Translated site ID to its short-name form")
 
             # Map cloud API paths to local API paths
             # Cloud API uses different endpoint naming than local API
@@ -194,7 +195,7 @@ class UniFiClient:
 
             local_path = path_mapping.get(cloud_path, cloud_path)
             if cloud_path != local_path:
-                self.logger.debug(f"Translated path: {cloud_path} -> {local_path}")
+                self.logger.debug("Translated cloud path to its local form")
 
             return f"/proxy/network/api/s/{site_name}/{local_path}"
 
@@ -205,7 +206,7 @@ class UniFiClient:
             # Translate UUID to site name if we have the mapping
             site_name = self._site_uuid_to_name.get(site_id, site_id)
             if site_id != site_name:
-                self.logger.debug(f"Translated site ID: {site_id} -> {site_name}")
+                self.logger.debug("Translated site ID to its short-name form")
             return f"/proxy/network/api/s/{site_name}/self"
 
         # Pattern: /proxy/network/v2/api/site/{site_id}/{rest}
@@ -220,7 +221,7 @@ class UniFiClient:
             prefix, site_id, rest = match.groups()
             site_name = self._site_uuid_to_name.get(site_id, site_id)
             if site_id != site_name:
-                self.logger.debug(f"Translated v2 site ID: {site_id} -> {site_name}")
+                self.logger.debug("Translated v2 site ID to its short-name form")
             return f"{prefix}{site_name}{rest or ''}"
 
         # Pattern: /integration/v1/sites/{site_id}/{rest}, with or without the
@@ -259,7 +260,9 @@ class UniFiClient:
             return f"/proxy/network{endpoint}"
 
         # If not recognized, return as-is and log warning
-        self.logger.warning(f"Endpoint does not match known patterns: {endpoint}")
+        self.logger.warning(
+            sanitize_log_message(f"Endpoint does not match known patterns: {endpoint}")
+        )
         return endpoint
 
     async def authenticate(self) -> None:
@@ -474,7 +477,11 @@ class UniFiClient:
 
             # ENHANCED LOGGING - Use INFO level to ensure visibility
             if endpoint != translated_endpoint:
-                self.logger.info(f"Endpoint translation: {endpoint} -> {translated_endpoint}")
+                self.logger.info(
+                    sanitize_log_message(
+                        f"Endpoint translation: {endpoint} -> {translated_endpoint}"
+                    )
+                )
 
             # Construct full URL explicitly to ensure HTTPS protocol is preserved
             # httpx's base_url joining can have issues with protocol handling
@@ -487,10 +494,12 @@ class UniFiClient:
             # CRITICAL: Ensure HTTPS scheme - force replace http:// with https://
             if full_url.startswith("http://"):
                 full_url = full_url.replace("http://", "https://", 1)
-                self.logger.warning(f"Force-corrected HTTP to HTTPS: {full_url}")
+                self.logger.warning(
+                    sanitize_log_message(f"Force-corrected HTTP to HTTPS: {full_url}")
+                )
 
             # ENHANCED LOGGING - Show actual URL being requested
-            self.logger.info(f"Making {method} request to: {full_url}")
+            self.logger.info(sanitize_log_message(f"Making {method} request to: {full_url}"))
 
             response = await self.client.request(
                 method=method,
@@ -573,12 +582,18 @@ class UniFiClient:
                         return {"data": data}
                 else:
                     # Empty response body - treat as success with empty data
-                    self.logger.debug(f"Empty response body for {endpoint}, returning empty dict")
+                    self.logger.debug(
+                        sanitize_log_message(
+                            f"Empty response body for {endpoint}, returning empty dict"
+                        )
+                    )
                     json_response = {}
                 return json_response
             except (ValueError, json.JSONDecodeError) as e:
                 # Invalid JSON - log and return empty dict for successful status codes
-                self.logger.warning(f"Invalid JSON in response for {endpoint}: {e}")
+                self.logger.warning(
+                    sanitize_log_message(f"Invalid JSON in response for {endpoint}: {e}")
+                )
                 return {}
 
         except httpx.TimeoutException as e:

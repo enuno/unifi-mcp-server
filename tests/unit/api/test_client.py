@@ -858,6 +858,35 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
+    async def test_endpoint_logging_never_emits_a_mac_in_clear_text(
+        self, mock_settings_local, caplog
+    ):
+        """A device MAC in a URL path must not reach the logs unmasked.
+
+        CodeQL (py/clear-text-logging-sensitive-data) treats a MAC as private
+        data, and the capture tools necessarily put one in the request path.
+        This file's own convention is that identifiers are either masked by
+        sanitize_log_message or not logged at all, so assert on what the
+        handler actually emits rather than on the formatter.
+        """
+        import logging
+
+        client = UniFiClient(mock_settings_local)
+        mac = "8c:30:66:9c:9b:46"
+        endpoint = f"/proxy/network/v2/api/site/site-uuid/pcap-status/{mac}"
+        client._site_uuid_to_name = {"site-uuid": "default"}
+
+        with caplog.at_level(logging.DEBUG):
+            translated = client._translate_endpoint(endpoint)
+
+        assert mac not in caplog.text
+        assert "site-uuid" not in caplog.text
+        # The translation still happened, it just is not narrated with the ids.
+        assert translated.endswith(f"/pcap-status/{mac}")
+        assert "/site/default/" in translated
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_download_bytes_uses_authenticated_controller_origin(self, mock_settings_local):
         client = UniFiClient(mock_settings_local)
         response = MagicMock(content=b"capture")

@@ -147,3 +147,74 @@ async def test_update_netflow_export_config_requires_enabled_dependencies(settin
         _client(client_class, get_responses=[{"data": [before]}])
         with pytest.raises(ValidationError, match="server"):
             await update_netflow_export_config("default", settings, enabled=True, confirm=True)
+
+
+async def test_netflow_rejects_cloud_mode(settings):
+    """No Cloud Connector route is documented, so cloud mode must fail loudly."""
+    settings.api_type = APIType.CLOUD_V1
+    with pytest.raises(ValidationError, match="direct local-console access"):
+        await get_netflow_export_config("default", settings)
+    with pytest.raises(ValidationError, match="direct local-console access"):
+        await update_netflow_export_config("default", settings, enabled=False, confirm=True)
+
+
+async def test_netflow_read_rejects_a_non_list_envelope(settings):
+    """A controller answer whose data is not a list yields no records."""
+    with patch("src.tools.netflow.UniFiClient") as client_class:
+        _client(client_class, get_responses=[{"data": {"key": "netflow"}}])
+        with pytest.raises(ResourceNotFoundError, match="netflow"):
+            await get_netflow_export_config("default", settings)
+
+
+async def test_netflow_update_raises_when_record_missing_before_write(settings):
+    with patch("src.tools.netflow.UniFiClient") as client_class:
+        client = _client(client_class, get_responses=[{"data": []}])
+        with pytest.raises(ResourceNotFoundError, match="netflow"):
+            await update_netflow_export_config("default", settings, enabled=False, confirm=True)
+    client.post.assert_not_awaited()
+
+
+async def test_netflow_update_raises_when_record_missing_after_write(settings):
+    before = {"_id": "s1", "key": "netflow", "enabled": False, "version": 10}
+    with patch("src.tools.netflow.UniFiClient") as client_class:
+        _client(
+            client_class,
+            get_responses=[{"data": [before]}, {"data": []}],
+            post_response={"data": [before]},
+        )
+        with pytest.raises(ResourceNotFoundError, match="netflow"):
+            await update_netflow_export_config(
+                "default", settings, export_frequency=6, confirm=True
+            )
+
+
+async def test_netflow_enabled_requires_at_least_one_network(settings):
+    before = {
+        "_id": "s1",
+        "key": "netflow",
+        "enabled": False,
+        "server": "collector.example",
+        "network_ids": [],
+        "version": 10,
+    }
+    with patch("src.tools.netflow.UniFiClient") as client_class:
+        _client(client_class, get_responses=[{"data": [before]}])
+        with pytest.raises(ValidationError, match="network_ids"):
+            await update_netflow_export_config("default", settings, enabled=True, confirm=True)
+
+
+async def test_netflow_v5_engine_id_is_capped_at_127(settings):
+    before = {
+        "_id": "s1",
+        "key": "netflow",
+        "enabled": False,
+        "version": 10,
+        "network_ids": ["n1"],
+        "server": "collector.example",
+    }
+    with patch("src.tools.netflow.UniFiClient") as client_class:
+        _client(client_class, get_responses=[{"data": [before]}])
+        with pytest.raises(ValidationError, match="1 and 127"):
+            await update_netflow_export_config(
+                "default", settings, version=5, engine_id=128, confirm=True
+            )

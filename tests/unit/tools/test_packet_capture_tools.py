@@ -203,3 +203,55 @@ def test_packet_capture_destination_stays_in_configured_directory(settings, tmp_
         _resolve_capture_destination("/outside/name.tar.gz", settings)
         == Path(tmp_path / "name.tar.gz").resolve()
     )
+
+
+async def test_packet_capture_rejects_cloud_mode(settings):
+    """No Cloud Connector capture route is documented."""
+    settings.api_type = APIType.CLOUD_V1
+    with pytest.raises(ValidationError, match="direct local-console access"):
+        await get_gateway_packet_capture_status("default", "aa:bb:cc:dd:ee:ff", settings)
+    with pytest.raises(ValidationError, match="direct local-console access"):
+        await start_gateway_packet_capture(
+            "default", "aa:bb:cc:dd:ee:ff", "net-1", settings, confirm=True
+        )
+
+
+async def test_start_rejects_an_empty_network_id(settings):
+    with pytest.raises(ValidationError, match="network_id"):
+        await start_gateway_packet_capture(
+            "default", "aa:bb:cc:dd:ee:ff", "   ", settings, confirm=True
+        )
+
+
+def test_capture_destination_refuses_a_symlink_planted_in_the_download_dir(settings, tmp_path):
+    """A symlink AT the destination name must not redirect the write.
+
+    Stripping the directory component is not enough on its own: an attacker
+    who can create `<download_dir>/capture.tar.gz` as a symlink to somewhere
+    else would otherwise have the capture written through it. Resolution moves
+    the parent outside the confined dir, which the guard rejects.
+    """
+    from src.tools.packet_capture import _resolve_capture_destination
+
+    base = tmp_path / "captures"
+    base.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (base / "capture.tar.gz").symlink_to(outside / "capture.tar.gz")
+    settings.packet_capture_download_dir = str(base)
+
+    with pytest.raises(ValidationError, match="Refusing to write outside"):
+        _resolve_capture_destination("capture.tar.gz", settings)
+
+
+def test_capture_destination_allows_a_symlinked_download_dir(settings, tmp_path):
+    """A download dir that is itself a symlink is fine once resolved."""
+    from src.tools.packet_capture import _resolve_capture_destination
+
+    real = tmp_path / "elsewhere"
+    real.mkdir()
+    (tmp_path / "link").symlink_to(real)
+    settings.packet_capture_download_dir = str(tmp_path / "link")
+
+    dest = _resolve_capture_destination("c.tar.gz", settings)
+    assert dest.parent == real.resolve()

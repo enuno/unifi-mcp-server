@@ -14,20 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   said which port a console's API actually lives on. It does: a UniFi OS
   appliance serves the API on `443`, UniFi OS Server 5.1.15 or later on
   `11443`, and a legacy self-hosted Network Application Server on `8443`.
-  API.md now carries a table of these, and the ports that are **not** the API
-  and will not work if pointed at: `8444` (the captive/secure portal, changed
-  from `8843` on the Network Server), `11084` (an internal port, restricted to
-  loopback on Linux by UniFi OS Server 5.1.15), `8080` (device inform) and
-  `8843` (hotspot portal redirection). Port `28082` is called out as a
-  device-side path for packet capture and support-file downloads, which this
-  server does not use. Documentation only; no behaviour change.
+  API.md now carries a table of these, the ports that are **not** the API and
+  will not work if pointed at (`8444`, the captive/secure portal, changed from
+  `8843` on the Network Server; `11084`, an internal port that UniFi OS Server
+  5.1.15 restricted to loopback on Linux; `8080`, device inform; and `8843`,
+  hotspot portal redirection), and the caveat that this server's request paths
+  target UniFi OS, so interoperability with a classic standalone server is
+  unverified. It also states that reaching a self-signed UniFi OS console
+  needs **both** `UNIFI_LOCAL_CA_FILE` (trust) and
+  `UNIFI_LOCAL_TLS_SERVER_NAME` (the name checked), because `src/api/tls.py`
+  keeps certificate and name verification both on. Port `28082` is called out
+  as a device-side path for packet capture and support-file downloads, which
+  this server does not use. Documentation only; no behaviour change.
 - **Console NetFlow export configuration and gateway packet capture (coverage item 2).** Six direct-local-console tools: `get_netflow_export_config` and `update_netflow_export_config` against the private `get/setting/netflow` and `set/setting/netflow` routes, plus `start_gateway_packet_capture`, `get_gateway_packet_capture_status`, `stop_gateway_packet_capture` and `download_gateway_packet_capture` against the site-scoped `pcap-start` / `pcap-status` / `pcap-stop` / `pcap-get` v2 routes. Neither surface exists in the official Integration API, so both reject Cloud Connector mode explicitly. The NetFlow write is a read-modify-write that reads the record back, because the controller **merges** the payload instead of replacing it and no route can clear a key once written. Capture downloads are confirmation-gated, confined to `UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR`, opened without following symlinks and written mode `0600`, returning path/size/SHA-256 rather than packet data. Routes, verbs, required fields and validation ranges were verified live against Network 10.6.111; the capture routes were confirmed only in their error paths, so a successful capture lifecycle — and the `/txt` rendering, which answered `406` with no capture present — is **not** live-verified. Evidence record in `docs/research/coverage-item-2-netflow-packet-capture.md`.
 - **Protect 7.4.96 coverage for the ranked competitor gaps.** External Alarm Manager profiles (`list`/`get`/`create`/`update`/`delete`/`arm`/`disarm` on `/v1/external/arm-profiles`), `list_protect_model_updates` (a bounded WebSocket sample from `/v1/subscribe/updates` with `model_keys`), and `stop_protect_speaker_siren`. NVR reads now surface `featureFlags.useExternalAlarmManager` and `armMode`; sensors surface `isMountedIncorrectly`; cameras surface `videoMode` including `antiFlicker`. PIN-bearing keys are stripped from external-profile responses. Mock-tested against the published 7.4.96 spec; write paths and WebSocket behavior are not live-verified.
 - **Network 11 MODERN statistics engine reads.** `get_statistics_source` and `get_recent_statistics_series` call the controller-wide v2 paths `/proxy/network/v2/api/stats/source` and `/stats/recent/series` (not the Integration API). Mock-tested; not live-verified on a Network 11 controller.
 
 ### Fixed
 
-- **Protect external arm profile list pagination and ID handling (coverage item 28).** The pinned Protect 7.4.96 specification defines `/v1/external/arm-profiles` with **no query parameters** and a bare-array response, so the `limit`/`offset` forwarded as query parameters were never honoured and the tool always returned the entire collection. It now requests the whole collection and applies the window locally, reporting `totalCount` for the collection size and `count` for the page size. External-profile IDs are additionally validated as a single path segment before interpolation, so an ID containing `/`, `..`, a space or a query character is rejected instead of retargeting the request. Both defects were raised by the Codex review of #316; #319 fixed the third. Regression-tested at tool and client level, including proof that the new tests fail against the previous implementation.
 - **Clear-text logging of private identifiers in the API client**: `UniFiClient`
   no longer interpolates endpoints, request URLs or site identifiers into its
   diagnostic log messages. This extends the convention already documented in

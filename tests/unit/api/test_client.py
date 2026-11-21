@@ -858,6 +858,97 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
+    async def test_translate_endpoint_passes_through_unrecognised_paths(
+        self, mock_settings_local, caplog
+    ):
+        """The no-match fall-through returns the endpoint and names no identifier."""
+        import logging
+
+        client = UniFiClient(mock_settings_local)
+        odd = "/some/unknown/route/aa:bb:cc:dd:ee:ff"
+
+        with caplog.at_level(logging.DEBUG):
+            assert client._translate_endpoint(odd) == odd
+
+        assert "does not match known translation patterns" in caplog.text
+        assert "aa:bb:cc:dd:ee:ff" not in caplog.text
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_translate_endpoint_prefixes_integration_and_v1_paths(self, mock_settings_local):
+        client = UniFiClient(mock_settings_local)
+        assert (
+            client._translate_endpoint("/integration/v1/sites")
+            == "/proxy/network/integration/v1/sites"
+        )
+        assert client._translate_endpoint("/v1/devices") == "/proxy/network/v1/devices"
+        # An already-local path is returned untouched.
+        assert (
+            client._translate_endpoint("/proxy/network/api/s/default/stat/device")
+            == "/proxy/network/api/s/default/stat/device"
+        )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_endpoint_logging_never_emits_a_mac_in_clear_text(
+        self, mock_settings_local, caplog
+    ):
+        """A device MAC in a URL path must not reach the logs unmasked.
+
+        CodeQL (py/clear-text-logging-sensitive-data) treats a MAC as private
+        data, and the capture tools necessarily put one in the request path.
+        This file's own convention is that identifiers are either masked by
+        sanitize_log_message or not logged at all, so assert on what the
+        handler actually emits rather than on the formatter.
+        """
+        import logging
+
+        client = UniFiClient(mock_settings_local)
+        mac = "aa:bb:cc:dd:ee:ff"
+        endpoint = f"/proxy/network/v2/api/site/site-uuid/pcap-status/{mac}"
+        client._site_uuid_to_name = {"site-uuid": "default"}
+
+        with caplog.at_level(logging.DEBUG):
+            translated = client._translate_endpoint(endpoint)
+
+        assert mac not in caplog.text
+        assert "site-uuid" not in caplog.text
+        # The translation still happened, it just is not narrated with the ids.
+        assert translated.endswith(f"/pcap-status/{mac}")
+        assert "/site/default/" in translated
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_uses_authenticated_controller_origin(self, mock_settings_local):
+        client = UniFiClient(mock_settings_local)
+        response = MagicMock(content=b"capture")
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = response
+            content = await client.download_bytes("/proxy/network/v2/api/site/default/pcap-get/mac")
+
+        request.assert_awaited_once_with(
+            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac"
+        )
+        response.raise_for_status.assert_called_once_with()
+        assert content == b"capture"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_translates_a_site_uuid_for_v2(self, mock_settings_local):
+        """A v2 route rejects the UUID callers hold, so translate it centrally."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"site-uuid": "default"}
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = MagicMock(content=b"capture")
+            await client.download_bytes("/proxy/network/v2/api/site/site-uuid/pcap-get/mac")
+
+        assert "/site/default/pcap-get/mac" in request.call_args[0][0]
+        assert "site-uuid" not in request.call_args[0][0]
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_download_backup_uses_the_dl_autobackup_path(self, mock_settings_local):
         """Autobackups are served from /dl/autobackup/ on a UniFi OS console.
 

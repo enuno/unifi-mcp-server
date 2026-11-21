@@ -591,6 +591,15 @@ class Settings(BaseSettings):
         validation_alias="UNIFI_BACKUP_DOWNLOAD_DIR",
     )
 
+    packet_capture_download_dir: str = Field(
+        default=".",
+        description=(
+            "Directory that download_gateway_packet_capture writes into. "
+            "Only the caller-supplied filename is used."
+        ),
+        validation_alias="UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR",
+    )
+
     # Supermemory Configuration (optional operator notes/context store)
     supermemory_enabled: bool = Field(
         default=False,

@@ -57,7 +57,7 @@
       "For destructive skills, supply confirm=true and optional dry_run=true for preview."
     ],
     "readOnly": false,
-    "readToolCount": 209,
+    "readToolCount": 211,
     "resourceCount": 6,
     "resources": [
       {
@@ -616,6 +616,34 @@
         "destructive": false,
         "reason": "Mutating controller state requires explicit confirmation.",
         "sensitiveFields": [],
+        "toolName": "update_netflow_export_config"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "download_gateway_packet_capture"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "start_gateway_packet_capture"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
+        "toolName": "stop_gateway_packet_capture"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": false,
+        "reason": "Mutating controller state requires explicit confirmation.",
+        "sensitiveFields": [],
         "toolName": "create_port_forward"
       },
       {
@@ -1136,9 +1164,9 @@
         "toolName": "health_check"
       }
     ],
-    "toolCount": 354,
+    "toolCount": 360,
     "toolsManifestUrl": "/a2a/discover",
-    "writeToolCount": 93
+    "writeToolCount": 97
   },
   "name": "unifi-mcp-server",
   "preferredTransport": "HTTP+JSON",
@@ -8461,6 +8489,90 @@
       }
     },
     {
+      "description": "Download a completed gateway capture into a confined local directory.\n\nCaptures can contain credentials and private traffic. Files are therefore\nwritten with mode ``0600`` under ``UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR``;\nany directory component supplied in ``output_path`` is discarded.\n\nThe ``/txt`` rendering selected by ``text_format`` is taken from the\nNetwork UI's own download helper but is not live-verified: with no capture\npresent the console answered ``406``, so its success path is unconfirmed.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "gateway_mac": "example-gateway_mac",
+            "output_path": "example-output_path",
+            "site_id": "example-id"
+          },
+          "tool": "download_gateway_packet_capture"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to write the capture to disk."
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Return the destination and endpoint without downloading."
+          },
+          "gateway_mac": {
+            "description": "Gateway MAC address.",
+            "type": "string"
+          },
+          "output_path": {
+            "description": "Destination filename; directory components are ignored.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          },
+          "text_format": {
+            "default": false,
+            "description": "Download the controller's text representation instead.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "site_id",
+          "gateway_mac",
+          "output_path"
+        ],
+        "type": "object"
+      },
+      "name": "download_gateway_packet_capture",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Download an asset (e.g. floor plan image) from InnerSpace.",
       "examples": [
         {
@@ -10573,6 +10685,53 @@
       }
     },
     {
+      "description": "Get gateway packet-capture progress from the local console.",
+      "examples": [
+        {
+          "arguments": {
+            "gateway_mac": "example-gateway_mac",
+            "site_id": "example-id"
+          },
+          "tool": "get_gateway_packet_capture_status"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "gateway_mac": {
+            "description": "Gateway MAC address.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "gateway_mac"
+        ],
+        "type": "object"
+      },
+      "name": "get_gateway_packet_capture_status",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Get guest portal (hotspot) configuration for a site.\n\nReads the legacy ``setting/guest_access`` section, which is where this\nconfiguration actually lives. An earlier version called\n``/integration/v1/sites/{site}/guest-portal/config``, an endpoint no\nknown Network version serves \u2014 it returned 404 everywhere.",
       "examples": [
         {
@@ -11287,6 +11446,47 @@
         "type": "object"
       },
       "name": "get_mobility_device",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Read the site's NetFlow/IPFIX export configuration.\n\nThis direct-console-only tool uses the private Network settings route\nobserved on Network 10.6.111. The official Integration API doesn't expose\nNetFlow settings.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "get_netflow_export_config"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "get_netflow_export_config",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -21854,6 +22054,90 @@
       }
     },
     {
+      "description": "Start a bounded wired packet capture on a site's gateway.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "gateway_mac": "example-gateway_mac",
+            "network_id": "example-id",
+            "site_id": "example-id"
+          },
+          "tool": "start_gateway_packet_capture"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to start the capture."
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Return the request payload without starting a capture."
+          },
+          "duration_seconds": {
+            "default": 60,
+            "description": "Capture duration from 30 through 300 seconds.",
+            "type": "integer"
+          },
+          "gateway_mac": {
+            "description": "Gateway MAC address.",
+            "type": "string"
+          },
+          "network_id": {
+            "description": "Controller network object ID to capture.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "gateway_mac",
+          "network_id"
+        ],
+        "type": "object"
+      },
+      "name": "start_gateway_packet_capture",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "Start an RF spectrum scan on an access point.\n\nDISRUPTIVE: the AP takes its radios offline for the duration of the\nscan (typically 5-10 minutes) and every client on it is dropped \u2014\nthey must roam elsewhere or wait. Run during a quiet window. Read\nresults with :func:`get_spectrum_scan` /\n:func:`list_spectrum_interference`; the scan state reports\n``spectrum_scanning`` true until the scan completes.",
       "examples": [
         {
@@ -21920,6 +22204,79 @@
         "type": "object"
       },
       "name": "start_spectrum_scan",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Stop an active gateway packet capture.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "gateway_mac": "example-gateway_mac",
+            "site_id": "example-id"
+          },
+          "tool": "stop_gateway_packet_capture"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to stop the capture."
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Preview the stop operation without making a request."
+          },
+          "gateway_mac": {
+            "description": "Gateway MAC address.",
+            "type": "string"
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "gateway_mac"
+        ],
+        "type": "object"
+      },
+      "name": "stop_gateway_packet_capture",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -25167,6 +25524,208 @@
         "type": "object"
       },
       "name": "update_mobility_device_wireless",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Update and read back the site's NetFlow/IPFIX export configuration.\n\nThe write is a read-modify-write because the controller merges the payload\ninto the stored document instead of replacing it, so a field cannot be\ncleared by leaving it out. Route, verb, merge behaviour and the validation\nranges below were verified live against Network 10.6.111.",
+      "examples": [
+        {
+          "arguments": {
+            "confirm": true,
+            "dry_run": true,
+            "site_id": "example-id"
+          },
+          "tool": "update_netflow_export_config"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "auto_engine_id_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Let the controller select the engine ID."
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Must be true to apply the configuration."
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Return the proposed changes without making requests."
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Whether NetFlow export is enabled."
+          },
+          "engine_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Explicit engine ID when automatic selection is disabled."
+          },
+          "export_frequency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Export frequency from 1 through 60."
+          },
+          "network_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller network object IDs to export."
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Collector port, from 1024 through 65535."
+          },
+          "refresh_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Template refresh rate from 1 through 2147483647."
+          },
+          "sampling_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "``off``, ``hash``, ``random``, or ``deterministic``."
+          },
+          "sampling_rate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sampling rate from 2 through 16383."
+          },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Collector hostname or IP address."
+          },
+          "site_id": {
+            "description": "Network site short name, such as ``default``.",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "NetFlow version 5, 9, or 10."
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "update_netflow_export_config",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"

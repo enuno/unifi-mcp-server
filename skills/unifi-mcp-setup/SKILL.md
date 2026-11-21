@@ -25,7 +25,7 @@ triggers:
 
 # UniFi MCP Server Skill
 
-Interact with UniFi Network, Protect and the UniFi cloud APIs using 354 MCP
+Interact with UniFi Network, Protect and the UniFi cloud APIs using 360 MCP
 tools (local mode) across six capability domains. The server supports three API modes (local gateway,
 cloud-v1, cloud-ea) and requires UniFi Network 9.0+ for zone-based firewall
 features.

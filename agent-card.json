@@ -18358,7 +18358,7 @@
       }
     },
     {
-      "description": "List UniFi Protect external Alarm Manager arm profiles.\n\nUse when ``nvr.featureFlags.useExternalAlarmManager`` is true. These\nprofiles are not the local ``arm-profiles`` family.",
+      "description": "List UniFi Protect external Alarm Manager arm profiles.\n\nUse when ``nvr.featureFlags.useExternalAlarmManager`` is true. These\nprofiles are not the local ``arm-profiles`` family.\n\nThe Protect 7.4.96 specification defines this route with no query\nparameters and a bare-array response, so the console applies no\nserver-side window. ``limit`` and ``offset`` are therefore applied to the\nreturned collection locally, and ``totalCount`` reports the size of the\nwhole collection while ``count`` reports the size of this page.",
       "examples": [
         {
           "arguments": {

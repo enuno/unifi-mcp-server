@@ -130,12 +130,12 @@ async def _fetch_raw_flow_by_id(
         response = await client.get(endpoint)
     except (APIError, ResourceNotFoundError):
         return None
-    if isinstance(response, dict):
-        data = response.get("data")
-        if isinstance(data, dict):
-            return data
-        return response if response else None
-    return response if isinstance(response, dict) else None
+    if not isinstance(response, dict):
+        return None
+    data = response.get("data")
+    if isinstance(data, dict):
+        return data
+    return response or None
 
 
 async def _fetch_raw_flows(

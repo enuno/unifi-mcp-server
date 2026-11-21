@@ -1093,3 +1093,31 @@ class TestGetTrafficFlowDetailsById:
             MockClient.return_value = client
             with pytest.raises(ResourceNotFoundError):
                 await tf.get_traffic_flow_details("default", "missing-id", mock_settings)
+
+
+class TestGetTrafficFlowDetailsEnveloped:
+    """The controller may envelope the flow in {"data": {...}}."""
+
+    @pytest.mark.asyncio
+    async def test_unwraps_a_data_envelope(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        flow = next(f for f in sample_raw_flows if f["id"] == "flow-2")
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            client.get = AsyncMock(return_value={"data": flow})
+            MockClient.return_value = client
+            result = await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
+        assert result["id"] == "flow-2"
+
+    @pytest.mark.asyncio
+    async def test_a_non_dict_answer_is_treated_as_absent(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """A scalar answer is not a flow, so the list scan still runs."""
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            client.get = AsyncMock(return_value="NOT_FOUND")
+            MockClient.return_value = client
+            result = await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
+        assert result["id"] == "flow-2"

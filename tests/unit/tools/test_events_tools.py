@@ -349,3 +349,25 @@ async def test_client_connection_events_returns_a_note(mock_settings):
         result = await list_client_connection_events(site_id="default", settings=mock_settings)
     assert "stat/alarm" in result["note"]
     assert "ignores its own filter" in result["note"]
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_skips_a_non_dict_row(mock_settings):
+    """A malformed row is skipped, not crashed on."""
+    mock_client = _log_client([{"data": ["not-a-dict", _log_row("CLIENT_CONNECTED_WIRELESS_2")]}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(site_id="default", settings=mock_settings)
+    assert result["count"] == 1
+    assert result["scanned_rows"] == 2
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_direction_falls_back_to_the_event_name(mock_settings):
+    """A key with neither prefix falls back to the event name."""
+    row = _log_row("CLIENT_ROAMED_WIRELESS_2")
+    row["event"] = "CLIENT_DISCONNECTED_WIRELESS"
+    mock_client = _log_client([{"data": [row]}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(site_id="default", settings=mock_settings)
+    assert result["count"] == 1
+    assert result["events"][0]["event"] == "disconnected"

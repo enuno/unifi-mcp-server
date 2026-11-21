@@ -928,3 +928,62 @@ async def test_bulk_client_action_unblock_and_forget_use_the_batch_shape(mock_se
         assert result["command"] == cmd
         assert result["batch_request"] is True
         assert mock_client.post.call_args[1]["json_data"]["macs"] == [mac]
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_sends_nothing_when_every_mac_is_unknown(mock_settings):
+    """No known client means no request at all."""
+    mock_client = _bulk_client([{"mac": "00:11:22:33:44:55"}])
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=["aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02"],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["not_found"] == 2
+    assert result["applied"] == 0
+    mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_skips_a_non_dict_entry_in_the_response(mock_settings):
+    """A malformed entry in the controller's answer is skipped, not crashed on."""
+    mac = "00:11:22:33:44:55"
+    mock_client = _bulk_client(
+        [{"mac": mac}],
+        post_return={"data": ["not-a-dict", {"mac": mac, "blocked": True}]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[mac],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["applied"] == 1
+    assert [r["status"] for r in result["results"]] == ["ok"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_reraises_when_the_inventory_lookup_fails(mock_settings):
+    """A failure to read the inventory is raised, not swallowed."""
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=APIError("api.err.SiteNotFound"))
+    mock_client.post = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        with pytest.raises(APIError):
+            await bulk_client_action(
+                site_id="default",
+                client_macs=["00:11:22:33:44:55"],
+                action="block",
+                settings=mock_settings,
+                confirm=True,
+            )
+    mock_client.post.assert_not_called()

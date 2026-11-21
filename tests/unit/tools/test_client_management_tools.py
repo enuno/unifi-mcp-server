@@ -987,3 +987,23 @@ async def test_bulk_client_action_reraises_when_the_inventory_lookup_fails(mock_
                 confirm=True,
             )
     mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_treats_the_string_false_as_false(mock_settings):
+    """MCP serialises booleans as strings, so dry_run="false" is not a preview."""
+    mac = "00:11:22:33:44:55"
+    mock_client = _bulk_client(
+        [{"mac": mac}], post_return={"data": [{"mac": mac, "blocked": True}]}
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[mac],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+            dry_run="false",
+        )
+    assert "dry-run" not in result
+    mock_client.post.assert_called_once()

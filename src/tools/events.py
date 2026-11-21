@@ -280,7 +280,7 @@ async def list_client_connection_events(
     events: list[dict[str, Any]] = []
     scanned = 0
     pages = 0
-    truncated = False
+    last_page_full = False
 
     async with UniFiClient(settings) as client:
         await client.authenticate()
@@ -304,8 +304,12 @@ async def list_client_connection_events(
             rows = rows if isinstance(rows, list) else []
             pages += 1
             if not rows:
+                last_page_full = False
                 break
             scanned += len(rows)
+            # A short page means the window ended here; a full one means there
+            # may be more.
+            last_page_full = len(rows) >= page_size
 
             for row in rows:
                 if not isinstance(row, dict):
@@ -327,8 +331,11 @@ async def list_client_connection_events(
             if len(rows) < page_size:
                 break
 
-        if len(events) >= limit:
-            truncated = True
+        # Truncated means the window may hold more matching events than were
+        # returned: the limit was reached on a full page, or the page budget
+        # ran out on a full page. A short or empty page means the window was
+        # scanned to its end, even when the count happens to land on limit.
+        truncated = last_page_full and (len(events) >= limit or pages >= _MAX_LOG_PAGES)
 
     logger.info(
         sanitize_log_message(

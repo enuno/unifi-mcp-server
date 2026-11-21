@@ -169,7 +169,7 @@ class TestV2Fallbacks:
 # =============================================================================
 
 
-def _log_row(key, mac="00:11:22:33:44:55", **over):
+def _log_row(key, mac="00:11:22:33:44:55", type_override=None, **over):
     """One v2 system-log row shaped like the live controller's."""
     connected = key.startswith("CLIENT_CONNECTED")
     row = {
@@ -207,6 +207,8 @@ def _log_row(key, mac="00:11:22:33:44:55", **over):
             "DURATION": {"name": "0"},
         },
     }
+    if type_override:
+        row["type"] = type_override
     row.update(over)
     return row
 
@@ -371,3 +373,32 @@ async def test_client_connection_events_direction_falls_back_to_the_event_name(m
         result = await list_client_connection_events(site_id="default", settings=mock_settings)
     assert result["count"] == 1
     assert result["events"][0]["event"] == "disconnected"
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_marks_a_page_budget_exhaustion_as_truncated(
+    mock_settings,
+):
+    """Twenty full non-matching pages means the window may hold more."""
+    full = [_log_row("ADMIN_ACCESS", type_override="ADMIN_ACCESS") for _ in range(50)]
+    mock_client = _log_client([{"data": full} for _ in range(20)])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default", settings=mock_settings, page_size=50, limit=100
+        )
+    assert result["count"] == 0
+    assert result["pages_fetched"] == 20
+    assert result["truncated"] is True
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_is_not_truncated_when_the_window_ends(mock_settings):
+    """Exactly `limit` events on a short final page means nothing was cut off."""
+    rows = [_log_row("CLIENT_CONNECTED_WIRELESS_2") for _ in range(3)]
+    mock_client = _log_client([{"data": rows}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default", settings=mock_settings, page_size=50, limit=3
+        )
+    assert result["count"] == 3
+    assert result["truncated"] is False

@@ -14,6 +14,7 @@ from ..utils import (
     validate_site_id,
 )
 from ..utils.tool_kind import write_tool
+from ..utils.validators import coerce_bool
 
 
 @write_tool
@@ -576,12 +577,16 @@ async def bulk_client_action(
             macs.append(mac)
 
     validate_confirmation(confirm, "bulk client management operation", dry_run)
+    # The signature accepts a string, and MCP clients serialise booleans as
+    # strings, so the flag is coerced the way the rest of the write tools do
+    # it. Without this, dry_run="false" reads as a preview.
+    dry_run_bool = coerce_bool(dry_run)
     logger = get_logger(__name__, settings.log_level)
     cmd = _STAMGR_CMDS[action]
 
     parameters = {"site_id": site_id, "action": action, "client_count": len(macs)}
 
-    if dry_run:
+    if dry_run_bool:
         logger.info(
             sanitize_log_message(
                 f"DRY RUN: Would apply '{action}' to {len(macs)} client(s) in site '{site_id}'"

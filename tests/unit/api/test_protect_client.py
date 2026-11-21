@@ -307,6 +307,88 @@ class TestProtectClientWebSocket:
         await client.close()
 
     @pytest.mark.asyncio
+    async def test_websocket_url_rejects_non_http_origin(self, mock_settings_local):
+        client = ProtectClient(mock_settings_local)
+
+        with patch.object(client, "_build_url", return_value="ftp://console.example.test/updates"):
+            with pytest.raises(APIError, match="must use http or https"):
+                client._build_websocket_url("updates", {"modelKeys": "camera"})
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_tls_context_reuses_configured_context(self, mock_settings_local):
+        import ssl
+
+        client = ProtectClient(mock_settings_local)
+        configured = ssl.create_default_context()
+
+        with patch("src.api.protect_client.httpx_verify", return_value=configured):
+            assert client._websocket_ssl_context() is configured
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_tls_context_enables_default_verification(self, mock_settings_local):
+        import ssl
+
+        client = ProtectClient(mock_settings_local)
+
+        with (
+            patch("src.api.protect_client.httpx_verify", return_value=True),
+            patch("src.api.protect_client.ssl.create_default_context") as create_context,
+        ):
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            create_context.return_value = context
+            assert client._websocket_ssl_context() is context
+
+        create_context.assert_called_once_with()
+        await client.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("duration_seconds", "max_messages", "error"),
+        [(0.0, 1, "duration_seconds"), (1.0, 0, "max_messages")],
+    )
+    async def test_websocket_sample_rejects_non_positive_bounds(
+        self, mock_settings_local, duration_seconds, max_messages, error
+    ):
+        client = ProtectClient(mock_settings_local)
+
+        with pytest.raises(APIError, match=error):
+            await client.sample_model_updates(
+                ["camera"], duration_seconds=duration_seconds, max_messages=max_messages
+            )
+
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_upgrade_wraps_transport_error_and_sets_tls_name(self):
+        settings = Settings.model_validate(
+            {
+                "UNIFI_API_KEY": "test-api-key",  # pragma: allowlist secret
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "console.example.test",
+                "UNIFI_LOCAL_VERIFY_SSL": True,
+                "UNIFI_LOCAL_TLS_SERVER_NAME": "console.internal",
+            }
+        )
+        client = ProtectClient(settings)
+
+        with (
+            patch.object(client, "_websocket_ssl_context", return_value=MagicMock()) as tls_context,
+            patch(
+                "src.api.protect_client.connect", side_effect=RuntimeError("transport down")
+            ) as connect,
+            pytest.raises(APIError, match="subscription failed: transport down"),
+        ):
+            await client.sample_model_updates(["camera"], duration_seconds=1.0, max_messages=1)
+
+        tls_context.assert_called_once_with()
+        assert connect.call_args.kwargs["server_hostname"] == "console.internal"
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_samples_updates_over_real_websocket_upgrade(self, mock_settings_local):
         import json
         from urllib.parse import parse_qs, urlsplit

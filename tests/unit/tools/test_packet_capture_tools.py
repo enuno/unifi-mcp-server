@@ -1,0 +1,205 @@
+"""Tests for gateway packet-capture tools."""
+
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from src.config import APIType
+from src.tools.packet_capture import (
+    download_gateway_packet_capture,
+    get_gateway_packet_capture_status,
+    start_gateway_packet_capture,
+    stop_gateway_packet_capture,
+)
+from src.utils.exceptions import ValidationError
+
+
+@pytest.fixture
+def settings(tmp_path):
+    value = MagicMock()
+    value.api_type = APIType.LOCAL
+    value.log_level = "INFO"
+    value.packet_capture_download_dir = str(tmp_path)
+    value.get_v2_api_path.side_effect = lambda site: f"/proxy/network/v2/api/site/{site}"
+    return value
+
+
+def _client(client_class, **responses):
+    client = AsyncMock()
+    client.authenticate = AsyncMock()
+    for method, response in responses.items():
+        setattr(client, method, AsyncMock(return_value=response))
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client_class.return_value = client
+    return client
+
+
+async def test_start_gateway_packet_capture_uses_observed_payload(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, post={"data": {"started": True}})
+        result = await start_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "network-1",
+            settings,
+            duration_seconds=60,
+            confirm=True,
+        )
+
+    client.post.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-start",
+        json_data={
+            "mac": "aa:bb:cc:dd:ee:ff",
+            "network_id": "network-1",
+            "traffic_type": "WIRED",
+            "duration": 60,
+        },
+    )
+    assert result["site_id"] == "default"
+    assert result["gateway_mac"] == "aa:bb:cc:dd:ee:ff"
+    assert result["controller_response"] == {"data": {"started": True}}
+
+
+async def test_start_gateway_packet_capture_requires_confirmation(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        with pytest.raises(ValidationError, match="requires confirmation"):
+            await start_gateway_packet_capture(
+                "default", "aa:bb:cc:dd:ee:ff", "network-1", settings
+            )
+    client_class.assert_not_called()
+
+
+async def test_start_gateway_packet_capture_dry_run_makes_no_request(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        result = await start_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "network-1",
+            settings,
+            duration_seconds=90,
+            dry_run=True,
+        )
+
+    client_class.assert_not_called()
+    assert result["dry_run"] is True
+    assert result["payload"]["duration"] == 90
+
+
+@pytest.mark.parametrize("duration", [29, 301])
+async def test_start_gateway_packet_capture_bounds_duration(settings, duration):
+    with pytest.raises(ValidationError, match="30 and 300"):
+        await start_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "network-1",
+            settings,
+            duration_seconds=duration,
+            confirm=True,
+        )
+
+
+async def test_get_gateway_packet_capture_status_uses_observed_path(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, get={"data": {"state": "RUNNING"}})
+        result = await get_gateway_packet_capture_status("default", "aa:bb:cc:dd:ee:ff", settings)
+
+    client.get.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-status/aa:bb:cc:dd:ee:ff"
+    )
+    assert result["controller_response"] == {"data": {"state": "RUNNING"}}
+
+
+async def test_stop_gateway_packet_capture_uses_observed_path(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, post={"data": {"stopped": True}})
+        await stop_gateway_packet_capture("default", "aa:bb:cc:dd:ee:ff", settings, confirm=True)
+
+    client.post.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-stop/aa:bb:cc:dd:ee:ff",
+        json_data={},
+    )
+
+
+async def test_stop_gateway_packet_capture_dry_run(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        result = await stop_gateway_packet_capture(
+            "default", "aa:bb:cc:dd:ee:ff", settings, dry_run=True
+        )
+    client_class.assert_not_called()
+    assert result["dry_run"] is True
+
+
+async def test_download_gateway_packet_capture_writes_private_file(settings, tmp_path):
+    content = b"capture-bytes"
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, download_bytes=content)
+        result = await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "../../capture.tar.gz",
+            settings,
+            confirm=True,
+        )
+
+    client.download_bytes.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff"
+    )
+    destination = tmp_path / "capture.tar.gz"
+    assert destination.read_bytes() == content
+    assert destination.stat().st_mode & 0o777 == 0o600
+    assert result["local_path"] == str(destination.resolve())
+    assert result["size_bytes"] == len(content)
+    assert len(result["sha256"]) == 64
+
+
+async def test_download_gateway_packet_capture_supports_text_format(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        client = _client(client_class, download_bytes=b"summary")
+        await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "capture.txt",
+            settings,
+            text_format=True,
+            confirm=True,
+        )
+
+    client.download_bytes.assert_awaited_once_with(
+        "/proxy/network/v2/api/site/default/pcap-get/aa:bb:cc:dd:ee:ff/txt"
+    )
+
+
+async def test_download_gateway_packet_capture_dry_run_makes_no_request(settings):
+    with patch("src.tools.packet_capture.UniFiClient") as client_class:
+        result = await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            "capture.tar.gz",
+            settings,
+            dry_run=True,
+        )
+    client_class.assert_not_called()
+    assert result["dry_run"] is True
+
+
+@pytest.mark.parametrize("output_path", ["", ".", ".."])
+async def test_download_gateway_packet_capture_rejects_empty_filename(settings, output_path):
+    with pytest.raises(ValidationError, match="output_path"):
+        await download_gateway_packet_capture(
+            "default",
+            "aa:bb:cc:dd:ee:ff",
+            output_path,
+            settings,
+            confirm=True,
+        )
+
+
+def test_packet_capture_destination_stays_in_configured_directory(settings, tmp_path):
+    from src.tools.packet_capture import _resolve_capture_destination
+
+    assert (
+        _resolve_capture_destination("/outside/name.tar.gz", settings)
+        == Path(tmp_path / "name.tar.gz").resolve()
+    )

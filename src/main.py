@@ -62,8 +62,10 @@ from .tools import innerspace as innerspace_tools
 from .tools import integration_api as integration_api_tools
 from .tools import mac_tags as mac_tags_tools
 from .tools import mobility as mobility_tools
+from .tools import netflow as netflow_tools
 from .tools import network_config as network_config_tools
 from .tools import networks as networks_tools
+from .tools import packet_capture as packet_capture_tools
 from .tools import port_forwarding as port_fwd_tools
 from .tools import port_profiles as port_profile_tools
 from .tools import protect_alarm as protect_alarm_tools
@@ -612,7 +614,9 @@ _LOCAL_TOOL_MODULES = [
     firewall_zones_tools,
     mac_tags_tools,
     network_config_tools,
+    netflow_tools,
     networks_tools,
+    packet_capture_tools,
     port_fwd_tools,
     port_profile_tools,
     protect_devices_tools,
@@ -661,7 +665,9 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         dhcp_tools,
         dns_tools,
         network_config_tools,
+        netflow_tools,
         networks_tools,
+        packet_capture_tools,
         vouchers_tools,
         wans_tools,
         wifi_tools,

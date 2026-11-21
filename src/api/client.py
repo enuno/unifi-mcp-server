@@ -871,6 +871,23 @@ class UniFiClient:
 
         return response.content
 
+    async def download_bytes(self, endpoint: str) -> bytes:
+        """Download binary content from an authenticated controller path.
+
+        Routed through :meth:`_translate_endpoint` so a caller holding a site
+        UUID still reaches a v2 route that only accepts the site short name.
+
+        Args:
+            endpoint: Absolute API path on the configured controller origin.
+
+        Returns:
+            Raw response content.
+        """
+        full_url = f"{self.settings.base_url}{self._translate_endpoint(endpoint)}"
+        response = await self.client.get(full_url)
+        response.raise_for_status()
+        return response.content
+
     async def delete_backup(
         self,
         site_id: str,

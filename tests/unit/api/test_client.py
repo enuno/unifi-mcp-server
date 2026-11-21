@@ -858,6 +858,36 @@ class TestUniFiClientBackupMethods:
     """Tests for backup-related client methods."""
 
     @pytest.mark.asyncio
+    async def test_download_bytes_uses_authenticated_controller_origin(self, mock_settings_local):
+        client = UniFiClient(mock_settings_local)
+        response = MagicMock(content=b"capture")
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = response
+            content = await client.download_bytes("/proxy/network/v2/api/site/default/pcap-get/mac")
+
+        request.assert_awaited_once_with(
+            "https://192.168.2.1/proxy/network/v2/api/site/default/pcap-get/mac"
+        )
+        response.raise_for_status.assert_called_once_with()
+        assert content == b"capture"
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_download_bytes_translates_a_site_uuid_for_v2(self, mock_settings_local):
+        """A v2 route rejects the UUID callers hold, so translate it centrally."""
+        client = UniFiClient(mock_settings_local)
+        client._site_uuid_to_name = {"site-uuid": "default"}
+
+        with patch.object(client.client, "get", new_callable=AsyncMock) as request:
+            request.return_value = MagicMock(content=b"capture")
+            await client.download_bytes("/proxy/network/v2/api/site/site-uuid/pcap-get/mac")
+
+        assert "/site/default/pcap-get/mac" in request.call_args[0][0]
+        assert "site-uuid" not in request.call_args[0][0]
+        await client.close()
+
+    @pytest.mark.asyncio
     async def test_download_backup_uses_the_dl_autobackup_path(self, mock_settings_local):
         """Autobackups are served from /dl/autobackup/ on a UniFi OS console.
 

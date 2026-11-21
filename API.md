@@ -166,6 +166,7 @@ Configure the MCP server using environment variables:
 | `LOG_API_REQUESTS` | Log each controller API request | No | `true` |
 | `UNIFI_CACHE_TTL` | Accepted but not used: read-cache lifetimes are fixed per resource type (sites, networks and WLANs 5 min, devices 1 min, clients 30 s) | No | `300` |
 | `UNIFI_BACKUP_DOWNLOAD_DIR` | Directory `download_backup` writes into; the caller names only the file | No | `.` |
+| `UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR` | Directory `download_gateway_packet_capture` writes into; the caller names only the file, and captures are written mode `0600` | No | `.` |
 | `SUPERMEMORY_ENABLED` | Enable the Supermemory integration for operator notes | No | `false` |
 | `SUPERMEMORY_API_KEY` | Supermemory API key | With `SUPERMEMORY_ENABLED` | unset |
 
@@ -2721,6 +2722,126 @@ epoch-ms `time`. An empty series adds `statistics_note` (below).
 > `list_top_applications` and `get_client_dpi` carries a
 > `statistics_note` field saying so. The field is absent on non-empty
 > responses.
+
+### NetFlow Export and Packet Capture
+
+Direct local-console tools for flow export configuration and gateway packet
+capture. Neither surface exists in the official Network Integration API, so
+both use private Network routes and reject Cloud Connector mode explicitly.
+Routes, verbs and validation ranges below were verified live against Network
+`10.6.111`; see `docs/research/coverage-item-2-netflow-packet-capture.md` for
+the evidence record.
+
+#### `get_netflow_export_config`
+
+Read the site's NetFlow/IPFIX export configuration from
+`GET /proxy/network/api/s/{site}/get/setting/netflow`.
+
+**Parameters:**
+
+- `site_id` (string, required): Network site short name, such as `default`
+
+**Returns:** the controller's NetFlow settings record.
+
+```json
+{
+  "key": "netflow",
+  "enabled": false,
+  "port": 2055,
+  "version": 10,
+  "auto_engine_id_enabled": true,
+  "export_frequency": 5,
+  "refresh_rate": 20,
+  "sampling_mode": "hash",
+  "sampling_rate": 512
+}
+```
+
+#### `update_netflow_export_config`
+
+Update and read back the NetFlow configuration via
+`POST /proxy/network/api/s/{site}/set/setting/netflow`.
+
+> **The controller merges, it does not replace.** A key left out of the
+> payload keeps its stored value, so a field cannot be cleared by omission,
+> and an empty `server` is rejected outright with `api.err.InvalidValue`.
+> The tool therefore does a full read-modify-write and returns `before`,
+> `after` and a `verified` flag from the read-back.
+
+**Parameters:**
+
+- `site_id` (string, required): Network site short name
+- `enabled` (boolean, optional): Whether NetFlow export is on
+- `network_ids` (array, optional): Controller network object IDs to export
+- `server` (string, optional): Collector hostname or IP
+- `port` (integer, optional): Collector port, 1024-65535
+- `version` (integer, optional): `5`, `9`, or `10`
+- `auto_engine_id_enabled` (boolean, optional): Let the controller pick the engine ID
+- `engine_id` (integer, optional): 1-127 for v5, otherwise 1-2147483647
+- `export_frequency` (integer, optional): 1-60
+- `refresh_rate` (integer, optional): 1-2147483647
+- `sampling_mode` (string, optional): `off`, `hash`, `random`, or `deterministic`
+- `sampling_rate` (integer, optional): 2-16383
+- `confirm` (boolean, required to execute)
+- `dry_run` (boolean, optional): Validate and return the proposed change only
+
+**Returns:** `{"site_id", "changed_fields", "before", "after", "verified"}`.
+
+#### `start_gateway_packet_capture`
+
+Start a bounded wired capture on the site gateway via
+`POST /proxy/network/v2/api/site/{site}/pcap-start`. The controller requires
+`mac`, `network_id` and `traffic_type`.
+
+**Parameters:**
+
+- `site_id` (string, required): Network site short name
+- `gateway_mac` (string, required): Gateway MAC address
+- `network_id` (string, required): Controller network object ID to capture
+- `duration_seconds` (integer, optional): 30-300 (default: 60)
+- `confirm` (boolean, required to execute)
+- `dry_run` (boolean, optional)
+
+#### `get_gateway_packet_capture_status`
+
+Read capture progress from
+`GET /proxy/network/v2/api/site/{site}/pcap-status/{mac}`. The controller
+answers with a bare JSON string such as `"NOT_FOUND"` or `"CAPTURING"`,
+which the tool returns verbatim under `controller_response`.
+
+#### `stop_gateway_packet_capture`
+
+Stop a running capture via
+`POST /proxy/network/v2/api/site/{site}/pcap-stop/{mac}`. With nothing
+running the controller answers `api.err.NoRunningPacketCapturing`.
+
+#### `download_gateway_packet_capture`
+
+Download a completed capture from
+`GET /proxy/network/v2/api/site/{site}/pcap-get/{mac}`, or the controller's
+text rendering from the same path with a `/txt` suffix.
+
+Captures contain private traffic, so this is a confirmation-gated write tool:
+only the filename component of `output_path` is honoured, the file lands
+inside `UNIFI_PACKET_CAPTURE_DOWNLOAD_DIR`, the destination is opened without
+following symlinks, and it is written mode `0600`. The tool returns the path,
+byte size and SHA-256 rather than packet contents.
+
+**Parameters:**
+
+- `site_id` (string, required): Network site short name
+- `gateway_mac` (string, required): Gateway MAC address
+- `output_path` (string, required): Destination filename; directory parts are ignored
+- `text_format` (boolean, optional): Request the `/txt` rendering instead
+- `confirm` (boolean, required to execute)
+- `dry_run` (boolean, optional)
+
+> **Verification status.** NetFlow read, write, merge behaviour and validation
+> were exercised live. The capture routes were confirmed live only in their
+> error paths — unknown device, no running capture, no capture file — because
+> starting a real capture on a production gateway was out of scope. A
+> successful capture lifecycle, and the `/txt` rendering in particular, are
+> **not** live-verified; `/txt` answered `406` with no capture present.
 
 ### DPI (Deep Packet Inspection) Statistics
 

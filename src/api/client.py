@@ -20,7 +20,6 @@ from ..utils import (
     ResourceNotFoundError,
     get_logger,
     log_api_request,
-    sanitize_log_message,
     validate_backup_filename,
 )
 from .pool import AuthState, active_pool
@@ -261,7 +260,7 @@ class UniFiClient:
 
         # If not recognized, return as-is and log warning
         self.logger.warning(
-            sanitize_log_message(f"Endpoint does not match known patterns: {endpoint}")
+            "Endpoint does not match known translation patterns; " "passing it through unchanged"
         )
         return endpoint
 
@@ -477,11 +476,7 @@ class UniFiClient:
 
             # ENHANCED LOGGING - Use INFO level to ensure visibility
             if endpoint != translated_endpoint:
-                self.logger.info(
-                    sanitize_log_message(
-                        f"Endpoint translation: {endpoint} -> {translated_endpoint}"
-                    )
-                )
+                self.logger.info("Endpoint translation applied")
 
             # Construct full URL explicitly to ensure HTTPS protocol is preserved
             # httpx's base_url joining can have issues with protocol handling
@@ -494,12 +489,10 @@ class UniFiClient:
             # CRITICAL: Ensure HTTPS scheme - force replace http:// with https://
             if full_url.startswith("http://"):
                 full_url = full_url.replace("http://", "https://", 1)
-                self.logger.warning(
-                    sanitize_log_message(f"Force-corrected HTTP to HTTPS: {full_url}")
-                )
+                self.logger.warning("Force-corrected request scheme from HTTP to HTTPS")
 
             # ENHANCED LOGGING - Show actual URL being requested
-            self.logger.info(sanitize_log_message(f"Making {method} request to: {full_url}"))
+            self.logger.info(f"Making {method} request")
 
             response = await self.client.request(
                 method=method,
@@ -582,18 +575,12 @@ class UniFiClient:
                         return {"data": data}
                 else:
                     # Empty response body - treat as success with empty data
-                    self.logger.debug(
-                        sanitize_log_message(
-                            f"Empty response body for {endpoint}, returning empty dict"
-                        )
-                    )
+                    self.logger.debug("Empty response body; returning empty dict")
                     json_response = {}
                 return json_response
             except (ValueError, json.JSONDecodeError) as e:
                 # Invalid JSON - log and return empty dict for successful status codes
-                self.logger.warning(
-                    sanitize_log_message(f"Invalid JSON in response for {endpoint}: {e}")
-                )
+                self.logger.warning(f"Invalid JSON in response: {e}")
                 return {}
 
         except httpx.TimeoutException as e:

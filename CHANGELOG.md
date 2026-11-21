@@ -15,14 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Clear-text logging of private identifiers in the API client**: endpoint and
-  URL logging in `UniFiClient` now runs through `sanitize_log_message`, which
-  masks MAC addresses and IPs, and the site-ID translation log lines no longer
-  interpolate site identifiers at all. This extends the convention already
-  documented in `_translate_endpoint` ("controller-identifying data does not
-  belong in logs") to the remaining ten log sites, and clears the CodeQL
+- **Clear-text logging of private identifiers in the API client**: `UniFiClient`
+  no longer interpolates endpoints, request URLs or site identifiers into its
+  diagnostic log messages. This extends the convention already documented in
+  `_translate_endpoint` ("controller-identifying data does not belong in logs")
+  to the remaining ten log sites, and clears the CodeQL
   `py/clear-text-logging-sensitive-data` findings that surfaced once the
   packet-capture tools began passing validated MAC addresses in request paths.
+  Every request is still recorded structurally by `log_api_request` (method,
+  translated endpoint, status code and duration), so request-level diagnostics
+  are unchanged. Wrapping these messages in `sanitize_log_message` was tried
+  first and rejected: CodeQL does not model it as a sanitizer, so taint still
+  reached the sink and the findings persisted.
 
 - **Protect no-content writes no longer fail JSON decoding.** `ProtectClient` now treats HTTP 204 and other successful empty-body responses as `{}`. This fixes `delete_protect_external_arm_profile` and `stop_protect_speaker_siren`, with client and tool regression coverage.
 - **`list_protect_model_updates` now performs the WebSocket upgrade required by the Protect specification.** The previous implementation issued a one-shot HTTP GET to a streaming endpoint. The tool now opens a bounded direct-console WebSocket subscription, sends the API key only in the upgrade header, validates JSON object frames, closes on deadline or message cap, and rejects Cloud Connector mode explicitly because Ubiquiti does not proxy WebSocket upgrades. Protocol-tested with a real local HTTP 101 exchange; live Protect 7.4.96 verification remains pending.

@@ -52,11 +52,21 @@ Record, for **every site**:
 
 | Field | Where |
 |---|---|
-| site UUID | `internalReference` in the integration `sites` list; `_id` in `networkconf` |
-| short name | `internalReference` in the `networkconf` entry |
-| display name | `name` |
-| purpose | `purpose` (`site-vpn`, `corporate`, `wan`, …) |
-| the site-to-site VPN peer | `ipsec_peer_ip`, `openvpn_remote_host`, and any `openvpn_remote_address` |
+| **site UUID** | the `id` of the entry in the integration `sites` list — **not** `internalReference`, which is the short name (`default`) |
+| short name | the `internalReference` of that same entry |
+| display name | its `name` |
+| purpose | `purpose` in `rest/networkconf` (`site-vpn`, `corporate`, `wan`, …) |
+| the site-to-site VPN peer | `ipsec_peer_ip`, `openvpn_remote_host`, and any `openvpn_remote_address`, in `rest/networkconf` |
+
+**The distinction matters.** In the integration `sites` list the `id` is the
+UUID and `internalReference` is the short name; the worker's own reader
+reflects that (`src/worker/jobs.py`: `site_uuid = entry.get("id") …`,
+`short_name = entry.get("internalReference") …`). And the `_id` in
+`rest/networkconf` identifies a **network configuration** — `Internet 1`, a
+VLAN — not the site. Capturing the short name, or a network `_id`, in the
+UUID column would let a stable short name look like a stable UUID and
+**refute a real change**. Key the capture by the integration `id`, and record
+the network and VPN identifiers separately.
 
 The VPN peer matters because a site-to-site VPN binds a peer by address: if
 the site UUID changes, every reference to the old UUID — in a VPN peer
@@ -128,11 +138,31 @@ a defect — that note is the entire difference between "the engine reset" and
 "the tool is broken", and it is the reason those three bare-list returns
 became dicts.
 
-### 2.2 The MODERN series
+### 2.2 The MODERN series — probe the engine's own endpoints
 
-Item 12's specific claim is that the new statistics engine serves a
-**MODERN** series where the old one served a legacy shape. Compare against
-the 10.6.109 baseline (`step3_historical_stats_tool.json`):
+**Comparing the legacy archive does not verify the MODERN series.**
+`get_historical_stats` still calls the legacy `stat/report/*` endpoint; the
+new engine is exposed separately, and those are the calls that settle item
+12:
+
+```
+get_statistics_source()                       # GET /proxy/network/v2/api/stats/source
+get_recent_statistics_series(site_id="default", ...)
+```
+
+`get_statistics_source` is the discriminator: the route is **controller-wide**
+(`/v2/api/stats/source`, not `/v2/api/site/{id}/stats/source` — the
+site-scoped spelling 404s), and it reports **`LEGACY`** on Network 10. After
+the upgrade it should report **`MODERN`**. Record that string verbatim: it is
+the single observation that distinguishes the two engines.
+
+`get_recent_statistics_series` takes the **classic site identifier** required
+by the series filter — `default`, the short name, not the UUID. Record what
+it returns, including whether the series is empty immediately after the
+upgrade (expected, per 2.1) and whether it fills as traffic accrues.
+
+Then, and only then, compare the legacy archive against the 10.6.109
+baseline (`step3_historical_stats_tool.json`):
 
 - `stat/report/hourly.site` (24h) — on 10.6.109 this returned **24 rows**
   with the key union

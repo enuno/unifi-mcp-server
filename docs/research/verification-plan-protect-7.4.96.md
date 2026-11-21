@@ -48,6 +48,11 @@ external family only, and the local `arm-profiles` family applies instead.
 
 ### 1.1 Read the collection
 
+**The external-profile tools take `arm_profile_id`, not `id`** — that is the
+parameter name in `src/tools/protect_external_arm.py`, and an example using
+`id=` fails argument validation before a request is ever made. Every call
+below uses `arm_profile_id`.
+
 ```
 list_protect_external_arm_profiles(limit=100, offset=0)
 ```
@@ -57,14 +62,22 @@ Expected against the spec: the route returns a **bare array** of
 `state`, `has_pin`, `activation_delay`, `deactivation_delay`, the
 `created_*`/`updated_*` timestamps. **Not** a `data` envelope.
 
-What to check in the answer:
+**Two different things, two different checks.** The *console* returns a bare
+array; the *tool* always returns an envelope —
+`{"data": [...], "count": N, "totalCount": M}` — because
+`src/tools/protect_external_arm.py` wraps the response and pages it locally.
+So:
 
-- the body is an array, not `{"data": [...]}`;
-- `count` and `totalCount` in the tool's result both equal the number of
-  profiles, because the tool pages a bare array locally;
-- **no PIN-like key survives**: `pin`, `pin_code`, `pincode`, `pincodes`
-  (case-insensitive) must be absent from every profile, including nested
-  values. The tool strips them; confirm it did.
+- **Wire level** (the console's own answer): is the body an array rather than
+  `{"data": [...]}`? **The tool result cannot answer this** — it is always a
+  dict by construction. Assert it from a raw HTTP capture or client
+  instrumentation, not from the MCP result. Checking the tool result for a
+  bare array would fail a perfectly conforming console.
+- **Tool level** (the MCP result): `count` and `totalCount` both equal the
+  number of profiles, because the tool pages a bare array locally; and
+  **no PIN-like key survives** — `pin`, `pin_code`, `pincode`, `pincodes`
+  (case-insensitive) absent from every profile, including nested values. The
+  tool strips them; confirm it did.
 
 Record: the number of profiles, and one profile's keys verbatim.
 
@@ -89,7 +102,7 @@ slice is the signal for that.
 ### 1.3 Read one profile
 
 ```
-get_protect_external_arm_profile(id=<one from 1.1>)
+get_protect_external_arm_profile(arm_profile_id=<one from 1.1>)
 ```
 
 Expected: the profile object, unwrapped from a `data` envelope if the
@@ -114,7 +127,7 @@ dropped.
 Then:
 
 ```
-update_protect_external_arm_profile(id=<id>, title="VERIFY-<timestamp>-updated", confirm=True)
+update_protect_external_arm_profile(arm_profile_id=<id>, title="VERIFY-<timestamp>-updated", confirm=True)
 ```
 
 Expected: the updated profile. Confirm the title changed and that the
@@ -124,7 +137,7 @@ fields you did **not** change survived — a partial update that wipes
 ### 1.5 Arm and disarm
 
 ```
-arm_protect_external_arm_profile(id=<id>, confirm=True)
+arm_protect_external_arm_profile(arm_profile_id=<id>, confirm=True)
 ```
 
 Expected: a profile whose `state` is `armed`. Confirm `state` really
@@ -133,7 +146,7 @@ state values, so the first live answer is the only evidence of what they
 are.
 
 ```
-disarm_protect_external_arm_profile(id=<id>, confirm=True)
+disarm_protect_external_arm_profile(arm_profile_id=<id>, confirm=True)
 ```
 
 Expected: `state` back to `disarmed`.
@@ -145,7 +158,7 @@ or a space that is not occupied before arming.
 ### 1.6 Delete — and the 204 that matters
 
 ```
-delete_protect_external_arm_profile(id=<id>, confirm=True)
+delete_protect_external_arm_profile(arm_profile_id=<id>, confirm=True)
 ```
 
 Expected: **`204 No Content`**. This is the step that most needs a live
@@ -156,7 +169,7 @@ for exactly this reason (#319), and the tool should report success.
 Then confirm the deletion took:
 
 ```
-get_protect_external_arm_profile(id=<id>)   # expect a not-found error
+get_protect_external_arm_profile(arm_profile_id=<id>)   # expect a not-found error
 list_protect_external_arm_profiles(...)     # expect the profile gone
 ```
 
@@ -201,11 +214,15 @@ The upgrade carries the API key in the **`X-API-KEY` header**, never in the
 query string and never in a log. Confirm from the console's own access log
 that the key did not appear in the URL.
 
-Expected result: a bounded sample with `messages`, `elapsedMs` and
-`stopReason`. On a quiet controller the honest answer is **zero messages**;
-that is a pass, not a failure. What must be true is that the upgrade
-succeeded (HTTP 101), the subscription was accepted, and the sample ended
-for a *reported* reason rather than an exception.
+Expected result: a bounded sample. Note the shape — the tool returns the
+sampled frames under **`data`**, not `messages`; `messages` is the name of
+the websocket library's frame list, not the tool's result key. Alongside it
+the result carries `elapsedMs` and `stopReason`.
+
+On a quiet controller the honest answer is **zero frames**; that is a pass,
+not a failure. What must be true is that the upgrade succeeded (HTTP 101),
+the subscription was accepted, and the sample ended for a *reported* reason
+rather than an exception.
 
 ### 2.2 Produce a real update
 
@@ -219,9 +236,10 @@ list_protect_model_updates(model_keys="camera,event", duration_seconds=30)
 In another session, arm or disarm a camera, or move a client so an event
 fires.
 
-Expected: at least one message, each a JSON **object** with `type` and
-`item`, where `item` carries `id` and `modelKey`. The `modelKey` must be one
-of the keys you asked for — a frame for an unrequested key is a finding.
+Expected: at least one frame under `data`, each a JSON **object** with
+`type` and `item`, where `item` carries `id` and `modelKey`. The `modelKey`
+must be one of the keys you asked for — a frame for an unrequested key is a
+finding.
 
 Record the **verbatim** first frame. Its exact field names are the evidence
 the pinned spec does not give.

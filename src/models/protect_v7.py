@@ -8,7 +8,7 @@ returns far more than we model, and unknown fields must not break parsing.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,6 +21,13 @@ class _ProtectV7Base(BaseModel):
     model_key: str | None = Field(None, alias="modelKey", description="Protect model key")
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
+
+
+class ProtectModelUpdateMessage(_ProtectV7Base):
+    """A model create/update/remove envelope from WS /v1/subscribe/updates."""
+
+    type: Literal["add", "update", "remove"] = Field(description="Update operation")
+    item: dict[str, Any] = Field(description="Created, updated, or removed model payload")
 
 
 class ProtectSiren(_ProtectV7Base):

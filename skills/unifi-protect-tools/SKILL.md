@@ -39,13 +39,16 @@ MCP resources for Protect are in `src/resources/protect.py`. The raw `connector_
 - A new module goes into three places in `src/main.py`: `_LOCAL_TOOL_MODULES`, the `protect` profile and the `system` profile.
 - Protect reads are not cached. Protect modules are not in `CACHED_MODULES` (`src/cache.py`).
 
-## HTTP
+## HTTP and WebSocket transports
 
 - Use `ProtectClient` from `src/api/protect_client.py`, not `UniFiClient`.
 - Build every path with `settings.get_protect_integration_path("<endpoint>")`. In local mode that gives `/proxy/protect/integration/v1/<endpoint>`.
-- Call `await client.authenticate()` first; it checks access with a GET to `cameras`.
+- For ordinary HTTP tools, call `await client.authenticate()` first; it checks access with a GET to `cameras`.
 - Send bodies with `json_data=`, not `json=`.
-- A status of 400 or more raises `APIError`.
+- A status of 400 or more raises `APIError`. A successful 204 or other empty response returns `{}` rather than attempting JSON decoding.
+- The `/subscribe/devices`, `/subscribe/events`, and `/subscribe/updates` routes are WebSocket subscriptions even though OpenAPI describes their upgrade handshake as GET. Never issue an ordinary HTTP GET to claim subscription coverage.
+- WebSocket subscriptions require direct local-console access. Ubiquiti's Cloud Connector does not proxy upgrades, so fail explicitly in cloud mode and never fall back to polling.
+- `ProtectClient.sample_model_updates()` owns URL conversion, API-key upgrade headers, TLS policy, bounded collection, frame validation, and close cleanup for `/subscribe/updates`.
 
 ```python
 async with ProtectClient(settings) as client:
@@ -104,4 +107,5 @@ Do not write audit code; the registry wrapper audits every mutating call. A tool
 
 ## Known defects (not fixed)
 
+- `list_protect_events` and `list_protect_device_updates` still issue ordinary HTTP GETs to `/subscribe/events` and `/subscribe/devices`, although the pinned Protect spec classifies both as WebSocket subscriptions. The corrected `/subscribe/updates` implementation must not be treated as evidence that those two older tools stream successfully.
 - `list_protect_device_updates` is defined once, in `src/tools/protect_devices.py`. `src/tools/protect_events.py` imports it for its two compatibility wrappers; `register_module_tools` skips imported functions, so it registers once. `TestToolModuleSets` in `tests/unit/test_main_runtime.py` fails if a tool name is defined in two modules.

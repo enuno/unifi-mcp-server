@@ -5,8 +5,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.api.protect_client import ProtectClient
-from src.config import APIType
-from src.utils.exceptions import AuthenticationError
+from src.config import APIType, Settings
+from src.utils.exceptions import APIError, AuthenticationError
+
+
+class _LocalHTTPSettings(Settings):
+    """Real Settings path behavior with HTTP for ephemeral test servers."""
+
+    @property
+    def base_url(self) -> str:
+        return f"http://{self.local_host}:{self.local_port}"
 
 
 @pytest.fixture
@@ -30,21 +38,14 @@ def mock_settings():
 
 @pytest.fixture
 def mock_settings_local():
-    settings = MagicMock()
-    settings.log_level = "INFO"
-    settings.api_type = APIType.LOCAL
-    settings.base_url = "https://192.168.2.1:443"
-    settings.request_timeout = 30.0
-    settings.verify_ssl = False
-    settings.get_headers = MagicMock(return_value={"X-API-Key": "test-api-key"})
-    settings.get_protect_integration_path = MagicMock(
-        side_effect=lambda endpoint: (
-            f"/proxy/protect/integration/v1/{endpoint.lstrip('/')}"
-            if settings.api_type == APIType.LOCAL
-            else f"/integration/v1/{endpoint.lstrip('/')}"
-        )
+    return _LocalHTTPSettings.model_validate(
+        {
+            "UNIFI_API_KEY": "test-api-key",  # pragma: allowlist secret
+            "UNIFI_API_TYPE": "local",
+            "UNIFI_LOCAL_HOST": "192.0.2.1",
+            "UNIFI_LOCAL_VERIFY_SSL": False,
+        }
     )
-    return settings
 
 
 class TestProtectClientInit:
@@ -126,7 +127,7 @@ class TestProtectClientLocalPathing:
 
         args, kwargs = mock_request.call_args
         assert args[0] == "GET"
-        assert args[1].startswith("https://192.168.2.1:443/proxy/protect/integration/v1/cameras")
+        assert args[1].startswith("http://192.0.2.1:443/proxy/protect/integration/v1/cameras")
         await client.close()
 
 
@@ -219,6 +220,27 @@ class TestProtectClientHttp:
         assert seen[0].method == "DELETE"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("status", [200, 204])
+    async def test_successful_empty_response_returns_empty_object(self, mock_settings, status):
+        seen, handler = _recorder(status=status, content=b"")
+        client = _mock_transport_client(mock_settings, handler)
+
+        result = await client.delete("external/arm-profiles/x")
+
+        assert result == {}
+        assert seen[0].method == "DELETE"
+
+    @pytest.mark.asyncio
+    async def test_successful_empty_post_returns_empty_object(self, mock_settings):
+        seen, handler = _recorder(status=204, content=b"")
+        client = _mock_transport_client(mock_settings, handler)
+
+        result = await client.post("speakers/speaker-1/stop-siren")
+
+        assert result == {}
+        assert seen[0].method == "POST"
+
+    @pytest.mark.asyncio
     async def test_error_status_raises_api_error(self, mock_settings):
         from src.utils.exceptions import APIError
 
@@ -242,14 +264,222 @@ class TestProtectClientHttp:
     async def test_transport_error_wrapped(self, mock_settings):
         import httpx
 
-        from src.utils.exceptions import APIError
-
         def handler(request):
             raise httpx.ConnectError("down", request=request)
 
         client = _mock_transport_client(mock_settings, handler)
         with pytest.raises(APIError, match="Unexpected Protect API error: down"):
             await client.get("cameras")
+
+
+class TestProtectClientWebSocket:
+    @pytest.mark.asyncio
+    async def test_websocket_url_uses_wss_for_real_local_settings(self):
+        settings = Settings.model_validate(
+            {
+                "UNIFI_API_KEY": "test-api-key",  # pragma: allowlist secret
+                "UNIFI_API_TYPE": "local",
+                "UNIFI_LOCAL_HOST": "console.example.test",
+            }
+        )
+        client = ProtectClient(settings)
+
+        url = client._build_websocket_url(
+            settings.get_protect_integration_path("subscribe/updates"),
+            {"modelKeys": "camera,event"},
+        )
+
+        assert url == (
+            "wss://console.example.test:443/proxy/protect/integration/v1/"
+            "subscribe/updates?modelKeys=camera%2Cevent"
+        )
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_tls_context_honors_disabled_verification(self, mock_settings_local):
+        import ssl
+
+        client = ProtectClient(mock_settings_local)
+        context = client._websocket_ssl_context()
+
+        assert context.check_hostname is False
+        assert context.verify_mode == ssl.CERT_NONE
+        await client.close()
+
+    @pytest.mark.asyncio
+    async def test_samples_updates_over_real_websocket_upgrade(self, mock_settings_local):
+        import json
+        from urllib.parse import parse_qs, urlsplit
+
+        from websockets.asyncio.server import serve
+
+        seen = {}
+
+        async def handler(websocket):
+            seen["path"] = websocket.request.path
+            seen["header_value"] = websocket.request.headers.get("X-API-KEY")
+            await websocket.send(
+                json.dumps(
+                    {
+                        "type": "update",
+                        "item": {"id": "cam-1", "modelKey": "camera", "name": "Front"},
+                    }
+                )
+            )
+            await websocket.close()
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            sample = await client.sample_model_updates(
+                ["camera", "event"], duration_seconds=1.0, max_messages=10
+            )
+            await client.close()
+
+        parsed = urlsplit(seen["path"])
+        assert parsed.path == "/proxy/protect/integration/v1/subscribe/updates"
+        assert parse_qs(parsed.query) == {"modelKeys": ["camera,event"]}
+        assert seen["header_value"] == "test-api-key"
+        assert sample["stop_reason"] == "peer_closed"
+        assert sample["messages"] == [
+            {
+                "type": "update",
+                "item": {"id": "cam-1", "modelKey": "camera", "name": "Front"},
+            }
+        ]
+
+    @pytest.mark.asyncio
+    async def test_websocket_sample_stops_at_message_limit(self, mock_settings_local):
+        import json
+
+        from websockets.asyncio.server import serve
+
+        async def handler(websocket):
+            for item_id in ("cam-1", "cam-2"):
+                await websocket.send(
+                    json.dumps({"type": "update", "item": {"id": item_id, "modelKey": "camera"}})
+                )
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            sample = await client.sample_model_updates(
+                ["camera"], duration_seconds=1.0, max_messages=1
+            )
+            await client.close()
+
+        assert sample["stop_reason"] == "max_messages"
+        assert len(sample["messages"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_websocket_sample_empty_deadline_is_success(self, mock_settings_local):
+        import asyncio
+
+        from websockets.asyncio.server import serve
+
+        async def handler(websocket):
+            await asyncio.sleep(1)
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            sample = await client.sample_model_updates(
+                ["camera"], duration_seconds=0.05, max_messages=10
+            )
+            await client.close()
+
+        assert sample["stop_reason"] == "deadline"
+        assert sample["messages"] == []
+
+    @pytest.mark.asyncio
+    async def test_websocket_sample_rejects_non_object_json(self, mock_settings_local):
+        from websockets.asyncio.server import serve
+
+        async def handler(websocket):
+            await websocket.send("[]")
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            with pytest.raises(APIError, match="JSON object"):
+                await client.sample_model_updates(["camera"], duration_seconds=1.0, max_messages=10)
+            await client.close()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("frame", "error"),
+        [("not-json", "malformed JSON"), (b"binary", "binary frame")],
+    )
+    async def test_websocket_sample_rejects_invalid_frames(self, mock_settings_local, frame, error):
+        from websockets.asyncio.server import serve
+
+        async def handler(websocket):
+            await websocket.send(frame)
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            with pytest.raises(APIError, match=error):
+                await client.sample_model_updates(["camera"], duration_seconds=1.0, max_messages=10)
+            await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_upgrade_timeout_is_error(self, mock_settings_local):
+        import asyncio
+
+        from websockets.asyncio.server import serve
+
+        async def process_request(connection, request):
+            await asyncio.sleep(1)
+
+        async def handler(websocket):
+            pytest.fail("handler must not run before the delayed upgrade completes")
+
+        async with serve(handler, "127.0.0.1", 0, process_request=process_request) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            with pytest.raises(APIError, match="upgrade timed out"):
+                await client.sample_model_updates(
+                    ["camera"], duration_seconds=0.05, max_messages=10
+                )
+            await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_abnormal_close_is_error(self, mock_settings_local):
+        from websockets.asyncio.server import serve
+
+        async def handler(websocket):
+            await websocket.close(code=1011, reason="controller failure")
+
+        async with serve(handler, "127.0.0.1", 0) as server:
+            port = next(iter(server.sockets)).getsockname()[1]
+            mock_settings_local.local_host = "127.0.0.1"
+            mock_settings_local.local_port = port
+            client = ProtectClient(mock_settings_local)
+            with pytest.raises(APIError, match="closed unexpectedly"):
+                await client.sample_model_updates(["camera"], duration_seconds=1.0, max_messages=10)
+            await client.close()
+
+    @pytest.mark.asyncio
+    async def test_websocket_sample_rejects_cloud_connector(self, mock_settings):
+        client = ProtectClient(mock_settings)
+
+        with pytest.raises(APIError, match="direct local console access"):
+            await client.sample_model_updates(["camera"], duration_seconds=1.0, max_messages=10)
+
+        await client.close()
 
 
 class TestProtectClientAuthenticateShapes:

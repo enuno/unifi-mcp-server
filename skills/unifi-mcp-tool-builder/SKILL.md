@@ -14,7 +14,7 @@ This skill guides you through adding new MCP tools to the existing UniFi MCP Ser
 
 **Project Context:**
 
-- **Existing Tools**: 360 MCP tools in local mode. The live count is what the registry reports; this figure is checked by `tests/unit/test_skill_tool_references.py`, so the test fails if it drifts.
+- **Existing Tools**: 362 MCP tools in local mode. The live count is what the registry reports; this figure is checked by `tests/unit/test_skill_tool_references.py`, so the test fails if it drifts.
 - **Test Coverage**: the unit suite is the gate. Run `pytest tests/unit/ -q --cov=src --cov-fail-under=80` from the repository root; the coverage gate is 80%. The exact test count changes with every change, so read it from that run rather than from this file.
 - **Architecture**: FastMCP + Pydantic v2 + async/await patterns
 - **API Support**: Local gateway (full), Cloud V1/EA (limited)

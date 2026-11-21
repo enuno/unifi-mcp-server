@@ -103,7 +103,7 @@ Configure the MCP server using environment variables:
 | `UNIFI_API_TYPE` | API type: `cloud-ea`, `cloud-v1`, or `local` | No | `cloud-ea` |
 | `UNIFI_MIXED_MODE` | Expose the cloud **and** local tool modules together, for a fleet whose registry holds both cloud controllers and local gateways. Without it the exposed modules follow the single `UNIFI_API_TYPE`, so local-only tools are missing on a cloud-typed server even when a local gateway is registered. Needs no `UNIFI_LOCAL_HOST`: the gateways come from the registry. See [Connecting to the cloud API and local gateways together](#connecting-to-the-cloud-api-and-local-gateways-together) | No | `false` |
 | `UNIFI_LOCAL_HOST` | Local gateway hostname or IP (required when `UNIFI_API_TYPE=local`) | No* | - |
-| `UNIFI_LOCAL_PORT` | Local gateway port | No | `443` |
+| `UNIFI_LOCAL_PORT` | Local gateway port. `443` for a UniFi OS appliance (Dream Machine, Cloud Key); `11443` for UniFi OS Server 5.1.15+; `8443` for a legacy self-hosted Network Application Server. See [Which console port to point at](#which-console-port-to-point-at) | No | `443` |
 | `UNIFI_LOCAL_VERIFY_SSL` | Verify the local gateway's TLS certificate. Setting `false` logs a startup warning; prefer `UNIFI_LOCAL_CA_FILE` for self-signed certs | No | `true` |
 | `UNIFI_LOCAL_CA_FILE` | CA certificate (PEM) to verify the local gateway with, in place of the default roots. Checked at startup. Can be the console's own self-signed certificate | No | - |
 | `UNIFI_LOCAL_TLS_SERVER_NAME` | Name to check the local gateway's certificate against, and send as SNI, when it is not `UNIFI_LOCAL_HOST`. UniFi OS's own certificate names `unifi.local`, not the console's address | No | - |
@@ -220,6 +220,47 @@ UNIFI_API_KEY=<key>
 The API key lives in the environment. Tool modules follow `UNIFI_API_TYPE`:
 `local` registers the cloud **and** local modules, a cloud type registers only
 the cloud ones.
+
+#### Which console port to point at
+
+`UNIFI_LOCAL_HOST` and `UNIFI_LOCAL_PORT` must address the console's **API**,
+and the port depends on what is running the console. `base_url` is always
+`https://{host}:{port}` — this server never speaks plain HTTP to a controller.
+
+| Deployment | Console API | `UNIFI_LOCAL_PORT` |
+|---|---|---|
+| UniFi OS appliance (Dream Machine, Cloud Key) | `https://<console>/` | `443` (the default) |
+| UniFi OS Server 5.1.15 or later (Linux) | `https://<host>:11443/` | `11443` |
+| UniFi OS Server before 5.1.15 | `https://<host>:8443/` | `8443` |
+| Legacy self-hosted Network Application Server | `https://<host>:8443/` | `8443` |
+
+Ports that are **not** the API, and will not work if you point at them:
+
+- **8444** — the captive/secure portal. Ubiquiti's self-hosting guide states
+  that captive portals are served on `8444`, changed from `8843` on the Network
+  Server.
+- **11084** — an internal port. UniFi OS Server 5.1.15 restricted it to
+  loopback access on Linux, so it does not answer from another host at all.
+- **8080** — device inform ("Device and application communication"), not the
+  console API.
+- **8843** — hotspot portal redirection (HTTPS) on the Network Server.
+
+Two related notes:
+
+- **8443 was removed as an external port by UniFi OS Server 5.1.15** ("Removed
+  unused external port 8443"), which is why a current UniFi OS Server needs
+  `11443`. Ubiquiti's Required Ports Reference still lists `8443` as
+  "Application GUI/API (on UniFi Console)", because that table covers UniFi
+  deployments generally, including the legacy Network Application Server and
+  UniFi OS appliances.
+- **Port 28082** is separate and not needed for this server: it carries
+  device packet capture and support-file downloads, so the *devices* must
+  reach it, not the MCP server.
+
+UniFi OS consoles present their own certificate, which names `unifi.local`
+rather than the console's address. Set `UNIFI_LOCAL_TLS_SERVER_NAME=unifi.local`
+(or point `UNIFI_LOCAL_CA_FILE` at the console's CA) — see
+`UNIFI_LOCAL_VERIFY_SSL` above.
 
 ### 2. Several controllers, from Postgres (fleet mode)
 
@@ -943,6 +984,10 @@ webhook = await mcp.call_tool(
 - `stop_protect_speaker_siren(speaker_id)`
 
 The mutating tools require `confirm=True` and support `dry_run`. Successful endpoints that return HTTP 204 or another empty success body are normalized to `{}` by `ProtectClient`; the delete and stop-siren tools therefore report success instead of a JSON decode failure. These Protect 7.4.96 operations are mock-tested against the pinned specification and need live-controller verification.
+
+`list_protect_external_arm_profiles` applies `limit` and `offset` **locally**. The pinned specification defines `/v1/external/arm-profiles` with no query parameters and a bare-array response, so the console applies no server-side window and query parameters sent to it are ignored; the tool therefore requests the whole collection and pages it itself. `totalCount` reports the size of the whole collection and `count` the size of the returned page.
+
+External arm profile IDs are validated as a single path segment before interpolation, so a value containing `/`, `..`, a space or a query character is rejected instead of retargeting the request.
 
 #### Still planned / not yet exposed
 

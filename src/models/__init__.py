@@ -66,7 +66,6 @@ from .protect_event import (
     ProtectAlarmWebhookResult,
     ProtectDeviceUpdateMessage,
     ProtectEventMessage,
-    ProtectModelUpdateMessage,
 )
 from .protect_nvr import ProtectNVR, ProtectNvrFeatureFlags
 from .protect_v7 import (
@@ -77,6 +76,7 @@ from .protect_v7 import (
     ProtectExternalArmProfile,
     ProtectFob,
     ProtectLinkStation,
+    ProtectModelUpdateMessage,
     ProtectPosTransactionResult,
     ProtectRelay,
     ProtectSiren,

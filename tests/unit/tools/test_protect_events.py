@@ -35,6 +35,7 @@ def mock_client():
     client.authenticate = AsyncMock()
     client.get = AsyncMock()
     client.post = AsyncMock()
+    client.sample_model_updates = AsyncMock()
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     return client
@@ -135,23 +136,41 @@ async def test_send_protect_alarm_webhook_strips_whitespace(mock_settings, mock_
 
 
 @pytest.mark.asyncio
-async def test_list_protect_model_updates_sends_model_keys(mock_settings, mock_client):
-    mock_client.get = AsyncMock(
+async def test_list_protect_model_updates_samples_websocket(mock_settings, mock_client):
+    mock_client.sample_model_updates = AsyncMock(
         return_value={
-            "data": [{"id": "cam-1", "type": "update", "modelKey": "camera"}],
+            "messages": [
+                {
+                    "type": "update",
+                    "item": {"id": "cam-1", "modelKey": "camera"},
+                }
+            ],
+            "count": 1,
+            "elapsed_ms": 25,
+            "stop_reason": "peer_closed",
         }
     )
     list_protect_model_updates = _tool("list_protect_model_updates")
     with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
         result = await list_protect_model_updates(
-            mock_settings, model_keys=["camera", "event"], limit=10, offset=0
+            mock_settings,
+            model_keys=["camera", "event"],
+            duration_seconds=2.5,
+            limit=10,
+            offset=0,
         )
-    mock_client.get.assert_awaited_once_with(
-        "/integration/v1/subscribe/updates", params={"modelKeys": "camera,event"}
+    mock_client.sample_model_updates.assert_awaited_once_with(
+        ["camera", "event"], duration_seconds=2.5, max_messages=10
     )
+    mock_client.get.assert_not_awaited()
     assert result["count"] == 1
     assert result["modelKeys"] == ["camera", "event"]
-    assert result["data"][0]["modelKey"] == "camera"
+    assert result["data"][0] == {
+        "type": "update",
+        "item": {"id": "cam-1", "modelKey": "camera"},
+    }
+    assert result["stopReason"] == "peer_closed"
+    assert result["elapsedMs"] == 25
 
 
 @pytest.mark.asyncio
@@ -165,15 +184,36 @@ async def test_list_protect_model_updates_rejects_unknown_key(mock_settings, moc
 
 @pytest.mark.asyncio
 async def test_list_protect_model_updates_accepts_comma_string(mock_settings, mock_client):
-    mock_client.get = AsyncMock(return_value=[{"id": "nvr-1", "type": "update", "modelKey": "nvr"}])
+    mock_client.sample_model_updates = AsyncMock(
+        return_value={
+            "messages": [{"type": "update", "item": {"id": "nvr-1", "modelKey": "nvr"}}],
+            "count": 1,
+            "elapsed_ms": 10,
+            "stop_reason": "max_messages",
+        }
+    )
     list_protect_model_updates = _tool("list_protect_model_updates")
     with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client):
         result = await list_protect_model_updates(mock_settings, model_keys="nvr,nvr")
-    mock_client.get.assert_awaited_once_with(
-        "/integration/v1/subscribe/updates", params={"modelKeys": "nvr"}
+    mock_client.sample_model_updates.assert_awaited_once_with(
+        ["nvr"], duration_seconds=5.0, max_messages=100
     )
     assert result["modelKeys"] == ["nvr"]
-    assert result["data"][0]["id"] == "nvr-1"
+    assert result["data"][0]["item"]["id"] == "nvr-1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("duration", [0, -1, 30.1])
+async def test_list_protect_model_updates_rejects_invalid_duration(
+    mock_settings, mock_client, duration
+):
+    list_protect_model_updates = _tool("list_protect_model_updates")
+    with patch(f"{protect_events.__name__}.ProtectClient", return_value=mock_client) as mock_cls:
+        with pytest.raises(ValidationError, match="duration_seconds"):
+            await list_protect_model_updates(
+                mock_settings, model_keys=["camera"], duration_seconds=duration
+            )
+    mock_cls.assert_not_called()
 
 
 @pytest.mark.asyncio

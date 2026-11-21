@@ -35,6 +35,7 @@ dependencies = [
     # Transitive dependency lower bounds for security (Dependabot alerts)
     "authlib>=1.6.9",
     "PyJWT>=2.12.0",
+    "websockets>=17.4,<18",
 ]
 
 [project.optional-dependencies]

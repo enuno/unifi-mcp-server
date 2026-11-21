@@ -18440,7 +18440,7 @@
       }
     },
     {
-      "description": "Get Protect model update messages for selected model keys.\n\nPolls GET /v1/subscribe/updates (Protect 7.4.96). This is not the\ndevices or events websocket. Pass model keys such as camera, event,\nor externalArmProfile.",
+      "description": "Sample Protect model updates from the direct-console WebSocket.\n\nOpens WS /v1/subscribe/updates (Protect 7.4.96), collects messages for a\nbounded interval, and closes the subscription. The UniFi Cloud Connector\ncannot proxy WebSocket upgrades, so cloud-only configurations fail with an\nexplicit transport error instead of falling back to a plain HTTP request.",
       "examples": [
         {
           "arguments": {
@@ -18463,6 +18463,11 @@
             ],
             "default": null,
             "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "duration_seconds": {
+            "default": 5.0,
+            "description": "Sampling window in seconds (greater than 0, at most 30)",
+            "type": "number"
           },
           "limit": {
             "anyOf": [
@@ -18500,7 +18505,7 @@
               }
             ],
             "default": null,
-            "description": "Number of messages to skip"
+            "description": "Number of sampled messages to skip"
           }
         },
         "required": [

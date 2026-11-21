@@ -917,15 +917,31 @@ viewers = await mcp.call_tool("list_protect_viewers", {})
 - `get_protect_event_messages(limit=None, offset=None)` compatibility alias
 - `get_protect_subscribe_devices(limit=None, offset=None)` compatibility alias
 - `get_protect_device_updates(limit=None, offset=None)` compatibility alias
+- `list_protect_model_updates(model_keys, duration_seconds=5.0, limit=None, offset=None)` opens the Protect 7.4.96 `/v1/subscribe/updates` WebSocket on a directly reachable local console, samples pushed create/update/remove envelopes for up to 30 seconds, and returns `elapsedMs` plus `stopReason`. The UniFi Cloud Connector does not support WebSocket upgrades; this tool fails explicitly in cloud modes and never falls back to HTTP polling.
 - `send_protect_alarm_webhook(webhook_id, payload=None)`: `webhook_id` is the alarm's webhook trigger ID, one path segment of letters, digits, `.`, `_`, `~`, `:` and `-`
 
 ```python
 events = await mcp.call_tool("list_protect_events", {})
+updates = await mcp.call_tool(
+    "list_protect_model_updates",
+    {"model_keys": ["camera", "event"], "duration_seconds": 5, "limit": 100},
+)
 webhook = await mcp.call_tool(
     "send_protect_alarm_webhook",
     {"webhook_id": "webhook-1", "payload": {"event": "manual-trigger"}, "confirm": True},
 )
 ```
+
+`list_protect_model_updates` is mock- and protocol-tested against the pinned Protect 7.4.96 specification, including a real local HTTP 101 WebSocket upgrade in the client tests. It still needs verification against a live Protect 7.4.96 console.
+
+#### Protect 7.4.96 external alarm and speaker actions
+
+- `list_protect_external_arm_profiles`, `get_protect_external_arm_profile`
+- `create_protect_external_arm_profile`, `update_protect_external_arm_profile`, `delete_protect_external_arm_profile`
+- `arm_protect_external_arm_profile`, `disarm_protect_external_arm_profile`
+- `stop_protect_speaker_siren(speaker_id)`
+
+The mutating tools require `confirm=True` and support `dry_run`. Successful endpoints that return HTTP 204 or another empty success body are normalized to `{}` by `ProtectClient`; the delete and stop-siren tools therefore report success instead of a JSON decode failure. These Protect 7.4.96 operations are mock-tested against the pinned specification and need live-controller verification.
 
 #### Still planned / not yet exposed
 

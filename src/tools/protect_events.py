@@ -142,36 +142,49 @@ def _normalize_model_keys(model_keys: list[str] | str) -> list[str]:
 async def list_protect_model_updates(
     settings: Settings,
     model_keys: list[str] | str,
+    duration_seconds: float = 5.0,
     limit: int | None = None,
     offset: int | None = None,
 ) -> dict[str, Any]:
-    """Get Protect model update messages for selected model keys.
+    """Sample Protect model updates from the direct-console WebSocket.
 
-    Polls GET /v1/subscribe/updates (Protect 7.4.96). This is not the
-    devices or events websocket. Pass model keys such as camera, event,
-    or externalArmProfile.
+    Opens WS /v1/subscribe/updates (Protect 7.4.96), collects messages for a
+    bounded interval, and closes the subscription. The UniFi Cloud Connector
+    cannot proxy WebSocket upgrades, so cloud-only configurations fail with an
+    explicit transport error instead of falling back to a plain HTTP request.
 
     Args:
         settings: Application settings
         model_keys: One or more Protect model keys, or a comma-separated string
+        duration_seconds: Sampling window in seconds (greater than 0, at most 30)
         limit: Maximum number of messages to return
-        offset: Number of messages to skip
+        offset: Number of sampled messages to skip
+
+    Returns:
+        A bounded sample with messages, elapsed time, and stop reason
     """
     logger = get_logger(__name__, settings.log_level)
     keys = _normalize_model_keys(model_keys)
     final_limit, final_offset = validate_limit_offset(limit, offset)
+    if (
+        isinstance(duration_seconds, bool)
+        or not isinstance(duration_seconds, int | float)
+        or not 0 < float(duration_seconds) <= 30
+    ):
+        raise ValidationError("duration_seconds must be greater than 0 and at most 30")
+    final_duration = float(duration_seconds)
 
     async with ProtectClient(settings) as client:
-        await client.authenticate()
-        response = await client.get(
-            settings.get_protect_integration_path("subscribe/updates"),
-            params={"modelKeys": ",".join(keys)},
+        sample = await client.sample_model_updates(
+            keys,
+            duration_seconds=final_duration,
+            max_messages=final_offset + final_limit,
         )
 
-    updates_data = _extract_collection(response)
+    updates_data = sample["messages"]
     paginated = updates_data[final_offset : final_offset + final_limit]
     updates = [
-        ProtectModelUpdateMessage.model_validate(item).model_dump(by_alias=True)
+        ProtectModelUpdateMessage.model_validate(item).model_dump(by_alias=True, exclude_none=True)
         for item in paginated
     ]
     logger.info(sanitize_log_message(f"Retrieved {len(updates)} Protect model update messages"))
@@ -181,6 +194,9 @@ async def list_protect_model_updates(
         "count": len(updates),
         "totalCount": len(updates_data),
         "modelKeys": keys,
+        "durationSeconds": final_duration,
+        "elapsedMs": sample["elapsed_ms"],
+        "stopReason": sample["stop_reason"],
         "data": updates,
     }
 

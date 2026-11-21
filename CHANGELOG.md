@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Classic-server controller labelling guidance (coverage item 15).** A
+  standalone, self-hosted Network Application Server cannot be detected from
+  the API — `/v1/info` returns only `applicationVersion`, with no host-type
+  field — so the platform break has to be recorded as operator-provided
+  metadata. The `deployment=classic-server` label convention is now stated in
+  `API.md` and in the fleet operations skill, together with how to set it
+  (`register_controller` / `update_controller`, whose `labels` mapping
+  **replaces** the controller's labels rather than merging into them) and how
+  to act on it (`fleet_health` and `fleet_sites` both take a `labels` filter
+  that matches only controllers carrying **all** the given labels). The
+  `fleet_health` docstring and `docs/NETWORK_11_COMPATIBILITY.md` already
+  described the break; what was missing was the procedure, and the skill
+  previously told the reader not to guess at a label convention without
+  naming the one in use.
+
 - **Console port guidance for `base_url` (coverage item 8).** `UNIFI_LOCAL_PORT`
   was documented as "Local gateway port" with the default `443`, and nothing
   said which port a console's API actually lives on. It does: a UniFi OS

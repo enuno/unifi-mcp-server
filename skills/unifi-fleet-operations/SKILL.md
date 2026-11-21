@@ -86,11 +86,58 @@ a genuinely USG-free site all look identical — no `platform_compat` field.
 
 There is no automatic signal for the other platform break, a classic,
 self-hosted Network Application Server: the Integration API's `/v1/info`
-only returns `applicationVersion`, with no host-type field. If you know a
-controller is on a classic server, say so from other evidence (an operator
-statement, a label someone already set) — do not infer it from
-`fleet_health`, and do not guess at a label convention the fleet does not
-already use. See `docs/NETWORK_11_COMPATIBILITY.md` for the full matrix.
+only returns `applicationVersion`, with no host-type field. Do not infer it
+from `fleet_health` — a classic server looks exactly like a UniFi OS console
+there.
+
+Say it from other evidence instead, and record it as a **label** so the fleet
+tools can act on it. The convention, recorded in
+`docs/NETWORK_11_COMPATIBILITY.md`, is:
+
+| Label | Meaning |
+|---|---|
+| `deployment=classic-server` | This controller runs a standalone, self-hosted Network Application Server, not UniFi OS Server. |
+
+Set it when registering the controller, or change it later with
+`update_controller` — both take a `labels` mapping that **replaces** the
+controller's labels, so pass the whole set you want to keep:
+
+
+`register_controller` needs a credential — exactly one of `api_key` and
+`cloud_account`, and it does not fall back to the server's own configured
+key. `update_controller` does not.
+
+```
+# on registration - api_key is required, exactly one of api_key / cloud_account
+register_controller(name="lab-1", api_type="local", local_host="10.0.0.5",
+                     api_key="<console-api-key>",
+                     labels={"deployment": "classic-server", "region": "west"},
+                     confirm=True)
+
+# on an existing controller - labels only, no credential needed
+update_controller(name="lab-1", labels={"deployment": "classic-server"},
+                  confirm=True)
+```
+
+Then filter the fleet tools on it. Both `fleet_health` and `fleet_sites` take
+a `labels` mapping and match a controller only when it carries **all** of the
+given labels:
+
+```
+# every classic-server controller, and its health
+fleet_health(labels={"deployment": "classic-server"})
+
+# and the sites on those controllers
+fleet_sites(labels={"deployment": "classic-server"})
+```
+
+`fleet_health` echoes each controller's labels in its `controllers` entry, so
+the label is visible in the output as well as usable as a filter. A label is
+operator-provided metadata: it records that you know the deployment type. It
+is not proof that the server interoperates with a classic host, and a failed
+401/403 or TLS connection does not establish that an endpoint is absent — keep
+capability unknown. See `docs/NETWORK_11_COMPATIBILITY.md` for the full
+matrix.
 
 ### `fleet_fanout` contacts controllers
 

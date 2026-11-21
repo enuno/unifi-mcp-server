@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Console port guidance for `base_url` (coverage item 8).** `UNIFI_LOCAL_PORT`
+  was documented as "Local gateway port" with the default `443`, and nothing
+  said which port a console's API actually lives on. It does: a UniFi OS
+  appliance serves the API on `443`, UniFi OS Server 5.1.15 or later on
+  `11443`, and a legacy self-hosted Network Application Server on `8443`.
+  API.md now carries a table of these, the ports that are **not** the API and
+  will not work if pointed at (`8444`, the captive/secure portal, changed from
+  `8843` on the Network Server; `11084`, an internal port that UniFi OS Server
+  5.1.15 restricted to loopback on Linux; `8080`, device inform; and `8843`,
+  hotspot portal redirection), and the caveat that this server's request paths
+  target UniFi OS, so interoperability with a classic standalone server is
+  unverified. It also states that reaching a self-signed UniFi OS console
+  needs **both** `UNIFI_LOCAL_CA_FILE` (trust) and
+  `UNIFI_LOCAL_TLS_SERVER_NAME` (the name checked), because `src/api/tls.py`
+  keeps certificate and name verification both on. Port `28082` is called out
+  as a device-side path for packet capture and support-file downloads, which
+  this server does not use. Documentation only; no behaviour change.
 - **Coverage item 22 evidence: external Network Lists are a negative finding.**
   The external-URL source field of traffic matching lists does not exist in the
   documented surface. The Network 11.0.97 Integration API specification carries

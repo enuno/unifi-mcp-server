@@ -110,6 +110,34 @@ def _extract_flows(response: Any) -> list[dict[str, Any]]:
     return []
 
 
+async def _fetch_raw_flow_by_id(
+    client: UniFiClient,
+    settings: Settings,
+    site_id: str,
+    flow_id: str,
+) -> dict[str, Any] | None:
+    """Fetch one flow by id, or None when the controller does not have it.
+
+    The v2 endpoint does have a per-flow lookup:
+    ``GET /proxy/network/v2/api/site/{site}/traffic-flows/{flow_id}`` answers
+    200 with the same object the list route returns, and 404 for an id the
+    controller does not know. Verified live 2026-11-21 against Network
+    10.6.111.
+    """
+    normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
+    endpoint = f"{settings.get_v2_api_path(normalized_site_id)}/traffic-flows/{flow_id}"
+    try:
+        response = await client.get(endpoint)
+    except (APIError, ResourceNotFoundError):
+        return None
+    if isinstance(response, dict):
+        data = response.get("data")
+        if isinstance(data, dict):
+            return data
+        return response if response else None
+    return response if isinstance(response, dict) else None
+
+
 async def _fetch_raw_flows(
     client: UniFiClient,
     settings: Settings,
@@ -455,10 +483,16 @@ async def get_traffic_flow_details(
     flow_id: str,
     settings: Settings,
 ) -> dict[str, Any]:
-    """Find a specific flow in the current 50-flow snapshot.
+    """Find a specific flow by id.
 
-    Raises :class:`ResourceNotFoundError` if the flow has rolled out of the
-    window (the v2 endpoint has no "fetch by id" lookup).
+    The v2 endpoint has a per-flow lookup
+    (``GET /traffic-flows/{flow_id}``, live-verified 2026-11-21 against
+    Network 10.6.111), so the flow is fetched directly instead of being
+    hunted for in the 50-flow list window. The list is still scanned as a
+    fallback, for a controller that serves the flow in the window but not by
+    id.
+
+    Raises :class:`ResourceNotFoundError` if the controller has no such flow.
     """
     site_id = validate_site_id(site_id)
     _ensure_local_api(settings)
@@ -466,6 +500,10 @@ async def get_traffic_flow_details(
     async with UniFiClient(settings) as client:
         if not client.is_authenticated:
             await client.authenticate()
+
+        raw = await _fetch_raw_flow_by_id(client, settings, site_id, flow_id)
+        if raw is not None:
+            return _parse_flow(raw).model_dump(by_alias=True)
 
         raw_flows = await _fetch_raw_flows(client, settings, site_id)
         for raw in raw_flows:

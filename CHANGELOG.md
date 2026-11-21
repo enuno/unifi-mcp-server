@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Live Flows: fetch one flow by id, and the terminate-connection finding
+  (coverage item 17).** `get_traffic_flow_details` said the v2 endpoint had
+  no "fetch by id" lookup, so it fetched the whole 50-flow window and
+  scanned it. That is not true: `GET
+  /proxy/network/v2/api/site/{site}/traffic-flows/{flow_id}` answers 200 with
+  the same object a list row carries, and 404 for an id the controller does
+  not know. Live-verified 2026-11-21 against Network 10.6.111. The tool now
+  fetches the flow directly, so a flow that has aged out of the list window
+  is still found; the list scan stays as a fallback. Four unit tests cover
+  the lookup, the fallback and the not-found case.
+
+  The terminate-connection action the brief asks for **does not exist** on
+  this console, and the probe that could have misled is recorded in
+  `docs/research/coverage-item-17-live-flows.md`: `POST` on
+  `/traffic-flows/<anything>` answers 405 - including a segment that
+  cannot exist - so the 405s on `/traffic-flows/terminate`,
+  `/traffic-flows/actions` and `/traffic-flows/terminate-connection` are the
+  GET-only `{id}` pattern rejecting POST, not three hidden routes. The
+  Threats/Blocked classification views the brief asks about **do** have a
+  real surface and are already exposed by `get_traffic_flows`'s `action` and
+  `risk` filters; streaming semantics do not, so no streaming tool was
+  written.
+
 - **Classic-server controller labelling guidance (coverage item 15).** A
   standalone, self-hosted Network Application Server cannot be detected from
   the API — `/v1/info` returns only `applicationVersion`, with no host-type

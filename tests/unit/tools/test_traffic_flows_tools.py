@@ -207,9 +207,17 @@ def _mock_client(raw_flows: list[dict[str, Any]] | dict[str, Any]) -> AsyncMock:
     client._site_uuid_to_name = {}
     client.authenticate = AsyncMock()
     client.post = AsyncMock(return_value=raw_flows)
+    # The v2 endpoint has a per-flow GET. By default it 404s, so the tool
+    # falls back to scanning the list - the pre-existing behaviour.
+    client.get = AsyncMock(side_effect=_not_found)
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
     return client
+
+
+async def _not_found(endpoint: str, **_: Any) -> Any:
+    """Stand in for the console's 404 on an unknown flow id."""
+    raise ResourceNotFoundError("traffic_flow", endpoint)
 
 
 # --------------------------------------------------------------------------- #
@@ -1025,3 +1033,63 @@ class TestBlockFlowActions:
             )
         assert result["duration"] == "temporary"
         assert result["expires_at"] is not None
+
+
+class TestGetTrafficFlowDetailsById:
+    """The v2 endpoint HAS a per-flow GET (live-verified 2026-11-21)."""
+
+    @pytest.mark.asyncio
+    async def test_uses_the_per_flow_get(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        flow = next(f for f in sample_raw_flows if f["id"] == "flow-2")
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            client.get = AsyncMock(return_value=flow)
+            MockClient.return_value = client
+            result = await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
+
+        assert result["id"] == "flow-2"
+        assert result["source"]["client_name"] == "Rob's Laptop"
+        # the lookup went straight to the per-flow route
+        client.get.assert_awaited_once()
+        url = client.get.await_args[0][0]
+        assert url.endswith("/traffic-flows/flow-2")
+        # and did NOT need the list window
+        client.post.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_flow_outside_the_list_window_is_still_found(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """The old code could only find a flow in the 50-flow snapshot."""
+        aged = {**sample_raw_flows[0], "id": "aged-flow"}
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            client.get = AsyncMock(return_value=aged)
+            MockClient.return_value = client
+            result = await tf.get_traffic_flow_details("default", "aged-flow", mock_settings)
+        assert result["id"] == "aged-flow"
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_the_list_when_the_id_route_404s(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        """A controller that has the flow in the window but not by id still works."""
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            MockClient.return_value = client
+            result = await tf.get_traffic_flow_details("default", "flow-2", mock_settings)
+        assert result["id"] == "flow-2"
+        client.get.assert_awaited_once()
+        client.post.assert_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unknown_id_raises(
+        self, mock_settings: MagicMock, sample_raw_flows: list[dict[str, Any]]
+    ) -> None:
+        with patch("src.tools.traffic_flows.UniFiClient") as MockClient:
+            client = _mock_client(sample_raw_flows)
+            MockClient.return_value = client
+            with pytest.raises(ResourceNotFoundError):
+                await tf.get_traffic_flow_details("default", "missing-id", mock_settings)

@@ -872,7 +872,7 @@ class TestUniFiClientBackupMethods:
         import logging
 
         client = UniFiClient(mock_settings_local)
-        mac = "8c:30:66:9c:9b:46"
+        mac = "aa:bb:cc:dd:ee:ff"
         endpoint = f"/proxy/network/v2/api/site/site-uuid/pcap-status/{mac}"
         client._site_uuid_to_name = {"site-uuid": "default"}
 

@@ -152,7 +152,7 @@ class ProtectClient:
 
         started = time.monotonic()
         messages: list[dict[str, Any]] = []
-        stop_reason = "peer_closed"
+        stop_reason: str
         connected = False
         try:
             async with asyncio.timeout(duration_seconds):

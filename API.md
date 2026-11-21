@@ -944,6 +944,10 @@ webhook = await mcp.call_tool(
 
 The mutating tools require `confirm=True` and support `dry_run`. Successful endpoints that return HTTP 204 or another empty success body are normalized to `{}` by `ProtectClient`; the delete and stop-siren tools therefore report success instead of a JSON decode failure. These Protect 7.4.96 operations are mock-tested against the pinned specification and need live-controller verification.
 
+`list_protect_external_arm_profiles` applies `limit` and `offset` **locally**. The pinned specification defines `/v1/external/arm-profiles` with no query parameters and a bare-array response, so the console applies no server-side window and query parameters sent to it are ignored; the tool therefore requests the whole collection and pages it itself. `totalCount` reports the size of the whole collection and `count` the size of the returned page.
+
+External arm profile IDs are validated as a single path segment before interpolation, so a value containing `/`, `..`, a space or a query character is rejected instead of retargeting the request.
+
 #### Still planned / not yet exposed
 
 Snapshot capture, media stream helpers, talkback, and PTZ operations remain roadmap work.

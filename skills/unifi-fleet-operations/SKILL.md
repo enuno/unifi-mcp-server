@@ -102,13 +102,19 @@ Set it when registering the controller, or change it later with
 `update_controller` — both take a `labels` mapping that **replaces** the
 controller's labels, so pass the whole set you want to keep:
 
+
+`register_controller` needs a credential — exactly one of `api_key` and
+`cloud_account`, and it does not fall back to the server's own configured
+key. `update_controller` does not.
+
 ```
-# on registration
+# on registration - api_key is required, exactly one of api_key / cloud_account
 register_controller(name="lab-1", api_type="local", local_host="10.0.0.5",
+                     api_key="<console-api-key>",
                      labels={"deployment": "classic-server", "region": "west"},
                      confirm=True)
 
-# on an existing controller
+# on an existing controller - labels only, no credential needed
 update_controller(name="lab-1", labels={"deployment": "classic-server"},
                   confirm=True)
 ```

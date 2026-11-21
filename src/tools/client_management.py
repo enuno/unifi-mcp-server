@@ -495,3 +495,215 @@ async def limit_bandwidth(
         "instead. For an already-authorized guest, unauthorize and re-authorize "
         "with the desired limits."
     )
+
+
+#: The controller's per-client command vocabulary. ``cmd/stamgr`` is the
+#: legacy route and takes either a single ``mac`` or a ``macs`` list.
+_STAMGR_CMDS = {
+    "block": "block-sta",
+    "unblock": "unblock-sta",
+    "reconnect": "kick-sta",
+    "forget": "forget-sta",
+}
+
+#: Commands that accept the ``macs`` list shape, so N clients go in one
+#: request. ``kick-sta`` does NOT: verified live on Network 10.6.111 it reads
+#: only the singular ``mac`` field and answers HTTP 500 when ``mac`` is
+#: absent, so a reconnect fan-out uses one request per client.
+_BATCH_CMDS = frozenset({"block-sta", "unblock-sta", "forget-sta"})
+
+#: Upper bound on one bulk call, so a mistyped argument cannot turn into a
+#: request the controller will not answer.
+_MAX_BULK_CLIENTS = 100
+
+
+@write_tool
+async def bulk_client_action(
+    site_id: str,
+    client_macs: list[str],
+    action: str,
+    settings: Settings,
+    confirm: bool | str = False,
+    dry_run: bool | str = False,
+) -> dict[str, Any]:
+    """Apply one action to several clients at once, reporting each client.
+
+    Network 11 adds bulk client editing. Live-verified 2026-11-21 against
+    Network 10.6.111 (UniFi OS): the legacy ``cmd/stamgr`` route accepts a
+    ``macs`` list, so ``block-sta``, ``unblock-sta`` and ``forget-sta`` all
+    take N clients in a single request and answer with one record per
+    client. ``kick-sta`` is the exception — it reads only the singular
+    ``mac`` field — so a reconnect is issued one request per client.
+
+    Unknown MACs are reported and left alone. The controller does not
+    validate them: ``block-sta`` on a MAC that has never been seen
+    **creates** a blocked client record, so a typo would otherwise leave a
+    phantom block behind. Every requested MAC is checked against the site
+    inventory first and only the known ones are sent.
+
+    Args:
+        site_id: Site identifier
+        client_macs: Client MAC addresses to act on
+        action: One of ``block``, ``unblock``, ``reconnect``, ``forget``
+        settings: Application settings
+        confirm: Confirmation flag (must be True to execute)
+        dry_run: If True, report what would happen without acting
+
+    Returns:
+        Per-client results: ``results`` lists every requested client with its
+        outcome, ``not_found`` the ones the site does not know, and the
+        counts of what was applied and what failed.
+
+    Raises:
+        ConfirmationRequiredError: If confirm is not True
+        ValidationError: If the action is unknown or the list is empty
+    """
+    site_id = validate_site_id(site_id)
+    action = action.strip().lower()
+    if action not in _STAMGR_CMDS:
+        raise ValueError(f"action must be one of {sorted(_STAMGR_CMDS)}, got '{action}'")
+    if not client_macs:
+        raise ValueError("client_macs must not be empty")
+    if len(client_macs) > _MAX_BULK_CLIENTS:
+        raise ValueError(
+            f"client_macs accepts at most {_MAX_BULK_CLIENTS} clients, got {len(client_macs)}"
+        )
+
+    macs: list[str] = []
+    for raw in client_macs:
+        mac = validate_mac_address(raw)
+        if mac not in macs:
+            macs.append(mac)
+
+    validate_confirmation(confirm, "bulk client management operation", dry_run)
+    logger = get_logger(__name__, settings.log_level)
+    cmd = _STAMGR_CMDS[action]
+
+    parameters = {"site_id": site_id, "action": action, "client_count": len(macs)}
+
+    if dry_run:
+        logger.info(
+            sanitize_log_message(
+                f"DRY RUN: Would apply '{action}' to {len(macs)} client(s) in site '{site_id}'"
+            )
+        )
+        log_audit(
+            operation="bulk_client_action",
+            parameters=parameters,
+            result="dry_run",
+            site_id=site_id,
+            dry_run=True,
+        )
+        return {
+            "dry-run": True,
+            "action": action,
+            "command": cmd,
+            "client_count": len(macs),
+            "batch_request": cmd in _BATCH_CMDS,
+        }
+
+    try:
+        async with UniFiClient(settings) as client:
+            await client.authenticate()
+
+            # Resolve the requested MACs against the site inventory. A MAC the
+            # controller has never seen is not an error to fail on — it is a
+            # per-client result, and it must not be sent, because block-sta
+            # would create a record for it.
+            response = await client.get(f"/ea/sites/{site_id}/stat/alluser")
+            clients_data: list[dict[str, Any]] = (
+                response if isinstance(response, list) else response.get("data", [])
+            )
+            known = {validate_mac_address(c.get("mac", "")) for c in clients_data if c.get("mac")}
+            present = [m for m in macs if m in known]
+            absent = [m for m in macs if m not in known]
+
+            results: list[dict[str, Any]] = [{"mac": m, "status": "not_found"} for m in absent]
+
+            if present:
+                if cmd in _BATCH_CMDS:
+                    payload = await client.post(
+                        f"/ea/sites/{site_id}/cmd/stamgr",
+                        json_data={"cmd": cmd, "macs": present},
+                    )
+                    body = payload.get("data", []) if isinstance(payload, dict) else payload
+                    entries = body if isinstance(body, list) else []
+                    seen: set[str] = set()
+                    for entry in entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        mac = str(entry.get("mac", "")).lower()
+                        seen.add(mac)
+                        results.append(
+                            {
+                                "mac": mac,
+                                "status": "ok",
+                                "blocked": entry.get("blocked"),
+                            }
+                        )
+                    for mac in present:
+                        if mac not in seen:
+                            results.append({"mac": mac, "status": "no_result"})
+                else:
+                    # kick-sta has no batch form: one request per client.
+                    for mac in present:
+                        try:
+                            payload = await client.post(
+                                f"/ea/sites/{site_id}/cmd/stamgr",
+                                json_data={"cmd": cmd, "mac": mac},
+                            )
+                            body = payload.get("data", []) if isinstance(payload, dict) else payload
+                            entries = body if isinstance(body, list) else []
+                            blocked = (
+                                entries[0].get("blocked")
+                                if entries and isinstance(entries[0], dict)
+                                else None
+                            )
+                            results.append({"mac": mac, "status": "ok", "blocked": blocked})
+                        except Exception as exc:  # noqa: BLE001 - one client, not the batch
+                            results.append(
+                                {"mac": mac, "status": "failed", "error": str(exc)[:200]}
+                            )
+
+            applied = [r for r in results if r["status"] == "ok"]
+            failed = [r for r in results if r["status"] in ("failed", "no_result")]
+            not_found = [r for r in results if r["status"] == "not_found"]
+
+            logger.info(
+                sanitize_log_message(
+                    f"Applied '{action}' to {len(applied)} of {len(macs)} client(s) "
+                    f"in site '{site_id}'"
+                )
+            )
+            log_audit(
+                operation="bulk_client_action",
+                parameters=parameters,
+                result="success" if not failed else "partial",
+                site_id=site_id,
+            )
+
+            return {
+                "success": not failed,
+                "action": action,
+                "command": cmd,
+                "batch_request": cmd in _BATCH_CMDS,
+                "requested": len(macs),
+                "applied": len(applied),
+                "failed": len(failed),
+                "not_found": len(not_found),
+                "results": sorted(results, key=lambda r: r["mac"]),
+            }
+
+    except Exception as e:
+        logger.error(
+            sanitize_log_message(
+                f"Failed to apply '{action}' to {len(macs)} client(s) in site '{site_id}': {e}"
+            )
+        )
+        log_audit(
+            operation="bulk_client_action",
+            parameters=parameters,
+            result="failed",
+            site_id=site_id,
+        )
+        raise

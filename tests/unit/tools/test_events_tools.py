@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.tools.events import list_alarms, list_events, list_neighboring_aps
+from src.tools.events import (
+    list_alarms,
+    list_client_connection_events,
+    list_events,
+    list_neighboring_aps,
+)
 from src.utils.exceptions import ResourceNotFoundError, ValidationError
 
 
@@ -157,3 +162,190 @@ class TestV2Fallbacks:
         body = client.post.call_args[1]["json_data"]
         assert body["timestampTo"] - body["timestampFrom"] == 7 * 24 * 3600 * 1000
         assert result == [alarm]
+
+
+# =============================================================================
+# list_client_connection_events Tests (coverage item 23)
+# =============================================================================
+
+
+def _log_row(key, mac="00:11:22:33:44:55", **over):
+    """One v2 system-log row shaped like the live controller's."""
+    connected = key.startswith("CLIENT_CONNECTED")
+    row = {
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaa",
+        "timestamp": 1760000000000,
+        "type": "CLIENT_CONNECTION",
+        "category": "CLIENT_DEVICES",
+        "key": key,
+        "event": "CLIENT_CONNECTED_WIRELESS" if connected else "CLIENT_DISCONNECTED_WIRELESS",
+        "severity": "LOW",
+        "status": "NEW",
+        "target": "CLIENT",
+        "message_raw": "Client connected",
+        "title_raw": "Client Connected",
+        "parameters": {
+            "CLIENT": {
+                "id": mac,
+                "name": "Phone",
+                "hostname": "phone",
+                "ip": "10.2.2.10",
+            },
+            "DEVICE": {
+                "id": "8c:30:66:9c:9b:46",
+                "name": "AP-Hallway",
+                "model": "UX7",
+                "version": "5.2.15",
+            },
+            "WLAN": {"name": "Home"},
+            "NETWORK": {"name": "LAN"},
+            "CHANNEL": {"name": "36"},
+            "SIGNAL_STRENGTH": {"name": "-52 dBm"},
+            "AUTH_METHOD": {"name": "WPA2"},
+            "DATA_UP": {"name": "190957"},
+            "DATA_DOWN": {"name": "621203"},
+            "DURATION": {"name": "0"},
+        },
+    }
+    row.update(over)
+    return row
+
+
+def _log_client(pages):
+    """Mocked UniFiClient returning a fixed page per call."""
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.post = AsyncMock(side_effect=pages)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_filters_to_client_connection(mock_settings):
+    rows = [
+        _log_row("CLIENT_CONNECTED_WIRELESS_2"),
+        _log_row("CLIENT_DISCONNECTED_WIRELESS_2"),
+        {"id": "z", "type": "ADMIN_ACCESS", "category": "AUDIT", "key": "ADMIN_ACCESS"},
+    ]
+    mock_client = _log_client([{"data": rows}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(site_id="default", settings=mock_settings)
+
+    assert result["count"] == 2
+    assert all(e["type"] == "CLIENT_CONNECTION" for e in result["events"])
+    assert {e["event"] for e in result["events"]} == {"connected", "disconnected"}
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_normalizes_the_row(mock_settings):
+    mock_client = _log_client([{"data": [_log_row("CLIENT_CONNECTED_WIRELESS_2")]}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(site_id="default", settings=mock_settings)
+    ev = result["events"][0]
+    assert ev["event"] == "connected"
+    assert ev["client_mac"] == "00:11:22:33:44:55"
+    assert ev["client_name"] == "Phone"
+    assert ev["client_ip"] == "10.2.2.10"
+    assert ev["device_model"] == "UX7"
+    assert ev["wlan"] == "Home"
+    assert ev["channel"] == "36"
+    assert ev["auth_method"] == "WPA2"
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_filters_by_direction(mock_settings):
+    rows = [
+        _log_row("CLIENT_CONNECTED_WIRELESS_2"),
+        _log_row("CLIENT_DISCONNECTED_WIRELESS_2"),
+    ]
+    mock_client = _log_client([{"data": rows}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default", settings=mock_settings, event_type="connected"
+        )
+    assert result["count"] == 1
+    assert result["events"][0]["event"] == "connected"
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_filters_by_client_mac(mock_settings):
+    rows = [
+        _log_row("CLIENT_CONNECTED_WIRELESS_2", mac="00:11:22:33:44:55"),
+        _log_row("CLIENT_CONNECTED_WIRELESS_2", mac="00:11:22:33:44:66"),
+    ]
+    mock_client = _log_client([{"data": rows}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default",
+            settings=mock_settings,
+            client_mac="00:11:22:33:44:66",
+        )
+    assert result["count"] == 1
+    assert result["events"][0]["client_mac"] == "00:11:22:33:44:66"
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_does_not_send_a_server_side_filter(mock_settings):
+    """The console ignores its own filter object, so we must not send one."""
+    mock_client = _log_client([{"data": [_log_row("CLIENT_CONNECTED_WIRELESS_2")]}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        await list_client_connection_events(
+            site_id="default", settings=mock_settings, event_type="connected"
+        )
+    body = mock_client.post.call_args[1]["json_data"]
+    assert "filter" not in body
+    assert body["pageNumber"] == 0
+    assert body["pageSize"] == 500
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_pages_until_enough(mock_settings):
+    page1 = [_log_row("CLIENT_CONNECTED_WIRELESS_2") for _ in range(50)]
+    page2 = [_log_row("CLIENT_CONNECTED_WIRELESS_2") for _ in range(50)]
+    mock_client = _log_client([{"data": page1}, {"data": page2}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default", settings=mock_settings, page_size=50, limit=75
+        )
+    assert result["count"] == 75
+    assert result["pages_fetched"] == 2
+    assert result["scanned_rows"] == 100
+    assert result["truncated"] is True
+    assert mock_client.post.call_count == 2
+    assert mock_client.post.call_args_list[1][1]["json_data"]["pageNumber"] == 1
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_stops_on_a_short_page(mock_settings):
+    mock_client = _log_client([{"data": [_log_row("CLIENT_CONNECTED_WIRELESS_2")]}, {"data": []}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(
+            site_id="default", settings=mock_settings, page_size=100, limit=10
+        )
+    assert result["count"] == 1
+    assert mock_client.post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_rejects_bad_arguments(mock_settings):
+    with pytest.raises(ValueError, match="event_type must be one of"):
+        await list_client_connection_events(
+            site_id="default", settings=mock_settings, event_type="sideways"
+        )
+    with pytest.raises(ValueError, match="hours must be between"):
+        await list_client_connection_events(site_id="default", settings=mock_settings, hours=0)
+    with pytest.raises(ValueError, match="limit must be between"):
+        await list_client_connection_events(site_id="default", settings=mock_settings, limit=0)
+    with pytest.raises(ValueError, match="page_size must be between"):
+        await list_client_connection_events(site_id="default", settings=mock_settings, page_size=0)
+
+
+@pytest.mark.asyncio
+async def test_client_connection_events_returns_a_note(mock_settings):
+    """The note records the two console behaviours a caller needs to know."""
+    mock_client = _log_client([{"data": []}])
+    with patch("src.tools.events.UniFiClient", return_value=mock_client):
+        result = await list_client_connection_events(site_id="default", settings=mock_settings)
+    assert "stat/alarm" in result["note"]
+    assert "ignores its own filter" in result["note"]

@@ -36,7 +36,7 @@
     ],
     "confirmUrl": "/a2a/confirm",
     "delegateUrl": "/a2a/delegate",
-    "destructiveToolCount": 52,
+    "destructiveToolCount": 53,
     "domains": [
       "network",
       "wireless",
@@ -57,7 +57,7 @@
       "For destructive skills, supply confirm=true and optional dry_run=true for preview."
     ],
     "readOnly": false,
-    "readToolCount": 211,
+    "readToolCount": 212,
     "resourceCount": 6,
     "resources": [
       {
@@ -288,6 +288,13 @@
         "reason": "Destructive action: removing or resetting controller state.",
         "sensitiveFields": [],
         "toolName": "block_client"
+      },
+      {
+        "confirmationLevel": "required",
+        "destructive": true,
+        "reason": "Destructive action: removing or resetting controller state.",
+        "sensitiveFields": [],
+        "toolName": "bulk_client_action"
       },
       {
         "confirmationLevel": "required",
@@ -1164,7 +1171,7 @@
         "toolName": "health_check"
       }
     ],
-    "toolCount": 360,
+    "toolCount": 362,
     "toolsManifestUrl": "/a2a/discover",
     "writeToolCount": 97
   },
@@ -2090,6 +2097,90 @@
         "type": "object"
       },
       "name": "block_flow_source_ip",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "Apply one action to several clients at once, reporting each client.\n\nNetwork 11 adds bulk client editing. Live-verified 2026-11-21 against\nNetwork 10.6.111 (UniFi OS): the legacy ``cmd/stamgr`` route accepts a\n``macs`` list, so ``block-sta``, ``unblock-sta`` and ``forget-sta`` all\ntake N clients in a single request and answer with one record per\nclient. ``kick-sta`` is the exception \u2014 it reads only the singular\n``mac`` field \u2014 so a reconnect is issued one request per client.\n\nUnknown MACs are reported and left alone. The controller does not\nvalidate them: ``block-sta`` on a MAC that has never been seen\n**creates** a blocked client record, so a typo would otherwise leave a\nphantom block behind. Every requested MAC is checked against the site\ninventory first and only the known ones are sent.",
+      "examples": [
+        {
+          "arguments": {
+            "action": "example-action",
+            "client_macs": [
+              "example-client_macs"
+            ],
+            "confirm": true,
+            "dry_run": true,
+            "site_id": "example-id"
+          },
+          "tool": "bulk_client_action"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "One of ``block``, ``unblock``, ``reconnect``, ``forget``",
+            "type": "string"
+          },
+          "client_macs": {
+            "description": "Client MAC addresses to act on",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "Confirmation flag (must be True to execute)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "default": false,
+            "description": "If True, report what would happen without acting"
+          },
+          "site_id": {
+            "description": "Site identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id",
+          "client_macs",
+          "action"
+        ],
+        "type": "object"
+      },
+      "name": "bulk_client_action",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"
@@ -15177,6 +15268,79 @@
         "type": "object"
       },
       "name": "list_carrier_subscribers",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "List client connection and disconnection events for a site.\n\nNetwork 11 adds an alarm for a client connecting or disconnecting.\nLive-verified 2026-11-21 against Network 10.6.111 (UniFi OS): the\ncontroller's ``stat/alarm`` route answers **404** there \u2014 Network 10.x\nhas no alarm route \u2014 and the client events live in the v2 system log\ninstead, under ``type: CLIENT_CONNECTION`` and\n``category: CLIENT_DEVICES``.\n\nThe system log's own ``filter`` object is **ignored** by the console:\nfiltering by ``category``, ``type`` or ``key`` each returned the same\nunfiltered page. The selection below is therefore done here, on the\nrows the console returns. Pagination does work, so the window is pulled\npage by page until enough matching events are found.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "list_client_connection_events"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "client_mac": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Restrict to one client (MAC address)"
+          },
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "event_type": {
+            "default": "all",
+            "description": "``all``, ``connected`` or ``disconnected``",
+            "type": "string"
+          },
+          "hours": {
+            "default": 24,
+            "description": "How far back to look, in hours (1-720)",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 100,
+            "description": "Maximum number of events to return (1-1000)",
+            "type": "integer"
+          },
+          "page_size": {
+            "default": 500,
+            "description": "Rows requested per page (1-1000)",
+            "type": "integer"
+          },
+          "site_id": {
+            "description": "Site identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_client_connection_events",
       "outputSchema": {
         "additionalProperties": true,
         "type": "object"

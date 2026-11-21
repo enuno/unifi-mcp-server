@@ -280,6 +280,11 @@ WORKFLOWS: tuple[WorkflowSpec, ...] = (
                 "Traffic counters, retries and rates for the client.",
             ),
             EvidenceTool(
+                "list_client_connection_events",
+                "Client connection and disconnection events for the client in the "
+                "time window, with the access point, WLAN and channel used.",
+            ),
+            EvidenceTool(
                 "list_client_rf_health",
                 "Per-client RF health, retry rate and signal quality.",
             ),

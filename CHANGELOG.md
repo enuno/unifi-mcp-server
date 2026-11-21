@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously told the reader not to guess at a label convention without
   naming the one in use.
 
+- **Coverage item 14 evidence: the `platform_compat` scope limit.** The brief
+  asked whether any signal can extend `platform_compat` to cloud or unsynced
+  controllers. It cannot, and the limit is in **collection**, not analysis: the
+  USG signal is the synced device inventory, and the worker collects that for
+  local controllers only, because the cloud APIs list devices per host rather
+  than per site. The check itself is already controller- and site-agnostic, so
+  a worker change that populated the inventory for cloud controllers would
+  extend it unchanged. For an unsynced local controller no new signal is
+  needed — the flag appears on the next sync. No code change is made; the
+  limit is recorded in `docs/research/coverage-item-14-platform-compat-scope.md`
+  and cross-referenced from `docs/NETWORK_11_COMPATIBILITY.md`.
 - **Phase 3 live verification plans (coverage items 28-30, 12, 13, 16).** The
   items that need hardware this project does not have now have executable
   plans rather than a note that they are blocked. Two documents: a Protect

@@ -13860,7 +13860,7 @@
       }
     },
     {
-      "description": "Find a specific flow in the current 50-flow snapshot.\n\nRaises :class:`ResourceNotFoundError` if the flow has rolled out of the\nwindow (the v2 endpoint has no \"fetch by id\" lookup).",
+      "description": "Find a specific flow by id.\n\nThe v2 endpoint has a per-flow lookup\n(``GET /traffic-flows/{flow_id}``, live-verified 2026-11-21 against\nNetwork 10.6.111), so the flow is fetched directly instead of being\nhunted for in the 50-flow list window. The list is still scanned as a\nfallback, for a controller that serves the flow in the window but not by\nid.\n\nRaises :class:`ResourceNotFoundError` if the controller has no such flow.",
       "examples": [
         {
           "arguments": {

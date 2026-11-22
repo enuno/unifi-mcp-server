@@ -64,6 +64,7 @@ from ..utils import (
     validate_site_id,
 )
 from ..utils.tool_kind import read_tool, write_tool
+from ..utils.validators import validate_path_segment
 
 logger = get_logger(__name__)
 
@@ -108,6 +109,37 @@ def _extract_flows(response: Any) -> list[dict[str, Any]]:
         if isinstance(inner, list):
             return [f for f in inner if isinstance(f, dict)]
     return []
+
+
+async def _fetch_raw_flow_by_id(
+    client: UniFiClient,
+    settings: Settings,
+    site_id: str,
+    flow_id: str,
+) -> dict[str, Any] | None:
+    """Fetch one flow by id, or None when the controller does not have it.
+
+    The v2 endpoint does have a per-flow lookup:
+    ``GET /proxy/network/v2/api/site/{site}/traffic-flows/{flow_id}`` answers
+    200 with the same object the list route returns, and 404 for an id the
+    controller does not know. Verified live 2026-11-21 against Network
+    10.6.111.
+    """
+    normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
+    endpoint = f"{settings.get_v2_api_path(normalized_site_id)}/traffic-flows/{flow_id}"
+    try:
+        response = await client.get(endpoint)
+    except ResourceNotFoundError:
+        # Only the controller's 404 means "no such flow". ResourceNotFoundError
+        # subclasses APIError, so catching APIError here would swallow 5xx,
+        # 429 and auth failures and report them as a missing flow.
+        return None
+    if not isinstance(response, dict):
+        return None
+    data = response.get("data")
+    if isinstance(data, dict):
+        return data
+    return response or None
 
 
 async def _fetch_raw_flows(
@@ -455,17 +487,31 @@ async def get_traffic_flow_details(
     flow_id: str,
     settings: Settings,
 ) -> dict[str, Any]:
-    """Find a specific flow in the current 50-flow snapshot.
+    """Find a specific flow by id.
 
-    Raises :class:`ResourceNotFoundError` if the flow has rolled out of the
-    window (the v2 endpoint has no "fetch by id" lookup).
+    The v2 endpoint has a per-flow lookup
+    (``GET /traffic-flows/{flow_id}``, live-verified 2026-11-21 against
+    Network 10.6.111), so the flow is fetched directly instead of being
+    hunted for in the 50-flow list window. The list is still scanned as a
+    fallback, for a controller that serves the flow in the window but not by
+    id.
+
+    Raises :class:`ResourceNotFoundError` if the controller has no such flow.
     """
     site_id = validate_site_id(site_id)
+    # The id becomes a path segment in the lookup URL, so it is validated as
+    # one: a value containing "/" or ".." would otherwise redirect the request
+    # to another endpoint on the same controller.
+    flow_id = validate_path_segment(flow_id, "flow_id")
     _ensure_local_api(settings)
 
     async with UniFiClient(settings) as client:
         if not client.is_authenticated:
             await client.authenticate()
+
+        raw = await _fetch_raw_flow_by_id(client, settings, site_id, flow_id)
+        if raw is not None:
+            return _parse_flow(raw).model_dump(by_alias=True)
 
         raw_flows = await _fetch_raw_flows(client, settings, site_id)
         for raw in raw_flows:

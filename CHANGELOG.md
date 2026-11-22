@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-22
+
 ### Added
 
 - **Inventoried Ubiquiti's official source materials and evaluated its
@@ -1108,6 +1110,7 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 - WiFi network configuration
 - Comprehensive test suite
 
+[0.10.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.9.0...v0.10.0
 [0.2.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.1.3...v0.2.0
 [0.1.4]: https://github.com/enuno/unifi-mcp-server/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/enuno/unifi-mcp-server/releases/tag/v0.1.3

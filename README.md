@@ -23,7 +23,7 @@
 
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
-**Current release: 0.9.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
+**Current release: 0.10.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
 ## Contents
 
@@ -42,12 +42,12 @@ An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs
 
 365 tools in local mode, from 64 modules.
 
-- **Network:** clients (search, block, reconnect), networks and VLANs, WiFi SSIDs, DHCP reservations, DNS, WAN, guest vouchers, QoS profiles and traffic routes, DPI statistics, traffic flows.
+- **Network:** clients (search, block, reconnect), networks and VLANs, WiFi SSIDs, DHCP reservations, DNS, WAN, guest vouchers, QoS profiles and traffic routes, DPI statistics, traffic flows (including lookup by flow ID), client-connection events and bulk client editing, and Matter/Thread inventory on Network 11.
 - **Devices:** inventory, adoption, restart, locate, upgrade, radio settings, port profiles and per-port overrides, switching and stacks, topology export (JSON, GraphML, DOT), diagnostics, WiFi channel planning.
 - **Security:** legacy firewall rules and groups, zone-based firewall (zones, policies, zone matrix), ACL rules, traffic matching lists, port forwarding, VPN and site-to-site VPN, content filtering, RADIUS and the guest portal.
 - **Protect:** cameras, NVRs, views, events, sensors, lights, chimes, sirens, relays, speakers, alarm hubs and the alarm manager.
 - **Cloud:** Site Manager (hosts, sites, cross-site statistics), the connector proxy, Mobility workspaces and devices, InnerSpace floor plans and inventory, Carrier Fabric subscribers and service plans.
-- **Operations:** sites, backups (create, schedule, download, restore), events, multi-site aggregation, device migration between sites.
+- **Operations:** sites, backups (create, schedule, download, restore), events, multi-site aggregation, device migration between sites, console NetFlow export configuration, and gateway packet capture.
 - **Fleet mode** (optional, with Postgres and Redis): many controllers behind one server, a controller registry with encrypted credentials, server-issued tokens with roles, a shared read cache, several replicas and background workers, and `fleet_*` tools that read across controllers. See [MULTI_CONTROLLER.md](MULTI_CONTROLLER.md) and [docs/FLEET_SCALING_PLAN.md](docs/FLEET_SCALING_PLAN.md).
 - **Native prompts:** eight parameterised UniFi operational workflows (health check, client connectivity, WiFi performance, device investigation, firewall review, change planning, Protect health, fleet summary) exposed through the standard `prompts/list` and `prompts/get` operations. See [docs/PROMPTS.md](docs/PROMPTS.md).
 - **Safety:** every mutating tool needs `confirm=True` and supports `dry_run=True`, plus read-only and dry-run server modes, role-based access over risk tiers, and a hash-chained audit log (see [below](#tool-profiles-and-safety-controls)).
@@ -67,6 +67,8 @@ Set `UNIFI_API_TYPE` to choose how the server reaches UniFi.
 The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.ui.com` and are registered in every mode. Set `UNIFI_SITE_MANAGER_ENABLED=true` to use Site Manager tools; actual exposure also depends on the selected profile. The existing Site Manager SD-WAN config list/detail/status reads use the official v1.0.0 `/v1/sd-wan-configs` paths after the 2026-11-08 reconciliation; this does not implement typed destination/performance steering policies, policy writes, or prove live account interoperability (see [API.md](API.md) and [the gap reconciliation](docs/COMPETITOR_GAP_RECONCILIATION.md)).
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
+
+The Matter and Thread reads need UniFi Network 11 or later. No published UniFi contract exposes a Matter or Thread path, so these tools are built against routes derived from the vendor's own Network 11.0.97 application package and verified only as far as a Network 10.6 controller allows: both routes answer 404 there, while a control route in the same API family answers 200 with the same API key, which establishes route absence rather than an auth refusal. **A successful Matter or Thread read has not been observed**, so the tools are implemented-needs-verification and report `supported: false` on a controller without the routes. A node's Matter pairing code is never returned. See [the discovery record](docs/research/matter-thread-network-11-discovery.md).
 
 **UniFi Network 11 / UniFi OS 6:** compatible per released documentation, with four items pending live-controller verification — not yet a claim of full support. USG gateways and the classic, self-hosted Network Application Server are removed platform targets; `fleet_health` automatically flags any registered controller with a USG in its device inventory, but there is no API signal to auto-detect a classic Network Application Server, so label that controller instead (e.g. `deployment=classic-server`) and filter on it. Network 11 replaces the statistics engine and resets historical data, so the statistics tools (`get_historical_stats`, `get_speed_test_history`, `get_dpi_statistics`, `list_top_applications`, `get_client_dpi`) attach a `statistics_note` to every empty response — an empty history right after the upgrade is expected, not an outage. See [docs/NETWORK_11_COMPATIBILITY.md](docs/NETWORK_11_COMPATIBILITY.md) for the full compatibility matrix.
 
@@ -407,6 +409,7 @@ matrix, the validation rules and the manual acceptance steps.
 | [NETWORK_PLAYBOOK.md](NETWORK_PLAYBOOK.md), [HARBOR_SETUP.md](HARBOR_SETUP.md) | Operating runbooks |
 | [SECURITY.md](SECURITY.md) | Reporting vulnerabilities, audit logging and hardening |
 | [SPEC.md](SPEC.md), [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md), [ROADMAP.md](ROADMAP.md) | Architecture target and roadmap |
+| [docs/research/](docs/research/) | Endpoint discovery records and negative findings: what was probed, what was observed live, and what remains unverified |
 | [CHANGELOG.md](CHANGELOG.md), [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) | Release history and how releases are cut and published |
 
 ## Development

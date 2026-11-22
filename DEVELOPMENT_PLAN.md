@@ -1,6 +1,6 @@
 # UniFi MCP Server Development Plan
 
-**Document Version:** 2026-11-16 competitor-gap close (revision basis local `feat/protect-7.4.96-gap-close`; prior reconciliation 2026-11-08 `311fce7714bbda5d77b581a381c4e19feacdeb8a`; `pyproject.toml` 0.9.0)
+**Document Version:** 2026-11-22 release 0.10.0 (revision basis `main` at `995fcd0`; prior revision 2026-11-16 competitor-gap close; prior reconciliation 2026-11-08 `311fce7714bbda5d77b581a381c4e19feacdeb8a`; `pyproject.toml` 0.10.0)
 **Historical Source Plan:** `~/INTEGRATION/Unifi-Evolution.md` (not present on this host at reconciliation; see `SPEC.md` and `docs/COMPETITOR_GAP_RECONCILIATION.md` for usable evidence)
 **Historical Repository Baseline:** 343 MCP tools / 60 modules / 3,152 passing tests / 93% coverage were earlier receipts, NOT a current run or current count; use the live registry and fresh checks below.
 **API Spec Baseline** (audited 2026-09-26, re-audited 2026-10-27, Protect pin refreshed 2026-11-16): UniFi Network **v11.0.97** (endpoint-stable since v10.6.106/v10.3.55), UniFi Protect **v7.4.96** (snapshot `scripts/protect-api-spec-v7.4.96.json`; v7.3.68/v7.3.70 retained for diffs), Site Manager v1.0.0; newly published (2026-09-26, unchanged on re-audit): Mobility v1.0.0, InnerSpace v1.3.23, Carrier Fabric v1.0.0 (artifacts in `scripts/`)

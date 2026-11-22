@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Discovery findings for SD-WAN policy authoring, Object Oriented Networking
+  and console-level backups (coverage items 26, 5 and 9).** Three surfaces the
+  brief asks for were searched for against the published specification and the
+  live console, and none of them is reachable, so nothing was modelled or
+  invented. **SD-WAN (item 26):** the Site Manager v1.0.0 OpenAPI document -
+  published without portal auth, like the repository's other specs - has ten
+  paths, and the SD-WAN ones are `GET` only
+  (`sd-wan-configs`, `sd-wan-configs/{id}`, `sd-wan-configs/{id}/status`);
+  there is no SD-WAN write path anywhere in the document, and its
+  `components.schemas` is empty, so the detail response is an example rather
+  than a typed steering-policy contract. The repository's own `SDWANConfig`
+  model already said the nested values were not a typed contract, and the
+  specification confirms it. **OON (item 5):** `oon`, `oon/objects`,
+  `policy-engine`, `policy-engine/objects`, `objects`,
+  `object-networking`, `oon-sites` and `site-objects` all answer 404 under the
+  console's v2 site API - with `content-filtering` answering 200 alongside
+  them as a control - and neither the pinned Network v11.0.97 Integration
+  API spec nor the Network UI bundle has an OON path or route string.
+  **Console-level backups (item 9):** `backups`, `system/backup`,
+  `system/backups`, `system/backup-schedules` and `backup-schedules` all
+  answer 404, and the console's backup belongs to the separate UniFi OS
+  Portal service - the Network bundle's own
+  `API_ERROR_UNIFI_OS_BACKUP_NOT_ALLOWED` message says to use "the file
+  generated from UniFi Network's System page, not the configuration backup in
+  your UniFi OS Portal". The Network-application backup surface remains
+  covered as it was. Findings, with the method and every status code, in
+  `docs/research/coverage-items-26-5-9-discovery-findings.md`.
+
 - **Classic-server controller labelling guidance (coverage item 15).** A
   standalone, self-hosted Network Application Server cannot be detected from
   the API — `/v1/info` returns only `applicationVersion`, with no host-type

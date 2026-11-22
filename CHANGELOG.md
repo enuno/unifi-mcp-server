@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Inventoried Ubiquiti's official source materials and evaluated its
+  Ansible collection**
+  (`docs/research/unifi-official-source-materials-and-ansible-collection.md`).
+  Two artifacts the repo was not using exist at predictable per-service
+  paths: `postman-collection.json` for all six services, and
+  `quick_start.ansible` for Network and Protect only. The six
+  `ai-gettingstarted.md` notes are one prompt template with the service name
+  substituted, carrying no endpoint data, so they add nothing to the
+  contracts - but they are citable vendor statements that all six services
+  authenticate with an `X-API-Key` header, that the canonical discovery
+  chain is root `llms.txt` -> per-service `llms.txt` -> `openapi.json`, and
+  that the Site Manager Connector is the sanctioned cloud-to-on-premises
+  bridge. None mentions a console login. There is no UniFi Access entry of
+  any kind, now confirmed a third independent way.
+
+  **The official `ubiquiti.unifi_api` collection (1.0.0) was installed and
+  exercised against a live Network 10.6.111 console, and has three defects.**
+  The first is safety-critical: `supports_check_mode=True` is declared but
+  `run()` never reads `check_mode`, so writes are transmitted during
+  `ansible-playbook --check`. Confirmed against a throwaway local listener
+  rather than by reading alone - it received the POST during a dry run while
+  Ansible reported `changed=True`, and no controller was involved.
+  Separately, `get_spec_url` calls `os.path.exists()` on an `https://` URL,
+  which is always false, so the spec-fallback branch always runs; and that
+  fallback does `.get("data", []).get("versions", [])`, which raises
+  `AttributeError` on any response lacking a `data` key - including the HTTP
+  401 its discovery endpoint returns to a console API key. Out of the box
+  every call fails, masking the real unauthorized error behind a type error.
+  Reads work once the spec cache is pre-seeded, recorded as a verified
+  workaround. `validate_certs` also defaults to `false`.
+
+  Assessment: not worth adopting. It is a raw REST passthrough over
+  contracts this server already implements natively, and this server has the
+  stronger safety properties - confirmation-gated writes, a real dry-run
+  mode, tiered permissions, and TLS verification that is not off by default.
+  Its value is as reference for the sanctioned base-URL shapes
+  (`{base_url}/proxy/{app}/integration`), the cloud proxy route, and the
+  vendor's own position that idempotency is the caller's responsibility.
+
+  Recommends pinning `site-manager_v1.0.0_openapi.json`, the only one of the
+  six services with no pin in `scripts/` despite the client and 16 tools
+  depending on it, and reporting the three defects upstream. Neither is
+  actioned here.
+
 - **Matter and Thread inventory reads (coverage items 19 and 20).** Network 11
   added a Settings > Matter page; neither the Site Manager v1.0.0 contract
   (10 paths) nor the Network v11.0.97 Integration contract (44 paths)

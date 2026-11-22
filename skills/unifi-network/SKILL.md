@@ -24,6 +24,8 @@ skills).
 | `block_client` | Block a client from the network |
 | `unblock_client` | Remove a block from a client |
 | `reconnect_client` | Force reconnect a wireless client |
+| `bulk_client_action` | Block, unblock, reconnect or forget several clients at once, reported per client |
+| `list_client_connection_events` | Client connection and disconnection events, with the AP, WLAN and channel used |
 | `authorize_guest` | Authorize a guest client through the captive portal |
 | `limit_bandwidth` | Apply upload/download bandwidth limits to a client |
 

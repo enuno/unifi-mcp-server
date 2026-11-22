@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Client-connection events and bulk client editing (coverage item 23).** Two
+  tools, both live-verified against Network 10.6.111. `list_client_connection_events`
+  reports who joined and left the network with the access point, WLAN, channel
+  and signal they used: the controller's `stat/alarm` route answers 404 on
+  Network 10.x, so the events come from the v2 system log's `all` tab under
+  `type: CLIENT_CONNECTION`, with the direction in the row key
+  (`CLIENT_CONNECTED_WIRELESS_2` / `CLIENT_DISCONNECTED_WIRELESS_2`) and the
+  client MAC in `parameters.CLIENT.id`. The system log ignores its own
+  `filter` object - filtering by `category`, `type` or `key` each returned the
+  same unfiltered page - so the selection is applied to the returned rows;
+  pagination does work, so the window is pulled page by page.
+  `bulk_client_action` applies `block`, `unblock`, `reconnect` or `forget` to
+  several clients and reports each one separately. The controller's
+  `cmd/stamgr` route does accept a `macs` list, so block, unblock and forget
+  go out as ONE request; `kick-sta` reads only the singular `mac` field
+  (a list, or no `mac` at all, answers HTTP 500), so a reconnect is issued
+  one request per client and the result says which happened. Unknown MACs are
+  reported and never sent: `block-sta` on a MAC the site has never seen
+  **creates** a blocked client record, so every MAC is checked against the
+  site inventory first. Both tools are confirmation-gated where they mutate
+  state, and the bulk tool caps a call at 100 clients. Evidence record in
+  `docs/research/coverage-item-23-client-connection-and-bulk-actions.md`.
+
 - **Discovery findings for SD-WAN policy authoring, Object Oriented Networking
   and console-level backups (coverage items 26, 5 and 9).** Three surfaces the
   brief asks for were searched for against the published specification and the

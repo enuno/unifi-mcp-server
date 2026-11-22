@@ -101,6 +101,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parsed-equal to the official Network contract including all 380 schemas,
   so the filename understates its provenance.
 
+  **Inventoried Ubiquiti's official source materials and evaluated its
+  Ansible collection** (`docs/research/unifi-official-source-materials-and-ansible-collection.md`).
+  Two artifacts the repo was not using exist at predictable paths for each
+  service: `postman-collection.json` for all six, and `quick_start.ansible`
+  for Network and Protect only. The six `ai-gettingstarted.md` notes are one
+  prompt template with the service name substituted - no endpoint data - but
+  they are citable vendor statements that all six services authenticate with
+  an `X-API-Key` header, that the canonical discovery chain is root
+  `llms.txt` -> per-service `llms.txt` -> `openapi.json`, and that the Site
+  Manager Connector is the sanctioned cloud-to-on-premises bridge. None of
+  them mentions a console login. There is still no UniFi Access entry of any
+  kind, now confirmed a third way.
+
+  **The official `ubiquiti.unifi_api` collection (1.0.0) was installed and
+  exercised against a live Network 10.6.111 console, and has three defects.**
+  The most serious: `supports_check_mode=True` is declared but `run()` never
+  reads `check_mode`, so writes are transmitted during `ansible-playbook
+  --check`. That was confirmed against a throwaway local listener, which
+  received the POST during a dry run while Ansible reported `changed=True` -
+  no controller was involved. Separately, `get_spec_url` calls
+  `os.path.exists()` on an `https://` URL, which is always false, so the
+  spec-fallback branch always runs; and that fallback does
+  `.get("data", []).get("versions", [])`, which raises `AttributeError` on
+  any response lacking a `data` key - including the HTTP 401 its discovery
+  endpoint returns to a console API key. Out of the box every call fails.
+  Reads work once the spec cache is pre-seeded, which is documented as a
+  verified workaround. `validate_certs` also defaults to `false`.
+
+  Assessment: not worth adopting. It is a raw REST passthrough over the same
+  published contracts this server already implements, and this server has
+  the stronger safety properties - confirmation-gated writes, a real dry-run
+  mode, tiered permissions, and TLS verification that is not off by default.
+  Its value is as reference for the sanctioned base-URL shapes and the
+  vendor's position that idempotency is the caller's responsibility.
+
   Corrects an earlier claim in this entry that the Protect pin was a release
   behind: `developer.ui.com` serves the **same document** under
   `protect/v7.4.96` and `protect/v7.4.102` - equal paths, operations and

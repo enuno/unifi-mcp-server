@@ -9,6 +9,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **sirkirby parity: four negative findings, no code needed
+  (`docs/research/sirkirby-parity-negative-findings.md`).** Four parity items
+  were investigated and none of them needs an implementation.
+
+  **UniFi Access has no official API to build against.** Ubiquiti's canonical
+  index (`developer.ui.com/llms.txt`) lists six services - Network, Protect,
+  Mobility, InnerSpace, Site Manager, Carrier Fabric - and Access is not one
+  of them; the obvious spec URLs all 404. There is no contract to pin, and
+  the competitor's own docs state that Access mutations require a console
+  login rather than an API key.
+
+  **Protect has no documented alarm-rule surface at any published version.**
+  The pinned v7.4.96 and the current v7.4.102 expose an identical set of 61
+  paths, and the only alarm paths - `/v1/alarm-hubs`, `/v1/alarm-hubs/{id}`,
+  `/v1/alarm-hubs/{id}/outputs/{outputId}/trigger` and
+  `/v1/alarm-manager/webhook/{id}` - are already covered here. Rule CRUD is
+  reached by the competitor through the SuperAdmin-gated UniFi OS Alarm
+  Manager, a privileged private surface.
+
+  **Site Manager is already at parity and beyond:** 16 tools against the
+  competitor's 9, with all 10 documented v1.0.0 paths covered.
+
+  **The Network event WebSocket upgrades and then closes without
+  delivering.** Live on Network 10.6.111 with an API key,
+  `wss://.../proxy/network/wss/s/{site}/events` accepts the HTTP upgrade -
+  so this is not a handshake auth rejection - then closes with code 1000 and
+  no reason after ~0.1s, having sent no frame; reproducible 4/4 including
+  with an `Origin` header. A bounded recent-events read would therefore
+  return zero messages every time, which is worse than the existing
+  poll-based event tools because it would read as "no events" rather than
+  "unavailable". The poll-based tools remain the supported path.
+
+  Two premises in the comparison did not survive checking and are corrected
+  in the record: this server's Site Manager set is larger, not smaller, than
+  the competitor's, and its InnerSpace reads already work over the Cloud
+  Connector proxy with an API key rather than needing a console login.
+
 - **Live Flows: fetch one flow by id, and the terminate-connection finding
   (coverage item 17).** `get_traffic_flow_details` said the v2 endpoint had
   no "fetch by id" lookup, so it fetched the whole 50-flow window and

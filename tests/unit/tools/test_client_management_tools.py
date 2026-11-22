@@ -8,11 +8,12 @@ import src.tools.client_management as cm_module
 from src.tools.client_management import (
     authorize_guest,
     block_client,
+    bulk_client_action,
     limit_bandwidth,
     reconnect_client,
     unblock_client,
 )
-from src.utils.exceptions import ResourceNotFoundError, ValidationError
+from src.utils.exceptions import APIError, ResourceNotFoundError, ValidationError
 
 
 @pytest.fixture
@@ -661,3 +662,348 @@ async def test_authorize_guest_minimal(mock_settings):
     assert result["success"] is True
     json_data = mock_client.post.call_args[1]["json_data"]
     assert json_data == {"action": "AUTHORIZE_GUEST_ACCESS"}
+
+
+# =============================================================================
+# bulk_client_action Tests (coverage item 23)
+# =============================================================================
+
+
+def _bulk_client(alluser_data, post_side_effect=None, post_return=None):
+    """A mocked UniFiClient for bulk_client_action."""
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(return_value={"data": alluser_data})
+    if post_side_effect is not None:
+        mock_client.post = AsyncMock(side_effect=post_side_effect)
+    else:
+        mock_client.post = AsyncMock(return_value=post_return or {"data": []})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_blocks_a_batch_in_one_request(mock_settings):
+    """block-sta takes a macs list, so N clients go in one request."""
+    macs = ["00:11:22:33:44:55", "00:11:22:33:44:66"]
+    mock_client = _bulk_client(
+        [{"mac": m} for m in macs],
+        post_return={"data": [{"mac": m, "blocked": True, "_id": "x"} for m in macs]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=macs,
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["success"] is True
+    assert result["requested"] == 2
+    assert result["applied"] == 2
+    assert result["batch_request"] is True
+    assert {r["mac"] for r in result["results"]} == set(macs)
+    assert all(r["status"] == "ok" and r["blocked"] is True for r in result["results"])
+
+    # ONE request, carrying the batch list
+    mock_client.post.assert_called_once()
+    payload = mock_client.post.call_args[1]["json_data"]
+    assert payload["cmd"] == "block-sta"
+    assert payload["macs"] == macs
+    assert "mac" not in payload
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_never_sends_an_unknown_mac(mock_settings):
+    """block-sta creates a record for an unseen MAC, so unknown ones are skipped."""
+    known = "00:11:22:33:44:55"
+    unknown = "aa:bb:cc:dd:ee:ff"
+    mock_client = _bulk_client(
+        [{"mac": known}],
+        post_return={"data": [{"mac": known, "blocked": True}]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[known, unknown],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["not_found"] == 1
+    assert result["applied"] == 1
+    payload = mock_client.post.call_args[1]["json_data"]
+    assert payload["macs"] == [known]
+    assert unknown not in payload["macs"]
+    statuses = {r["mac"]: r["status"] for r in result["results"]}
+    assert statuses[unknown] == "not_found"
+    assert statuses[known] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_requires_confirmation(mock_settings):
+    """Without confirm the call is refused and nothing is sent."""
+    mock_client = _bulk_client([{"mac": "00:11:22:33:44:55"}])
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        with pytest.raises(ValidationError):
+            await bulk_client_action(
+                site_id="default",
+                client_macs=["00:11:22:33:44:55"],
+                action="block",
+                settings=mock_settings,
+            )
+    mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_dry_run_makes_no_request(mock_settings):
+    mock_client = _bulk_client([{"mac": "00:11:22:33:44:55"}])
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=["00:11:22:33:44:55"],
+            action="block",
+            settings=mock_settings,
+            dry_run=True,
+        )
+    assert result["dry-run"] is True
+    assert result["command"] == "block-sta"
+    mock_client.post.assert_not_called()
+    mock_client.get.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_rejects_a_bad_action(mock_settings):
+    with pytest.raises(ValueError, match="action must be one of"):
+        await bulk_client_action(
+            site_id="default",
+            client_macs=["00:11:22:33:44:55"],
+            action="nuke",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_rejects_an_empty_list(mock_settings):
+    with pytest.raises(ValueError, match="must not be empty"):
+        await bulk_client_action(
+            site_id="default",
+            client_macs=[],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_rejects_too_many_clients(mock_settings):
+    many = [f"00:11:22:33:44:{i:02x}" for i in range(101)]
+    with pytest.raises(ValueError, match="at most"):
+        await bulk_client_action(
+            site_id="default",
+            client_macs=many,
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_dedupes_repeated_macs(mock_settings):
+    mac = "00:11:22:33:44:55"
+    mock_client = _bulk_client(
+        [{"mac": mac}], post_return={"data": [{"mac": mac, "blocked": True}]}
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[mac, mac.upper()],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["requested"] == 1
+    assert mock_client.post.call_args[1]["json_data"]["macs"] == [mac]
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_reconnect_uses_one_request_per_client(mock_settings):
+    """kick-sta has no batch form: it reads only the singular mac field."""
+    macs = ["00:11:22:33:44:55", "00:11:22:33:44:66"]
+    mock_client = _bulk_client(
+        [{"mac": m} for m in macs],
+        post_return={"data": [{"mac": macs[0], "blocked": False}]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=macs,
+            action="reconnect",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["batch_request"] is False
+    assert result["command"] == "kick-sta"
+    assert mock_client.post.call_count == 2
+    for call in mock_client.post.call_args_list:
+        payload = call[1]["json_data"]
+        assert payload["cmd"] == "kick-sta"
+        assert "mac" in payload
+        assert "macs" not in payload
+    assert result["applied"] == 2
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_reports_a_failed_client_without_losing_the_rest(
+    mock_settings,
+):
+    """One client's failure is reported; the others still run."""
+    good, bad = "00:11:22:33:44:55", "00:11:22:33:44:66"
+
+    async def side_effect(url, json_data=None, **kwargs):
+        if json_data.get("mac") == bad:
+            raise APIError("api.err.UnknownStation")
+        return {"data": [{"mac": good, "blocked": False}]}
+
+    mock_client = _bulk_client([{"mac": good}, {"mac": bad}], post_side_effect=side_effect)
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[good, bad],
+            action="reconnect",
+            settings=mock_settings,
+            confirm=True,
+        )
+
+    assert result["success"] is False
+    assert result["applied"] == 1
+    assert result["failed"] == 1
+    statuses = {r["mac"]: r["status"] for r in result["results"]}
+    assert statuses[good] == "ok"
+    assert statuses[bad] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_flags_a_mac_the_controller_omitted(mock_settings):
+    """A batch response that omits a MAC is reported, not assumed done."""
+    macs = ["00:11:22:33:44:55", "00:11:22:33:44:66"]
+    mock_client = _bulk_client(
+        [{"mac": m} for m in macs],
+        post_return={"data": [{"mac": macs[0], "blocked": True}]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=macs,
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["failed"] == 1
+    statuses = {r["mac"]: r["status"] for r in result["results"]}
+    assert statuses[macs[1]] == "no_result"
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_unblock_and_forget_use_the_batch_shape(mock_settings):
+    """unblock-sta and forget-sta both accept the macs list."""
+    mac = "00:11:22:33:44:55"
+    for action, cmd in (("unblock", "unblock-sta"), ("forget", "forget-sta")):
+        mock_client = _bulk_client(
+            [{"mac": mac}], post_return={"data": [{"mac": mac, "blocked": False}]}
+        )
+        with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+            result = await bulk_client_action(
+                site_id="default",
+                client_macs=[mac],
+                action=action,
+                settings=mock_settings,
+                confirm=True,
+            )
+        assert result["command"] == cmd
+        assert result["batch_request"] is True
+        assert mock_client.post.call_args[1]["json_data"]["macs"] == [mac]
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_sends_nothing_when_every_mac_is_unknown(mock_settings):
+    """No known client means no request at all."""
+    mock_client = _bulk_client([{"mac": "00:11:22:33:44:55"}])
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=["aa:bb:cc:dd:ee:01", "aa:bb:cc:dd:ee:02"],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["not_found"] == 2
+    assert result["applied"] == 0
+    mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_skips_a_non_dict_entry_in_the_response(mock_settings):
+    """A malformed entry in the controller's answer is skipped, not crashed on."""
+    mac = "00:11:22:33:44:55"
+    mock_client = _bulk_client(
+        [{"mac": mac}],
+        post_return={"data": ["not-a-dict", {"mac": mac, "blocked": True}]},
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[mac],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+        )
+    assert result["applied"] == 1
+    assert [r["status"] for r in result["results"]] == ["ok"]
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_reraises_when_the_inventory_lookup_fails(mock_settings):
+    """A failure to read the inventory is raised, not swallowed."""
+    mock_client = MagicMock()
+    mock_client.authenticate = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=APIError("api.err.SiteNotFound"))
+    mock_client.post = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        with pytest.raises(APIError):
+            await bulk_client_action(
+                site_id="default",
+                client_macs=["00:11:22:33:44:55"],
+                action="block",
+                settings=mock_settings,
+                confirm=True,
+            )
+    mock_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_bulk_client_action_treats_the_string_false_as_false(mock_settings):
+    """MCP serialises booleans as strings, so dry_run="false" is not a preview."""
+    mac = "00:11:22:33:44:55"
+    mock_client = _bulk_client(
+        [{"mac": mac}], post_return={"data": [{"mac": mac, "blocked": True}]}
+    )
+    with patch.object(cm_module, "UniFiClient", return_value=mock_client):
+        result = await bulk_client_action(
+            site_id="default",
+            client_macs=[mac],
+            action="block",
+            settings=mock_settings,
+            confirm=True,
+            dry_run="false",
+        )
+    assert "dry-run" not in result
+    mock_client.post.assert_called_once()

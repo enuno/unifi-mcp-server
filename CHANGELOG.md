@@ -32,6 +32,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `risk` filters; streaming semantics do not, so no streaming tool was
   written.
 
+- **Client-connection events and bulk client editing (coverage item 23).** Two
+  tools, both live-verified against Network 10.6.111. `list_client_connection_events`
+  reports who joined and left the network with the access point, WLAN, channel
+  and signal they used: the controller's `stat/alarm` route answers 404 on
+  Network 10.x, so the events come from the v2 system log's `all` tab under
+  `type: CLIENT_CONNECTION`, with the direction in the row key
+  (`CLIENT_CONNECTED_WIRELESS_2` / `CLIENT_DISCONNECTED_WIRELESS_2`) and the
+  client MAC in `parameters.CLIENT.id`. The system log ignores its own
+  `filter` object - filtering by `category`, `type` or `key` each returned the
+  same unfiltered page - so the selection is applied to the returned rows;
+  pagination does work, so the window is pulled page by page.
+  `bulk_client_action` applies `block`, `unblock`, `reconnect` or `forget` to
+  several clients and reports each one separately. The controller's
+  `cmd/stamgr` route does accept a `macs` list, so block, unblock and forget
+  go out as ONE request; `kick-sta` reads only the singular `mac` field
+  (a list, or no `mac` at all, answers HTTP 500), so a reconnect is issued
+  one request per client and the result says which happened. Unknown MACs are
+  reported and never sent: `block-sta` on a MAC the site has never seen
+  **creates** a blocked client record, so every MAC is checked against the
+  site inventory first. Both tools are confirmation-gated where they mutate
+  state, and the bulk tool caps a call at 100 clients. Evidence record in
+  `docs/research/coverage-item-23-client-connection-and-bulk-actions.md`.
+
+- **Discovery findings for SD-WAN policy authoring, Object Oriented Networking
+  and console-level backups (coverage items 26, 5 and 9).** Three surfaces the
+  brief asks for were searched for against the published specification and the
+  live console, and none of them is reachable, so nothing was modelled or
+  invented. **SD-WAN (item 26):** the Site Manager v1.0.0 OpenAPI document -
+  published without portal auth, like the repository's other specs - has ten
+  paths, and the SD-WAN ones are `GET` only
+  (`sd-wan-configs`, `sd-wan-configs/{id}`, `sd-wan-configs/{id}/status`);
+  there is no SD-WAN write path anywhere in the document, and its
+  `components.schemas` is empty, so the detail response is an example rather
+  than a typed steering-policy contract. The repository's own `SDWANConfig`
+  model already said the nested values were not a typed contract, and the
+  specification confirms it. **OON (item 5):** `oon`, `oon/objects`,
+  `policy-engine`, `policy-engine/objects`, `objects`,
+  `object-networking`, `oon-sites` and `site-objects` all answer 404 under the
+  console's v2 site API - with `content-filtering` answering 200 alongside
+  them as a control - and neither the pinned Network v11.0.97 Integration
+  API spec nor the Network UI bundle has an OON path or route string.
+  **Console-level backups (item 9):** `backups`, `system/backup`,
+  `system/backups`, `system/backup-schedules` and `backup-schedules` all
+  answer 404, and the console's backup belongs to the separate UniFi OS
+  Portal service - the Network bundle's own
+  `API_ERROR_UNIFI_OS_BACKUP_NOT_ALLOWED` message says to use "the file
+  generated from UniFi Network's System page, not the configuration backup in
+  your UniFi OS Portal". The Network-application backup surface remains
+  covered as it was. Findings, with the method and every status code, in
+  `docs/research/coverage-items-26-5-9-discovery-findings.md`.
+
 - **Classic-server controller labelling guidance (coverage item 15).** A
   standalone, self-hosted Network Application Server cannot be detected from
   the API — `/v1/info` returns only `applicationVersion`, with no host-type

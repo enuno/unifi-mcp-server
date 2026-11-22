@@ -68,6 +68,7 @@ READS_THAT_POST = frozenset(
         "get_historical_stats",
         "get_speed_test_history",
         "get_top_flows",
+        "list_client_connection_events",
         "get_traffic_flow_details",
         "get_traffic_flows",
         "list_alarms",

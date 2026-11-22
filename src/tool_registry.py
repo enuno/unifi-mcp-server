@@ -89,6 +89,7 @@ DESTRUCTIVE_TOOLS = frozenset(
         # Blocking clients or traffic.
         "block_application_by_zone",
         "block_client",
+        "bulk_client_action",
         "block_flow_application",
         "block_flow_destination_ip",
         "block_flow_source_ip",

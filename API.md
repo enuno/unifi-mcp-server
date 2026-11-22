@@ -2481,6 +2481,63 @@ Force a client to reconnect.
 
 **Parameters:** `site_id`, `client_mac`, **`confirm`**, **`dry_run`**
 
+#### `bulk_client_action`
+
+Apply one action to several clients at once, reporting each client
+separately. `action` is one of `block`, `unblock`, `reconnect`, `forget`.
+
+**Parameters:** `site_id`, `client_macs` (list, max 100), `action`,
+**`confirm`**, **`dry_run`**
+
+**How the batch is issued.** The controller's `cmd/stamgr` route takes a
+`macs` list, so `block`, `unblock` and `forget` send **one** request for all
+the clients and the console answers with one record per client.
+`reconnect` is the exception: `kick-sta` reads only the singular `mac`
+field — with a list or with no `mac` at all it answers HTTP 500 — so a
+reconnect is issued one request per client. The result reports
+`batch_request` so the caller knows which happened.
+
+**Unknown MACs are reported and left alone.** The controller does not
+validate them: `block-sta` on a MAC the site has never seen **creates** a
+blocked client record. Every requested MAC is therefore checked against the
+site inventory first, and only the known ones are sent. The result lists
+each client with `status` (`ok`, `not_found`, `failed` or `no_result`),
+plus the `applied` / `failed` / `not_found` counts.
+
+**Result:** `success`, `action`, `command`, `batch_request`, `requested`,
+`applied`, `failed`, `not_found`, `results[]` (one entry per requested
+client, with `mac`, `status` and `blocked`).
+
+#### `list_client_connection_events`
+
+List client connection and disconnection events — who joined the network
+and who left, with the access point, WLAN, channel and signal they used.
+
+**Parameters:** `site_id`, `event_type` (`all` / `connected` /
+`disconnected`), `client_mac` (optional), `hours` (1-720, default 24),
+`limit` (1-1000, default 100), `page_size` (1-1000, default 500)
+
+**Where the events live.** The controller's `stat/alarm` route answers
+**404** on Network 10.x — that route does not exist there. Client
+connection events are in the v2 system log instead, under `type:
+CLIENT_CONNECTION` and `category: CLIENT_DEVICES`, with the direction in
+the row `key` (`CLIENT_CONNECTED_WIRELESS_2` /
+`CLIENT_DISCONNECTED_WIRELESS_2`).
+
+**The console ignores its own filter object.** Filtering the system-log
+request by `category`, `type` or `key` each returned the same unfiltered
+page, so the selection is done on the rows the console returns.
+Pagination does work, so the window is pulled page by page until enough
+matching events are found.
+
+**Result:** `events[]` (newest first), `count`, `scanned_rows`,
+`pages_fetched`, `window_hours`, `event_type`, `truncated`, and a `note`
+recording both console behaviours. Each event carries `event`, `timestamp`,
+`client_mac`, `client_name`, `client_hostname`, `client_ip`, `device_mac`,
+`device_name`, `device_model`, `device_version`, `wlan`, `network`,
+`channel`, `signal_strength`, `auth_method`, `data_up`, `data_down` and
+`duration`.
+
 ### MCP Prompts
 
 The server exposes eight parameterised UniFi operational workflows through

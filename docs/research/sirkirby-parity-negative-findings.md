@@ -4,8 +4,29 @@ Four parity items were investigated and **none of them needs code**. Three
 are blocked by a missing surface rather than by missing work, and one is
 already at parity. This record exists so the same ground is not re-covered.
 
-Comparison baseline: `unifi-competitor-comparison-sirkirby-2026-11-21.md`.
-Nothing here changes the coverage map or the dashboard.
+Comparison baseline: the sirkirby comparison of 2026-11-21, an external
+dashboard goal file that is **not** part of this repository — it cannot be
+consulted from here. The in-repo reconciliation record is
+`docs/COMPETITOR_GAP_RECONCILIATION.md`. Nothing here changes the coverage
+map or the dashboard.
+
+Every official claim below is checked against a vendor source. Ubiquiti's
+own agent-onboarding note for the Network API names the canonical discovery
+chain used throughout this record — the root index at
+`https://developer.ui.com/llms.txt` for "which APIs exist, current
+versions", the per-service surface at
+`https://developer.ui.com/{service}/{version}/llms.txt`, and the
+machine-readable contract at
+`https://developer.ui.com/{service}/{version}/openapi.json`
+([ai-gettingstarted.md](https://developer.ui.com/network/v11.0.97/ai-gettingstarted.md)).
+That matters for the Access finding: the root index is the vendor's own
+statement of which APIs exist, not an inference of ours.
+
+The same note states Network authenticates with an `X-API-Key` header, with
+keys generated at `unifi.ui.com`, and that the Site Manager Connector
+(`POST /v1/connector/consoles/{id}/proxy/...`) is the sanctioned cloud
+to on-premises bridge "without a VPN". Both corroborate findings recorded
+here and in the session-auth note.
 
 ## Summary
 
@@ -15,6 +36,7 @@ Nothing here changes the coverage map or the dashboard.
 | Protect alarm **rules** | **No documented rule surface at any published version** | Official (negative) |
 | Site Manager tool parity | **Already at parity and beyond** — 16 tools vs their 9 | Repo + official spec |
 | Network real-time events | **Event WebSocket upgrades, then closes without delivering** | Live (observed) |
+| Supplied spec bundle | **Authentic, adds no endpoint**; Site Manager is unpinned | Official |
 
 Two of the brief's premises did not survive checking; both are corrected in
 their sections below.
@@ -113,10 +135,19 @@ account privilege this server deliberately does not require.
 **Recommendation:** no implementation. Revisit only if a published Protect
 version adds a rule resource.
 
-**Incidental:** the repo pins Protect **7.4.96** while **7.4.102** is
-current. Because the path sets are identical, this is not a coverage gap,
-but the pin is one release behind and `scripts/fetch-specs.sh` should be
-refreshed when something else touches it.
+**Correction on the pin.** An earlier draft of this record said the repo's
+Protect pin was "one release behind" and should be refreshed. That was
+wrong, and checking it properly showed why: `developer.ui.com` serves the
+**same document** under both version paths. The repo's
+`protect-api-spec-v7.4.96.json` and the vendor's
+`protect/v7.4.102/openapi.json` are **equal when parsed** — identical 61
+paths, identical 83 operations, identical 321 component schemas, and both
+carry `info.version: 0.0.0`. Only byte-level formatting differs.
+
+So there is no spec drift and nothing to refresh: bumping the pin would
+change the filename and nothing else. The version in a Protect spec URL is
+a documentation label, not a contract version. Worth knowing before anyone
+spends time chasing a Protect spec upgrade.
 
 ---
 
@@ -226,6 +257,71 @@ record proposes one.
 
 ---
 
+---
+
+## 5. Review of the supplied spec bundle (`~/inbox/unifi-api-spec`)
+
+Six OpenAPI documents were supplied for review. All six parse, all six are
+authentic, and together they independently confirm the Access finding above.
+
+### Authenticity
+
+Each file was compared against the live vendor URL it corresponds to. All
+six are **byte-identical** to what `developer.ui.com` serves, so they are
+unmodified official documents rather than exports or scrapes:
+
+| File | OAS | Title | Paths | Ops | vs live vendor URL |
+| --- | --- | --- | --- | --- | --- |
+| `site-manager_v1.0.0_openapi.json` | 3.0.3 | UniFi Site Manager API | 10 | 14 | byte-identical |
+| `network_v11.0.97_openapi.json` | 3.1.0 | UniFi Network API | 44 | 73 | byte-identical |
+| `protect_v7.4.102_openapi.json` | 3.1.0 | UniFi Protect API | 61 | 83 | byte-identical |
+| `innerspace_v1.3.23_openapi.json` | 3.1.0 | UniFi InnerSpace Integration API | 6 | 6 | byte-identical |
+| `mobility_v1.0.0_openapi.json` | 3.0.3 | UniFi Mobility API | 7 | 8 | byte-identical |
+| `carrier-fabric_v1.0.0_openapi.json` | 3.0.3 | UniFi Carrier / ISP Fabric | 8 | 11 | byte-identical |
+
+### The bundle contains no Access spec
+
+The bundle is exactly the six services the vendor's root index lists. There
+is **no UniFi Access document**, which corroborates section 1 from a second
+direction: the omission is not a gap in our retrieval, it is the shape of
+Ubiquiti's published surface.
+
+### Against what the repo already pins
+
+No new endpoint appears anywhere. For all five services the repo pins, the
+supplied document is **equal when parsed** to the pinned one — same paths,
+same operations, same schemas:
+
+| Service | Repo pin | Paths | Ops | Schemas | Parsed-equal |
+| --- | --- | --- | --- | --- | --- |
+| Carrier Fabric | `carrier-fabric-api-spec-v1.0.0.json` | 8 | 11 | 26 | yes |
+| InnerSpace | `innerspace-api-spec-v1.3.23.json` | 6 | 6 | 0 | yes |
+| Mobility | `mobility-api-spec-v1.0.0.json` | 7 | 8 | 17 | yes |
+| Network | `scraped-api-spec-v11.0.97.json` | 44 | 73 | 380 | yes |
+| Protect | `protect-api-spec-v7.4.96.json` | 61 | 83 | 321 | yes |
+
+So the bundle adds no coverage. Its value is confirmatory, and it surfaces
+two housekeeping items:
+
+**1. Site Manager v1.0.0 is not pinned at all.** It is the only supplied
+service with no counterpart in `scripts/`, yet the repo depends on it:
+`src/api/site_manager_client.py` and the 16 Site Manager tools are built
+against it, and section 3 above had to fetch it live to check coverage.
+Pinning it would close that, and would let
+`scripts/audit-spec-coverage.py` cover the Site Manager surface the same
+way it covers the others. This is the one actionable item in the bundle.
+
+**2. `scraped-api-spec-v11.0.97.json` is not a scrape.** Despite the
+filename it is parsed-equal to the official `network/v11.0.97/openapi.json`,
+including all 380 component schemas. The name implies lower-fidelity
+provenance than the file actually has, which could lead someone to distrust
+it or re-derive it unnecessarily. Worth renaming when something else touches
+`scripts/`.
+
+Neither item is a coverage change, so neither is actioned here.
+
+---
+
 ## What would change these answers
 
 1. **Access** — Ubiquiti publishing an Access API, or an explicit decision to
@@ -234,3 +330,17 @@ record proposes one.
 3. **Site Manager** — a working Site Manager credential, to verify the six
    undocumented endpoints listed above.
 4. **Network events** — a decision on session auth, then a re-probe.
+
+## Sources
+
+- Root index, "which APIs exist, current versions":
+  <https://developer.ui.com/llms.txt>
+- Network API agent onboarding, naming the discovery chain, the
+  `X-API-Key` auth model and the Site Manager Connector bridge:
+  <https://developer.ui.com/network/v11.0.97/ai-gettingstarted.md>
+- Machine-readable contracts, fetched and compared directly:
+  `https://developer.ui.com/{service}/{version}/openapi.json` for
+  site-manager v1.0.0, network v11.0.97, protect v7.4.102,
+  innerspace v1.3.23, mobility v1.0.0 and carrier-fabric v1.0.0
+- Live probes against Network 10.6.111 using this server's own client and
+  API key (host, site and credential redacted)

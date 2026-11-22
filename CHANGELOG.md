@@ -88,6 +88,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the competitor's, and its InnerSpace reads already work over the Cloud
   Connector proxy with an API key rather than needing a console login.
 
+  **Reviewed the six supplied OpenAPI documents** in `~/inbox/unifi-api-spec`
+  (site-manager v1.0.0, network v11.0.97, protect v7.4.102, innerspace
+  v1.3.23, mobility v1.0.0, carrier-fabric v1.0.0). All six are
+  byte-identical to the live vendor URLs, and the bundle contains no Access
+  document - corroborating the Access finding from a second direction. It
+  adds no endpoint: for all five services the repo pins, the supplied
+  document is parsed-equal to the pinned one. Two housekeeping items fall
+  out, neither actioned here: **Site Manager v1.0.0 is the one service with
+  no pin in `scripts/`** even though the client and 16 tools depend on it,
+  and `scraped-api-spec-v11.0.97.json` is not a scrape - it is
+  parsed-equal to the official Network contract including all 380 schemas,
+  so the filename understates its provenance.
+
+  Corrects an earlier claim in this entry that the Protect pin was a release
+  behind: `developer.ui.com` serves the **same document** under
+  `protect/v7.4.96` and `protect/v7.4.102` - equal paths, operations and
+  schemas, both reporting `info.version: 0.0.0` - so there is no drift and
+  no refresh to make.
+
 - **Live Flows: fetch one flow by id, and the terminate-connection finding
   (coverage item 17).** `get_traffic_flow_details` said the v2 endpoint had
   no "fetch by id" lookup, so it fetched the whole 50-flow window and

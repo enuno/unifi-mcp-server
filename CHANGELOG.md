@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Matter and Thread inventory reads (coverage items 19 and 20).** Network 11
+  added a Settings > Matter page; neither the Site Manager v1.0.0 contract
+  (10 paths) nor the Network v11.0.97 Integration contract (44 paths)
+  publishes a Matter or Thread path, so the surface was established from the
+  vendor's own application package. `list_thread_networks`,
+  `list_matter_nodes` and `list_matter_thread_clients` read
+  `GET /proxy/network/v2/api/site/{site}/thread-networks`,
+  `.../matter/nodes` and `.../clients/active` respectively. All three project
+  the controller's records through allowlist models: the active-client record
+  is wide and carries fields such as `fingerprint` and `ip`, which are not
+  republished. A 404 from a feature route means the release lacks Matter
+  support and is reported as `supported: false`; a 404 caused by an unknown
+  site id is raised instead, since the two are indistinguishable by status
+  alone and a mistyped site must not look like a missing feature.
+
+  **Evidence, stated precisely.** The two Matter/Thread route paths and their
+  operation summaries are *derived* from Network Application
+  `v11.0.97-37231-1` (MD5 `6f0359d2bc4c01eebd5f92bdacb6447d`, verified before
+  use), decoded from its private backend archive; the controller's own UI
+  bundle calls the same two paths. Both routes answer **404 on Network
+  10.6.111**, while a control route in the same v2 family
+  (`.../trafficroutes`) answers **200** with the same API key in the same
+  run - so the 404 is route absence on 10.6, not an auth refusal, and this
+  server's API-key auth is accepted on this route family.
+  `.../clients/active` **is** live-verified on 10.6.111 and its records carry
+  the `type` discriminator the client tool filters on. No successful Matter
+  or Thread read has been observed, because no Network 11 console was
+  available: these three tools are **implemented-needs-verification** and are
+  mock-tested only. Full record, including the seven derived Matter *write*
+  routes that are deliberately **not** implemented:
+  `docs/research/matter-thread-network-11-discovery.md`.
+
+  A node's Matter pairing code (`setupCode`) and a Thread border router's
+  `fingerprint`, `host`, `domainName`, `stateBitmap`, `sequenceNumber` and
+  `backboneRouterPort` are never surfaced, and Matter fabric identifiers are
+  reduced to a count; each exclusion is locked by a regression test. The
+  pairing code is a live credential - a holder can commission the device into
+  another fabric - and it is confirmed real in the 11.0.97 schema, so the
+  exclusion is a decision rather than an accident. 18 unit tests cover the
+  shaping, the allowlists, the 404-means-unsupported path, a real failure
+  propagating instead of being reported as unsupported, malformed entries, an
+  unknown commissioning state, cloud-mode refusal and site validation.
 - **sirkirby parity: four negative findings, no code needed
   (`docs/research/sirkirby-parity-negative-findings.md`).** Four parity items
   were investigated and none of them needs an implementation.

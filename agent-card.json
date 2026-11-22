@@ -57,7 +57,7 @@
       "For destructive skills, supply confirm=true and optional dry_run=true for preview."
     ],
     "readOnly": false,
-    "readToolCount": 212,
+    "readToolCount": 215,
     "resourceCount": 6,
     "resources": [
       {
@@ -1171,7 +1171,7 @@
         "toolName": "health_check"
       }
     ],
-    "toolCount": 362,
+    "toolCount": 365,
     "toolsManifestUrl": "/a2a/discover",
     "writeToolCount": 97
   },
@@ -17498,6 +17498,88 @@
       }
     },
     {
+      "description": "List the site's Matter nodes and their commissioning state (Network 11+).\n\nA node's Matter pairing code (``setupCode``) is **never** returned: it is\na live credential that would let a holder commission the device into\nanother fabric. Each node's ``thread_client_id`` can be joined to a\n``MATTER_THREAD`` record from :func:`list_matter_thread_clients` for its\nnetwork identity.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "list_matter_nodes"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "site_id": {
+            "description": "Site identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_matter_nodes",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
+      "description": "List the site's Matter/Thread devices from the active-client inventory.\n\nMatter nodes join the client inventory as records whose ``type`` is\n``MATTER_THREAD``, so this is the client-side view of the same devices\n:func:`list_matter_nodes` reports from the Matter service. The route and\nits ``type`` discriminator are live-verified on Network 10.6.111; the\n``MATTER_THREAD`` value itself requires a Network 11 site with a\ncommissioned node and has not been observed.\n\nUnlike the Matter and Thread routes, this route exists before Network 11,\nso an empty result on an older controller means \"no Matter/Thread\nclients\", not \"unsupported\" \u2014 and because the route is always present, a\n404 from it can only mean an unknown site and is raised rather than\nreported as a lack of support. ``supported`` is therefore always ``True``\nhere, and is kept only so the three tools share one result shape.\n\nRecords are projected through an allowlist: the controller's active-client\nrecord is wide and carries fields such as ``fingerprint`` and ``ip`` that\nthis server does not republish.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "list_matter_thread_clients"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "site_id": {
+            "description": "Site identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_matter_thread_clients",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    {
       "description": "List all MC-LAG domains in a site.",
       "examples": [
         {
@@ -19824,6 +19906,47 @@
         ],
         "type": "object",
         "x-fastmcp-wrap-result": true
+      }
+    },
+    {
+      "description": "List the Thread networks a site detects (Network 11+).\n\nA site reports the Thread networks it runs and may also detect a\nneighbouring network it does not control, so a result with no border\nrouters is normal rather than an error.\n\nBorder-router identification internals (``fingerprint``, ``host``,\n``domainName``, ``stateBitmap``, ``sequenceNumber``,\n``backboneRouterPort``) are deliberately not surfaced, and Matter fabric\nidentifiers are reduced to a count.",
+      "examples": [
+        {
+          "arguments": {
+            "site_id": "example-id"
+          },
+          "tool": "list_thread_networks"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "controller": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Controller to run against (see list_controllers). Defaults to the controller chosen with select_controller, then the server default."
+          },
+          "site_id": {
+            "description": "Site identifier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "site_id"
+        ],
+        "type": "object"
+      },
+      "name": "list_thread_networks",
+      "outputSchema": {
+        "additionalProperties": true,
+        "type": "object"
       }
     },
     {

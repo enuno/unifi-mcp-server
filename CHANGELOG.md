@@ -51,6 +51,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shaping, the allowlists, the 404-means-unsupported path, a real failure
   propagating instead of being reported as unsupported, malformed entries, an
   unknown commissioning state, cloud-mode refusal and site validation.
+- **sirkirby parity: four negative findings, no code needed
+  (`docs/research/sirkirby-parity-negative-findings.md`).** Four parity items
+  were investigated and none of them needs an implementation.
+
+  **UniFi Access has no official API to build against.** Ubiquiti's canonical
+  index (`developer.ui.com/llms.txt`) lists six services - Network, Protect,
+  Mobility, InnerSpace, Site Manager, Carrier Fabric - and Access is not one
+  of them; the obvious spec URLs all 404. There is no contract to pin, and
+  the competitor's own docs state that Access mutations require a console
+  login rather than an API key.
+
+  **Protect has no documented alarm-rule surface at any published version.**
+  The pinned v7.4.96 and the current v7.4.102 expose an identical set of 61
+  paths, and the only alarm paths - `/v1/alarm-hubs`, `/v1/alarm-hubs/{id}`,
+  `/v1/alarm-hubs/{id}/outputs/{outputId}/trigger` and
+  `/v1/alarm-manager/webhook/{id}` - are already covered here. Rule CRUD is
+  reached by the competitor through the SuperAdmin-gated UniFi OS Alarm
+  Manager, a privileged private surface.
+
+  **Site Manager is already at parity and beyond:** 16 tools against the
+  competitor's 9, with all 10 documented v1.0.0 paths covered.
+
+  **The Network event WebSocket upgrades and then closes without
+  delivering.** Live on Network 10.6.111 with an API key,
+  `wss://.../proxy/network/wss/s/{site}/events` accepts the HTTP upgrade -
+  so this is not a handshake auth rejection - then closes with code 1000 and
+  no reason after ~0.1s, having sent no frame; reproducible 4/4 including
+  with an `Origin` header. A bounded recent-events read would therefore
+  return zero messages every time, which is worse than the existing
+  poll-based event tools because it would read as "no events" rather than
+  "unavailable". The poll-based tools remain the supported path.
+
+  Two premises in the comparison did not survive checking and are corrected
+  in the record: this server's Site Manager set is larger, not smaller, than
+  the competitor's, and its InnerSpace reads already work over the Cloud
+  Connector proxy with an API key rather than needing a console login.
+
+  **Reviewed the six supplied OpenAPI documents** in `~/inbox/unifi-api-spec`
+  (site-manager v1.0.0, network v11.0.97, protect v7.4.102, innerspace
+  v1.3.23, mobility v1.0.0, carrier-fabric v1.0.0). All six are
+  byte-identical to the live vendor URLs, and the bundle contains no Access
+  document - corroborating the Access finding from a second direction. It
+  adds no endpoint: for all five services the repo pins, the supplied
+  document is parsed-equal to the pinned one. Two housekeeping items fall
+  out, neither actioned here: **Site Manager v1.0.0 is the one service with
+  no pin in `scripts/`** even though the client and 16 tools depend on it,
+  and `scraped-api-spec-v11.0.97.json` is not a scrape - it is
+  parsed-equal to the official Network contract including all 380 schemas,
+  so the filename understates its provenance.
+
+  Corrects an earlier claim in this entry that the Protect pin was a release
+  behind: `developer.ui.com` serves the **same document** under
+  `protect/v7.4.96` and `protect/v7.4.102` - equal paths, operations and
+  schemas, both reporting `info.version: 0.0.0` - so there is no drift and
+  no refresh to make.
 
 - **Live Flows: fetch one flow by id, and the terminate-connection finding
   (coverage item 17).** `get_traffic_flow_details` said the v2 endpoint had

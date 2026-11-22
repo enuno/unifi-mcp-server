@@ -61,6 +61,7 @@ from .tools import firewall_zones as firewall_zones_tools
 from .tools import innerspace as innerspace_tools
 from .tools import integration_api as integration_api_tools
 from .tools import mac_tags as mac_tags_tools
+from .tools import matter as matter_tools
 from .tools import mobility as mobility_tools
 from .tools import netflow as netflow_tools
 from .tools import network_config as network_config_tools
@@ -613,6 +614,7 @@ _LOCAL_TOOL_MODULES = [
     firewall_policies_tools,
     firewall_zones_tools,
     mac_tags_tools,
+    matter_tools,
     network_config_tools,
     netflow_tools,
     networks_tools,
@@ -664,6 +666,7 @@ _PROFILE_MODULES: dict[str, list[Any]] = {
         clients_tools,
         dhcp_tools,
         dns_tools,
+        matter_tools,
         network_config_tools,
         netflow_tools,
         networks_tools,

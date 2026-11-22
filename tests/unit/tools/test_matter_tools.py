@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from src.config import APIType, Settings
-from src.models.matter import MatterNode, ThreadNetwork
+from src.models.matter import MatterNode, MatterThreadClient, ThreadNetwork
 from src.tools.matter import list_matter_nodes, list_matter_thread_clients, list_thread_networks
 from src.utils.exceptions import APIError, ResourceNotFoundError, ValidationError
 
@@ -124,7 +124,11 @@ async def test_thread_network_never_surfaces_border_router_internals() -> None:
 @pytest.mark.asyncio
 async def test_list_thread_networks_reports_unsupported_on_404(settings: Settings) -> None:
     """A pre-Network-11 controller 404s; that is 'unsupported', not an error."""
-    get = AsyncMock(side_effect=ResourceNotFoundError("resource", "/thread-networks"))
+    # The feature route 404s, but the control route answers, so the site
+    # exists and the 404 genuinely means "this release has no Thread support".
+    get = AsyncMock(
+        side_effect=[ResourceNotFoundError("resource", "/thread-networks"), {"data": []}]
+    )
     with _patch(get):
         result = await list_thread_networks("default", settings)
 
@@ -234,7 +238,7 @@ async def test_matter_node_never_surfaces_the_setup_code() -> None:
 
 @pytest.mark.asyncio
 async def test_list_matter_nodes_reports_unsupported_on_404(settings: Settings) -> None:
-    get = AsyncMock(side_effect=ResourceNotFoundError("resource", "/matter/nodes"))
+    get = AsyncMock(side_effect=[ResourceNotFoundError("resource", "/matter/nodes"), {"data": []}])
     with _patch(get):
         result = await list_matter_nodes("default", settings)
     assert result == {"supported": False, "count": 0, "matter_nodes": []}
@@ -280,6 +284,99 @@ async def test_list_matter_thread_clients_empty_is_not_unsupported(settings: Set
     with _patch(get):
         result = await list_matter_thread_clients("default", settings)
     assert result == {"supported": True, "count": 0, "clients": []}
+
+
+@pytest.mark.asyncio
+async def test_matter_thread_client_record_is_allowlisted(settings: Settings) -> None:
+    """A wide controller record must not reach the caller verbatim.
+
+    The live Network 10.6.111 active-client record carries ``fingerprint``,
+    ``hostname``, ``ip``, ``ipv6_address``, ``bssid``, ``ap_mac`` and
+    ``fixed_ip``. Returning it raw would leak a client fingerprint while
+    ThreadBorderRouter deliberately excludes the same field. This test fails
+    against the previous implementation, which returned ``matched`` directly.
+    """
+    get = AsyncMock(
+        return_value={
+            "data": [
+                {
+                    "id": "b",
+                    "type": "MATTER_THREAD",
+                    "client_id": "client-abc",
+                    "mac": "aa:bb:cc:dd:ee:ff",
+                    "fingerprint": "must-not-appear",
+                    "hostname": "must-not-appear",
+                    "ip": "198.51.100.23",
+                    "ipv6_address": "must-not-appear",
+                    "bssid": "must-not-appear",
+                    "ap_mac": "must-not-appear",
+                    "fixed_ip": "must-not-appear",
+                    "note": "must-not-appear",
+                }
+            ]
+        }
+    )
+    with _patch(get):
+        result = await list_matter_thread_clients("default", settings)
+
+    client = result["clients"][0]
+    for leaked in (
+        "fingerprint",
+        "hostname",
+        "ip",
+        "ipv6_address",
+        "bssid",
+        "ap_mac",
+        "fixed_ip",
+        "note",
+    ):
+        assert leaked not in client, f"{leaked} reached the caller"
+    assert "must-not-appear" not in str(client)
+    # The join key and the useful identity fields survive.
+    assert client["client_id"] == "client-abc"
+    assert client["mac"] == "aa:bb:cc:dd:ee:ff"
+
+
+def test_matter_thread_client_model_ignores_unlisted_fields() -> None:
+    """A field added by future firmware cannot reach the result."""
+    shaped = MatterThreadClient.from_api(
+        {"id": "x", "type": "MATTER_THREAD", "some_future_field": "must-not-appear"}
+    )
+    dumped = shaped.model_dump()
+    assert "some_future_field" not in dumped
+    assert "must-not-appear" not in str(dumped)
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_site_is_not_reported_as_unsupported(settings: Settings) -> None:
+    """A mistyped site id must raise, not claim the controller lacks Matter.
+
+    Live on Network 10.6.111 a nonexistent site name 404s even on a route
+    that otherwise answers 200, so the feature 404 and the bad-site 404 are
+    indistinguishable by status alone. This test fails against the previous
+    implementation, which mapped every 404 to ``supported: false``.
+    """
+    # Both the feature route and the control route 404: the site is unknown.
+    get = AsyncMock(side_effect=ResourceNotFoundError("resource", "/matter/nodes"))
+    with _patch(get), pytest.raises(ResourceNotFoundError):
+        await list_matter_nodes("nosuchsite", settings)
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_site_raises_for_the_client_inventory(settings: Settings) -> None:
+    """clients/active always exists, so its 404 can only be a bad site."""
+    get = AsyncMock(side_effect=ResourceNotFoundError("resource", "/clients/active"))
+    with _patch(get), pytest.raises(ResourceNotFoundError):
+        await list_matter_thread_clients("nosuchsite", settings)
+
+
+@pytest.mark.asyncio
+async def test_the_site_check_only_runs_after_a_404(settings: Settings) -> None:
+    """The success path must not pay for an extra round trip."""
+    get = AsyncMock(return_value=[])
+    with _patch(get):
+        await list_thread_networks("default", settings)
+    assert get.await_count == 1
 
 
 # --------------------------------------------------------------------------- #

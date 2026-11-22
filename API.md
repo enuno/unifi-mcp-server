@@ -1356,6 +1356,103 @@ result = await mcp.call_tool("search_clients", {
 })
 ```
 
+### Matter and Thread Tools
+
+Read the Matter and Thread inventory behind Network 11's Settings > Matter
+page. These are local-only reads: no published UniFi contract exposes a
+Matter or Thread path, so they use the private v2 API through the local
+gateway proxy and raise `NotImplementedError` in cloud API mode.
+
+A controller older than Network 11 has no Matter or Thread route and answers
+404. That is reported as `supported: false` rather than an empty list, so a
+caller can tell "no Matter devices" from "this controller has no Matter
+support". A 404 caused by an unknown site id raises instead.
+
+Evidence and limits are recorded in
+`docs/research/matter-thread-network-11-discovery.md`. A node's Matter
+pairing code (`setupCode`) is never returned.
+
+#### `list_thread_networks`
+
+List the Thread networks a site detects. A site reports its own networks and
+may also detect a neighbouring one it does not control, so a result with no
+border routers is normal. Border-router identification internals
+(`fingerprint`, `host`, `domainName`, `stateBitmap`, `sequenceNumber`,
+`backboneRouterPort`) are not surfaced, and Matter fabric identifiers are
+reduced to `fabric_count`.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:** `{"supported": bool, "count": int, "thread_networks": [...]}`
+where each network carries `network_name`, `extended_pan_id`, `channel`,
+`controller`, `thread_version`, `device_count`, `fabric_count` and
+`border_routers`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_thread_networks", {
+    "site_id": "default"
+})
+```
+
+#### `list_matter_nodes`
+
+List the site's Matter nodes and their commissioning state. `status` is one
+of `QUEUED`, `COMMISSIONING`, `PROVISIONING`, `COMMISSIONED`, `FAILED`,
+`UNVERIFIED` or `REMOVED`; an unrecognised state from a newer controller is
+passed through rather than rejected. Join `thread_client_id` to a
+`MATTER_THREAD` record from `list_matter_thread_clients` for the node's
+network identity.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:** `{"supported": bool, "count": int, "matter_nodes": [...]}` where
+each node carries `node_id`, `name`, `status`, `online`, `device_type_name`,
+`vendor_name`, `product_name`, `model`, `software_version_string`,
+`thread_client_id`, `last_online_at` and `error_code`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_matter_nodes", {
+    "site_id": "default"
+})
+```
+
+#### `list_matter_thread_clients`
+
+List the site's Matter/Thread devices from the active-client inventory —
+the client-side view of the devices `list_matter_nodes` reports from the
+Matter service. Unlike the Matter and Thread routes, this route predates
+Network 11, so an empty result means "no Matter/Thread clients" and
+`supported` is always `true`.
+
+Records are projected through an allowlist; the controller's active-client
+record also carries fields such as `fingerprint` and `ip`, which are not
+republished.
+
+**Parameters:**
+
+- `site_id` (string, required): Site identifier
+
+**Returns:** `{"supported": bool, "count": int, "clients": [...]}` where each
+client carries `id`, `client_id`, `type`, `mac`, `name`, `display_name`,
+`network_name`, `thread_version`, `uplink_mac`, `last_seen`, `is_guest` and
+`blocked`.
+
+**Example:**
+
+```python
+result = await mcp.call_tool("list_matter_thread_clients", {
+    "site_id": "default"
+})
+```
+
 ### Network Information Tools
 
 #### `get_network_details`

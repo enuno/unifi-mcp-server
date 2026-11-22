@@ -142,6 +142,59 @@ class ThreadNetwork(BaseModel):
         )
 
 
+class MatterThreadClient(BaseModel):
+    """A Matter/Thread device as it appears in the active-client inventory.
+
+    The controller's active-client record is wide and carries fields this
+    server has no reason to republish — on a live Network 10.6.111 console
+    the record included ``fingerprint``, ``hostname``, ``ip``,
+    ``ipv6_address``, ``bssid``, ``ap_mac`` and ``fixed_ip``. Returning it
+    verbatim would leak a client ``fingerprint`` even while
+    :class:`ThreadBorderRouter` deliberately excludes the same field, so the
+    record is projected through this allowlist instead.
+
+    ``client_id`` is kept because it is the join key back to a
+    :class:`MatterNode`'s ``thread_client_id``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str | None = Field(None, description="Controller's record identifier for the client")
+    client_id: str | None = Field(
+        None,
+        description="Join key matching a Matter node's thread_client_id",
+    )
+    type: str | None = Field(None, description="Client type, MATTER_THREAD for these records")
+    mac: str | None = Field(None, description="Client MAC address")
+    name: str | None = Field(None, description="User-assigned client name")
+    display_name: str | None = Field(None, description="Name the UniFi UI shows")
+    network_name: str | None = Field(None, description="Network the client is attached to")
+    thread_version: str | None = Field(None, description="Thread protocol version the client runs")
+    uplink_mac: str | None = Field(None, description="MAC of the device the client uplinks through")
+    last_seen: int | str | None = Field(None, description="When the controller last saw the client")
+    is_guest: bool | None = Field(None, description="Whether the client is on a guest network")
+    blocked: bool | None = Field(None, description="Whether the client is blocked")
+
+    @classmethod
+    def from_api(cls, record: dict[str, Any]) -> MatterThreadClient:
+        """Build a client from a controller record, allowlisting its fields."""
+        allowed = (
+            "id",
+            "client_id",
+            "type",
+            "mac",
+            "name",
+            "display_name",
+            "network_name",
+            "thread_version",
+            "uplink_mac",
+            "last_seen",
+            "is_guest",
+            "blocked",
+        )
+        return cls.model_validate({key: record.get(key) for key in allowed})
+
+
 class MatterNode(BaseModel):
     """A Matter node commissioned into (or pending on) the site.
 

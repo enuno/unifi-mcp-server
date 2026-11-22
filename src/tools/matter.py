@@ -40,7 +40,7 @@ from typing import Any
 
 from ..api.client import UniFiClient
 from ..config import APIType, Settings
-from ..models.matter import MATTER_THREAD_CLIENT_TYPE, MatterNode, ThreadNetwork
+from ..models.matter import MATTER_THREAD_CLIENT_TYPE, MatterNode, MatterThreadClient, ThreadNetwork
 from ..utils import ResourceNotFoundError, get_logger, sanitize_log_message, validate_site_id
 from ..utils.tool_kind import read_tool
 
@@ -69,25 +69,68 @@ def _records(response: Any) -> list[dict[str, Any]]:
     return []
 
 
+#: A v2 route that exists on every Network release this server supports, used
+#: to tell "this controller lacks the feature" apart from "that site does not
+#: exist". Both answer 404, so the status code alone cannot distinguish them.
+#: Verified live on Network 10.6.111: the real site answers 200 here, and a
+#: site name that cannot exist answers 404.
+_SITE_CONTROL_ROUTE = "/clients/active"
+
+
+async def _site_exists(client: UniFiClient, settings: Settings, site_id: str) -> bool:
+    """Return whether the controller knows *site_id*.
+
+    Asked only after a feature route 404s, so the extra request is not on the
+    success path.
+    """
+    endpoint = f"{settings.get_v2_api_path(site_id)}{_SITE_CONTROL_ROUTE}"
+    try:
+        await client.get(endpoint)
+    except ResourceNotFoundError:
+        return False
+    return True
+
+
 async def _get_v2(
     settings: Settings,
     site_id: str,
     suffix: str,
+    *,
+    feature_route: bool,
 ) -> tuple[list[dict[str, Any]], bool]:
     """GET a v2 site route and return its records plus controller support.
 
-    Returns ``([], False)`` when the controller answers 404, which is how a
-    Network release without the feature reports it. Every other failure
-    propagates: a 401, 429 or 5xx must not be reported as "unsupported".
+    A 404 is ambiguous on this API: the v2 routes answer 404 both for a
+    feature the Network release does not have *and* for a site that does not
+    exist (confirmed live on 10.6.111, where a nonexistent site name 404s on
+    a route that otherwise answers 200). Reporting the second case as
+    ``supported: false`` would turn a mistyped site id into a confident,
+    wrong claim that the controller lacks Matter support.
+
+    So a 404 is disambiguated rather than assumed:
+
+    * ``feature_route=True`` — on 404, check the site against a control route
+      that every supported release serves. If the site is unknown the 404 is
+      re-raised; only a 404 on a site that *does* exist means "unsupported".
+    * ``feature_route=False`` — the route itself predates the feature, so a
+      404 can only mean an unknown site and always propagates.
+
+    Every other failure propagates either way: a 401, 429 or 5xx must never
+    be reported as "unsupported".
     """
     async with UniFiClient(settings) as client:
         if not client.is_authenticated:
             await client.authenticate()
-        normalized_site_id = client._site_uuid_to_name.get(site_id, site_id)
-        endpoint = f"{settings.get_v2_api_path(normalized_site_id)}{suffix}"
+        # The site UUID -> short-name translation is applied centrally by
+        # UniFiClient._normalize_endpoint, so it is not repeated here.
+        endpoint = f"{settings.get_v2_api_path(site_id)}{suffix}"
         try:
             response = await client.get(endpoint)
         except ResourceNotFoundError:
+            if not feature_route:
+                raise
+            if not await _site_exists(client, settings, site_id):
+                raise
             return [], False
         return _records(response), True
 
@@ -121,7 +164,7 @@ async def list_thread_networks(site_id: str, settings: Settings) -> dict[str, An
     _ensure_local_api(settings)
     site_id = validate_site_id(site_id)
 
-    records, supported = await _get_v2(settings, site_id, "/thread-networks")
+    records, supported = await _get_v2(settings, site_id, "/thread-networks", feature_route=True)
     networks = [ThreadNetwork.from_api(record) for record in records]
 
     if not supported:
@@ -170,7 +213,7 @@ async def list_matter_nodes(site_id: str, settings: Settings) -> dict[str, Any]:
     _ensure_local_api(settings)
     site_id = validate_site_id(site_id)
 
-    records, supported = await _get_v2(settings, site_id, "/matter/nodes")
+    records, supported = await _get_v2(settings, site_id, "/matter/nodes", feature_route=True)
     nodes = [MatterNode.from_api(record) for record in records]
 
     if not supported:
@@ -205,7 +248,14 @@ async def list_matter_thread_clients(site_id: str, settings: Settings) -> dict[s
 
     Unlike the Matter and Thread routes, this route exists before Network 11,
     so an empty result on an older controller means "no Matter/Thread
-    clients", not "unsupported".
+    clients", not "unsupported" — and because the route is always present, a
+    404 from it can only mean an unknown site and is raised rather than
+    reported as a lack of support. ``supported`` is therefore always ``True``
+    here, and is kept only so the three tools share one result shape.
+
+    Records are projected through an allowlist: the controller's active-client
+    record is wide and carries fields such as ``fingerprint`` and ``ip`` that
+    this server does not republish.
 
     Args:
         site_id: Site identifier
@@ -222,8 +272,12 @@ async def list_matter_thread_clients(site_id: str, settings: Settings) -> dict[s
     _ensure_local_api(settings)
     site_id = validate_site_id(site_id)
 
-    records, supported = await _get_v2(settings, site_id, "/clients/active")
-    matched = [record for record in records if record.get("type") == MATTER_THREAD_CLIENT_TYPE]
+    records, supported = await _get_v2(settings, site_id, _SITE_CONTROL_ROUTE, feature_route=False)
+    matched = [
+        MatterThreadClient.from_api(record)
+        for record in records
+        if record.get("type") == MATTER_THREAD_CLIENT_TYPE
+    ]
 
     logger.info(
         sanitize_log_message(
@@ -235,5 +289,5 @@ async def list_matter_thread_clients(site_id: str, settings: Settings) -> dict[s
     return {
         "supported": supported,
         "count": len(matched),
-        "clients": matched,
+        "clients": [client.model_dump() for client in matched],
     }

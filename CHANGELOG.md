@@ -16,8 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vendor's own application package. `list_thread_networks`,
   `list_matter_nodes` and `list_matter_thread_clients` read
   `GET /proxy/network/v2/api/site/{site}/thread-networks`,
-  `.../matter/nodes` and `.../clients/active` respectively, returning
-  allowlist-shaped models.
+  `.../matter/nodes` and `.../clients/active` respectively. All three project
+  the controller's records through allowlist models: the active-client record
+  is wide and carries fields such as `fingerprint` and `ip`, which are not
+  republished. A 404 from a feature route means the release lacks Matter
+  support and is reported as `supported: false`; a 404 caused by an unknown
+  site id is raised instead, since the two are indistinguishable by status
+  alone and a mistyped site must not look like a missing feature.
 
   **Evidence, stated precisely.** The two Matter/Thread route paths and their
   operation summaries are *derived* from Network Application

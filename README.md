@@ -21,9 +21,12 @@
 
 </p>
 
+
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
 **Current release: 0.11.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
+
+  [![UniFi MCP Server MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/enuno/unifi-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/enuno/unifi-mcp-server)
 
 ## Contents
 

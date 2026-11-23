@@ -199,14 +199,21 @@ class AuditLogger:
         Postgres store) and ``forwarder`` (SIEM) on the object they were
         handed; a replacement would silently drop both.
 
+        Takes ``_chain_lock``: :meth:`_write` resolves the chain key from
+        ``self.log_file`` and then opens ``self.log_file``, both under that
+        lock. Swapping the path without it could land between those two
+        reads, appending a record sealed against the old file's chain to the
+        new file and splitting the hash chain so ``audit_verify`` fails.
+
         Args:
             log_file: Path the audit records should be written to.
         """
         target = Path(log_file)
-        if target == self.log_file:
-            return
-        self.log_file = target
-        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+        with _chain_lock:
+            if target == self.log_file:
+                return
+            self.log_file = target
+            self.log_file.parent.mkdir(parents=True, exist_ok=True)
 
     @staticmethod
     def _opener(path: str, flags: int) -> int:
@@ -655,6 +662,10 @@ class ToolCallRecorder:
 
 # Global audit logger instance
 _audit_logger: AuditLogger | None = None
+# Guards the check-then-assign below. Separate from ``_chain_lock`` because
+# ``retarget`` takes that one: the order is always _singleton_lock →
+# _chain_lock, and nothing acquires them the other way round.
+_singleton_lock = threading.Lock()
 
 
 def get_audit_logger(log_file: str | Path | None = None, log_level: str = "INFO") -> AuditLogger:
@@ -674,12 +685,19 @@ def get_audit_logger(log_file: str | Path | None = None, log_level: str = "INFO"
     """
     global _audit_logger
 
-    if _audit_logger is None:
-        _audit_logger = AuditLogger(log_file, log_level)
-    elif log_file is not None:
-        _audit_logger.retarget(log_file)
+    with _singleton_lock:
+        # Double-checked: two concurrent first callers would otherwise each
+        # build a logger, and the loser's sink and forwarder assignments
+        # would be silently dropped along with its instance.
+        if _audit_logger is None:
+            _audit_logger = AuditLogger(log_file, log_level)
+            return _audit_logger
+        logger = _audit_logger
 
-    return _audit_logger
+    if log_file is not None:
+        logger.retarget(log_file)
+
+    return logger
 
 
 def log_audit(

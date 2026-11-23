@@ -28,6 +28,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   designed. The loss was confined to file-based (non-fleet) deployments
   whose working directory is not writable.
 
+- **A retarget can no longer split the audit hash chain.** `_write` resolves
+  the chain key from `self.log_file` and then opens `self.log_file`, both
+  under `_chain_lock`. Retargeting without that lock could land between the
+  two reads, appending a record sealed against the old file's chain to the
+  new file so `audit_verify` rejected the chain. `retarget` now takes the
+  lock.
+
+- **Two concurrent first callers can no longer build two audit loggers.**
+  `get_audit_logger` did an unlocked check-then-assign on the module global,
+  so a racing pair could each construct an instance and the loser's `sink`
+  (Postgres) and `forwarder` (SIEM) assignments were silently dropped along
+  with its object. The check is now double-checked under a dedicated lock.
+
 ## [0.10.0] - 2026-11-22
 
 ### Added

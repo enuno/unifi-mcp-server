@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A configured audit log path is no longer discarded by the memoized
+  logger.** `get_audit_logger` returns one logger per process, so the first
+  caller fixed the file and `main.py` reaches it with no argument before the
+  settings-aware call in `src/fleet/db/audit_store.install`. The logger was
+  therefore built with the relative `audit.log` fallback, and every later
+  call carrying the operator's configured path was ignored. Under a
+  read-only root filesystem — the chart sets
+  `readOnlyRootFilesystem: true`, and the working directory is `/app` —
+  that fallback cannot be written and each record fails with
+  `[Errno 30] Read-only file system`. A supplied path now retargets the
+  existing instance rather than rebuilding it, because callers assign
+  `sink` (the Postgres store) and `forwarder` (SIEM) on the object they
+  were handed and a replacement would silently drop both.
+
+  A fleet deployment was not affected: `audit_store.install` replaces the
+  file with a Postgres sink, so records went to the `audit_log` table as
+  designed. The loss was confined to file-based (non-fleet) deployments
+  whose working directory is not writable.
+
 ## [0.10.0] - 2026-11-22
 
 ### Added

@@ -187,6 +187,27 @@ class AuditLogger:
         # Ensure log directory exists
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
 
+    def retarget(self, log_file: str | Path) -> None:
+        """Point this logger at ``log_file``.
+
+        The process memoizes one logger, so the first caller fixes the file
+        and a caller that passed no path got the relative ``audit.log``
+        fallback. In a container the working directory is a read-only root
+        filesystem, so that fallback cannot be written and every record is
+        lost. This moves the existing instance onto the configured path
+        instead of rebuilding it, because callers assign ``sink`` (the
+        Postgres store) and ``forwarder`` (SIEM) on the object they were
+        handed; a replacement would silently drop both.
+
+        Args:
+            log_file: Path the audit records should be written to.
+        """
+        target = Path(log_file)
+        if target == self.log_file:
+            return
+        self.log_file = target
+        self.log_file.parent.mkdir(parents=True, exist_ok=True)
+
     @staticmethod
     def _opener(path: str, flags: int) -> int:
         """Open the audit log owner-readable only.
@@ -639,6 +660,11 @@ _audit_logger: AuditLogger | None = None
 def get_audit_logger(log_file: str | Path | None = None, log_level: str = "INFO") -> AuditLogger:
     """Get or create the global audit logger instance.
 
+    The logger is memoized for the process. A caller that supplies a path
+    retargets the existing instance, so a configured path still wins when an
+    earlier no-argument call already created the logger with the relative
+    ``audit.log`` fallback — unwritable under a read-only root filesystem.
+
     Args:
         log_file: Path to audit log file
         log_level: Logging level
@@ -650,6 +676,8 @@ def get_audit_logger(log_file: str | Path | None = None, log_level: str = "INFO"
 
     if _audit_logger is None:
         _audit_logger = AuditLogger(log_file, log_level)
+    elif log_file is not None:
+        _audit_logger.retarget(log_file)
 
     return _audit_logger
 

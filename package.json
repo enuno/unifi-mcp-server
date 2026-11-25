@@ -1,6 +1,6 @@
 {
   "name": "unifi-mcp-server",
-  "version": "0.2.0",
+  "version": "0.12.0",
   "description": "An MCP server that leverages official UniFi API",
   "main": "index.js",
   "keywords": [

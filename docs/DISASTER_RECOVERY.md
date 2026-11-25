@@ -1,7 +1,7 @@
 # UniFi MCP Server - Disaster Recovery Guide
 
-**Last Updated**: 2025-11-28
-**Version**: 0.2.0
+**Last Updated**: 2026-11-25
+**Version**: 0.12.0
 
 This guide provides comprehensive instructions for backup, restore, and disaster recovery operations using the UniFi MCP Server.
 
@@ -630,6 +630,6 @@ For backup/restore issues:
 
 ---
 
-**Last Updated**: 2025-11-28
-**Version**: 0.2.0
+**Last Updated**: 2026-11-25
+**Version**: 0.12.0
 **Maintained By**: UniFi MCP Server Team

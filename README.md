@@ -23,7 +23,7 @@
 
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
-**Current release: 0.11.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
+**Current release: 0.12.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
 
   [![UniFi MCP Server MCP server – quality and maintenance score on Glama](https://glama.ai/mcp/servers/enuno/unifi-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/enuno/unifi-mcp-server)
 
@@ -74,6 +74,9 @@ speed test. The `statistics` fields can differ by UniFi Network version;
 unavailable values appear as `null` or `unknown`. The inferred site status
 describes device availability; reported internet issue entries appear separately
 because they do not by themselves prove a current fault (see [API.md](API.md)).
+That data mapping has been checked read-only against one Site Manager account;
+the added edge cases use mocked responses, and version-wide live compatibility
+has not been verified.
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 

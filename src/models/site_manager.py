@@ -6,29 +6,38 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SiteHealthSummary(BaseModel):
-    """Health status for a site."""
+    """Site statistics and a status inferred from documented counters."""
 
     site_id: str = Field(..., description="Site identifier")
     site_name: str = Field(..., description="Site name")
-    status: Literal["healthy", "degraded", "down"] = Field(..., description="Health status")
-    devices_online: int = Field(0, description="Number of online devices")
-    devices_total: int = Field(0, description="Total number of devices")
-    clients_active: int = Field(0, description="Number of active clients")
-    uptime_percentage: float = Field(0.0, description="Uptime percentage")
-    last_updated: str = Field(..., description="Last update timestamp (ISO)")
+    status: Literal["healthy", "degraded", "down", "unknown"] = Field(
+        ..., description="Inferred status, or unknown when statistics are absent"
+    )
+    status_source: Literal["site_statistics"] | None = Field(
+        None, description="Basis for the inferred status"
+    )
+    devices_online: int | None = Field(None, description="Number of online devices, when reported")
+    devices_total: int | None = Field(None, description="Total number of devices, when reported")
+    clients_active: int | None = Field(None, description="WiFi plus wired clients, when reported")
+    uptime_percentage: float | None = Field(None, description="Reported WAN uptime percentage")
+    last_updated: str | None = Field(None, description="Update timestamp, when provided")
 
 
 class InternetHealthMetrics(BaseModel):
-    """Internet connectivity metrics."""
+    """Latest reported ISP metric interval; no speed test is requested."""
 
     site_id: str | None = Field(None, description="Site identifier (None for aggregate)")
     latency_ms: float | None = Field(None, description="Average latency in milliseconds")
-    packet_loss_percent: float = Field(0.0, description="Packet loss percentage")
+    packet_loss_percent: float | None = Field(None, description="Reported packet loss percentage")
     jitter_ms: float | None = Field(None, description="Jitter in milliseconds")
     bandwidth_up_mbps: float | None = Field(None, description="Upload bandwidth in Mbps")
     bandwidth_down_mbps: float | None = Field(None, description="Download bandwidth in Mbps")
-    status: Literal["healthy", "degraded", "down"] = Field(..., description="Health status")
-    last_tested: str = Field(..., description="Last test timestamp (ISO)")
+    uptime_percentage: float | None = Field(None, description="Reported WAN uptime percentage")
+    status: Literal["healthy", "degraded", "down", "unknown"] = Field(
+        ..., description="Health status, if known"
+    )
+    last_reported: str | None = Field(None, description="Latest ISP metric interval timestamp")
+    last_tested: str | None = Field(None, description="Speed test timestamp, if available")
 
 
 class CrossSiteStatistics(BaseModel):
@@ -38,11 +47,21 @@ class CrossSiteStatistics(BaseModel):
     sites_healthy: int = Field(0, description="Number of healthy sites")
     sites_degraded: int = Field(0, description="Number of degraded sites")
     sites_down: int = Field(0, description="Number of down sites")
+    sites_unknown: int = Field(
+        0, description="Number of sites without enough statistics for status"
+    )
+    totals_complete: bool = Field(
+        True, description="Whether every site reported device and client counts"
+    )
     total_devices: int = Field(0, description="Total number of devices")
     devices_online: int = Field(0, description="Total online devices")
     total_clients: int = Field(0, description="Total number of clients")
-    total_bandwidth_up_mbps: float = Field(0.0, description="Total upload bandwidth")
-    total_bandwidth_down_mbps: float = Field(0.0, description="Total download bandwidth")
+    total_bandwidth_up_mbps: float | None = Field(
+        None, description="Total upload bandwidth, if measured"
+    )
+    total_bandwidth_down_mbps: float | None = Field(
+        None, description="Total download bandwidth, if measured"
+    )
     site_summaries: list[SiteHealthSummary] = Field(
         default_factory=list, description="Health summary for each site"
     )
@@ -84,10 +103,14 @@ class SitePerformanceMetrics(BaseModel):
     avg_latency_ms: float | None = Field(None, description="Average latency")
     avg_bandwidth_up_mbps: float | None = Field(None, description="Average upload bandwidth")
     avg_bandwidth_down_mbps: float | None = Field(None, description="Average download bandwidth")
-    uptime_percentage: float = Field(0.0, description="Uptime percentage")
-    device_online_percentage: float = Field(0.0, description="Percentage of devices online")
-    client_count: int = Field(0, description="Active clients")
-    health_status: Literal["healthy", "degraded", "down"] = Field(..., description="Overall status")
+    uptime_percentage: float | None = Field(None, description="Reported WAN uptime percentage")
+    device_online_percentage: float | None = Field(
+        None, description="Percentage of devices online, when counts are available"
+    )
+    client_count: int | None = Field(None, description="Active clients, when reported")
+    health_status: Literal["healthy", "degraded", "down", "unknown"] = Field(
+        ..., description="Inferred site status"
+    )
 
 
 class CrossSitePerformanceComparison(BaseModel):
@@ -100,7 +123,7 @@ class CrossSitePerformanceComparison(BaseModel):
     worst_performing_site: SitePerformanceMetrics | None = Field(
         None, description="Site with worst overall performance"
     )
-    average_uptime: float = Field(0.0, description="Average uptime across all sites")
+    average_uptime: float | None = Field(None, description="Average reported uptime across sites")
     average_latency_ms: float | None = Field(None, description="Average latency across sites")
     site_metrics: list[SitePerformanceMetrics] = Field(
         default_factory=list, description="Metrics for each site"

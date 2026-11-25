@@ -238,10 +238,6 @@ class TestEndpoints:
                 "/v1/sites",
                 {"limit": "10", "offset": "20"},
             ),
-            (lambda c: c.get_site_health(), "/v1/sites/health", {}),
-            (lambda c: c.get_site_health("s1"), "/v1/sites/s1/health", {}),
-            (lambda c: c.get_internet_health(), "/v1/internet/health", {}),
-            (lambda c: c.get_internet_health("s1"), "/v1/sites/s1/internet/health", {}),
             (lambda c: c.list_vantage_points(), "/v1/vantage-points", {}),
             (lambda c: c.get_isp_metrics("s1"), "/v1/sites/s1/isp/metrics", {}),
             (lambda c: c.query_isp_metrics(), "/v1/isp/metrics", {}),
@@ -268,6 +264,145 @@ class TestEndpoints:
 
         assert seen[0].url.path == path
         assert dict(seen[0].url.params) == params
+
+
+class TestHealthFromDocumentedEndpoints:
+    @pytest.mark.asyncio
+    async def test_site_health_pages_sites_and_preserves_missing_statistics(
+        self, settings: MagicMock
+    ) -> None:
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            if request.url.params.get("nextToken"):
+                return httpx.Response(
+                    200, json={"data": [{"siteId": "s2", "meta": {"name": "Old console"}}]}
+                )
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "meta": {"name": "Office"},
+                            "statistics": {
+                                "counts": {
+                                    "totalDevice": 5,
+                                    "offlineDevice": 1,
+                                    "offlineGatewayDevice": 0,
+                                    "wifiClient": 4,
+                                    "wiredClient": 2,
+                                },
+                                "percentages": {"wanUptime": 98.5},
+                                "internetIssues": [],
+                            },
+                        }
+                    ],
+                    "nextToken": "page-2",
+                },
+            )
+
+        client = _client(settings, handler)
+        result = await client.get_site_health()
+
+        assert [r.url.path for r in seen] == ["/v1/sites", "/v1/sites"]
+        assert seen[1].url.params["nextToken"] == "page-2"
+        assert result[0]["status"] == "degraded"
+        assert result[0]["devices_online"] == 4
+        assert result[0]["clients_active"] == 6
+        assert result[0]["uptime_percentage"] == 98.5
+        assert result[1]["status"] == "unknown"
+        assert result[1]["devices_total"] is None
+        assert result[1]["uptime_percentage"] is None
+
+    @pytest.mark.asyncio
+    async def test_site_health_rejects_unknown_site(self, settings: MagicMock) -> None:
+        _, handler = _recorder(httpx.Response(200, json={"data": []}))
+        client = _client(settings, handler)
+
+        with pytest.raises(ResourceNotFoundError):
+            await client.get_site_health("missing")
+
+    @pytest.mark.asyncio
+    async def test_one_of_two_gateways_offline_is_degraded(self, settings: MagicMock) -> None:
+        _, handler = _recorder(
+            httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "statistics": {
+                                "counts": {
+                                    "totalDevice": 2,
+                                    "offlineDevice": 1,
+                                    "gatewayDevice": 2,
+                                    "offlineGatewayDevice": 1,
+                                },
+                                "internetIssues": [],
+                            },
+                        }
+                    ]
+                },
+            )
+        )
+        client = _client(settings, handler)
+
+        result = await client.get_site_health("s1")
+
+        assert result["status"] == "degraded"
+
+    @pytest.mark.asyncio
+    async def test_internet_health_uses_isp_metrics_without_claiming_speed_test(
+        self, settings: MagicMock
+    ) -> None:
+        seen: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "periods": [
+                                {
+                                    "metricTime": "2026-11-24T12:00:00Z",
+                                    "data": {"wan": {"avgLatency": 30}},
+                                },
+                                {
+                                    "metricTime": "2026-11-24T12:05:00Z",
+                                    "data": {
+                                        "wan": {
+                                            "avgLatency": 26,
+                                            "packetLoss": 0,
+                                            "uptime": 100,
+                                            "download_kbps": 0,
+                                            "upload_kbps": 0,
+                                        }
+                                    },
+                                },
+                            ],
+                        }
+                    ]
+                },
+            )
+
+        client = _client(settings, handler)
+        result = await client.get_internet_health("s1")
+
+        assert seen[0].url.path == "/v1/isp-metrics/5m"
+        assert dict(seen[0].url.params) == {"duration": "24h"}
+        assert result["site_id"] == "s1"
+        assert result["latency_ms"] == 26
+        assert result["packet_loss_percent"] == 0
+        assert result["last_reported"] == "2026-11-24T12:05:00Z"
+        assert result["last_tested"] is None
+        assert result["bandwidth_down_mbps"] is None
+        assert result["bandwidth_up_mbps"] is None
+        assert result["status"] == "unknown"
 
 
 class TestReplyShapes:

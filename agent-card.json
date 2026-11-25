@@ -11304,15 +11304,35 @@
               }
             ],
             "default": null,
-            "description": "Optional site identifier. If None, returns aggregate metrics."
+            "description": "Optional site identifier. If None, returns one entry per site."
           }
         },
         "type": "object"
       },
       "name": "get_internet_health",
       "outputSchema": {
-        "additionalProperties": true,
-        "type": "object"
+        "properties": {
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "type": "object",
+        "x-fastmcp-wrap-result": true
       }
     },
     {

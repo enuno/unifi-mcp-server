@@ -82,35 +82,26 @@ async def list_all_sites_aggregated(settings: Settings) -> list[dict[str, Any]]:
 
 @read_tool
 @require_site_manager
-async def get_internet_health(settings: Settings, site_id: str | None = None) -> dict[str, Any]:
+async def get_internet_health(
+    settings: Settings, site_id: str | None = None
+) -> dict[str, Any] | list[dict[str, Any]]:
     """Get internet health metrics across sites.
 
     Args:
         settings: Application settings
-        site_id: Optional site identifier. If None, returns aggregate metrics.
+        site_id: Optional site identifier. If None, returns one entry per site.
 
     Returns:
-        Internet health metrics
+        Latest reported ISP metric for each matching site. No speed test is run.
     """
     async with SiteManagerClient(settings) as client:
         logger.info(sanitize_log_message(f"Retrieving internet health metrics (site_id={site_id})"))
 
-        try:
-            response = await client.get_internet_health(site_id)
-            if isinstance(response, list):
-                data = response[0] if response else {}
-            else:
-                _raw = response.get("data", response)
-                data = _raw[0] if isinstance(_raw, list) else _raw
-
-            return InternetHealthMetrics(**data).model_dump()
-        except ResourceNotFoundError:
-            logger.warning("internet/health endpoint not available on this Site Manager API")
-            return {
-                "error": "internet/health endpoint not available",
-                "site_id": site_id,
-                "status": "unknown",
-            }
+        response = await client.get_internet_health(site_id)
+        data = response.get("data", response) if isinstance(response, dict) else response
+        if isinstance(data, list):
+            return [InternetHealthMetrics(**metric).model_dump() for metric in data]
+        return InternetHealthMetrics(**data).model_dump()
 
 
 @read_tool
@@ -130,29 +121,13 @@ async def get_site_health_summary(
     async with SiteManagerClient(settings) as client:
         logger.info(sanitize_log_message(f"Retrieving site health summary (site_id={site_id})"))
 
-        try:
-            response = await client.get_site_health(site_id)
-            # Client now auto-unwraps the "data" field, so response is the actual data
-            data = response
-
-            if site_id:
-                if isinstance(data, list):
-                    data = data[0] if data else {}
-                return SiteHealthSummary(**data).model_dump()
-            else:
-                # Multiple sites - response is already a list or dict with sites
-                summaries = data.get("sites", []) if isinstance(data, dict) else data
-                return [SiteHealthSummary(**summary).model_dump() for summary in summaries]
-        except ResourceNotFoundError:
-            logger.warning("sites/health endpoint not available on this Site Manager API")
-            if site_id:
-                return {
-                    "error": "sites/health endpoint not available",
-                    "site_id": site_id,
-                    "status": "unknown",
-                }
-            else:
-                return []
+        response = await client.get_site_health(site_id)
+        if site_id:
+            if not isinstance(response, dict):
+                raise APIError("Unexpected Site Manager site summary response")
+            return SiteHealthSummary(**response).model_dump()
+        summaries = response.get("sites", []) if isinstance(response, dict) else response
+        return [SiteHealthSummary(**summary).model_dump() for summary in summaries]
 
 
 @read_tool
@@ -169,36 +144,23 @@ async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
     async with SiteManagerClient(settings) as client:
         logger.info("Retrieving cross-site statistics")
 
-        # Get all sites with health
-        sites_response = await client.list_sites()
-        sites_data = (
-            sites_response
-            if isinstance(sites_response, list)
-            else sites_response.get("data", sites_response.get("sites", []))
-        ) or []
-
-        try:
-            health_response = await client.get_site_health()
-            health_data = (
-                health_response
-                if isinstance(health_response, list)
-                else health_response.get("data", health_response)
-            )
-        except ResourceNotFoundError:
-            logger.warning("sites/health endpoint not available; returning partial statistics")
-            health_data = []
+        health_response = await client.get_site_health()
+        health_data = (
+            health_response
+            if isinstance(health_response, list)
+            else health_response.get("data", health_response)
+        )
 
         # Aggregate statistics
-        total_sites = len(sites_data)
+        total_sites = len(health_data) if isinstance(health_data, list) else 0
         sites_healthy = 0
         sites_degraded = 0
         sites_down = 0
+        sites_unknown = 0
+        totals_complete = True
         total_devices = 0
         devices_online = 0
         total_clients = 0
-        total_bandwidth_up_mbps = 0.0
-        total_bandwidth_down_mbps = 0.0
-
         site_summaries: list[SiteHealthSummary] = []
         if isinstance(health_data, list):
             for health in health_data:
@@ -209,22 +171,29 @@ async def get_cross_site_statistics(settings: Settings) -> dict[str, Any]:
                     sites_degraded += 1
                 elif status == "down":
                     sites_down += 1
+                else:
+                    sites_unknown += 1
 
                 site_summaries.append(SiteHealthSummary(**health))
-                total_devices += health.get("devices_total", 0)
-                devices_online += health.get("devices_online", 0)
-                total_clients += health.get("clients_active", 0)
+                if any(
+                    health.get(key) is None
+                    for key in ("devices_total", "devices_online", "clients_active")
+                ):
+                    totals_complete = False
+                total_devices += health.get("devices_total") or 0
+                devices_online += health.get("devices_online") or 0
+                total_clients += health.get("clients_active") or 0
 
         return CrossSiteStatistics(
             total_sites=total_sites,
             sites_healthy=sites_healthy,
             sites_degraded=sites_degraded,
             sites_down=sites_down,
+            sites_unknown=sites_unknown,
+            totals_complete=totals_complete,
             total_devices=total_devices,
             devices_online=devices_online,
             total_clients=total_clients,
-            total_bandwidth_up_mbps=total_bandwidth_up_mbps,
-            total_bandwidth_down_mbps=total_bandwidth_down_mbps,
             site_summaries=site_summaries,
         ).model_dump()
 
@@ -354,17 +323,12 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
     async with SiteManagerClient(settings) as client:
         logger.info("Comparing performance across sites")
 
-        # Get site health data
-        try:
-            health_response = await client.get_site_health()
-            health_data = (
-                health_response
-                if isinstance(health_response, list)
-                else health_response.get("data", health_response)
-            )
-        except ResourceNotFoundError:
-            logger.warning("sites/health endpoint not available")
-            health_data = []
+        health_response = await client.get_site_health()
+        health_data = (
+            health_response
+            if isinstance(health_response, list)
+            else health_response.get("data", health_response)
+        )
 
         # Get internet health data for bandwidth/latency
         try:
@@ -375,7 +339,7 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
                 else internet_response.get("data", internet_response)
             )
         except ResourceNotFoundError:
-            logger.warning("internet/health endpoint not available")
+            logger.warning("ISP metrics endpoint unavailable; comparing site statistics only")
             internet_data = []
 
         site_metrics: list[SitePerformanceMetrics] = []
@@ -386,10 +350,14 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
                 site_id = health.get("site_id", "")
 
                 # Calculate device online percentage
-                devices_total = health.get("devices_total", 0)
-                devices_online = health.get("devices_online", 0)
+                devices_total = health.get("devices_total")
+                devices_online = health.get("devices_online")
                 device_online_pct = (
-                    (devices_online / devices_total * 100) if devices_total > 0 else 0.0
+                    devices_online / devices_total * 100
+                    if devices_total is not None
+                    and devices_total > 0
+                    and devices_online is not None
+                    else None
                 )
 
                 # Find matching internet health data
@@ -411,10 +379,10 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
                     avg_bandwidth_down_mbps=(
                         internet_health.get("bandwidth_down_mbps") if internet_health else None
                     ),
-                    uptime_percentage=health.get("uptime_percentage", 0.0),
+                    uptime_percentage=health.get("uptime_percentage"),
                     device_online_percentage=device_online_pct,
-                    client_count=health.get("clients_active", 0),
-                    health_status=health.get("status", "down"),
+                    client_count=health.get("clients_active"),
+                    health_status=health.get("status", "unknown"),
                 )
                 site_metrics.append(metrics)
 
@@ -423,22 +391,20 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
         best_site = None
         worst_site = None
 
-        if site_metrics:
-            # Sort by uptime (primary) and device online percentage (secondary)
+        ranked_sites = [site for site in site_metrics if site.uptime_percentage is not None]
+        if ranked_sites:
+            # Sort by reported uptime, then known device availability.
             sorted_sites = sorted(
-                site_metrics,
-                key=lambda s: (s.uptime_percentage, s.device_online_percentage),
+                ranked_sites,
+                key=lambda s: (s.uptime_percentage or 0, s.device_online_percentage or 0),
                 reverse=True,
             )
             best_site = sorted_sites[0] if sorted_sites else None
             worst_site = sorted_sites[-1] if sorted_sites else None
 
         # Calculate average uptime
-        avg_uptime = (
-            sum(m.uptime_percentage for m in site_metrics) / len(site_metrics)
-            if site_metrics
-            else 0.0
-        )
+        uptimes = [m.uptime_percentage for m in site_metrics if m.uptime_percentage is not None]
+        avg_uptime = sum(uptimes) / len(uptimes) if uptimes else None
 
         # Calculate average latency (excluding None values)
         latencies = [m.avg_latency_ms for m in site_metrics if m.avg_latency_ms is not None]

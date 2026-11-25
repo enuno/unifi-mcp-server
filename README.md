@@ -69,6 +69,11 @@ Set `UNIFI_API_TYPE` to choose how the server reaches UniFi.
 
 The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.ui.com` and are registered in every mode. Set `UNIFI_SITE_MANAGER_ENABLED=true` to use Site Manager tools; actual exposure also depends on the selected profile. The existing Site Manager SD-WAN config list/detail/status reads use the official v1.0.0 `/v1/sd-wan-configs` paths after the 2026-11-08 reconciliation; this does not implement typed destination/performance steering policies, policy writes, or prove live account interoperability (see [API.md](API.md) and [the gap reconciliation](docs/COMPETITOR_GAP_RECONCILIATION.md)).
 
+Site Manager health summaries use the documented `/v1/sites` statistics and
+`/v1/isp-metrics/5m` records. These report available values without running a
+speed test. The `statistics` fields can differ by UniFi Network version;
+unavailable values appear as `null` or `unknown` (see [API.md](API.md)).
+
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 
 The Matter and Thread reads need UniFi Network 11 or later. No published UniFi contract exposes a Matter or Thread path, so these tools are built against routes derived from the vendor's own Network 11.0.97 application package and verified only as far as a Network 10.6 controller allows: both routes answer 404 there, while a control route in the same API family answers 200 with the same API key, which establishes route absence rather than an auth refusal. **A successful Matter or Thread read has not been observed**, so the tools are implemented-needs-verification and report `supported: false` on a controller without the routes. A node's Matter pairing code is never returned. See [the discovery record](docs/research/matter-thread-network-11-discovery.md).

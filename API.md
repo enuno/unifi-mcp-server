@@ -1980,6 +1980,41 @@ result = await mcp.call_tool("get_site_statistics", {
 
 The Site Manager API (`api.ui.com/v1/`) provides cloud-based multi-site management, ISP metrics monitoring, SD-WAN configuration, and host management capabilities.
 
+#### Site health and internet metrics
+
+`get_site_health_summary(site_id=None)` reads the documented `GET /v1/sites`
+pages. It returns one summary for a supplied site ID, or a list for all sites.
+Device and client counts and WAN uptime come from `statistics` when present.
+The returned status is inferred from offline device counts and internet issues;
+when the data is insufficient, status is `unknown` and absent numbers are
+`null`.
+
+`get_internet_health(site_id=None)` reads the latest interval from documented
+`GET /v1/isp-metrics/5m?duration=24h`. It returns one entry for a supplied
+site ID, or a list for the sites in the metrics response. It does not initiate
+a speed test. `last_reported` identifies the metric interval; `last_tested`
+remains `null`. Zero or missing upload/download values are `null`, not a
+measured zero connection speed.
+
+`get_cross_site_statistics()` totals available site counts and marks
+`totals_complete=false` when any site lacks them. `compare_site_performance()`
+combines the site summaries and ISP metrics; sites without reported uptime are
+not ranked. Both use the documented endpoints above.
+
+The Site Manager API is versioned separately from the UniFi Network application.
+The official Site Manager v1.0.0 schema says the `statistics` structure varies
+with the Network version. In particular, a Network 11 statistics-engine change
+can leave older history endpoints empty. These tools report missing values as
+unknown rather than treating an empty history or zero ISP speed fields as a
+failed connection. See [Network 11 compatibility](docs/NETWORK_11_COMPATIBILITY.md).
+
+```python
+await mcp.call_tool("get_site_health_summary", {"site_id": "site-12345"})
+await mcp.call_tool("get_internet_health", {"site_id": "site-12345"})
+await mcp.call_tool("get_cross_site_statistics", {})
+await mcp.call_tool("compare_site_performance", {})
+```
+
 #### `get_isp_metrics`
 
 Get ISP performance metrics for a specific site.

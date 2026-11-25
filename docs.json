@@ -279,8 +279,8 @@
   "seo": {
     "indexing": "navigable",
     "metatags": {
-      "canonical": "https://docs.hashgrid.net/",
-      "og:image": "https://docs.hashgrid.net/images/social-preview.png"
+      "canonical": "https://unifi-mcp-docs.hashgrid.net/",
+      "og:image": "https://unifi-mcp-docs.hashgrid.net/images/social-preview.png"
     }
   },
   "integrations": {

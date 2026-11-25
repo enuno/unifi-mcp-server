@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-25
+
 ### Fixed
 
 - Site Manager health tools now derive site summaries from documented
@@ -18,6 +20,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sites without metrics and do not rank sites without reported WAN uptime.
   Site status now reflects device availability from counts; issue entries are
   reported separately instead of automatically marking a site degraded.
+
+### Documentation
+
+- The complete operator and developer skills library is now documented in the
+  README and published in the Mintlify documentation.
+
+### Verification
+
+- Site Manager health mapping was checked read-only against one account. The
+  added edge cases use mocked responses; version-wide live behavior remains
+  unverified.
 
 ## [0.11.0] - 2026-11-23
 
@@ -1158,6 +1171,7 @@ See [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) for the complete roadmap.
 - WiFi network configuration
 - Comprehensive test suite
 
+[0.12.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.9.0...v0.10.0
 [0.2.0]: https://github.com/enuno/unifi-mcp-server/compare/v0.1.3...v0.2.0

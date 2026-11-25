@@ -10,16 +10,18 @@ AI agent can read and change UniFi infrastructure through one standard
 interface. It runs against a single controller or, in fleet mode, many.
 
 <Note>
-  Current release: **0.11.0**. See the [changelog](https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md) for release details.
+  Current release: **0.12.0**. See the [changelog](https://github.com/enuno/unifi-mcp-server/blob/main/CHANGELOG.md) for release details.
 </Note>
 
-Version 0.11.0 fixes file-based audit logging when the process creates its
-memoized logger before the configured path is available. A later settings-aware
-call now retargets the existing logger in place, preserving its Postgres sink and
-SIEM forwarder wiring. Retargeting and first construction are synchronized so
-concurrent writes cannot split the audit hash chain and concurrent callers cannot
-create competing singleton instances. Fleet deployments were not affected because
-they replace the file writer with the Postgres audit sink.
+Version 0.12.0 corrects Site Manager health reporting. Site summaries use the
+documented `/v1/sites` statistics and `/v1/isp-metrics/5m` records; device counts
+determine availability, and reported internet issues are kept separate from
+current status. Missing version-dependent fields remain unknown. The mapping was
+checked read-only against one Site Manager account; added edge cases use mocked
+responses, and version-wide live compatibility has not been verified.
+
+The complete operator and developer skills library is now indexed in the README
+and published documentation.
 
 <Warning>
   The Matter and Thread reads require UniFi Network 11 or later, and no

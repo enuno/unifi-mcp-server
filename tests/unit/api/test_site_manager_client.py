@@ -354,6 +354,49 @@ class TestHealthFromDocumentedEndpoints:
         assert result["status"] == "degraded"
 
     @pytest.mark.asyncio
+    async def test_undated_internet_issues_do_not_mark_online_devices_degraded(
+        self, settings: MagicMock
+    ) -> None:
+        _, handler = _recorder(
+            httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "site": {"name": "Home"},
+                            "statistics": {
+                                "counts": {
+                                    "totalDevice": 3,
+                                    "offlineDevice": 0,
+                                    "gatewayDevice": 1,
+                                    "offlineGatewayDevice": 0,
+                                    "wifiClient": 25,
+                                    "wiredClient": 2,
+                                },
+                                "percentages": {"wanUptime": 100},
+                                "internetIssues": [
+                                    {"index": 100, "wanDowntime": True},
+                                    {"index": 101, "highLatency": True, "latencyMaxMs": 206},
+                                ],
+                            },
+                        }
+                    ]
+                },
+            )
+        )
+        client = _client(settings, handler)
+
+        result = await client.get_site_health("s1")
+
+        assert result["site_name"] == "Home"
+        assert result["status"] == "healthy"
+        assert result["status_source"] == "device_counts"
+        assert result["status_reason"] == "no_offline_devices"
+        assert result["reported_internet_issue_count"] == 2
+        assert result["reported_internet_issue_types"] == ["highLatency", "wanDowntime"]
+
+    @pytest.mark.asyncio
     async def test_internet_health_uses_isp_metrics_without_claiming_speed_test(
         self, settings: MagicMock
     ) -> None:

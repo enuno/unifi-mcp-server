@@ -2333,7 +2333,7 @@
       }
     },
     {
-      "description": "Compare performance metrics across all sites.\n\nAnalyzes uptime, latency, bandwidth, and health status to identify\nbest and worst performing sites.",
+      "description": "Compare performance metrics across all sites.\n\nCombines reported WAN uptime and ISP metrics with device availability.\nIssue entries are reported separately and may not be active now.",
       "examples": [
         {
           "arguments": {
@@ -13237,7 +13237,7 @@
       }
     },
     {
-      "description": "Get health summary for all sites or a specific site.",
+      "description": "Get device availability and reported site statistics.\n\nStatus reflects online device counts only. Reported internet issue entries\ndo not establish that an issue is active now.",
       "examples": [
         {
           "arguments": {

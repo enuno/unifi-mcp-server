@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads return each reported site, and zero ISP upload/download fields no
   longer appear as measured connection speeds. Cross-site comparisons retain
   sites without metrics and do not rank sites without reported WAN uptime.
+  Site status now reflects device availability from counts; issue entries are
+  reported separately instead of automatically marking a site degraded.
 
 ## [0.11.0] - 2026-11-23
 

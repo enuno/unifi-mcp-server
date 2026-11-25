@@ -21,7 +21,6 @@
 
 </p>
 
-
 An MCP server that exposes UniFi Network, UniFi Protect and the UniFi cloud APIs (Site Manager, Mobility, InnerSpace, Carrier Fabric) as MCP tools, so AI agents can read and change UniFi infrastructure through one standard interface. It runs against one controller or, in fleet mode, many.
 
 **Current release: 0.11.0.** See [CHANGELOG.md](CHANGELOG.md) for what changed.
@@ -72,7 +71,9 @@ The cloud tools (Site Manager, Mobility, InnerSpace, Carrier Fabric) call `api.u
 Site Manager health summaries use the documented `/v1/sites` statistics and
 `/v1/isp-metrics/5m` records. These report available values without running a
 speed test. The `statistics` fields can differ by UniFi Network version;
-unavailable values appear as `null` or `unknown` (see [API.md](API.md)).
+unavailable values appear as `null` or `unknown`. The inferred site status
+describes device availability; reported internet issue entries appear separately
+because they do not by themselves prove a current fault (see [API.md](API.md)).
 
 Zone-based firewall tools need UniFi Network 9.0 or later. Some documented UniFi endpoints do not exist on every firmware version; see [docs/UNIFI_API.md](docs/UNIFI_API.md).
 

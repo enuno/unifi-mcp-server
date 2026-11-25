@@ -25,9 +25,9 @@ Requires cloud API or Site Manager access.
 | Tool | Description |
 |---|---|
 | `list_all_sites_aggregated` | Aggregated status across all sites |
-| `get_site_health_summary` | Health scores for one or all sites |
+| `get_site_health_summary` | Device availability from counts, WAN uptime, and separately reported issue entries |
 | `get_site_inventory` | Device inventory aggregated by site |
-| `compare_site_performance` | Compare performance metrics across sites |
+| `compare_site_performance` | Compare reported WAN and device availability metrics across sites |
 | `get_cross_site_statistics` | Cross-site bandwidth and usage |
 | `search_across_sites` | Search clients/devices across all sites |
 | `get_internet_health` | Internet health score and metrics |
@@ -40,6 +40,12 @@ Requires cloud API or Site Manager access.
 | `get_sdwan_config_status` | Get deployment status of an SD-WAN config |
 | `list_vantage_points` | List ISP vantage points |
 | `get_version_control` | Get firmware version control policy |
+
+Site Manager `status` and `health_status` describe device availability from
+reported counts. An `internetIssues` entry alone does not prove a current fault.
+Use `status_source`, `status_reason`, and the separate reported issue fields
+when explaining a result. Use small paginated Network integration tool reads
+for client or device details rather than bulk raw controller responses.
 
 ## Backups
 

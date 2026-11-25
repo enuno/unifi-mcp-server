@@ -6,15 +6,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class SiteHealthSummary(BaseModel):
-    """Site statistics and a status inferred from documented counters."""
+    """Site statistics with device availability inferred from documented counters."""
 
     site_id: str = Field(..., description="Site identifier")
     site_name: str = Field(..., description="Site name")
     status: Literal["healthy", "degraded", "down", "unknown"] = Field(
-        ..., description="Inferred status, or unknown when statistics are absent"
+        ..., description="Device availability only; not overall internet or WiFi health"
     )
-    status_source: Literal["site_statistics"] | None = Field(
-        None, description="Basis for the inferred status"
+    status_source: Literal["device_counts"] | None = Field(
+        None, description="Source of the inferred device availability status"
+    )
+    status_reason: (
+        Literal["all_gateways_offline", "offline_devices", "no_offline_devices"] | None
+    ) = Field(None, description="Device count rule used to infer status")
+    reported_internet_issue_count: int | None = Field(
+        None,
+        description="Number of internet issue entries reported, without asserting they are active",
+    )
+    reported_internet_issue_types: list[str] | None = Field(
+        None, description="Issue flags reported by Site Manager, with no current-state guarantee"
     )
     devices_online: int | None = Field(None, description="Number of online devices, when reported")
     devices_total: int | None = Field(None, description="Total number of devices, when reported")
@@ -109,7 +119,19 @@ class SitePerformanceMetrics(BaseModel):
     )
     client_count: int | None = Field(None, description="Active clients, when reported")
     health_status: Literal["healthy", "degraded", "down", "unknown"] = Field(
-        ..., description="Inferred site status"
+        ..., description="Inferred device availability; not overall internet or WiFi health"
+    )
+    health_status_source: Literal["device_counts"] | None = Field(
+        None, description="Source of the device availability status"
+    )
+    health_status_reason: (
+        Literal["all_gateways_offline", "offline_devices", "no_offline_devices"] | None
+    ) = Field(None, description="Device count rule used to infer status")
+    reported_internet_issue_count: int | None = Field(
+        None, description="Number of reported issue entries, not necessarily active"
+    )
+    reported_internet_issue_types: list[str] | None = Field(
+        None, description="Reported issue flags, with no current-state guarantee"
     )
 
 

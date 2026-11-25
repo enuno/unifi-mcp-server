@@ -1985,9 +1985,14 @@ The Site Manager API (`api.ui.com/v1/`) provides cloud-based multi-site manageme
 `get_site_health_summary(site_id=None)` reads the documented `GET /v1/sites`
 pages. It returns one summary for a supplied site ID, or a list for all sites.
 Device and client counts and WAN uptime come from `statistics` when present.
-The returned status is inferred from offline device counts and internet issues;
-when the data is insufficient, status is `unknown` and absent numbers are
-`null`.
+The returned `status` describes device availability from offline device counts
+only: `down` when every known gateway is offline, `degraded` when another device
+is offline, `healthy` when known devices are online, and `unknown` when counts
+are insufficient. `status_source=device_counts` and `status_reason` show the
+rule used. `reported_internet_issue_count` and
+`reported_internet_issue_types` expose Site Manager issue entries separately;
+their presence alone does not establish a current internet fault. Absent
+numbers are `null`.
 
 `get_internet_health(site_id=None)` reads the latest interval from documented
 `GET /v1/isp-metrics/5m?duration=24h`. It returns one entry for a supplied
@@ -1999,7 +2004,9 @@ measured zero connection speed.
 `get_cross_site_statistics()` totals available site counts and marks
 `totals_complete=false` when any site lacks them. `compare_site_performance()`
 combines the site summaries and ISP metrics; sites without reported uptime are
-not ranked. Both use the documented endpoints above.
+not ranked. Its `health_status` has the same device availability meaning and
+includes `health_status_source`, `health_status_reason`, and reported issue
+fields. Both use the documented endpoints above.
 
 The Site Manager API is versioned separately from the UniFi Network application.
 The official Site Manager v1.0.0 schema says the `statistics` structure varies

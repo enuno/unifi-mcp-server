@@ -3232,10 +3232,13 @@ remain `unknown` and `null`. A site without a record returns unknown values.
 
 `get_site_health_summary(site_id=None)` reads every page of documented
 `GET /v1/sites`. It returns one summary for a site ID or a list for all sites.
-The `status` is inferred from site statistics: all known gateways offline means
-`down`; other offline devices or internet issues mean `degraded`; known positive
-device counts with no offline devices or issues mean `healthy`. Otherwise it is
-`unknown`. `status_source` is `site_statistics` only for an inferred status.
+The `status` describes device availability inferred from counts: all known
+gateways offline means `down`; other offline devices mean `degraded`; known
+positive device counts with no offline devices mean `healthy`. Otherwise it is
+`unknown`. `status_source` is `device_counts` for an inferred status, and
+`status_reason` names the count rule. `reported_internet_issue_count` and
+`reported_internet_issue_types` describe issue entries separately. An entry
+without a current-state marker does not prove an active internet problem.
 The Site Manager response does not provide a last-update time, so
 `last_updated` is `null`.
 
@@ -3247,7 +3250,10 @@ client, or WAN uptime fields remain `null` rather than becoming zero.
   "site_id": "site-abc123",
   "site_name": "Main Office",
   "status": "degraded",
-  "status_source": "site_statistics",
+  "status_source": "device_counts",
+  "status_reason": "offline_devices",
+  "reported_internet_issue_count": 2,
+  "reported_internet_issue_types": ["highLatency", "wanDowntime"],
   "devices_online": 4,
   "devices_total": 5,
   "clients_active": 6,
@@ -3376,7 +3382,9 @@ if none report uptime, the best and worst sites and average uptime are `null`.
 A missing ISP record leaves latency and bandwidth `null`, but the site still
 appears in `site_metrics`. `avg_bandwidth_up_mbps` and
 `avg_bandwidth_down_mbps` are reported ISP metric values when positive, not a
-connection speed test or current traffic rate.
+connection speed test or current traffic rate. `health_status` has the same
+device availability meaning as the site summary and carries its source, reason,
+and reported issue fields.
 
 ```json
 {
@@ -3394,7 +3402,11 @@ connection speed test or current traffic rate.
     "uptime_percentage": null,
     "device_online_percentage": null,
     "client_count": null,
-    "health_status": "unknown"
+    "health_status": "unknown",
+    "health_status_source": null,
+    "health_status_reason": null,
+    "reported_internet_issue_count": null,
+    "reported_internet_issue_types": null
   }]
 }
 ```

@@ -775,6 +775,10 @@ async def test_compare_site_performance_success(mock_settings):
                 "site_id": "site-1",
                 "site_name": "Best Site",
                 "status": "healthy",
+                "status_source": "device_counts",
+                "status_reason": "no_offline_devices",
+                "reported_internet_issue_count": 2,
+                "reported_internet_issue_types": ["highLatency", "wanDowntime"],
                 "devices_online": 10,
                 "devices_total": 10,
                 "clients_active": 50,
@@ -843,6 +847,13 @@ async def test_compare_site_performance_success(mock_settings):
         assert result["average_uptime"] == pytest.approx((99.9 + 95.0 + 80.0) / 3)
         assert result["average_latency_ms"] == pytest.approx((10.0 + 25.0 + 150.0) / 3)
         assert len(result["site_metrics"]) == 3
+        assert result["site_metrics"][0]["health_status_source"] == "device_counts"
+        assert result["site_metrics"][0]["health_status_reason"] == "no_offline_devices"
+        assert result["site_metrics"][0]["reported_internet_issue_count"] == 2
+        assert result["site_metrics"][0]["reported_internet_issue_types"] == [
+            "highLatency",
+            "wanDowntime",
+        ]
 
 
 @pytest.mark.asyncio

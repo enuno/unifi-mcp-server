@@ -261,6 +261,7 @@ class SiteManagerClient:
         if not isinstance(site, dict) or not isinstance(site.get("siteId"), str):
             raise APIError("Unexpected Site Manager site entry")
         meta = _object(site.get("meta"))
+        legacy_site = _object(site.get("site"))
         statistics = _object(site.get("statistics"))
         counts = _object(statistics.get("counts"))
         percentages = _object(statistics.get("percentages"))
@@ -277,6 +278,7 @@ class SiteManagerClient:
         wired_clients = count("wiredClient")
         issues = statistics.get("internetIssues")
         status = "unknown"
+        reason = None
         if (
             gateway_total is not None
             and gateway_total > 0
@@ -284,26 +286,36 @@ class SiteManagerClient:
             and gateway_offline >= gateway_total
         ):
             status = "down"
-        elif (
-            (offline is not None and offline > 0)
-            or (gateway_offline is not None and gateway_offline > 0)
-            or (isinstance(issues, list) and issues)
+            reason = "all_gateways_offline"
+        elif (offline is not None and offline > 0) or (
+            gateway_offline is not None and gateway_offline > 0
         ):
             status = "degraded"
-        elif (
-            total is not None
-            and total > 0
-            and offline == 0
-            and gateway_offline == 0
-            and issues == []
-        ):
+            reason = "offline_devices"
+        elif total is not None and total > 0 and offline == 0 and gateway_offline == 0:
             status = "healthy"
+            reason = "no_offline_devices"
+
+        issue_types: list[str] | None = None
+        if isinstance(issues, list):
+            names: set[str] = set()
+            for issue in issues:
+                if isinstance(issue, str):
+                    names.add(issue)
+                elif isinstance(issue, dict):
+                    names.update(key for key, value in issue.items() if value is True)
+                    if isinstance(issue.get("type"), str):
+                        names.add(issue["type"])
+            issue_types = sorted(names)
 
         return {
             "site_id": site["siteId"],
-            "site_name": meta.get("name") or site["siteId"],
+            "site_name": meta.get("name") or legacy_site.get("name") or site["siteId"],
             "status": status,
-            "status_source": "site_statistics" if status != "unknown" else None,
+            "status_source": "device_counts" if status != "unknown" else None,
+            "status_reason": reason,
+            "reported_internet_issue_count": len(issues) if isinstance(issues, list) else None,
+            "reported_internet_issue_types": issue_types,
             "devices_total": total,
             "devices_online": (
                 max(total - offline, 0) if total is not None and offline is not None else None

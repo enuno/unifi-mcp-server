@@ -109,14 +109,17 @@ async def get_internet_health(
 async def get_site_health_summary(
     settings: Settings, site_id: str | None = None
 ) -> dict[str, Any] | list[dict[str, Any]]:
-    """Get health summary for all sites or a specific site.
+    """Get device availability and reported site statistics.
+
+    Status reflects online device counts only. Reported internet issue entries
+    do not establish that an issue is active now.
 
     Args:
         settings: Application settings
         site_id: Optional site identifier. If None, returns summary for all sites.
 
     Returns:
-        Health summary
+        Device availability, WAN uptime, and separately reported issue entries
     """
     async with SiteManagerClient(settings) as client:
         logger.info(sanitize_log_message(f"Retrieving site health summary (site_id={site_id})"))
@@ -311,8 +314,8 @@ async def get_site_inventory(
 async def compare_site_performance(settings: Settings) -> dict[str, Any]:
     """Compare performance metrics across all sites.
 
-    Analyzes uptime, latency, bandwidth, and health status to identify
-    best and worst performing sites.
+    Combines reported WAN uptime and ISP metrics with device availability.
+    Issue entries are reported separately and may not be active now.
 
     Args:
         settings: Application settings
@@ -383,6 +386,10 @@ async def compare_site_performance(settings: Settings) -> dict[str, Any]:
                     device_online_percentage=device_online_pct,
                     client_count=health.get("clients_active"),
                     health_status=health.get("status", "unknown"),
+                    health_status_source=health.get("status_source"),
+                    health_status_reason=health.get("status_reason"),
+                    reported_internet_issue_count=health.get("reported_internet_issue_count"),
+                    reported_internet_issue_types=health.get("reported_internet_issue_types"),
                 )
                 site_metrics.append(metrics)
 

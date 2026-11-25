@@ -354,6 +354,77 @@ class TestHealthFromDocumentedEndpoints:
         assert result["status"] == "degraded"
 
     @pytest.mark.asyncio
+    async def test_all_gateways_offline_reports_down_from_device_counts(
+        self, settings: MagicMock
+    ) -> None:
+        seen, handler = _recorder(
+            httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "statistics": {
+                                "counts": {
+                                    "totalDevice": 3,
+                                    "offlineDevice": 2,
+                                    "gatewayDevice": 2,
+                                    "offlineGatewayDevice": 2,
+                                },
+                                "internetIssues": [],
+                            },
+                        }
+                    ]
+                },
+            )
+        )
+        client = _client(settings, handler)
+
+        result = await client.get_site_health("s1")
+
+        assert [request.url.path for request in seen] == ["/v1/sites"]
+        assert result["status"] == "down"
+        assert result["status_source"] == "device_counts"
+        assert result["status_reason"] == "all_gateways_offline"
+        assert result["devices_online"] == 1
+        assert result["devices_total"] == 3
+
+    @pytest.mark.asyncio
+    async def test_internet_issue_strings_and_typed_objects_are_reported_separately(
+        self, settings: MagicMock
+    ) -> None:
+        _, handler = _recorder(
+            httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "siteId": "s1",
+                            "statistics": {
+                                "counts": {
+                                    "totalDevice": 2,
+                                    "offlineDevice": 0,
+                                    "gatewayDevice": 1,
+                                    "offlineGatewayDevice": 0,
+                                },
+                                "internetIssues": ["highLatency", {"type": "wanDowntime"}],
+                            },
+                        }
+                    ]
+                },
+            )
+        )
+        client = _client(settings, handler)
+
+        result = await client.get_site_health("s1")
+
+        assert result["status"] == "healthy"
+        assert result["status_source"] == "device_counts"
+        assert result["status_reason"] == "no_offline_devices"
+        assert result["reported_internet_issue_count"] == 2
+        assert result["reported_internet_issue_types"] == ["highLatency", "wanDowntime"]
+
+    @pytest.mark.asyncio
     async def test_undated_internet_issues_do_not_mark_online_devices_degraded(
         self, settings: MagicMock
     ) -> None:

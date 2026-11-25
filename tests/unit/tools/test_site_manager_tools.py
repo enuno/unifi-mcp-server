@@ -246,6 +246,38 @@ async def test_get_internet_health_disabled(mock_settings_disabled):
     assert "Site Manager API is not enabled" in str(excinfo.value)
 
 
+@pytest.mark.asyncio
+async def test_get_internet_health_returns_each_site_without_inventing_a_test(mock_settings):
+    response = [
+        {
+            "site_id": "site-1",
+            "status": "unknown",
+            "latency_ms": 26,
+            "last_reported": "2026-11-24T12:05:00Z",
+            "last_tested": None,
+        },
+        {
+            "site_id": "site-2",
+            "status": "unknown",
+            "latency_ms": None,
+            "last_reported": None,
+            "last_tested": None,
+        },
+    ]
+    with patch("src.tools.site_manager.SiteManagerClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_internet_health = AsyncMock(return_value=response)
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        result = await get_internet_health(mock_settings)
+
+    assert len(result) == 2
+    assert result[0]["last_tested"] is None
+    assert result[1]["latency_ms"] is None
+
+
 # =============================================================================
 # Task 4.3: Test get_site_health_summary and get_cross_site_statistics
 # =============================================================================
@@ -418,6 +450,35 @@ async def test_get_cross_site_statistics_empty(mock_settings):
         assert result["sites_healthy"] == 0
         assert result["total_devices"] == 0
         assert len(result["site_summaries"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_cross_site_statistics_marks_version_dependent_gaps(mock_settings):
+    with patch("src.tools.site_manager.SiteManagerClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_site_health = AsyncMock(
+            return_value=[
+                {
+                    "site_id": "site-1",
+                    "site_name": "Older console",
+                    "status": "unknown",
+                    "devices_online": None,
+                    "devices_total": None,
+                    "clients_active": None,
+                    "uptime_percentage": None,
+                }
+            ]
+        )
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        result = await get_cross_site_statistics(mock_settings)
+
+    assert result["total_sites"] == 1
+    assert result["sites_unknown"] == 1
+    assert result["totals_complete"] is False
+    assert result["site_summaries"][0]["uptime_percentage"] is None
 
 
 @pytest.mark.asyncio
@@ -714,6 +775,10 @@ async def test_compare_site_performance_success(mock_settings):
                 "site_id": "site-1",
                 "site_name": "Best Site",
                 "status": "healthy",
+                "status_source": "device_counts",
+                "status_reason": "no_offline_devices",
+                "reported_internet_issue_count": 2,
+                "reported_internet_issue_types": ["highLatency", "wanDowntime"],
                 "devices_online": 10,
                 "devices_total": 10,
                 "clients_active": 50,
@@ -782,6 +847,13 @@ async def test_compare_site_performance_success(mock_settings):
         assert result["average_uptime"] == pytest.approx((99.9 + 95.0 + 80.0) / 3)
         assert result["average_latency_ms"] == pytest.approx((10.0 + 25.0 + 150.0) / 3)
         assert len(result["site_metrics"]) == 3
+        assert result["site_metrics"][0]["health_status_source"] == "device_counts"
+        assert result["site_metrics"][0]["health_status_reason"] == "no_offline_devices"
+        assert result["site_metrics"][0]["reported_internet_issue_count"] == 2
+        assert result["site_metrics"][0]["reported_internet_issue_types"] == [
+            "highLatency",
+            "wanDowntime",
+        ]
 
 
 @pytest.mark.asyncio
@@ -803,7 +875,7 @@ async def test_compare_site_performance_empty(mock_settings):
         assert result["total_sites"] == 0
         assert result["best_performing_site"] is None
         assert result["worst_performing_site"] is None
-        assert result["average_uptime"] == 0.0
+        assert result["average_uptime"] is None
 
 
 @pytest.mark.asyncio
@@ -851,6 +923,37 @@ async def test_compare_site_performance_single_site(mock_settings):
         assert result["best_performing_site"]["site_id"] == "site-1"
         assert result["worst_performing_site"]["site_id"] == "site-1"
         assert result["average_uptime"] == 99.5
+
+
+@pytest.mark.asyncio
+async def test_compare_site_performance_does_not_rank_missing_uptime(mock_settings):
+    with patch("src.tools.site_manager.SiteManagerClient") as mock_client_class:
+        mock_client = AsyncMock()
+        mock_client.get_site_health = AsyncMock(
+            return_value=[
+                {
+                    "site_id": "site-1",
+                    "site_name": "Older console",
+                    "status": "unknown",
+                    "devices_online": None,
+                    "devices_total": None,
+                    "clients_active": None,
+                    "uptime_percentage": None,
+                },
+            ]
+        )
+        mock_client.get_internet_health = AsyncMock(return_value=[])
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_class.return_value = mock_client
+
+        result = await compare_site_performance(mock_settings)
+
+    assert result["total_sites"] == 1
+    assert result["best_performing_site"] is None
+    assert result["worst_performing_site"] is None
+    assert result["average_uptime"] is None
+    assert result["site_metrics"][0]["device_online_percentage"] is None
 
 
 # =============================================================================

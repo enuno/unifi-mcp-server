@@ -14,6 +14,16 @@ logger = get_logger(__name__)
 JSONBody = dict[str, Any] | list[Any]
 
 
+def _object(value: Any) -> dict[str, Any]:
+    """Use an empty object for absent version-specific response sections."""
+    return value if isinstance(value, dict) else {}
+
+
+def _number(value: Any) -> float | None:
+    """Accept a reported number, excluding booleans and missing values."""
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
 class SiteManagerClient:
     """Client for UniFi Site Manager API (api.ui.com/v1/)."""
 
@@ -216,34 +226,173 @@ class SiteManagerClient:
         )
 
     async def get_site_health(self, site_id: str | None = None) -> JSONBody:
-        """Get health metrics for a site or all sites.
+        """Summarize the documented sites response, including all pages.
 
-        Args:
-            site_id: Optional site identifier. If None, returns health for all sites.
-
-        Returns:
-            Health metrics
+        Site Manager has no ``/sites/health`` endpoint. Its ``statistics``
+        shape varies by Network version, so absent values stay unknown.
         """
-        endpoint = "sites/health"
-        if site_id:
-            endpoint = f"sites/{site_id}/health"
+        sites: list[dict[str, Any]] = []
+        next_token: str | None = None
+        seen_tokens: set[str] = set()
+        while True:
+            response = await self._get_object(
+                "sites", params={"nextToken": next_token} if next_token else None
+            )
+            if not isinstance(response, dict) or not isinstance(response.get("data"), list):
+                raise APIError("Unexpected Site Manager sites response")
+            sites.extend(response["data"])
+            next_token = response.get("nextToken")
+            if next_token is None or next_token == "":
+                break
+            if not isinstance(next_token, str) or next_token in seen_tokens:
+                raise APIError("Invalid Site Manager sites pagination token")
+            seen_tokens.add(next_token)
 
-        return await self._get_object(endpoint)
+        summaries = [self._site_summary(site) for site in sites]
+        if site_id is None:
+            return summaries
+        for summary in summaries:
+            if summary["site_id"] == site_id:
+                return summary
+        raise ResourceNotFoundError("site", site_id)
+
+    @staticmethod
+    def _site_summary(site: Any) -> dict[str, Any]:
+        if not isinstance(site, dict) or not isinstance(site.get("siteId"), str):
+            raise APIError("Unexpected Site Manager site entry")
+        meta = _object(site.get("meta"))
+        legacy_site = _object(site.get("site"))
+        statistics = _object(site.get("statistics"))
+        counts = _object(statistics.get("counts"))
+        percentages = _object(statistics.get("percentages"))
+
+        def count(name: str) -> int | None:
+            value = counts.get(name)
+            return value if type(value) is int and value >= 0 else None
+
+        total = count("totalDevice")
+        offline = count("offlineDevice")
+        gateway_total = count("gatewayDevice")
+        gateway_offline = count("offlineGatewayDevice")
+        wifi_clients = count("wifiClient")
+        wired_clients = count("wiredClient")
+        issues = statistics.get("internetIssues")
+        status = "unknown"
+        reason = None
+        if (
+            gateway_total is not None
+            and gateway_total > 0
+            and gateway_offline is not None
+            and gateway_offline >= gateway_total
+        ):
+            status = "down"
+            reason = "all_gateways_offline"
+        elif (offline is not None and offline > 0) or (
+            gateway_offline is not None and gateway_offline > 0
+        ):
+            status = "degraded"
+            reason = "offline_devices"
+        elif total is not None and total > 0 and offline == 0 and gateway_offline == 0:
+            status = "healthy"
+            reason = "no_offline_devices"
+
+        issue_types: list[str] | None = None
+        if isinstance(issues, list):
+            names: set[str] = set()
+            for issue in issues:
+                if isinstance(issue, str):
+                    names.add(issue)
+                elif isinstance(issue, dict):
+                    names.update(key for key, value in issue.items() if value is True)
+                    if isinstance(issue.get("type"), str):
+                        names.add(issue["type"])
+            issue_types = sorted(names)
+
+        return {
+            "site_id": site["siteId"],
+            "site_name": meta.get("name") or legacy_site.get("name") or site["siteId"],
+            "status": status,
+            "status_source": "device_counts" if status != "unknown" else None,
+            "status_reason": reason,
+            "reported_internet_issue_count": len(issues) if isinstance(issues, list) else None,
+            "reported_internet_issue_types": issue_types,
+            "devices_total": total,
+            "devices_online": (
+                max(total - offline, 0) if total is not None and offline is not None else None
+            ),
+            "clients_active": (
+                wifi_clients + wired_clients
+                if wifi_clients is not None and wired_clients is not None
+                else None
+            ),
+            "uptime_percentage": _number(percentages.get("wanUptime")),
+            "last_updated": None,
+        }
 
     async def get_internet_health(self, site_id: str | None = None) -> JSONBody:
-        """Get internet health metrics.
+        """Read the latest documented 5-minute ISP metric for each site.
 
-        Args:
-            site_id: Optional site identifier. If None, returns aggregate internet health.
-
-        Returns:
-            Internet health metrics
+        This is a reported metric interval, not a requested connection test.
+        Zero upload/download values are treated as unavailable because the
+        API can report zero while the connection is in use.
         """
-        endpoint = "internet/health"
-        if site_id:
-            endpoint = f"sites/{site_id}/internet/health"
+        response = await self._get_object("isp-metrics/5m", params={"duration": "24h"})
+        if not isinstance(response, dict) or not isinstance(response.get("data"), list):
+            raise APIError("Unexpected Site Manager ISP metrics response")
 
-        return await self._get_object(endpoint)
+        metrics: list[dict[str, Any]] = []
+        for item in response["data"]:
+            if not isinstance(item, dict) or not isinstance(item.get("siteId"), str):
+                raise APIError("Unexpected Site Manager ISP metrics entry")
+            periods = item.get("periods")
+            periods = periods if isinstance(periods, list) else []
+            reported = [
+                period
+                for period in periods
+                if isinstance(period, dict) and isinstance(period.get("metricTime"), str)
+            ]
+            latest = max(reported, key=lambda period: period["metricTime"]) if reported else {}
+            data = _object(latest.get("data"))
+            wan = _object(data.get("wan"))
+
+            download = _number(wan.get("download_kbps"))
+            upload = _number(wan.get("upload_kbps"))
+            metrics.append(
+                {
+                    "site_id": item["siteId"],
+                    "latency_ms": _number(wan.get("avgLatency")),
+                    "packet_loss_percent": _number(wan.get("packetLoss")),
+                    "jitter_ms": None,
+                    "bandwidth_up_mbps": (
+                        upload / 1000 if upload is not None and upload > 0 else None
+                    ),
+                    "bandwidth_down_mbps": (
+                        download / 1000 if download is not None and download > 0 else None
+                    ),
+                    "uptime_percentage": _number(wan.get("uptime")),
+                    "status": "unknown",
+                    "last_reported": latest.get("metricTime"),
+                    "last_tested": None,
+                }
+            )
+
+        if site_id is None:
+            return metrics
+        for metric in metrics:
+            if metric["site_id"] == site_id:
+                return metric
+        return {
+            "site_id": site_id,
+            "latency_ms": None,
+            "packet_loss_percent": None,
+            "jitter_ms": None,
+            "bandwidth_up_mbps": None,
+            "bandwidth_down_mbps": None,
+            "uptime_percentage": None,
+            "status": "unknown",
+            "last_reported": None,
+            "last_tested": None,
+        }
 
     async def list_vantage_points(self) -> JSONBody:
         """List all Vantage Points.

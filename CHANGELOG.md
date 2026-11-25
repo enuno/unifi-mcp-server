@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Site Manager health tools now derive site summaries from documented
+  `GET /v1/sites` and internet metrics from `GET /v1/isp-metrics/5m`, instead
+  of calling unsupported `/sites/health` and `/internet/health` routes.
+  Missing version-dependent statistics remain unknown, all-site internet
+  reads return each reported site, and zero ISP upload/download fields no
+  longer appear as measured connection speeds. Cross-site comparisons retain
+  sites without metrics and do not rank sites without reported WAN uptime.
+  Site status now reflects device availability from counts; issue entries are
+  reported separately instead of automatically marking a site degraded.
+
 ## [0.11.0] - 2026-11-23
 
 ### Fixed

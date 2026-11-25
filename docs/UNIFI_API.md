@@ -3197,133 +3197,95 @@ List all managed sites with aggregated statistics from the Site Manager API.
 
 ---
 
-### Get Internet Health ✅
+### Get Internet Health
 
-Get internet connectivity health metrics across sites or for a specific site.
+`get_internet_health(site_id=None)` reads the latest available 5-minute record
+from the documented `GET /v1/isp-metrics/5m?duration=24h` endpoint. Without a
+site ID it returns one entry per site in the ISP metrics response; with a site
+ID it returns one entry. It does not run a speed test.
 
-- **Method:** `GET`
-- **Endpoint:** `/v1/internet/health` or `/v1/sites/{siteId}/internet/health`
-- **MCP Tool:** `get_internet_health(site_id=None)`
-- **Implementation:** v0.2.0 Phase 5 (93% coverage)
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `site_id` | string | No | Site identifier (None for aggregate) |
-
-**Response (Aggregate):** `200 OK`
-
-```json
-{
-  "site_id": null,
-  "latency_ms": 25.5,
-  "packet_loss_percent": 0.1,
-  "jitter_ms": 2.3,
-  "bandwidth_up_mbps": 100.0,
-  "bandwidth_down_mbps": 500.0,
-  "status": "healthy",
-  "last_tested": "2026-01-24T12:00:00Z"
-}
-```
-
-**Response (Specific Site):** `200 OK`
+A record can contain latency, packet loss, WAN uptime, and `download_kbps` /
+`upload_kbps`. The latter are reported ISP metrics, not live traffic rates or
+proof of a tested connection speed. Zero or missing speed values become `null`;
+`last_reported` is the metric interval time, while `last_tested` stays `null`.
+There is no explicit health status or jitter in this response, so those values
+remain `unknown` and `null`. A site without a record returns unknown values.
 
 ```json
 {
   "site_id": "site-abc123",
-  "latency_ms": 15.0,
+  "latency_ms": 26.0,
   "packet_loss_percent": 0.0,
-  "jitter_ms": 1.0,
-  "bandwidth_up_mbps": 50.0,
-  "bandwidth_down_mbps": 200.0,
-  "status": "healthy",
-  "last_tested": "2026-01-24T12:00:00Z"
+  "jitter_ms": null,
+  "bandwidth_up_mbps": null,
+  "bandwidth_down_mbps": null,
+  "uptime_percentage": 100.0,
+  "status": "unknown",
+  "last_reported": "2026-11-24T12:05:00Z",
+  "last_tested": null
 }
 ```
 
 ---
 
-### Get Site Health Summary ✅
+### Get Site Health Summary
 
-Get health summary for all sites or a specific site.
+`get_site_health_summary(site_id=None)` reads every page of documented
+`GET /v1/sites`. It returns one summary for a site ID or a list for all sites.
+The `status` describes device availability inferred from counts: all known
+gateways offline means `down`; other offline devices mean `degraded`; known
+positive device counts with no offline devices mean `healthy`. Otherwise it is
+`unknown`. `status_source` is `device_counts` for an inferred status, and
+`status_reason` names the count rule. `reported_internet_issue_count` and
+`reported_internet_issue_types` describe issue entries separately. An entry
+without a current-state marker does not prove an active internet problem.
+The Site Manager response does not provide a last-update time, so
+`last_updated` is `null`.
 
-- **Method:** `GET`
-- **Endpoint:** `/v1/sites/health` or `/v1/sites/{siteId}/health`
-- **MCP Tool:** `get_site_health_summary(site_id=None)`
-- **Implementation:** v0.2.0 Phase 5 (93% coverage)
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `site_id` | string | No | Site identifier (None for all sites) |
-
-**Response (All Sites):** `200 OK`
+The `statistics` structure varies by UniFi Network version. Missing device,
+client, or WAN uptime fields remain `null` rather than becoming zero.
 
 ```json
-[
-  {
-    "site_id": "site-abc123",
-    "site_name": "Main Office",
-    "status": "healthy",
-    "devices_online": 25,
-    "devices_total": 25,
-    "clients_active": 150,
-    "uptime_percentage": 99.9,
-    "last_updated": "2026-01-24T12:00:00Z"
-  },
-  {
-    "site_id": "site-def456",
-    "site_name": "Branch Office",
-    "status": "degraded",
-    "devices_online": 8,
-    "devices_total": 10,
-    "clients_active": 50,
-    "uptime_percentage": 95.0,
-    "last_updated": "2026-01-24T12:00:00Z"
-  }
-]
+{
+  "site_id": "site-abc123",
+  "site_name": "Main Office",
+  "status": "degraded",
+  "status_source": "device_counts",
+  "status_reason": "offline_devices",
+  "reported_internet_issue_count": 2,
+  "reported_internet_issue_types": ["highLatency", "wanDowntime"],
+  "devices_online": 4,
+  "devices_total": 5,
+  "clients_active": 6,
+  "uptime_percentage": 98.5,
+  "last_updated": null
+}
 ```
 
 ---
 
-### Get Cross-Site Statistics ✅
+### Get Cross-Site Statistics
 
-Get aggregated statistics across all managed sites.
-
-- **Method:** `GET`
-- **Endpoint:** `/v1/sites/statistics`
-- **MCP Tool:** `get_cross_site_statistics()`
-- **Implementation:** v0.2.0 Phase 5 (93% coverage)
-
-**Request:** No parameters required.
-
-**Response:** `200 OK`
+`get_cross_site_statistics()` totals the documented `/v1/sites` summaries.
+`sites_unknown` counts sites without enough information for a status.
+`totals_complete=false` means at least one site did not report all device and
+client counts; numeric totals then cover only the available values. Upload and
+download bandwidth totals are `null` because this tool does not measure them.
 
 ```json
 {
-  "total_sites": 5,
-  "sites_healthy": 3,
+  "total_sites": 2,
+  "sites_healthy": 0,
   "sites_degraded": 1,
-  "sites_down": 1,
-  "total_devices": 75,
-  "devices_online": 68,
-  "total_clients": 350,
-  "total_bandwidth_up_mbps": 500.0,
-  "total_bandwidth_down_mbps": 2500.0,
-  "site_summaries": [
-    {
-      "site_id": "site-abc123",
-      "site_name": "Main Office",
-      "status": "healthy",
-      "devices_online": 25,
-      "devices_total": 25,
-      "clients_active": 150,
-      "uptime_percentage": 99.9,
-      "last_updated": "2026-01-24T12:00:00Z"
-    }
-  ]
+  "sites_down": 0,
+  "sites_unknown": 1,
+  "totals_complete": false,
+  "total_devices": 5,
+  "devices_online": 4,
+  "total_clients": 6,
+  "total_bandwidth_up_mbps": null,
+  "total_bandwidth_down_mbps": null,
+  "site_summaries": []
 }
 ```
 
@@ -3412,79 +3374,42 @@ Returns an array of inventory objects for each site.
 
 ---
 
-### Compare Site Performance ✅ 🆕
+### Compare Site Performance
 
-Compare performance metrics across all sites with rankings.
-
-- **Method:** `GET`
-- **Endpoint:** `/v1/sites/performance/compare`
-- **MCP Tool:** `compare_site_performance()`
-- **Implementation:** v0.2.0 Phase 5 (93% coverage)
-
-Analyzes uptime, latency, bandwidth, and health status to identify best and worst performing sites.
-
-**Request:** No parameters required.
-
-**Response:** `200 OK`
+`compare_site_performance()` combines `/v1/sites` with the latest
+`/v1/isp-metrics/5m` records. It ranks only sites with reported WAN uptime;
+if none report uptime, the best and worst sites and average uptime are `null`.
+A missing ISP record leaves latency and bandwidth `null`, but the site still
+appears in `site_metrics`. `avg_bandwidth_up_mbps` and
+`avg_bandwidth_down_mbps` are reported ISP metric values when positive, not a
+connection speed test or current traffic rate. `health_status` has the same
+device availability meaning as the site summary and carries its source, reason,
+and reported issue fields.
 
 ```json
 {
-  "total_sites": 3,
-  "best_performing_site": {
+  "total_sites": 1,
+  "best_performing_site": null,
+  "worst_performing_site": null,
+  "average_uptime": null,
+  "average_latency_ms": null,
+  "site_metrics": [{
     "site_id": "site-abc123",
-    "site_name": "Main Office",
-    "avg_latency_ms": 10.0,
-    "avg_bandwidth_up_mbps": 100.0,
-    "avg_bandwidth_down_mbps": 500.0,
-    "uptime_percentage": 99.9,
-    "device_online_percentage": 100.0,
-    "client_count": 150,
-    "health_status": "healthy"
-  },
-  "worst_performing_site": {
-    "site_id": "site-ghi789",
-    "site_name": "Remote Office",
-    "avg_latency_ms": 150.0,
-    "avg_bandwidth_up_mbps": 20.0,
-    "avg_bandwidth_down_mbps": 100.0,
-    "uptime_percentage": 80.0,
-    "device_online_percentage": 50.0,
-    "client_count": 20,
-    "health_status": "degraded"
-  },
-  "average_uptime": 91.63,
-  "average_latency_ms": 61.67,
-  "site_metrics": [
-    {
-      "site_id": "site-abc123",
-      "site_name": "Main Office",
-      "avg_latency_ms": 10.0,
-      "uptime_percentage": 99.9,
-      "health_status": "healthy"
-    },
-    {
-      "site_id": "site-def456",
-      "site_name": "Branch Office",
-      "avg_latency_ms": 25.0,
-      "uptime_percentage": 95.0,
-      "health_status": "healthy"
-    },
-    {
-      "site_id": "site-ghi789",
-      "site_name": "Remote Office",
-      "avg_latency_ms": 150.0,
-      "uptime_percentage": 80.0,
-      "health_status": "degraded"
-    }
-  ]
+    "site_name": "Older console",
+    "avg_latency_ms": null,
+    "avg_bandwidth_up_mbps": null,
+    "avg_bandwidth_down_mbps": null,
+    "uptime_percentage": null,
+    "device_online_percentage": null,
+    "client_count": null,
+    "health_status": "unknown",
+    "health_status_source": null,
+    "health_status_reason": null,
+    "reported_internet_issue_count": null,
+    "reported_internet_issue_types": null
+  }]
 }
 ```
-
-**Use Cases:**
-- Identify sites needing infrastructure upgrades
-- Compare performance across geographic regions
-- Track improvement over time
-- SLA compliance monitoring
 
 ---
 

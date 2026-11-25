@@ -103,10 +103,69 @@ jobs:
       - name: Install Claude Code
         run: |
           curl -LsSf https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Validate the plugin and the marketplace manifests
+      # The installer fetches the latest release, so check the version the
+      # validator needs rather than assuming it.
+      - name: Check the Claude Code version
         run: |
-          claude plugin validate . --strict
+          version=$(claude --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "Claude Code $version"
+          lowest=$(printf '%s\n%s\n' "2.1.326" "$version" | sort -V | head -1)
+          test "$lowest" = "2.1.326" || {
+            echo "::error::claude plugin validate needs v2.1.326 or later, got $version"
+            exit 1
+          }
+
+      # The marketplace manifest is the plugin's own file and must be clean.
+      - name: Validate the marketplace manifest
+        run: |
+          claude plugin validate .claude-plugin/marketplace.json --strict
+
+      # The repository root is the plugin root, so it carries the
+      # repository's own CLAUDE.md. The docs state that a CLAUDE.md at the
+      # plugin root is not loaded as project context, and the validator warns
+      # about it, so --strict would fail on a warning about this repository's
+      # layout rather than about the plugin. Assert that this is the only
+      # warning and that there is no error, so any other finding still fails
+      # the build.
+      - name: Validate the plugin at the repository root
+        run: |
+          claude plugin validate . --json > /tmp/plugin-validate.json
+          python - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("/tmp/plugin-validate.json"))
+
+          KNOWN = "CLAUDE.md at the plugin root is not loaded as project context"
+
+          problems = []
+
+          # The manifest's own errors and warnings, and the same for every
+          # content file the validator read.
+          for item in [report.get("manifest", {})] + report.get("contents", []):
+              for error in item.get("errors", []):
+                  problems.append(("error", error.get("message", str(error))))
+              for warning in item.get("warnings", []):
+                  if KNOWN not in warning.get("message", ""):
+                      problems.append(("warning", warning.get("message", str(warning))))
+
+          # The directory checks, which the validator reports separately.
+          for finding in report.get("directory", {}).get("findings", []):
+              message = finding.get("message", str(finding))
+              if finding.get("severity") == "warning" and KNOWN in message:
+                  continue
+              problems.append((finding.get("severity", "finding"), message))
+
+          for severity, message in problems:
+              print(f"::error::{severity}: {message}")
+
+          if problems:
+              sys.exit(1)
+
+          print("only the known CLAUDE.md warning was reported")
+          PY
 
       - name: Validate the built Claude plugin package
         run: |

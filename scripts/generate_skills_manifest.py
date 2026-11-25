@@ -145,6 +145,10 @@ def tool_tier_map() -> dict[str, str]:
     os.environ.setdefault("UNIFI_API_TYPE", "local")
     os.environ.setdefault("UNIFI_MIXED_MODE", "false")
     os.environ.setdefault("UNIFI_API_KEY", "manifest-generation-no-controller")
+    # Local mode requires a console address. Use the reserved documentation
+    # address, as the repository's own registry test does, so the script
+    # works on a machine with no .env and reaches no controller.
+    os.environ.setdefault("UNIFI_LOCAL_HOST", "192.0.2.1")
     sys.path.insert(0, str(ROOT))
     from src.main import TOOL_TIERS  # noqa: PLC0415
 

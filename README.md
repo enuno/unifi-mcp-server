@@ -169,28 +169,33 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 
 ## Agent skills
 
-The `skills/` directory holds agent skills: Markdown files an AI agent loads on demand, so it knows which UniFi tools exist and how to use them safely without keeping every tool definition in context. Each skill is a folder with a `SKILL.md`, in the layout Claude Code and other agents install.
+The `skills/` directory contains 16 installable agent skills. Each is a Markdown `SKILL.md` that an AI agent loads when relevant: operator skills guide safe use of a running server; developer skills give repository-specific implementation procedures. The summaries below describe when to use each skill and its main workflow. Follow the linked `SKILL.md` for complete tool references, prerequisites, examples, safety gates, and troubleshooting guidance.
 
 **Using the server (operator skills)**
 
-| Skill | Covers |
+| Skill | When to use it and what it covers |
 |---|---|
-| [`unifi-network`](skills/unifi-network/SKILL.md) | Clients, networks and VLANs, WiFi, DHCP, DNS, WAN, vouchers |
-| [`unifi-devices`](skills/unifi-devices/SKILL.md) | Inventory, adoption, restarts and upgrades, ports, switching, topology |
-| [`unifi-security`](skills/unifi-security/SKILL.md) | Firewall rules and groups, zone-based firewall, ACLs, port forwarding, VPN |
-| [`unifi-system`](skills/unifi-system/SKILL.md) | Sites, backups, QoS, traffic flows, DPI, RADIUS, guest portal |
-| [`unifi-channel-planning`](skills/unifi-channel-planning/SKILL.md) | Low-interference WiFi channel plans from neighbor scans |
-| [`unifi-mcp-setup`](skills/unifi-mcp-setup/SKILL.md) | One-file overview of the whole server: install, env vars, API-mode matrix, `UNIFI_PROFILE` |
+| [`unifi-network`](skills/unifi-network/SKILL.md) | Inspect and manage connected clients, networks/VLANs, WiFi/SSIDs, DHCP reservations, DNS filters, WAN connections, and guest vouchers. |
+| [`unifi-devices`](skills/unifi-devices/SKILL.md) | Inventory, adopt, diagnose, restart, or upgrade UniFi hardware; configure radios, port profiles, switching, stacks, and topology. |
+| [`unifi-security`](skills/unifi-security/SKILL.md) | Review or manage firewall rules/groups, zone-based firewall, ACLs, port forwarding, VPNs, and content filtering; observe local-mode and firmware requirements. |
+| [`unifi-system`](skills/unifi-system/SKILL.md) | Administer sites and backups; investigate QoS/routes, traffic flows, DPI, RADIUS, guest portal, and traffic matching lists. |
+| [`unifi-protect`](skills/unifi-protect/SKILL.md) | Work with cameras, NVRs, alarms, sensors, chimes, sirens, lights, viewers, events, and Protect configuration, with privacy and safety considerations. |
+| [`unifi-fleet-operations`](skills/unifi-fleet-operations/SKILL.md) | Operate multiple controllers through one server: select the target controller, route calls, inspect fleet health, manage registry entries, and understand fan-out limits. |
+| [`unifi-channel-planning`](skills/unifi-channel-planning/SKILL.md) | Turn AP and neighbor observations into a low-interference channel plan, including planning constraints, scoring, validation, and safe rollout. |
+| [`unifi-discovery`](skills/unifi-discovery/SKILL.md) | Check what a server exposes, its health and profile, then choose the appropriate local, cloud, or fleet backend before using tools. |
+| [`unifi-safe-changes`](skills/unifi-safe-changes/SKILL.md) | Gate state changes with `confirm`, `dry_run`, read-only mode, risk awareness, rollback planning, and audit checks. Use when a mutation is proposed or a call is refused. |
+| [`unifi-mcp-setup`](skills/unifi-mcp-setup/SKILL.md) | Set up or configure the server: installation, environment variables, API-mode capability matrix, profiles, and example prompts. |
 
 **Changing this codebase (developer skills)**
 
-| Skill | Covers |
+| Skill | When to use it and what it covers |
 |---|---|
-| [`unifi-mcp-tool-builder`](skills/unifi-mcp-tool-builder/SKILL.md) | Adding any MCP tool: model, function, registration, tests, docs |
-| [`unifi-network-config-tools`](skills/unifi-network-config-tools/SKILL.md) | Network configuration tools: URL spaces, site IDs, read-modify-write |
-| [`unifi-security-tools`](skills/unifi-security-tools/SKILL.md) | Firewall, ZBF, ACL and port forward tools, and their risk tiers |
-| [`unifi-protect-tools`](skills/unifi-protect-tools/SKILL.md) | The `protect_*` modules and the Protect client |
-| [`unifi-cloud-fleet-tools`](skills/unifi-cloud-fleet-tools/SKILL.md) | Cloud API tools and the fleet stack |
+| [`unifi-mcp-tool-builder`](skills/unifi-mcp-tool-builder/SKILL.md) | Add an MCP tool end to end: research the API, design models and function behavior, register it, write tests, and update documentation. |
+| [`unifi-network-config-tools`](skills/unifi-network-config-tools/SKILL.md) | Implement or test Network configuration tools, including endpoint URL spaces, site-ID translation, read-modify-write behavior, caching, and firmware-specific cases. |
+| [`unifi-security-tools`](skills/unifi-security-tools/SKILL.md) | Implement or test security tools across firewall, ZBF, ACL, port forwarding, traffic matching, RADIUS, and related areas; covers endpoint/ID mapping and risk tiers. |
+| [`unifi-protect-tools`](skills/unifi-protect-tools/SKILL.md) | Implement or test Protect modules, HTTP/WebSocket paths, v7 models, response shapes, and the confirmed/dry-run write pattern. |
+| [`unifi-cloud-fleet-tools`](skills/unifi-cloud-fleet-tools/SKILL.md) | Implement or test Site Manager, connector, integration API, Mobility, InnerSpace, Carrier Fabric, and fleet routing/authentication. |
+| [`unifi-docs-sync`](skills/unifi-docs-sync/SKILL.md) | Keep the live tool registry, A2A card, native prompt catalog, API reference, skills, and generated artifacts aligned; includes the drift-test workflow. |
 
 ### Install
 
@@ -203,7 +208,9 @@ mkdir -p ~/.claude/skills
 
 # All operator skills
 cp -r skills/unifi-network skills/unifi-devices skills/unifi-security \
-      skills/unifi-system skills/unifi-channel-planning ~/.claude/skills/
+      skills/unifi-system skills/unifi-protect skills/unifi-fleet-operations \
+      skills/unifi-channel-planning skills/unifi-discovery \
+      skills/unifi-safe-changes skills/unifi-mcp-setup ~/.claude/skills/
 
 # Or one skill
 cp -r skills/unifi-security ~/.claude/skills/
@@ -226,8 +233,11 @@ You don't invoke a skill yourself. The agent reads each skill's description and 
 - "Which clients are on the guest VLAN right now?" loads `unifi-network`.
 - "Audit the zone-based firewall for anything that allows WAN to LAN." loads `unifi-security`.
 - "Which APs share a 5 GHz channel with a neighbor? Propose a channel plan." loads `unifi-channel-planning`.
+- "Which controller should I target, and what tools does this server expose?" loads `unifi-discovery`.
+- "Plan maintenance across APs managed by two controllers." loads `unifi-fleet-operations`.
+- "Preview a VLAN change and explain how to roll it back." loads `unifi-safe-changes`.
 
-If the agent doesn't pick a skill up, name it ("use the unifi-security skill"). Pair a skill with the matching `UNIFI_PROFILE` to keep the tool list small too. [docs/SKILLS.md](docs/SKILLS.md) has the full guide.
+If the agent doesn't pick a skill up, name it ("use the unifi-security skill"). Pair a skill with the matching `UNIFI_PROFILE` to keep the tool list small too. [docs/SKILLS.md](docs/SKILLS.md) has additional guidance on skill installation and profiles.
 
 ## Tool profiles and safety controls
 

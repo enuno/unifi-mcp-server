@@ -35,7 +35,7 @@ Use it when the request touches any of:
 
 - `docs.json`, `.mintignore`, `.mintlify/`, or the navigation tree
 - a documentation page: `index.mdx`, a root-level `*.md`, or anything under `docs/`
-- the published site (`https://docs.hashgrid.net`) and the agent skills it serves
+- the published site (`https://unifi-mcp-docs.hashgrid.net`) and the agent skills it serves
 - the `mintlify-docs` or `mintlify` MCP servers
 - a request to audit, update, verify, release-sync, or publish the documentation
 
@@ -173,7 +173,7 @@ Verify what is actually served with a plain HTTP request — no login, no MCP:
 
 ```bash
 curl -sSL -o /dev/null -w "%{http_code}\n" \
-  https://docs.hashgrid.net/.well-known/skills/<slug>/SKILL.md
+  https://unifi-mcp-docs.hashgrid.net/.well-known/skills/<slug>/SKILL.md
 ```
 
 The path form that works is `/.well-known/skills/<slug>/SKILL.md`. The
@@ -182,8 +182,7 @@ and `/.well-known/agent-skills/` — all return 404 on this site. A 404 on the
 per-skill path means the skill is not deployed yet, which is the expected
 answer for a skill that exists only on a branch.
 
-This site currently serves six skills: `unifi`, `unifi-channel-planning`,
-`unifi-devices`, `unifi-network`, `unifi-security` and `unifi-system`.
+All 16 skills under `skills/` are exposed through matching entries under `.mintlify/skills/`. The library includes `unifi-channel-planning`, `unifi-cloud-fleet-tools`, `unifi-devices`, `unifi-discovery`, `unifi-docs-sync`, `unifi-fleet-operations`, `unifi-mcp-setup`, `unifi-mcp-tool-builder`, `unifi-network`, `unifi-network-config-tools`, `unifi-protect`, `unifi-protect-tools`, `unifi-safe-changes`, `unifi-security`, `unifi-security-tools` and `unifi-system`. The separate `mintlify-docs` maintenance skill also remains available under `.mintlify/skills/`. Verify the live endpoints after deployment; local links alone do not prove publication.
 
 ### Mintlify parses `.md` with the MDX parser
 
@@ -650,10 +649,10 @@ Inspected 2026-10-24.
   `src/main.py`, `src/tool_registry.py`, `src/access.py`, `src/utils/tool_kind.py`,
   `src/config/config.py`, `src/fleet/fleet_tools.py`, `src/fleet/tools.py`,
   and the `skills/`, `.claude/skills/` and `.agents/skills/` trees.
-- **The deployed site**, read-only: `https://docs.hashgrid.net`,
-  `https://docs.hashgrid.net/skill.md`, `https://docs.hashgrid.net/llms.txt`,
-  and `https://docs.hashgrid.net/.well-known/skills/<slug>/SKILL.md` for each
-  of the six published skills. The `mintlify` admin MCP's
+- **The deployed site**, read-only: `https://unifi-mcp-docs.hashgrid.net`,
+  `https://unifi-mcp-docs.hashgrid.net/skill.md`, `https://unifi-mcp-docs.hashgrid.net/llms.txt`,
+  and `https://unifi-mcp-docs.hashgrid.net/.well-known/skills/<slug>/SKILL.md` for
+  each of the 16 library skills after they are deployed. The `mintlify` admin MCP's
   `list_deployments`, `list_branches`, `read`, `search`, `list_nodes`,
   `diff`, `status` and `deployment_status`.
 

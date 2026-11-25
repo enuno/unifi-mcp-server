@@ -9,7 +9,7 @@ The `skills/` directory holds all agent skills, one folder per skill.
 
 `skills/unifi-mcp-setup/` is a one-file overview of the whole server (setup, API modes, capability domains, example prompts). It used to live at the repository root as `SKILL.md`, but package-skill installers such as `npx skills` only install a root-level `SKILL.md` and ignore everything under `skills/`, which hid every other skill from those tools. It now lives alongside the rest, in `skills/unifi-mcp-setup/SKILL.md`.
 
-A third skill, `mintlify-docs`, lives in `.mintlify/skills/` because Mintlify serves it from there. It helps an agent maintain, validate and publish this site's documentation.
+The Mintlify site exposes all 16 library skills through matching entries in `.mintlify/skills/`. The separate `mintlify-docs` maintenance skill lives there too; it is site tooling rather than part of the 16-skill UniFi library.
 
 ---
 

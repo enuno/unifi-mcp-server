@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "unifi": {
+      "command": "uvx",
+      "args": ["unifi-mcp-server==0.12.0"],
+      "env": {
+        "UNIFI_API_KEY": "${UNIFI_API_KEY}",
+        "UNIFI_API_TYPE": "${UNIFI_API_TYPE:-cloud-ea}",
+        "UNIFI_DEFAULT_SITE": "${UNIFI_DEFAULT_SITE:-default}",
+        "UNIFI_LOCAL_HOST": "${UNIFI_LOCAL_HOST:-}",
+        "UNIFI_LOCAL_PORT": "${UNIFI_LOCAL_PORT:-443}",
+        "UNIFI_LOCAL_VERIFY_SSL": "${UNIFI_LOCAL_VERIFY_SSL:-true}",
+        "UNIFI_READ_ONLY": "${UNIFI_READ_ONLY:-true}",
+        "UNIFI_PROFILE": "${UNIFI_PROFILE:-minimal}"
+      }
+    }
+  }
+}

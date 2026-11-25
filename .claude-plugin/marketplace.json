@@ -1,0 +1,32 @@
+{
+  "name": "unifi-mcp-server",
+  "owner": {
+    "name": "enuno",
+    "email": "noreply@github.com",
+    "url": "https://github.com/enuno"
+  },
+  "description": "UniFi Network, UniFi Protect and the UniFi cloud APIs as MCP tools, with the operator skills for running them.",
+  "version": "0.12.0",
+  "metadata": {
+    "description": "UniFi Network, UniFi Protect and the UniFi cloud APIs as MCP tools, with the operator skills for running them."
+  },
+  "plugins": [
+    {
+      "name": "unifi-mcp-server",
+      "source": "./",
+      "description": "Operate UniFi Network, UniFi Protect and the UniFi cloud APIs through the UniFi MCP Server.",
+      "version": "0.12.0",
+      "category": "infrastructure",
+      "tags": [
+        "unifi",
+        "network",
+        "protect",
+        "mcp",
+        "model-context-protocol",
+        "infrastructure",
+        "firewall",
+        "wifi"
+      ]
+    }
+  ]
+}

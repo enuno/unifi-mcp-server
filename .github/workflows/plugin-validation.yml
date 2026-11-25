@@ -1,0 +1,131 @@
+name: Plugin Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.claude-plugin/**'
+      - '.mcp.json'
+      - 'skills/**'
+      - 'scripts/validate_plugins.py'
+      - 'scripts/generate_skills_manifest.py'
+      - 'scripts/build_plugin_packages.py'
+      - 'docs/PLUGINS.md'
+      - 'docs/GROK.md'
+      - 'docs/CHATGPT_CONNECTOR.md'
+      - 'docs/submission/**'
+      - 'pyproject.toml'
+      - 'server.json'
+      - '.github/workflows/plugin-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.claude-plugin/**'
+      - '.mcp.json'
+      - 'skills/**'
+      - 'scripts/validate_plugins.py'
+      - 'scripts/generate_skills_manifest.py'
+      - 'scripts/build_plugin_packages.py'
+      - 'pyproject.toml'
+      - 'server.json'
+      - '.github/workflows/plugin-validation.yml'
+  workflow_dispatch:
+
+# Least privilege: this workflow only reads the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate plugin manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: uv sync --locked --python 3.12 --extra dev
+
+      # Checks that the manifests are valid JSON, that the version is the
+      # same everywhere, that every skill a manifest names exists, and that
+      # no manifest carries a secret.
+      - name: Validate plugin manifests
+        run: |
+          source .venv/bin/activate
+          python scripts/validate_plugins.py
+
+      # The skills manifest is generated from the skills on disk. Regenerating
+      # it must not change it, so a stale manifest fails the build.
+      - name: Check the skills manifest is up to date
+        run: |
+          source .venv/bin/activate
+          python scripts/generate_skills_manifest.py
+          git diff --exit-code skills/manifest.json
+
+      # Both distributable packages must build from the skills on disk and
+      # must carry only the operator skills.
+      - name: Build the plugin packages
+        run: |
+          source .venv/bin/activate
+          python scripts/build_plugin_packages.py
+
+      # The GitHub secret-scanning tool runs over the manifests. The regex
+      # pass in validate_plugins.py already runs; this adds the scanner.
+      - name: Install gitleaks
+        run: |
+          curl -LsSf https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz \
+            | tar -xz -C /usr/local/bin gitleaks
+
+      - name: Scan the manifests for secrets
+        run: |
+          source .venv/bin/activate
+          mkdir -p /tmp/manifests/.claude-plugin /tmp/manifests/skills
+          cp .claude-plugin/plugin.json .claude-plugin/marketplace.json /tmp/manifests/.claude-plugin/
+          cp .mcp.json skills/manifest.json /tmp/manifests/
+          gitleaks detect --no-git --source /tmp/manifests --redact --exit-code 1
+
+      # Claude Code validates the plugin and the marketplace manifests.
+      # The validator needs Claude Code v2.1.326 or later.
+      - name: Install Claude Code
+        run: |
+          curl -LsSf https://claude.ai/install.sh | bash
+
+      - name: Validate the plugin and the marketplace manifests
+        run: |
+          claude plugin validate . --strict
+
+      - name: Validate the built Claude plugin package
+        run: |
+          claude plugin validate dist/claude/unifi-mcp-server --strict
+
+      # The ChatGPT package is a skills-only upload: it must carry a manifest
+      # and skills, and it must not carry an MCP server or a marketplace.
+      - name: Check the ChatGPT package is skills-only
+        run: |
+          package=dist/chatgpt/unifi-mcp-server
+          test -f "$package/.claude-plugin/plugin.json" || {
+            echo "::error::missing .claude-plugin/plugin.json"; exit 1; }
+          test -f "$package/plugin.json" || {
+            echo "::error::missing plugin.json"; exit 1; }
+          test ! -f "$package/.mcp.json" || {
+            echo "::error::a skills-only package must not carry .mcp.json"; exit 1; }
+          test ! -f "$package/.claude-plugin/marketplace.json" || {
+            echo "::error::a skills-only package must not carry marketplace.json"; exit 1; }
+          count=$(find "$package/skills" -mindepth 2 -maxdepth 2 -name SKILL.md | wc -l)
+          test "$count" -ge 1 || {
+            echo "::error::no skills at skills/<name>/SKILL.md"; exit 1; }
+          echo "skills-only package holds $count skills"

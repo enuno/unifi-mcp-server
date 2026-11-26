@@ -142,13 +142,25 @@ def tool_tier_map() -> dict[str, str]:
     Imported lazily so that reading the manifest works without the server's
     runtime dependencies.
     """
-    os.environ.setdefault("UNIFI_API_TYPE", "local")
-    os.environ.setdefault("UNIFI_MIXED_MODE", "false")
-    os.environ.setdefault("UNIFI_API_KEY", "manifest-generation-no-controller")
+    # The registry is read under a fixed configuration, so the generated
+    # manifest does not depend on the operator's own settings. An ambient
+    # UNIFI_READ_ONLY=true would leave every mutating tool unregistered,
+    # and an ambient UNIFI_PROFILE would narrow the tool surface, so the
+    # manifest would differ between machines for reasons nothing reports.
+    for key in [key for key in os.environ if key.startswith("UNIFI_")]:
+        del os.environ[key]
+    os.environ["UNIFI_API_TYPE"] = "local"
+    os.environ["UNIFI_MIXED_MODE"] = "false"
+    os.environ["UNIFI_API_KEY"] = "test-key"  # pragma: allowlist secret
     # Local mode requires a console address. Use the reserved documentation
     # address, as the repository's own registry test does, so the script
     # works on a machine with no .env and reaches no controller.
-    os.environ.setdefault("UNIFI_LOCAL_HOST", "192.0.2.1")
+    os.environ["UNIFI_LOCAL_HOST"] = "192.0.2.1"
+    # Read-only and dry-run would remove the mutating tools from the
+    # registry, and a profile would narrow it to one group of modules.
+    os.environ["UNIFI_READ_ONLY"] = "false"
+    os.environ["UNIFI_DRY_RUN"] = "false"
+    os.environ.pop("UNIFI_PROFILE", None)
     sys.path.insert(0, str(ROOT))
     from src.main import TOOL_TIERS  # noqa: PLC0415
 

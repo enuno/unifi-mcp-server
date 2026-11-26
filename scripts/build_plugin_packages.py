@@ -106,44 +106,43 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def plugin_metadata(manifest: dict[str, Any]) -> dict[str, Any]:
-    """Return the manifest fields every package carries."""
-    return {
-        "name": "unifi-mcp-server",
-        "version": manifest["version"],
-        "description": manifest["pluginDescription"],
-        "author": manifest["author"],
-        "homepage": manifest["homepage"],
-        "repository": manifest["repository"],
-        "license": manifest["license"],
-        "keywords": manifest["keywords"],
-    }
+    """Return the manifest fields every package carries.
+
+    The repository's own ``.claude-plugin/plugin.json`` is the source, so
+    the package and the repository cannot describe the plugin differently.
+    Only the version comes from the skills manifest, because that is the
+    field the version check spans across every manifest.
+    """
+    repository = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    metadata = dict(repository)
+    metadata["version"] = manifest["version"]
+    return metadata
 
 
 def mcp_config(manifest: dict[str, Any]) -> dict[str, Any]:
     """Return the MCP server configuration.
 
+    The repository's own ``.mcp.json`` is the source, so the uvx pin and
+    the environment defaults have one home. The version is written from the
+    skills manifest, because the pin names a published release and the
+    version check spans the pin.
+
     Env values are placeholders only. The API key is never written into a
     package; Claude Code expands ``${UNIFI_API_KEY}`` from the user's own
     environment, and warns when the variable is unset.
     """
-    return {
-        "mcpServers": {
-            "unifi": {
-                "command": "uvx",
-                "args": [f"unifi-mcp-server=={manifest['version']}"],
-                "env": {
-                    "UNIFI_API_KEY": "${UNIFI_API_KEY}",
-                    "UNIFI_API_TYPE": "${UNIFI_API_TYPE:-cloud-ea}",
-                    "UNIFI_DEFAULT_SITE": "${UNIFI_DEFAULT_SITE:-default}",
-                    "UNIFI_LOCAL_HOST": "${UNIFI_LOCAL_HOST:-}",
-                    "UNIFI_LOCAL_PORT": "${UNIFI_LOCAL_PORT:-443}",
-                    "UNIFI_LOCAL_VERIFY_SSL": "${UNIFI_LOCAL_VERIFY_SSL:-true}",
-                    "UNIFI_READ_ONLY": "${UNIFI_READ_ONLY:-true}",
-                    "UNIFI_PROFILE": "${UNIFI_PROFILE:-minimal}",
-                },
-            }
-        }
-    }
+    config: dict[str, Any] = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
+    for server in (config.get("mcpServers") or {}).values():
+        args = server.get("args") or []
+        server["args"] = [
+            (
+                f"unifi-mcp-server=={manifest['version']}"
+                if str(arg).startswith("unifi-mcp-server==")
+                else arg
+            )
+            for arg in args
+        ]
+    return config
 
 
 def build_claude(manifest: dict[str, Any], out_dir: Path) -> Path:

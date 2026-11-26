@@ -43,6 +43,10 @@ jobs:
   validate:
     name: Validate plugin manifests
     runs-on: ubuntu-latest
+    env:
+      # The SHA256 of https://claude.ai/install.sh as it stood when this
+      # workflow was written. Update it when the installer changes.
+      CLAUDE_INSTALLER_SHA256: 2c5506d110560bf618bbe88f678f2c2a0047c86a9c6585fc84976120b1de0b44
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -52,10 +56,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Pinned to a commit SHA, so the action cannot change under the
+      # workflow. The repository's other workflows install uv with
+      # curl | sh; a new workflow should not add another one.
       - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
 
       - name: Install dependencies
         run: uv sync --locked --python 3.12 --extra dev
@@ -85,10 +90,17 @@ jobs:
 
       # The GitHub secret-scanning tool runs over the manifests. The regex
       # pass in validate_plugins.py already runs; this adds the scanner.
+      # Download the release, verify its checksum, and only then extract
+      # it. A checksum that is not pinned would not help.
       - name: Install gitleaks
         run: |
-          curl -LsSf https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz \
-            | tar -xz -C /usr/local/bin gitleaks
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl -LsSf \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz" \
+            -o "$archive"
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  $archive" | sha256sum --check --strict
+          tar -xz -C /usr/local/bin -f "$archive" gitleaks
+          gitleaks version
 
       - name: Scan the manifests for secrets
         run: |
@@ -100,9 +112,15 @@ jobs:
 
       # Claude Code validates the plugin and the marketplace manifests.
       # The validator needs Claude Code v2.1.326 or later.
+      # Download the installer, verify its checksum, and only then run it.
+      # The installer fetches the latest release, so the checksum is for
+      # the bootstrap script, not for the version it installs.
       - name: Install Claude Code
         run: |
-          curl -LsSf https://claude.ai/install.sh | bash
+          installer="$RUNNER_TEMP/claude-install.sh"
+          curl -LsSf https://claude.ai/install.sh -o "$installer"
+          echo "$CLAUDE_INSTALLER_SHA256  $installer" | sha256sum --check --strict
+          bash "$installer"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       # The installer fetches the latest release, so check the version the

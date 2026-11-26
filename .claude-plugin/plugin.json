@@ -1,0 +1,25 @@
+{
+  "name": "unifi-mcp-server",
+  "version": "0.12.0",
+  "description": "Operate UniFi Network, UniFi Protect and the UniFi cloud APIs through the UniFi MCP Server. Ships the operator skills for network, devices, security, system, Protect, fleet and safe-change workflows, and launches the server over stdio.",
+  "author": {
+    "name": "enuno",
+    "email": "noreply@github.com",
+    "url": "https://github.com/enuno"
+  },
+  "homepage": "https://github.com/enuno/unifi-mcp-server",
+  "repository": "https://github.com/enuno/unifi-mcp-server",
+  "license": "Apache-2.0",
+  "icon": ".claude-plugin/icon.png",
+  "keywords": [
+    "unifi",
+    "network",
+    "protect",
+    "mcp",
+    "model-context-protocol",
+    "infrastructure",
+    "firewall",
+    "wifi",
+    "automation"
+  ]
+}

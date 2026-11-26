@@ -170,6 +170,21 @@ Keep `-i` and do not add `-d`: the client talks to the server over the container
 
 [.env.example](.env.example) lists every setting with comments, including audit logging, SIEM export, metrics, Supermemory and agnost.ai.
 
+## Plugins
+
+The repository is a Claude Code plugin and a self-hosted Claude marketplace. The plugin ships the MCP server over stdio and the operator skills.
+
+```bash
+/plugin marketplace add enuno/unifi-mcp-server
+/plugin install unifi-mcp-server --marketplace enuno/unifi-mcp-server
+```
+
+The plugin starts the server read-only and with a small tool profile. Set `UNIFI_API_KEY` in your environment before installing; the plugin never stores a credential. To let the agent change controller state, set `UNIFI_READ_ONLY=false` and widen `UNIFI_PROFILE`.
+
+`UNIFI_PROFILE` defaults to `minimal`, which registers the site, client and device tools. An unset variable does not select every tool; set `UNIFI_PROFILE=all` for the full surface.
+
+ChatGPT and Codex get a skills-only package, because the skills are the portable part and this project has no hosted MCP endpoint to point ChatGPT at. See [docs/PLUGINS.md](docs/PLUGINS.md) for the full install and publish steps, [docs/CHATGPT_CONNECTOR.md](docs/CHATGPT_CONNECTOR.md) for the ChatGPT connector, and [docs/GROK.md](docs/GROK.md) for the Grok connector.
+
 ## Agent skills
 
 The `skills/` directory contains 16 installable agent skills. Each is a Markdown `SKILL.md` that an AI agent loads when relevant: operator skills guide safe use of a running server; developer skills give repository-specific implementation procedures. The summaries below describe when to use each skill and its main workflow. Follow the linked `SKILL.md` for complete tool references, prerequisites, examples, safety gates, and troubleshooting guidance.
@@ -462,6 +477,20 @@ Contributions from people and AI coding agents are welcome. See [CONTRIBUTING.md
 3. Use conventional commit messages (`feat: ...`, `fix: ...`) and open a pull request.
 
 Issues with `[Bug]` in the title opened by a maintainer or collaborator get an automated first analysis; other reports are triaged by hand ([details](CONTRIBUTING.md#automated-workflows)).
+
+## Permissions and data handling
+
+The server runs on your machine and talks to your controller. It does not relay your traffic to a third party.
+
+**What leaves your controller.** The server sends API requests to the controller you configured, and only to that controller: the UniFi console in local mode, or `api.ui.com` in cloud mode. It reads and writes through the official UniFi API. Nothing about your network is sent to the server's authors, because the authors run no server: the plugin runs `uvx unifi-mcp-server`, which installs the published package and starts it on your machine.
+
+**What the plugin does not do.** The plugin carries no credential. `.mcp.json` refers to `${UNIFI_API_KEY}`, and Claude Code expands it from your own environment. The plugin stores no data, keeps no history and runs no background job.
+
+**Telemetry is off by default.** The server can optionally report performance data to agnost.ai, but only when you set both `AGNOST_ENABLED=true` and `AGNOST_ORG_ID`. Without those two variables the tracking code is never reached. If you do enable it, it sends the prompt and the response to `api.agnost.ai`, so leave it off unless you want that.
+
+**Audit records stay on your machine.** Mutating calls are written to a hash-chained audit log. The path defaults to `audit.log` in the working directory; set `UNIFI_AUDIT_LOG_PATH` to an absolute path to control it. Audit records can be forwarded to a SIEM you name in `UNIFI_AUDIT_SIEM_TARGETS`, which is off unless you set it.
+
+**What a write costs.** Every mutating tool requires `confirm=True`, and most support `dry_run=True`. `UNIFI_READ_ONLY=true`, which the plugin sets by default, does not register any mutating tool at all, so a read-only session cannot change your network. `UNIFI_DRY_RUN=true` turns every change into a preview. The 53 tools the server classifies as destructive, including the firewall, device and network changes, are off in both of those modes.
 
 ## Security
 

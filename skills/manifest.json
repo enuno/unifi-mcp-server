@@ -1,0 +1,644 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "unifi-mcp-server-skills",
+  "description": "Index of the agent skills shipped by the UniFi MCP Server plugins. The skill content lives in skills/<name>/SKILL.md; this file only indexes it.",
+  "sourceOfTruth": "skills/",
+  "audiences": {
+    "operator": "Ships in the plugin packages. Uses a running MCP server.",
+    "developer": "Stays in the repository. Helps a coding agent change this codebase."
+  },
+  "tiers": {
+    "read": "Observes controller state. Available in a read-only session.",
+    "write": "Changes controller state. Refused in a read-only session.",
+    "destructive": "Changes controller state in a way that can interrupt service or lock an operator out. Off unless the session allows writes.",
+    "fleet": "Reads across controllers. Needs a fleet registry."
+  },
+  "version": "0.12.0",
+  "pluginDescription": "Operate UniFi Network, UniFi Protect and the UniFi cloud APIs through the UniFi MCP Server. Ships the operator skills for network, devices, security, system, Protect, fleet and safe-change workflows.",
+  "author": {
+    "name": "enuno",
+    "email": "noreply@github.com",
+    "url": "https://github.com/enuno"
+  },
+  "homepage": "https://github.com/enuno/unifi-mcp-server",
+  "repository": "https://github.com/enuno/unifi-mcp-server",
+  "license": "Apache-2.0",
+  "keywords": [
+    "unifi",
+    "network",
+    "protect",
+    "mcp",
+    "model-context-protocol",
+    "infrastructure",
+    "firewall",
+    "wifi",
+    "automation"
+  ],
+  "skills": [
+    {
+      "name": "unifi-channel-planning",
+      "description": "Build an AI-driven low-interference WiFi channel plan from UniFi MCP neighbor observations. Use when the task is RF optimization, channel conflict reduction, co-channel interference mitigation, or per-AP channel assignment.",
+      "path": "skills/unifi-channel-planning/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [],
+        "read": [
+          "get_device_details",
+          "list_ap_neighbors_v2",
+          "list_devices_by_type",
+          "list_neighboring_aps",
+          "list_site_internal_ap_neighbors_v2",
+          "list_sites"
+        ],
+        "write": [
+          "set_ap_radio_channel"
+        ]
+      }
+    },
+    {
+      "name": "unifi-cloud-fleet-tools",
+      "description": "Use when adding, changing or testing a cloud or multi-controller MCP tool (Site Manager, the connector proxy, the integration API tools, sites, Mobility, InnerSpace, Carrier Fabric) or the fleet stack (router, registry, pool, read cache, workers, fleet_* and admin tools) - covers API modes, gating, per-call routing, tokens and roles, test fixtures and known gaps.",
+      "path": "skills/unifi-cloud-fleet-tools/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [
+          "connector_protect_post",
+          "suspend_carrier_subscriber"
+        ],
+        "read": [
+          "connector_network_get",
+          "get_isp_metrics",
+          "get_site_details",
+          "get_site_statistics",
+          "list_all_sites_aggregated",
+          "list_hosts",
+          "list_innerspace_floor_plans",
+          "list_integration_sites",
+          "list_integration_wans",
+          "list_mobility_workspaces",
+          "list_sites"
+        ],
+        "write": [
+          "create_carrier_subscriber",
+          "update_mobility_device"
+        ]
+      }
+    },
+    {
+      "name": "unifi-devices",
+      "description": "UniFi device management: inventory, adoption, restarts, firmware upgrades, radio/channel configuration, port profiles, switching/stacks, network topology, and diagnostics. Use when the task involves physical UniFi hardware (APs, switches, gateways, cameras).",
+      "path": "skills/unifi-devices/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [
+          "delete_port_profile",
+          "execute_port_action",
+          "restart_device",
+          "upgrade_device"
+        ],
+        "read": [
+          "export_topology",
+          "get_ap_radio_config",
+          "get_device_by_mac",
+          "get_device_connections",
+          "get_device_details",
+          "get_device_port_overrides",
+          "get_device_statistics",
+          "get_lag_details",
+          "get_mclag_domain",
+          "get_network_references",
+          "get_network_topology",
+          "get_port_mappings",
+          "get_port_profile",
+          "get_spectrum_scan",
+          "get_speed_test_history",
+          "get_speed_test_status",
+          "get_switch_stack",
+          "get_topology_statistics",
+          "list_devices_by_type",
+          "list_lags",
+          "list_mclag_domains",
+          "list_pending_devices",
+          "list_port_profiles",
+          "list_spectrum_interference",
+          "list_switch_stacks",
+          "search_devices"
+        ],
+        "write": [
+          "adopt_device",
+          "create_port_profile",
+          "locate_device",
+          "run_speed_test",
+          "set_ap_radio_channel",
+          "set_device_port_overrides",
+          "update_port_profile"
+        ]
+      }
+    },
+    {
+      "name": "unifi-discovery",
+      "description": "Find what a UniFi MCP Server can do and pick the right backend before acting. Use when starting a session, when a tool is missing or returns nothing, when choosing between local, cloud and fleet mode, or when deciding which tools are safe to call.",
+      "path": "skills/unifi-discovery/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [],
+        "read": [],
+        "write": []
+      }
+    },
+    {
+      "name": "unifi-docs-sync",
+      "description": "Use when adding, changing or removing an MCP tool, changing the A2A agent card or the native MCP prompt catalog, or changing what a deployment exposes - covers the tool registry, the agent card, the prompt catalog, API.md, the skills and the checks that fail when they drift.",
+      "path": "skills/unifi-docs-sync/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [],
+        "read": [],
+        "write": []
+      }
+    },
+    {
+      "name": "unifi-fleet-operations",
+      "description": "Operate a multi-controller UniFi deployment behind one MCP server. Use when there is more than one controller, when a task must run against a specific controller, when a controller is unreachable, or when a controller's credentials need to be managed.",
+      "path": "skills/unifi-fleet-operations/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [],
+        "read": [],
+        "write": []
+      }
+    },
+    {
+      "name": "unifi-mcp-setup",
+      "description": "Use when setting up, installing or configuring the UniFi MCP Server itself, or as a broad fallback for a UniFi task when none of the narrower operator skills fit. One-file overview of install methods, environment variables, the API-mode feature matrix, UNIFI_PROFILE scoping and example prompts. Triggers when the user mentions UniFi, Ubiquiti, network clients, APs, switches, gateways, firewall policies, or traffic flows in a network management context.\n",
+      "path": "skills/unifi-mcp-setup/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [],
+        "read": [],
+        "write": []
+      }
+    },
+    {
+      "name": "unifi-mcp-tool-builder",
+      "description": "Specialized guide for adding new MCP tools to the UniFi MCP Server following project standards, UniFi API patterns, and test-driven development practices. Use when implementing new UniFi Network Controller features as MCP tools.",
+      "path": "skills/unifi-mcp-tool-builder/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [],
+        "read": [
+          "list_acl_rules",
+          "list_protect_relays",
+          "list_wlans"
+        ],
+        "write": [
+          "update_port_profile",
+          "update_protect_relay"
+        ]
+      },
+      "version": "1.0.0",
+      "license": "Apache 2.0",
+      "author": "UniFi MCP Server Team"
+    },
+    {
+      "name": "unifi-network",
+      "description": "UniFi network operations: manage clients, VLANs, WiFi SSIDs, DHCP reservations, DNS settings, WAN connections, and guest vouchers. Use when the task involves connected clients, wireless networks, IP allocation, or internet access management.",
+      "path": "skills/unifi-network/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [
+          "block_client",
+          "bulk_client_action",
+          "bulk_delete_vouchers",
+          "delete_network",
+          "delete_voucher",
+          "delete_wlan",
+          "remove_dhcp_reservation"
+        ],
+        "read": [
+          "get_client_details",
+          "get_client_statistics",
+          "get_dhcp_reservation",
+          "get_dns_filter_settings",
+          "get_network_details",
+          "get_network_statistics",
+          "get_subnet_info",
+          "get_voucher",
+          "get_wlan_statistics",
+          "list_active_clients",
+          "list_client_connection_events",
+          "list_dhcp_reservations",
+          "list_vlans",
+          "list_vouchers",
+          "list_wan_connections",
+          "list_wan_dns",
+          "list_wlans",
+          "search_clients"
+        ],
+        "write": [
+          "authorize_guest",
+          "create_dhcp_reservation",
+          "create_network",
+          "create_vouchers",
+          "create_wlan",
+          "limit_bandwidth",
+          "reconnect_client",
+          "unblock_client",
+          "update_dhcp_reservation",
+          "update_dns_filter",
+          "update_network",
+          "update_wan_dns",
+          "update_wlan"
+        ]
+      }
+    },
+    {
+      "name": "unifi-network-config-tools",
+      "description": "Use when adding, changing or testing a UniFi Network configuration MCP tool (networks, WiFi, WAN, DHCP, DNS, QoS, port profiles, switching, VPN) - covers URL spaces and site ID translation, read-modify-write updates, the write pattern, caching, test fixtures and firmware gotchas.",
+      "path": "skills/unifi-network-config-tools/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [
+          "delete_network",
+          "remove_dhcp_reservation"
+        ],
+        "read": [
+          "get_lag_details",
+          "get_network_details",
+          "get_site_to_site_vpn",
+          "get_subnet_info",
+          "get_wlan_statistics",
+          "list_switch_stacks",
+          "list_traffic_routes",
+          "list_vlans",
+          "list_vpn_servers",
+          "list_vpn_tunnels",
+          "list_wan_connections",
+          "list_wan_dns",
+          "list_wlans"
+        ],
+        "write": [
+          "configure_smart_queue",
+          "create_dhcp_reservation",
+          "create_dynamic_dns",
+          "create_network",
+          "set_device_port_overrides",
+          "update_dns_filter",
+          "update_network",
+          "update_port_profile",
+          "update_site_to_site_vpn",
+          "update_wan_dns",
+          "update_wlan"
+        ]
+      }
+    },
+    {
+      "name": "unifi-protect",
+      "description": "Operate UniFi Protect: cameras, NVRs, alarm hubs, sensors, chimes, sirens, lights, views and viewers. Use when checking whether a camera or alarm device is online, when a Protect device needs configuring, or when an alarm is armed or disarmed.",
+      "path": "skills/unifi-protect/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [
+          "arm_protect_external_arm_profile",
+          "delete_protect_arm_profile",
+          "delete_protect_external_arm_profile",
+          "disable_protect_alarm",
+          "disarm_protect_external_arm_profile",
+          "set_current_protect_arm_profile"
+        ],
+        "read": [
+          "get_protect_alarm_hub",
+          "get_protect_arm_profile",
+          "get_protect_bridge",
+          "get_protect_camera",
+          "get_protect_chime",
+          "get_protect_device",
+          "get_protect_device_updates",
+          "get_protect_event_messages",
+          "get_protect_external_arm_profile",
+          "get_protect_fob",
+          "get_protect_light",
+          "get_protect_link_station",
+          "get_protect_live_view",
+          "get_protect_meta_info",
+          "get_protect_relay",
+          "get_protect_sensor",
+          "get_protect_siren",
+          "get_protect_speaker",
+          "get_protect_subscribe_devices",
+          "get_protect_subscribe_events",
+          "get_protect_ulp_user",
+          "get_protect_viewer",
+          "list_protect_alarm_hubs",
+          "list_protect_arm_profiles",
+          "list_protect_bridges",
+          "list_protect_cameras",
+          "list_protect_chimes",
+          "list_protect_device_updates",
+          "list_protect_devices",
+          "list_protect_events",
+          "list_protect_external_arm_profiles",
+          "list_protect_fobs",
+          "list_protect_lights",
+          "list_protect_link_stations",
+          "list_protect_live_views",
+          "list_protect_model_updates",
+          "list_protect_nvrs",
+          "list_protect_sensors",
+          "list_protect_sirens",
+          "list_protect_ulp_users",
+          "list_protect_users",
+          "list_protect_viewers"
+        ],
+        "write": [
+          "activate_protect_relay_output",
+          "create_protect_arm_profile",
+          "create_protect_external_arm_profile",
+          "create_protect_live_view",
+          "enable_protect_alarm",
+          "ingest_pos_transaction",
+          "play_protect_siren",
+          "send_protect_alarm_webhook",
+          "stop_protect_siren",
+          "stop_protect_speaker_siren",
+          "test_protect_siren_sound",
+          "test_protect_speaker_sound",
+          "trigger_protect_alarm_hub_output",
+          "update_protect_alarm_hub",
+          "update_protect_arm_profile",
+          "update_protect_bridge",
+          "update_protect_chime",
+          "update_protect_device",
+          "update_protect_external_arm_profile",
+          "update_protect_fob",
+          "update_protect_light",
+          "update_protect_link_station",
+          "update_protect_live_view",
+          "update_protect_relay",
+          "update_protect_sensor",
+          "update_protect_siren",
+          "update_protect_speaker",
+          "update_protect_viewer"
+        ]
+      }
+    },
+    {
+      "name": "unifi-protect-tools",
+      "description": "Use when adding, changing or testing a UniFi Protect MCP tool (any src/tools/protect_*.py module) - covers the Protect client and paths, v7 models, the confirm/dry_run write pattern, response shapes, test fixtures and known Protect API gaps.",
+      "path": "skills/unifi-protect-tools/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [
+          "arm_protect_external_arm_profile",
+          "disable_protect_alarm",
+          "set_current_protect_arm_profile"
+        ],
+        "read": [
+          "get_protect_arm_profile",
+          "get_protect_bridge",
+          "get_protect_camera",
+          "get_protect_chime",
+          "get_protect_meta_info",
+          "get_protect_nvr",
+          "list_protect_alarm_hubs",
+          "list_protect_arm_profiles",
+          "list_protect_cameras",
+          "list_protect_device_updates",
+          "list_protect_devices",
+          "list_protect_events",
+          "list_protect_external_arm_profiles",
+          "list_protect_model_updates",
+          "list_protect_nvrs",
+          "list_protect_ulp_users",
+          "list_protect_users"
+        ],
+        "write": [
+          "activate_protect_relay_output",
+          "create_protect_live_view",
+          "ingest_pos_transaction",
+          "play_protect_siren",
+          "send_protect_alarm_webhook",
+          "stop_protect_siren",
+          "stop_protect_speaker_siren",
+          "update_protect_alarm_hub",
+          "update_protect_bridge",
+          "update_protect_fob",
+          "update_protect_light",
+          "update_protect_link_station",
+          "update_protect_relay",
+          "update_protect_speaker"
+        ]
+      }
+    },
+    {
+      "name": "unifi-safe-changes",
+      "description": "Change UniFi state through the MCP server without losing the network, the audit trail or the operator's trust. Use when creating, updating or deleting anything, when a call is refused, when deciding whether a change is safe to make unattended, or when a change must be rolled back.",
+      "path": "skills/unifi-safe-changes/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [],
+        "read": [
+          "list_active_clients",
+          "list_backups"
+        ],
+        "write": []
+      }
+    },
+    {
+      "name": "unifi-security",
+      "description": "UniFi security operations: traditional firewall rules, firewall groups, zone-based firewall (ZBF), ACL rules, port forwarding, VPN tunnels, site-to-site VPN, and content filtering. Use when the task involves network access control, firewall policies, traffic blocking, or VPN configuration. Zone-based firewall requires UniFi Network 9.0+ and local API mode.",
+      "path": "skills/unifi-security/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [
+          "assign_network_to_zone",
+          "block_flow_application",
+          "create_firewall_policy",
+          "create_firewall_rule",
+          "delete_acl_rule",
+          "delete_content_filter",
+          "delete_firewall_group",
+          "delete_firewall_policy",
+          "delete_firewall_rule",
+          "delete_firewall_zone",
+          "delete_port_forward",
+          "unassign_network_from_zone",
+          "update_firewall_policy",
+          "update_firewall_rule"
+        ],
+        "read": [
+          "get_acl_rule",
+          "get_application_info",
+          "get_client_flow_aggregation",
+          "get_firewall_group",
+          "get_firewall_policy",
+          "get_site_to_site_vpn",
+          "get_top_flows",
+          "get_topology_statistics",
+          "get_zone_networks",
+          "get_zone_policy_matrix",
+          "list_acl_rules",
+          "list_content_filter_categories",
+          "list_content_filters",
+          "list_dpi_application_categories",
+          "list_dpi_applications",
+          "list_firewall_groups",
+          "list_firewall_policies",
+          "list_firewall_rules",
+          "list_firewall_zones",
+          "list_firewall_zones_v2",
+          "list_port_forwards",
+          "list_site_to_site_vpns",
+          "list_top_applications",
+          "list_vpn_servers",
+          "list_vpn_tunnels"
+        ],
+        "write": [
+          "create_acl_rule",
+          "create_address_group",
+          "create_firewall_group",
+          "create_firewall_zone",
+          "create_port_forward",
+          "create_port_group",
+          "update_acl_rule",
+          "update_content_filter",
+          "update_firewall_group",
+          "update_firewall_zone",
+          "update_port_forward",
+          "update_site_to_site_vpn"
+        ]
+      }
+    },
+    {
+      "name": "unifi-security-tools",
+      "description": "Use when adding, changing or testing a UniFi security MCP tool (legacy firewall rules, zone-based firewall policies and zones, firewall groups, ACL rules, traffic matching lists, content filtering, port forwarding, RADIUS and guest portal) - covers the three URL spaces, zone and network ID mapping, full-object policy updates, risk tiers, test fixtures and known gaps.",
+      "path": "skills/unifi-security-tools/SKILL.md",
+      "audience": "developer",
+      "requiredTools": {
+        "destructive": [
+          "assign_network_to_zone",
+          "create_firewall_policy",
+          "create_firewall_rule",
+          "delete_firewall_group",
+          "delete_firewall_zone",
+          "unassign_network_from_zone",
+          "update_firewall_policy",
+          "update_firewall_rule"
+        ],
+        "read": [
+          "get_zone_policy_matrix",
+          "list_acl_rules",
+          "list_content_filters",
+          "list_firewall_policies",
+          "list_firewall_rules",
+          "list_firewall_zones_v2",
+          "list_port_forwards",
+          "list_radius_profiles",
+          "list_traffic_matching_lists"
+        ],
+        "write": [
+          "configure_guest_portal",
+          "create_acl_rule",
+          "create_address_group",
+          "create_port_forward",
+          "create_port_group",
+          "create_traffic_matching_list",
+          "update_content_filter"
+        ]
+      }
+    },
+    {
+      "name": "unifi-system",
+      "description": "UniFi system administration and monitoring: site management, multi-site aggregation, backups, QoS traffic routes, traffic flow analytics, deep packet inspection (DPI), RADIUS authentication, guest portal, hotspot packages, and SD-WAN. Use when the task involves site health, backups, bandwidth analytics, or RADIUS user management.",
+      "path": "skills/unifi-system/SKILL.md",
+      "audience": "operator",
+      "requiredTools": {
+        "destructive": [
+          "block_flow_application",
+          "block_flow_destination_ip",
+          "block_flow_source_ip",
+          "delete_backup",
+          "delete_hotspot_package",
+          "delete_radius_account",
+          "delete_radius_profile",
+          "delete_traffic_matching_list",
+          "restore_backup"
+        ],
+        "read": [
+          "compare_site_performance",
+          "download_backup",
+          "export_traffic_flows",
+          "filter_traffic_flows",
+          "find_flows_for_rule_reference",
+          "get_backup_details",
+          "get_backup_schedule",
+          "get_backup_status",
+          "get_client_dpi",
+          "get_client_flow_aggregation",
+          "get_connection_states",
+          "get_cross_site_statistics",
+          "get_dpi_statistics",
+          "get_flow_analytics",
+          "get_flow_risks",
+          "get_flow_statistics",
+          "get_flow_trends",
+          "get_guest_portal_config",
+          "get_host",
+          "get_hotspot_package",
+          "get_internet_health",
+          "get_isp_metrics",
+          "get_radius_account",
+          "get_radius_profile",
+          "get_recent_statistics_series",
+          "get_restore_status",
+          "get_sdwan_config",
+          "get_sdwan_config_status",
+          "get_site_details",
+          "get_site_health_summary",
+          "get_site_inventory",
+          "get_site_statistics",
+          "get_smart_queue_status",
+          "get_statistics_source",
+          "get_top_flows",
+          "get_traffic_flow_details",
+          "get_traffic_flows",
+          "get_traffic_matching_list",
+          "get_version_control",
+          "list_all_sites_aggregated",
+          "list_backups",
+          "list_countries",
+          "list_dpi_applications",
+          "list_dpi_categories",
+          "list_hosts",
+          "list_hotspot_packages",
+          "list_radius_accounts",
+          "list_radius_profiles",
+          "list_sdwan_configs",
+          "list_sites",
+          "list_top_applications",
+          "list_traffic_matching_lists",
+          "list_traffic_routes",
+          "list_vantage_points",
+          "query_isp_metrics",
+          "search_across_sites",
+          "stream_traffic_flows",
+          "validate_backup"
+        ],
+        "write": [
+          "configure_guest_portal",
+          "configure_smart_queue",
+          "create_hotspot_package",
+          "create_radius_account",
+          "create_radius_profile",
+          "create_traffic_matching_list",
+          "schedule_backups",
+          "trigger_backup",
+          "update_hotspot_package",
+          "update_radius_account",
+          "update_radius_profile",
+          "update_traffic_matching_list"
+        ]
+      }
+    }
+  ]
+}

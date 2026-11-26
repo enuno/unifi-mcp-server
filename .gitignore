@@ -222,6 +222,11 @@ bandit-report.json
 .mcp.json
 .xerj/
 
+# Exception: the repository root .mcp.json is the plugin's MCP server
+# definition, not a personal override. It holds only ${VAR} placeholders and
+# carries no credential, and the plugin does not load without it.
+!.mcp.json
+
 
 # Ansible deploy (deploy/ansible): secrets and downloaded collections
 deploy/ansible/inventories/*/group_vars/all/vault.yml

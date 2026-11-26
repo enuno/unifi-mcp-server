@@ -58,7 +58,7 @@ it. Do not change anything yet.
 
 **Skill:** `unifi-safe-changes`, then `unifi-network`
 
-**Tools:** `list_networks`, `get_network_details`, `list_wlans`, `create_network`, `update_wlan`
+**Tools:** `get_network_details`, `list_wlans`, `create_network`, `update_wlan`
 
 **Why it demonstrates the plugin:** it shows the safety model rather than just the tool surface. The agent reads first, proposes the change, and does not write until the user confirms, because every mutating tool requires `confirm=True`.
 

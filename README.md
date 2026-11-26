@@ -181,6 +181,8 @@ The repository is a Claude Code plugin and a self-hosted Claude marketplace. The
 
 The plugin starts the server read-only and with a small tool profile. Set `UNIFI_API_KEY` in your environment before installing; the plugin never stores a credential. To let the agent change controller state, set `UNIFI_READ_ONLY=false` and widen `UNIFI_PROFILE`.
 
+`UNIFI_PROFILE` defaults to `minimal`, which registers the site, client and device tools. An unset variable does not select every tool; set `UNIFI_PROFILE=all` for the full surface.
+
 ChatGPT and Codex get a skills-only package, because the skills are the portable part and this project has no hosted MCP endpoint to point ChatGPT at. See [docs/PLUGINS.md](docs/PLUGINS.md) for the full install and publish steps, [docs/CHATGPT_CONNECTOR.md](docs/CHATGPT_CONNECTOR.md) for the ChatGPT connector, and [docs/GROK.md](docs/GROK.md) for the Grok connector.
 
 ## Agent skills

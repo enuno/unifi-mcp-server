@@ -69,4 +69,5 @@ The server registers 365 tools in local mode, from 64 modules.
 | Write | 93 | Change controller state, with `confirm=True` |
 | Destructive | 53 | Change controller state in a way that can interrupt service or lock an operator out |
 
-A read-only session registers 219 tools and no mutating tool at all.
+A read-only session registers 219 tools and no mutating tool at all. That is
+the 215 read-tier tools plus the four fleet tools, which carry no tier.

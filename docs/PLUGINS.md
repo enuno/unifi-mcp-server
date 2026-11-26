@@ -28,6 +28,32 @@ This repository ships the UniFi MCP Server as a Claude Code plugin and as a Chat
 
 The split matches `docs/SKILLS.md`. The operator skills are `unifi-network`, `unifi-devices`, `unifi-security`, `unifi-system`, `unifi-protect`, `unifi-fleet-operations`, `unifi-channel-planning`, `unifi-discovery`, `unifi-safe-changes` and `unifi-mcp-setup`.
 
+### Two installs, two skill sets
+
+| Install | Skills loaded |
+|---|---|
+| `dist/claude/unifi-mcp-server.zip`, `dist/chatgpt/unifi-mcp-server.zip` | The 10 operator skills |
+| The repository, as a marketplace | All 16 skills |
+
+The packages ship the operator skills only. A marketplace install of the
+repository loads all 16, because Claude Code always scans the plugin root's
+`skills/` directory and the manifest's `skills` field only adds directories
+to that scan; it cannot replace it. There is no manifest field that removes
+a skill from the default scan, so the repository's `skills/` directory is
+what a marketplace install loads.
+
+Keeping the repository's `skills/` directory whole matters because it is the
+source of truth for every consumer: the packages are built from it, the
+Mintlify site serves it through symlinks, and the repository's own tests
+read it. The alternative, moving the developer skills one directory deeper
+so the default scan skips them, would change the paths that those tests,
+those symlinks and the documentation all use.
+
+The distributable packages are the artifacts whose skill set is a decision
+rather than a consequence of the repository layout, so the boundary is
+enforced there: `scripts/validate_plugins.py` fails the build if a package
+ships a developer skill or omits an operator skill.
+
 ## Build the packages
 
 ```bash
@@ -94,7 +120,18 @@ To let the agent change controller state:
 export UNIFI_READ_ONLY=false
 ```
 
-To widen the tool surface, set `UNIFI_PROFILE` to one of the profiles the server defines: `network`, `devices`, `security`, `system`, `minimal`, `protect`, `mobility`, `innerspace`, `carrier`. Omit it to load every tool.
+To widen the tool surface, set `UNIFI_PROFILE` to one of the profiles the server defines: `network`, `devices`, `security`, `system`, `minimal`, `protect`, `mobility`, `innerspace`, `carrier`.
+
+An unset `UNIFI_PROFILE` does **not** load every tool. The plugin sets the
+default to `minimal`, so a variable that is not set selects the minimal
+profile, which registers only the site, client and device tools. Set
+`UNIFI_PROFILE=all` for the full surface:
+
+```bash
+export UNIFI_PROFILE=all
+```
+
+`all` is the value the server recognises for the whole tool surface.
 
 The server classifies every tool as a read, a write or a destructive change. The destructive tools, which include the firewall, device and network changes, need `confirm=True` and are refused entirely in a read-only session.
 
@@ -149,7 +186,7 @@ See [docs/CHATGPT_CONNECTOR.md](CHATGPT_CONNECTOR.md).
 
 ## Grok
 
-Grok has no plugin catalog that a developer publishes into. A Grok user adds a remote MCP server by URL. See [docs/GROK.md](docs/GROK.md).
+Grok has no plugin catalog that a developer publishes into. A Grok user adds a remote MCP server by URL. See [GROK.md](GROK.md).
 
 ## Sources
 

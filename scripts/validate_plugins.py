@@ -52,6 +52,9 @@ VERSION_SOURCES = (
     (".claude-plugin/plugin.json", r'"version"\s*:\s*"([^"]+)"', re.MULTILINE),
     (".claude-plugin/marketplace.json", r'"version"\s*:\s*"([^"]+)"', re.MULTILINE),
     ("skills/manifest.json", r'"version"\s*:\s*"([^"]+)"', re.MULTILINE),
+    # The MCP server pins the published package, so a version bump that
+    # misses it would leave the plugin launching an old release.
+    (".mcp.json", r'unifi-mcp-server==([^"\s]+)', re.MULTILINE),
 )
 
 #: Patterns that look like a secret in a manifest.
@@ -240,7 +243,14 @@ def check_no_secrets(report: Report, documents: dict[str, dict]) -> None:
                 # A placeholder is not a secret.
                 if "${" in match.group(0):
                     continue
-                report.error(f"{relative}: {description}: {match.group(0)[:80]!r}")
+                # Report where the secret is, never what it is. Printing the
+                # value would copy the credential into CI logs and terminal
+                # scrollback, which is what this check exists to prevent.
+                line = raw.count("\n", 0, match.start()) + 1
+                report.error(
+                    f"{relative}:{line}: {description} "
+                    f"({len(match.group(0))} characters, value withheld)"
+                )
 
     # The MCP config must not carry a literal credential.
     mcp = documents.get(".mcp.json")
@@ -285,25 +295,145 @@ def run_secret_scanner(report: Report, documents: dict[str, dict]) -> None:
         return
 
     with tempfile.TemporaryDirectory() as workdir:
+        # The report goes in its own directory. gitleaks scans the directory
+        # it is given, so a report inside that directory can be picked up by
+        # the scan itself.
+        scan_dir = Path(workdir) / "manifests"
+        report_path = Path(workdir) / "gitleaks-report.json"
+        scan_dir.mkdir(parents=True, exist_ok=True)
+
         for relative in documents:
-            target = Path(workdir) / relative
+            target = scan_dir / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text((ROOT / relative).read_text(encoding="utf-8"), encoding="utf-8")
 
+        # gitleaks prints each finding only in verbose mode, and its exit
+        # code says whether it found any. Ask for a JSON report and read the
+        # exit status, rather than grepping stdout for lines that may not be
+        # there at all.
         result = subprocess.run(
-            [binary, "detect", "--no-git", "--source", workdir, "--redact", "--exit-code", "0"],
+            [
+                binary,
+                "detect",
+                "--no-git",
+                "--source",
+                str(scan_dir),
+                "--redact",
+                "--report-format",
+                "json",
+                "--report-path",
+                str(report_path),
+                "--exit-code",
+                "1",
+            ],
             capture_output=True,
             text=True,
             check=False,
         )
-        findings = [
-            line for line in result.stdout.splitlines() if "Finding:" in line or "Secret:" in line
-        ]
-        if findings:
+
+        findings: list[dict] = []
+        if report_path.is_file():
+            try:
+                findings = json.loads(report_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                findings = []
+
+        if result.returncode != 0 or findings:
             for finding in findings:
-                report.error(f"gitleaks: {finding}")
+                # Report the rule and the location, never the secret.
+                rule = finding.get("RuleID", finding.get("Rule", "unknown"))
+                location = finding.get("File", "unknown")
+                line = finding.get("StartLine", "?")
+                report.error(f"gitleaks: {rule} at {location}:{line} (value withheld)")
+            if not findings:
+                report.error(
+                    f"gitleaks: the scan failed with exit code {result.returncode}: "
+                    f"{result.stderr.strip()[:200]}"
+                )
         else:
             report.note("gitleaks: no findings in the manifests")
+
+
+def check_built_package(report: Report) -> None:
+    """Check that the built package matches the repository's manifests.
+
+    The build script reads the repository's manifests rather than
+    synthesising its own, so the package and the repository cannot describe
+    the plugin differently. This proves it for the package that was built.
+    """
+    package = ROOT / "dist"
+    claude_manifest = package / "claude" / "unifi-mcp-server" / ".claude-plugin" / "plugin.json"
+    if not claude_manifest.is_file():
+        report.note("no built Claude package found; skipped the package comparison")
+        return
+
+    repository = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    built = json.loads(claude_manifest.read_text(encoding="utf-8"))
+
+    for field in ("name", "description", "author", "homepage", "repository", "license", "keywords"):
+        if repository.get(field) != built.get(field):
+            report.error(
+                f"the built package differs from the repository manifest: "
+                f"{field} is {built.get(field)!r} in the package and "
+                f"{repository.get(field)!r} in the repository"
+            )
+
+    repository_mcp = json.loads((ROOT / ".mcp.json").read_text(encoding="utf-8"))
+    built_mcp_path = package / "claude" / "unifi-mcp-server" / ".mcp.json"
+    if built_mcp_path.is_file():
+        built_mcp = json.loads(built_mcp_path.read_text(encoding="utf-8"))
+        if repository_mcp != built_mcp:
+            report.error("the built package's .mcp.json differs from the repository's .mcp.json")
+
+
+def check_package_skills(report: Report, documents: dict[str, dict]) -> None:
+    """Check that the built packages ship only the operator skills.
+
+    The developer skills help a coding agent change this codebase and are of
+    no use to an operator, so they must not ship in a package.
+    """
+    manifest = documents.get("skills/manifest.json")
+    if manifest is None:
+        return
+
+    developer = {
+        entry["name"]
+        for entry in manifest.get("skills", [])
+        if isinstance(entry, dict) and entry.get("audience") == "developer"
+    }
+    operator = {
+        entry["name"]
+        for entry in manifest.get("skills", [])
+        if isinstance(entry, dict) and entry.get("audience") == "operator"
+    }
+    if not developer:
+        report.error("skills/manifest.json: no skill has the developer audience")
+        return
+
+    for package in ("claude", "chatgpt"):
+        skills_dir = ROOT / "dist" / package / "unifi-mcp-server" / "skills"
+        if not skills_dir.is_dir():
+            report.note(f"no built {package} package found; skipped its skill check")
+            continue
+
+        shipped = {path.parent.name for path in skills_dir.glob("*/SKILL.md")}
+        leaked = shipped & developer
+        if leaked:
+            report.error(
+                f"the built {package} package ships developer skills: "
+                f"{', '.join(sorted(leaked))}"
+            )
+        missing = operator - shipped
+        if missing:
+            report.error(
+                f"the built {package} package is missing operator skills: "
+                f"{', '.join(sorted(missing))}"
+            )
+        if not leaked and not missing:
+            report.note(
+                f"the built {package} package ships {len(shipped)} operator skills "
+                "and no developer skills"
+            )
 
 
 def main() -> int:
@@ -316,6 +446,8 @@ def main() -> int:
         check_skills(report, documents)
         check_no_secrets(report, documents)
         run_secret_scanner(report, documents)
+        check_built_package(report)
+        check_package_skills(report, documents)
 
     for note in report.notes:
         print(f"note: {note}")

@@ -78,7 +78,7 @@ _UNIFI_KEY_SHAPE = (
 )
 _PRIVATE_KEY_HEADER = "-----BEGIN " + "[A-Z ]*" + "PRIVATE KEY" + "-----"
 
-SECRET_PATTERNS = (
+CREDENTIAL_PATTERNS = (
     # A credential-looking key with a literal value.
     (
         re.compile(
@@ -107,7 +107,7 @@ SECRET_PATTERNS = (
 FORBIDDEN_NAMES = (".env", ".env.local", ".env.production", "credentials.json")
 
 #: The directories a secret may never be committed in.
-SECRET_DIRS = (".claude-plugin", "skills", "docs", "scripts")
+CREDENTIAL_DIRS = (".claude-plugin", "skills", "docs", "scripts")
 
 
 class Report:
@@ -246,7 +246,7 @@ def check_skills(report: Report, documents: dict[str, dict]) -> None:
     report.note(f"skills: {len(entries)} listed ({operator} operator, {developer} developer)")
 
 
-def secret_findings(documents: dict[str, dict]) -> list[tuple[str, str, int]]:
+def credential_findings(documents: dict[str, dict]) -> list[tuple[str, str, int]]:
     """Return the secrets in the manifests as a file, pattern and length.
 
     The value of a secret never becomes part of the result. The length is
@@ -256,7 +256,7 @@ def secret_findings(documents: dict[str, dict]) -> list[tuple[str, str, int]]:
     findings: list[tuple[str, str, int]] = []
     for relative in documents:
         raw = (ROOT / relative).read_text(encoding="utf-8")
-        for pattern, description in SECRET_PATTERNS:
+        for pattern, description in CREDENTIAL_PATTERNS:
             for match in pattern.finditer(raw):
                 # A placeholder is not a secret.
                 if "${" in match.group(0):
@@ -266,9 +266,9 @@ def secret_findings(documents: dict[str, dict]) -> list[tuple[str, str, int]]:
     return findings
 
 
-def check_no_secrets(report: Report, documents: dict[str, dict]) -> None:
+def check_no_credentials(report: Report, documents: dict[str, dict]) -> None:
     """Check that no manifest carries a secret."""
-    for location, description, length in secret_findings(documents):
+    for location, description, length in credential_findings(documents):
         report.error(f"{location}: {description} ({length} characters, value withheld)")
 
     # The MCP config must not carry a literal credential.
@@ -297,11 +297,11 @@ def check_no_secrets(report: Report, documents: dict[str, dict]) -> None:
         if name in FORBIDDEN_NAMES:
             report.error(f"{tracked_file}: a credentials file is tracked")
         parts = Path(tracked_file).parts
-        if any(part in SECRET_DIRS for part in parts) and name.endswith(".env"):
+        if any(part in CREDENTIAL_DIRS for part in parts) and name.endswith(".env"):
             report.error(f"{tracked_file}: an environment file is tracked")
 
 
-def run_secret_scanner(report: Report, documents: dict[str, dict]) -> None:
+def run_credential_scanner(report: Report, documents: dict[str, dict]) -> None:
     """Run the GitHub secret-scanning tool over the manifests, when available.
 
     The tool is ``gitleaks``. It is not a dependency of this repository, so
@@ -463,8 +463,8 @@ def main() -> int:
     if documents:
         check_versions(report, documents)
         check_skills(report, documents)
-        check_no_secrets(report, documents)
-        run_secret_scanner(report, documents)
+        check_no_credentials(report, documents)
+        run_credential_scanner(report, documents)
         check_built_package(report)
         check_package_skills(report, documents)
 
